@@ -1,0 +1,62 @@
+package org.wfanet.measurement.common
+
+import java.math.BigInteger
+import java.security.MessageDigest
+
+data class Duchy(val name: String, val publicKey: BigInteger)
+
+/**
+ * Determines ordering of duchies for computations.
+ */
+class DuchyOrder(nodes: Set<Duchy>) {
+  private val orderedNodes = nodes.sortedBy { it.publicKey }.map { it.name }
+  private val numberOfNodes = BigInteger.valueOf(orderedNodes.size.toLong())
+
+  /**
+   * Returns the ordering of [Duchy.name] for a computation based on the identifier.
+   *
+   * The first item in the list is the primary node for the computation. Each [Duchy] sends
+   * messages to the next node in the list. The list is implicitly a ring, so the last [Duchy]
+   * sends its results to the first.
+   */
+  fun computationOrder(computationId: Long): List<String> {
+    val primaryIndex = sha1Mod(computationId, numberOfNodes)
+
+    return orderedNodes.subList(primaryIndex, orderedNodes.size) +
+      orderedNodes.subList(0, primaryIndex)
+  }
+
+  /**
+   * Returns the [DuchyPosition] for a duchy name in a computation.
+   */
+  fun positionFor(computationId: Long, name: String): DuchyPosition {
+    val ordered = computationOrder(computationId)
+    val indexOfThisDuchy = ordered.indexOf(name)
+
+    return DuchyPosition(
+      role =
+        when {
+          indexOfThisDuchy < 0 -> error("Duchy not in computation?")
+          indexOfThisDuchy == 0 -> DuchyRole.PRIMARY
+          else -> DuchyRole.SECONDARY
+        },
+      prev = ordered.wrapAroundGet(indexOfThisDuchy - 1),
+      next = ordered.wrapAroundGet(indexOfThisDuchy + 1)
+    )
+  }
+}
+
+data class DuchyPosition(val role: DuchyRole, val prev: String, val next: String)
+
+/** Gets the index % size item of list. */
+private fun List<String>.wrapAroundGet(index: Int): String {
+  val i = (index + size) % size
+  return this[i]
+}
+
+/** Returns sha1(value) % n. */
+fun sha1Mod(value: Long, n: BigInteger): Int {
+  val md = MessageDigest.getInstance("SHA1")
+  val hash = BigInteger(md.digest(value.toBigInteger().toByteArray()))
+  return hash.mod(n).longValueExact().toInt()
+}
