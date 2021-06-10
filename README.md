@@ -1,10 +1,5 @@
 # WFA JVM Common
 
-**Table of Contents**
-
-*   [Purpose](#purpose)
-*   [Contributing](#contributing)
-
 ## Purpose
 
 Implementation of comnmon JVM dependencies for the wfa repositories. 
