@@ -64,6 +64,5 @@ java_image(
     name = "server_image",
     data = ["@grpc_health_probe//file"],
     main_class = "org.wfanet.measurement.storage.filesystem.FileSystemStorageServerKt",
-    visibility = ["//src:docker_image_deployment"],
     runtime_deps = [":server"],
 )

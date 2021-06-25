@@ -26,7 +26,7 @@ def _cue_binaries_impl(rctx):
     )
     rctx.template(
         "BUILD.bazel",
-        Label("@wfa_measurement_system//build/cue:BUILD.external"),
+        Label("@wfa_common_jvm//build/cue:BUILD.external"),
         executable = False,
     )
 
