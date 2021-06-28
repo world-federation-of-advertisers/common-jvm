@@ -86,7 +86,7 @@ platform(
         ":glibc_2_27",
     ],
     parents = [
-        "@wfa_measurement_system//third_party/rbe_configs/config:platform",
+        "@wfa_common_jvm//third_party/rbe_configs/config:platform",
     ],
 )
 

@@ -9,8 +9,6 @@ kt_jvm_library(
     testonly = True,
     srcs = glob(["*.kt"]),
     deps = [
-        "//imports/java/org/junit",
-        "//imports/kotlin/kotlinx/coroutines:core",
         "//src/main/kotlin/org/wfanet/measurement/common/identity",
     ],
 )

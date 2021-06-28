@@ -18,8 +18,8 @@ DISTROLESS_JAVA = [
     "@platforms//os:linux",
     "@platforms//cpu:x86_64",
 ] + select({
-    "@wfa_measurement_system//build/platforms:glibc_2_23": [],
-    "@wfa_measurement_system//build/platforms:glibc_2_27": [],
-    "@wfa_measurement_system//build/platforms:glibc_2_28": [],
+    "@wfa_common_jvm//build/platforms:glibc_2_23": [],
+    "@wfa_common_jvm//build/platforms:glibc_2_27": [],
+    "@wfa_common_jvm//build/platforms:glibc_2_28": [],
     "//conditions:default": ["@platforms//:incompatible"],
 })

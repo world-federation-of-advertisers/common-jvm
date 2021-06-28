@@ -80,6 +80,5 @@ java_binary(
 java_image(
     name = "spanner_emulator_image",
     main_class = "org.wfanet.measurement.db.gcp.testing.SpannerEmulatorMainKt",
-    visibility = ["//src:docker_image_deployment"],
     runtime_deps = [":spanner_emulator_main"],
 )

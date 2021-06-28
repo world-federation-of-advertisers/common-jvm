@@ -26,7 +26,7 @@ def _cloud_spanner_emulator_impl(rctx):
     )
     rctx.template(
         "BUILD.bazel",
-        Label("@wfa_measurement_system//build/cloud_spanner_emulator:BUILD.external"),
+        Label("@wfa_common_jvm//build/cloud_spanner_emulator:BUILD.external"),
         executable = False,
     )
 
