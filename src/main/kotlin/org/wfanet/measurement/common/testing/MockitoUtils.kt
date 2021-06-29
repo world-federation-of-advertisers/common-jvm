@@ -17,9 +17,9 @@ package org.wfanet.measurement.common.testing
 import com.google.common.truth.extensions.proto.ProtoSubject
 import com.google.common.truth.extensions.proto.ProtoTruth
 import com.google.protobuf.Message
-import com.nhaarman.mockitokotlin2.KArgumentCaptor
-import com.nhaarman.mockitokotlin2.argumentCaptor
-import com.nhaarman.mockitokotlin2.verifyBlocking
+import org.mockito.kotlin.KArgumentCaptor
+import org.mockito.kotlin.argumentCaptor
+import org.mockito.kotlin.verifyBlocking
 
 /** Captures the sole parameter to [method] on a Mockito [mock]. */
 inline fun <reified T : Any, M> verifyAndCapture(
