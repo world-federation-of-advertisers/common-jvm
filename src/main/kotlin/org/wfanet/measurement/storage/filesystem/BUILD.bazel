@@ -2,15 +2,6 @@ load("@io_bazel_rules_kotlin//kotlin:kotlin.bzl", "kt_jvm_library")
 load("@rules_java//java:defs.bzl", "java_binary")
 load("@io_bazel_rules_docker//java:image.bzl", "java_image")
 
-package_group(
-    name = "duchy_tests",
-    packages = [
-        "//src/test/kotlin/org/wfanet/measurement/duchy/...",
-        "//src/test/kotlin/org/wfanet/measurement/service/internal/duchy/...",
-        "//src/test/kotlin/org/wfanet/measurement/service/v1alpha/publisherdata/...",
-    ],
-)
-
 package(default_visibility = ["//visibility:public"])
 
 kt_jvm_library(
