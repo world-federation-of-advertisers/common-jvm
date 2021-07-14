@@ -1,0 +1,102 @@
+// Copyright 2021 The Cross-Media Measurement Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package org.wfanet.measurement.common.crypto
+
+import com.google.common.truth.Truth.assertThat
+import java.nio.file.Paths
+import java.security.cert.X509Certificate
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.junit.runners.JUnit4
+import org.wfanet.measurement.common.byteStringOf
+import org.wfanet.measurement.common.getRuntimePath
+
+private const val KEY_ALGORITHM = "EC"
+private val SERVER_SKID =
+  byteStringOf(
+    0xE7,
+    0xB3,
+    0xB5,
+    0x45,
+    0x77,
+    0x1B,
+    0xC2,
+    0xB9,
+    0xA1,
+    0x88,
+    0x02,
+    0x07,
+    0x90,
+    0x3F,
+    0x87,
+    0xA5,
+    0xC4,
+    0x2C,
+    0x63,
+    0xA8
+  )
+
+private val TESTDATA_DIR =
+  Paths.get(
+    "wfa_common_jvm",
+    "src",
+    "main",
+    "kotlin",
+    "org",
+    "wfanet",
+    "measurement",
+    "common",
+    "crypto",
+    "testing",
+    "testdata"
+  )
+
+@RunWith(JUnit4::class)
+class SecurityProviderTest {
+  @Test
+  fun `readCertificate reads cert from PEM file`() {
+    val certificate: X509Certificate = readCertificate(SERVER_CERT_PEM_FILE)
+
+    assertThat(certificate.subjectDN.name).isEqualTo("CN=server.example.com,O=Server")
+  }
+
+  @Test
+  fun `readPrivateKey reads key from PKCS#8 PEM file`() {
+    val privateKey = readPrivateKey(SERVER_KEY_FILE, KEY_ALGORITHM)
+
+    assertThat(privateKey.format).isEqualTo("PKCS#8")
+  }
+
+  @Test
+  fun `subjectKeyIdentifier returns SKID`() {
+    val certificate: X509Certificate = readCertificate(SERVER_CERT_PEM_FILE)
+
+    assertThat(certificate.subjectKeyIdentifier).isEqualTo(SERVER_SKID)
+  }
+
+  @Test
+  fun `authorityKeyIdentifier returns SKID of issuer`() {
+    val issuerCertificate = readCertificate(CA_CERT_PEM_FILE)
+    val certificate: X509Certificate = readCertificate(SERVER_CERT_PEM_FILE)
+
+    assertThat(certificate.authorityKeyIdentifier).isEqualTo(issuerCertificate.subjectKeyIdentifier)
+  }
+
+  companion object {
+    private val CA_CERT_PEM_FILE = getRuntimePath(TESTDATA_DIR.resolve("ca.pem"))!!.toFile()
+    private val SERVER_CERT_PEM_FILE = getRuntimePath(TESTDATA_DIR.resolve("server.pem"))!!.toFile()
+    private val SERVER_KEY_FILE = getRuntimePath(TESTDATA_DIR.resolve("server.key"))!!.toFile()
+  }
+}
