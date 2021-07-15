@@ -19,17 +19,15 @@ See https://github.com/bazelbuild/rules_kotlin
 
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
-def rules_kotlin_repo(version, sha256):
+def _rules_kotlin_repo(version, sha256):
     http_archive(
         name = "io_bazel_rules_kotlin",
         urls = ["https://github.com/bazelbuild/rules_kotlin/releases/download/%s/rules_kotlin_release.tgz" % version],
         sha256 = sha256,
     )
 
-def kotlinc_release(version, sha256):
-    return {
-        "urls": [
-            "https://github.com/JetBrains/kotlin/releases/download/v{v}/kotlin-compiler-{v}.zip".format(v = version),
-        ],
-        "sha256": sha256,
-    }
+def rules_kotlin_repo():
+    _rules_kotlin_repo(
+        version = "v1.5.0-alpha-2",
+        sha256 = "6194a864280e1989b6d8118a4aee03bb50edeeae4076e5bc30eef8a98dcd4f07",
+    )
