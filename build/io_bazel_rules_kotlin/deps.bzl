@@ -16,7 +16,19 @@
 
 load("@io_bazel_rules_kotlin//kotlin:kotlin.bzl", "kotlin_repositories", "kt_register_toolchains")
 
-def rules_kotlin_deps(compiler_release):
+def _kotlinc_release(version, sha256):
+    return {
+        "urls": [
+            "https://github.com/JetBrains/kotlin/releases/download/v{v}/kotlin-compiler-{v}.zip".format(v = version),
+        ],
+        "sha256": sha256,
+    }
+
+def rules_kotlin_deps():
+    compiler_release = _kotlinc_release(
+        sha256 = "dfef23bb86bd5f36166d4ec1267c8de53b3827c446d54e82322c6b6daad3594c",
+        version = "1.4.32",
+    )
     kotlin_repositories(compiler_release = compiler_release)
 
     kt_register_toolchains()
