@@ -59,19 +59,13 @@ load("//build/com_google_truth:repo.bzl", "com_google_truth_artifact_dict")
 
 # @io_bazel_rules_kotlin
 
-load("//build/io_bazel_rules_kotlin:repo.bzl", "kotlinc_release", "rules_kotlin_repo")
+load("//build/io_bazel_rules_kotlin:repo.bzl", "rules_kotlin_repo")
 
-rules_kotlin_repo(
-    sha256 = "6194a864280e1989b6d8118a4aee03bb50edeeae4076e5bc30eef8a98dcd4f07",
-    version = "v1.5.0-alpha-2",
-)
+rules_kotlin_repo()
 
 load("//build/io_bazel_rules_kotlin:deps.bzl", "rules_kotlin_deps")
 
-rules_kotlin_deps(compiler_release = kotlinc_release(
-    sha256 = "dfef23bb86bd5f36166d4ec1267c8de53b3827c446d54e82322c6b6daad3594c",
-    version = "1.4.32",
-))
+rules_kotlin_deps()
 
 # kotlinx.coroutines
 load("//build/kotlinx_coroutines:repo.bzl", "kotlinx_coroutines_artifact_dict")
@@ -215,13 +209,6 @@ load("@com_github_grpc_grpc//bazel:grpc_extra_deps.bzl", "grpc_extra_deps")
 
 grpc_extra_deps()
 
-load("//build/com_google_private_join_and_compute:repo.bzl", "private_join_and_compute_repo")
-
-private_join_and_compute_repo(
-    commit = "89c8d0aae070b9c282043af419e47d7ef897f460",
-    sha256 = "13e0414220a2709b0dbeefafe5a4d1b3f3261a541d0405c844857521d5f25f32",
-)
-
 # @cloud_spanner_emulator
 
 load("//build/cloud_spanner_emulator:defs.bzl", "cloud_spanner_emulator_binaries")
@@ -267,34 +254,4 @@ load("@com_google_googleapis//:repository_rules.bzl", "switched_rules_by_languag
 switched_rules_by_language(
     name = "com_google_googleapis_imports",
     java = True,
-)
-
-load("//build/wfa:repositories.bzl", "wfa_repo_archive")
-
-wfa_repo_archive(
-    name = "wfa_measurement_proto",
-    commit = "584b40ca7b4275d194cc4cedfb877c05ec5ab24e",
-    repo = "cross-media-measurement-api",
-    sha256 = "12f231fe7c8f75e3170ee9c6e308d355eccc354ed60ef4505f6f537812652626",
-)
-
-wfa_repo_archive(
-    name = "wfa_rules_swig",
-    commit = "653d1bdcec85a9373df69920f35961150cf4b1b6",
-    repo = "rules_swig",
-    sha256 = "34c15134d7293fc38df6ed254b55ee912c7479c396178b7f6499b7e5351aeeec",
-)
-
-wfa_repo_archive(
-    name = "any_sketch",
-    commit = "995fe42006a56f926e568c0b02adae5f834a813d",
-    repo = "any-sketch",
-    sha256 = "2477a9cb52a6a415b0d498f7ba19010965145af4a449029df2e64d2379d3cc01",
-)
-
-wfa_repo_archive(
-    name = "any_sketch_java",
-    commit = "a63d47ace86d025ec3330f341d1ba4b5573fe756",
-    repo = "any-sketch-java",
-    sha256 = "9dc3cea71dfeecad40ef67a6198846177d750d84401336d196d4d83059e8301e",
 )
