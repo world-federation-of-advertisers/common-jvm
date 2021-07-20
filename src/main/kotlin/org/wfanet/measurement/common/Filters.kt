@@ -37,6 +37,8 @@ interface GreaterThanClause : TerminalClause
 
 interface LessThanClause : TerminalClause
 
+interface EqualClause : TerminalClause
+
 fun <V : TerminalClause> allOf(clauses: Iterable<V>): AllOfClause<V> = AllOfClause(clauses)
 
 fun <V : TerminalClause> allOf(vararg clauses: V): AllOfClause<V> =
