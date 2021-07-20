@@ -85,6 +85,11 @@ fun readCertificateCollection(pemFile: File): Collection<X509Certificate> {
     Collection<X509Certificate>
 }
 
+/** Returns a private key from a ByteString. */
+fun readPrivateKey(data: ByteString, algorithm: String): PrivateKey {
+  return KeyFactory.getInstance(algorithm, jceProvider).generatePrivate(PKCS8EncodedKeySpec(data.toByteArray()))
+}
+
 /** Returns a private key from a PKCS#8-encoded spec. */
 fun readPrivateKey(data: PKCS8EncodedKeySpec, algorithm: String): PrivateKey {
   return KeyFactory.getInstance(algorithm, jceProvider).generatePrivate(data)
