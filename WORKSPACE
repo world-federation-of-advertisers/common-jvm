@@ -127,7 +127,7 @@ MAVEN_ARTIFACTS.update({
     "com.google.guava:guava": "30.0-jre",
     "info.picocli:picocli": "4.4.0",
     "junit:junit": "4.13",
-    #"org.conscrypt:conscrypt-openjdk-uber": "2.5.2",
+    "org.conscrypt:conscrypt-openjdk-uber": "2.5.2",
     "org.mockito.kotlin:mockito-kotlin": "3.2.0",
 })
 

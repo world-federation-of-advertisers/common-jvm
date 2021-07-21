@@ -85,7 +85,11 @@ fun readCertificateCollection(pemFile: File): Collection<X509Certificate> {
     Collection<X509Certificate>
 }
 
-/** Reads a private key from DER-encoded PKCS#8 [ByteString] */
+/**
+ * Reads a private key from DER-encoded PKCS#8 [ByteString]
+ *
+ * @throws java.security.spec.InvalidKeySpecException on parsing errors
+ */
 fun readPrivateKey(data: ByteString, algorithm: String): PrivateKey {
   return KeyFactory.getInstance(algorithm, jceProvider)
     .generatePrivate(PKCS8EncodedKeySpec(data.toByteArray()))
