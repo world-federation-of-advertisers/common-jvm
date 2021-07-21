@@ -15,6 +15,7 @@
 package org.wfanet.measurement.common.crypto
 
 import com.google.common.truth.Truth.assertThat
+import com.google.protobuf.ByteString
 import java.nio.file.Paths
 import java.security.cert.X509Certificate
 import org.junit.Test
@@ -77,6 +78,15 @@ class SecurityProviderTest {
     val privateKey = readPrivateKey(SERVER_KEY_FILE, KEY_ALGORITHM)
 
     assertThat(privateKey.format).isEqualTo("PKCS#8")
+  }
+
+  @Test
+  fun `readPrivateKey reads key from PKCS#8 PEM ByteString`() {
+    val privateKey1 = readPrivateKey(SERVER_KEY_FILE, KEY_ALGORITHM)
+    val privateKey1ByteString = ByteString.copyFrom(privateKey1.getEncoded())
+    val privateKey2 = readPrivateKey(privateKey1ByteString, KEY_ALGORITHM)
+    assertThat(privateKey1).isEqualTo(privateKey2)
+    assertThat(privateKey2.format).isEqualTo("PKCS#8")
   }
 
   @Test
