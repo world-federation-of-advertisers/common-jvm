@@ -27,7 +27,17 @@ def _rules_kotlin_repo(version, sha256):
     )
 
 def rules_kotlin_repo():
+    # Import rules_android to work around known bug in rules_kotlin v1.5.0-beta-2.
+    # See https://github.com/bazelbuild/rules_kotlin/releases/tag/v1.5.0-beta-2
+    if "rules_android" not in native.existing_rules():
+        http_archive(
+            name = "rules_android",
+            urls = ["https://github.com/bazelbuild/rules_android/archive/v0.1.1.zip"],
+            sha256 = "cd06d15dd8bb59926e4d65f9003bfc20f9da4b2519985c27e190cddc8b7a7806",
+            strip_prefix = "rules_android-0.1.1",
+        )
+
     _rules_kotlin_repo(
-        version = "v1.5.0-alpha-2",
-        sha256 = "6194a864280e1989b6d8118a4aee03bb50edeeae4076e5bc30eef8a98dcd4f07",
+        version = "v1.5.0-beta-2",
+        sha256 = "e4185409c787c18f332ae83a73827aab6e77058a48ffee0cac01123408cbc89a",
     )
