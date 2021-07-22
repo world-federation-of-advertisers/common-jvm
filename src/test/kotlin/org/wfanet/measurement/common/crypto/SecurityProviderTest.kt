@@ -15,8 +15,11 @@
 package org.wfanet.measurement.common.crypto
 
 import com.google.common.truth.Truth.assertThat
+import com.google.protobuf.ByteString
 import java.nio.file.Paths
 import java.security.cert.X509Certificate
+import java.security.spec.InvalidKeySpecException
+import kotlin.test.assertFailsWith
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
@@ -77,6 +80,21 @@ class SecurityProviderTest {
     val privateKey = readPrivateKey(SERVER_KEY_FILE, KEY_ALGORITHM)
 
     assertThat(privateKey.format).isEqualTo("PKCS#8")
+  }
+
+  @Test
+  fun `readPrivateKey reads key from PKCS#8 PEM ByteString`() {
+    val privateKey = readPrivateKey(SERVER_KEY_FILE, KEY_ALGORITHM)
+    val data = ByteString.copyFrom(privateKey.getEncoded())
+    val privateKeyCopy = readPrivateKey(data, KEY_ALGORITHM)
+    assertThat(privateKeyCopy.format).isEqualTo("PKCS#8")
+    assertThat(privateKey).isEqualTo(privateKeyCopy)
+  }
+
+  @Test
+  fun `readPrivateKey reads key from invalid encoded ByteString`() {
+    val data = ByteString.copyFromUtf8("some-invalid-encoded-key")
+    assertFailsWith(InvalidKeySpecException::class) { readPrivateKey(data, KEY_ALGORITHM) }
   }
 
   @Test
