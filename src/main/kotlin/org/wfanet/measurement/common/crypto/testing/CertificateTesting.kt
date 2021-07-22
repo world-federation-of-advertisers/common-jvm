@@ -43,8 +43,7 @@ val FIXED_SERVER_CERT_PEM_FILE = getRuntimePath(TESTDATA_DIR_PATH.resolve("serve
 val FIXED_SERVER_KEY_FILE = getRuntimePath(TESTDATA_DIR_PATH.resolve("server.key"))!!.toFile()
 val FIXED_CA_CERT_PEM_FILE = getRuntimePath(TESTDATA_DIR_PATH.resolve("ca.pem"))!!.toFile()
 
-private const val TESTDATA_DIR =
-  "src/main/kotlin/org/wfanet/measurement/common/crypto/testing/testdata/"
+private val TESTDATA_DIR = "src/main/kotlin/org/wfanet/measurement/common/crypto/testing/testdata/"
 
 val EDP_1_CERT_PEM_FILE = File("${TESTDATA_DIR}edp_1_server.pem")
 val EDP_1_KEY_FILE = File("${TESTDATA_DIR}edp_1_server.key")

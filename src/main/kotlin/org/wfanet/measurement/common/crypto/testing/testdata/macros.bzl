@@ -12,6 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""
+This module contains genrules to generate certificates for different parties.
+"""
+
 def generate_root_certificate(name, srcs, visibility = None):
     native.genrule(
         name = name,
