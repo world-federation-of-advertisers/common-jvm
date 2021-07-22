@@ -1,8 +1,66 @@
+load(":macros.bzl", "generate_root_certificate", "generate_server_certificate")
+
 # Test data for crypto utils.
 
 package(
     default_testonly = True,
     default_visibility = ["//visibility:public"],
+)
+
+generate_root_certificate(
+    name = "edp_1_root",
+    srcs = ["openssl.cnf"],
+)
+
+generate_server_certificate(
+    name = "edp_1_server",
+    srcs = [
+        "openssl.cnf",
+        ":edp_1_root",
+    ],
+    root = "edp_1_root",
+)
+
+generate_root_certificate(
+    name = "aggregator_root",
+    srcs = ["openssl.cnf"],
+)
+
+generate_server_certificate(
+    name = "aggregator_server",
+    srcs = [
+        "openssl.cnf",
+        ":aggregator_root",
+    ],
+    root = "aggregator_root",
+)
+
+generate_root_certificate(
+    name = "non_aggregator_1_root",
+    srcs = ["openssl.cnf"],
+)
+
+generate_server_certificate(
+    name = "non_aggregator_1_server",
+    srcs = [
+        "openssl.cnf",
+        ":non_aggregator_1_root",
+    ],
+    root = "non_aggregator_1_root",
+)
+
+generate_root_certificate(
+    name = "non_aggregator_2_root",
+    srcs = ["openssl.cnf"],
+)
+
+generate_server_certificate(
+    name = "non_aggregator_2_server",
+    srcs = [
+        "openssl.cnf",
+        ":non_aggregator_2_root",
+    ],
+    root = "non_aggregator_2_root",
 )
 
 filegroup(
