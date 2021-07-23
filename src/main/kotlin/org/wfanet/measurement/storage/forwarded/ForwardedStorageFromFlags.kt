@@ -14,7 +14,7 @@
 
 package org.wfanet.measurement.storage.forwarded
 
-import org.wfanet.measurement.common.grpc.buildChannel
+import org.wfanet.measurement.common.grpc.buildPlaintextChannel
 import org.wfanet.measurement.internal.testing.ForwardedStorageGrpcKt.ForwardedStorageCoroutineStub
 import org.wfanet.measurement.storage.StorageClient
 import picocli.CommandLine
@@ -24,7 +24,7 @@ class ForwardedStorageFromFlags(private val flags: Flags) {
 
   val storageClient: StorageClient by lazy {
     ForwardedStorageClient(
-      ForwardedStorageCoroutineStub(buildChannel(flags.forwardedStorageServiceTarget))
+      ForwardedStorageCoroutineStub(buildPlaintextChannel(flags.forwardedStorageServiceTarget))
     )
   }
 

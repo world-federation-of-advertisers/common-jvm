@@ -16,7 +16,10 @@ package org.wfanet.measurement.common.grpc
 
 import io.grpc.ManagedChannel
 import io.grpc.ManagedChannelBuilder
+import io.grpc.netty.NettyChannelBuilder
+import java.security.cert.X509Certificate
 import java.time.Duration
+import org.wfanet.measurement.common.crypto.SigningCerts
 
 /**
  * Builds a [ManagedChannel] for the specified target.
@@ -30,17 +33,33 @@ fun buildPlaintextChannel(target: String): ManagedChannel {
     .build()
 }
 
-fun buildChannel(target: String): ManagedChannel {
-  return ManagedChannelBuilder.forTarget(target).build()
+/**
+ * Builds a [ManagedChannel] for the specified target with mTLS connection.
+ *
+ * @param target the URI or authority string for the target server.
+ * @param clientCerts the collection of client certificate and private key, as well as the trusted
+ * server certificates.
+ */
+fun buildMutualTlsChannel(target: String, clientCerts: SigningCerts): ManagedChannel {
+  return NettyChannelBuilder.forTarget(target).sslContext(clientCerts.toClientTlsContext()).build()
 }
 
 /**
- * Builds a [ManagedChannel] for the specified target.
+ * Builds a [ManagedChannel] for the specified target with TLS connection.
  *
  * @param target the URI or authority string for the target server
- * @param shutdownTimeout duration of time to allow a channel to finish processing on server
- * shutdown
+ * @param trustedServerCerts trusted server certificates.
  */
-fun buildChannel(target: String, shutdownTimeout: Duration): ManagedChannel {
-  return buildChannel(target).also { Runtime.getRuntime().addShutdownHook(it, shutdownTimeout) }
+fun buildTlsChannel(
+  target: String,
+  trustedServerCerts: Collection<X509Certificate>
+): ManagedChannel {
+  return NettyChannelBuilder.forTarget(target)
+    .sslContext(trustedServerCerts.toClientTlsContext())
+    .build()
+}
+
+/** Add shutdownHook to a managedChannel */
+fun ManagedChannel.withShutdownTimeout(shutdownTimeout: Duration): ManagedChannel {
+  return this.also { Runtime.getRuntime().addShutdownHook(it, shutdownTimeout) }
 }
