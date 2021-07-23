@@ -18,10 +18,9 @@ This module contains genrules to generate certificates for different parties.
 
 def generate_root_certificate(
         name,
-        srcs = [],
         org = "Server",
         common_name = "ca.server.example.com",
-        visibility = ["//visibility:public"],
+        visibility = None,
         ssl_conf = "@wfa_common_jvm//build/wfa:openssl.cnf"):
     """Generates a root certificate and private key.
 
@@ -29,7 +28,6 @@ def generate_root_certificate(
 
     Args:
         name: the entity owning the certificate
-        srcs: necessary dependent input files
         org: org name on the ceritificate
         common_name: common name on the ceritificate
         ssl_conf: the ssl configuration used by OpenSSL
@@ -50,7 +48,7 @@ def generate_root_certificate(
     ]
     native.genrule(
         name = name,
-        srcs = srcs + ["@wfa_common_jvm//build/wfa:openssl.cnf"],
+        srcs = [ssl_conf],
         outs = [
             name + ".pem",
             name + ".key",
@@ -59,22 +57,22 @@ def generate_root_certificate(
         visibility = visibility,
     )
 
-def generate_server_certificate(
+def generate_user_certificate(
         name,
-        root,
-        srcs,
+        root_key,
+        root_certificate,
         org = "Server",
         common_name = "server.example.com",
-        visibility = ["//visibility:public"],
+        visibility = None,
         ssl_conf = "@wfa_common_jvm//build/wfa:openssl.cnf"):
-    """Generates a certificate signing request, private key, and a certificate chain.
+    """Generates a private key and a certificate that is signed by the root authority.
 
     Uses OpenSSL using elliptic curve crypto over the P-256 curve.
 
     Args:
         name: the entity owning the certificate
-        root: the root ca
-        srcs: necessary inputs like root authority file
+        root_key: private key of root ca
+        root_certificate: pem of root ca
         org: org name on the ceritificate
         common_name: common name on the ceritificate
         visibility: the bazel visibility of the generated rule
@@ -97,15 +95,15 @@ def generate_server_certificate(
         "-out $(RULEDIR)/{}.pem".format(name),
         "-days 365",
         "-req",
-        "-CA $(RULEDIR)/{}.pem".format(root),
-        "-CAkey $(RULEDIR)/{}.key".format(root),
+        "-CA $(RULEDIR)/{}".format(root_certificate.split(":")[1]),
+        "-CAkey $(RULEDIR)/{}".format(root_key.split(":")[1]),
         "-CAcreateserial",
         "-extfile $(location {})".format(ssl_conf),
         "-extensions usr_cert",
     ]
     native.genrule(
         name = name,
-        srcs = srcs + [ssl_conf],
+        srcs = [root_key] + [root_certificate] + [ssl_conf],
         outs = [
             name + ".key",
             name + ".pem",
