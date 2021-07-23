@@ -19,7 +19,6 @@ import io.grpc.Server
 import io.grpc.health.v1.HealthCheckRequest
 import io.grpc.health.v1.HealthCheckResponse
 import io.grpc.health.v1.HealthGrpcKt.HealthCoroutineStub
-import io.grpc.netty.NettyChannelBuilder
 import io.grpc.services.HealthStatusManager
 import io.grpc.testing.GrpcCleanupRule
 import io.netty.handler.ssl.ClientAuth
@@ -35,6 +34,7 @@ import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 import org.wfanet.measurement.common.crypto.SigningCerts
+import org.wfanet.measurement.common.crypto.readCertificateCollection
 
 private const val ALGORITHM = "ec"
 private const val CURVE = "prime256v1"
@@ -61,6 +61,9 @@ class TransportSecurityTest {
       privateKeyFile = tempDir.resolve("client.key"),
       trustedCertCollectionFile = tempDir.resolve("server-root.pem")
     )
+
+  private val trustedServerCertificates =
+    readCertificateCollection(tempDir.resolve("server-root.pem"))
 
   @get:Rule val grpcCleanup = GrpcCleanupRule()
 
@@ -135,11 +138,7 @@ class TransportSecurityTest {
     startCommonServer(ClientAuth.NONE)
 
     val channel =
-      grpcCleanup.register(
-        NettyChannelBuilder.forAddress(HOSTNAME, PORT)
-          .sslContext(clientCerts.toClientTlsContext())
-          .build()
-      )
+      grpcCleanup.register(buildTlsChannel("$HOSTNAME:$PORT", trustedServerCertificates))
     val client = HealthCoroutineStub(channel)
 
     val response = runBlocking {
@@ -152,12 +151,7 @@ class TransportSecurityTest {
   @Test
   fun `mTLS RPC succeeds`() {
     startCommonServer(ClientAuth.REQUIRE)
-    val channel =
-      grpcCleanup.register(
-        NettyChannelBuilder.forAddress(HOSTNAME, PORT)
-          .sslContext(clientCerts.toClientTlsContext())
-          .build()
-      )
+    val channel = grpcCleanup.register(buildMTlsChannel("$HOSTNAME:$PORT", clientCerts))
     val client = HealthCoroutineStub(channel)
 
     val response = runBlocking {
