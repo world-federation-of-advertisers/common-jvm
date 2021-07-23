@@ -9,13 +9,8 @@ kt_jvm_library(
     name = "testing",
     srcs = glob(["*.kt"]),
     data = [
-        "//src/main/kotlin/org/wfanet/measurement/common/crypto/testing/testdata:aggregator_server.key",
-        "//src/main/kotlin/org/wfanet/measurement/common/crypto/testing/testdata:aggregator_server.pem",
-        "//src/main/kotlin/org/wfanet/measurement/common/crypto/testing/testdata:certs",
-        "//src/main/kotlin/org/wfanet/measurement/common/crypto/testing/testdata:edp_1_server.key",
-        "//src/main/kotlin/org/wfanet/measurement/common/crypto/testing/testdata:edp_1_server.pem",
-        "//src/main/kotlin/org/wfanet/measurement/common/crypto/testing/testdata:non_aggregator_1_server.key",
-        "//src/main/kotlin/org/wfanet/measurement/common/crypto/testing/testdata:non_aggregator_1_server.pem",
+        "//src/main/kotlin/org/wfanet/measurement/common/crypto/testing/testdata:dynamic_certs",
+        "//src/main/kotlin/org/wfanet/measurement/common/crypto/testing/testdata:static_certs",
     ],
     deps = [
         "//src/main/kotlin/org/wfanet/measurement/common",
