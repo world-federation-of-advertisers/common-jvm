@@ -56,5 +56,5 @@ private val DYNAMIC_TESTDATA_DIR_PATH =
     "testing",
     "testdata"
   )
-val DYNAMIC_SERVER_1_CERT_PEM_FILE = File("${DYNAMIC_TESTDATA_DIR_PATH}/dynamic_1.pem")
-val DYNAMIC_SERVER_1_KEY_FILE = File("${DYNAMIC_TESTDATA_DIR_PATH}/dynamic_1.key")
+val DYNAMIC_SERVER_1_CERT_PEM_FILE = File("$DYNAMIC_TESTDATA_DIR_PATH/dynamic_1.pem")
+val DYNAMIC_SERVER_1_KEY_FILE = File("$DYNAMIC_TESTDATA_DIR_PATH/dynamic_1.key")
