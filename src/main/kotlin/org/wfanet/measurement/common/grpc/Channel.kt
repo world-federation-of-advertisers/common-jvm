@@ -16,7 +16,9 @@ package org.wfanet.measurement.common.grpc
 
 import io.grpc.ManagedChannel
 import io.grpc.ManagedChannelBuilder
+import io.grpc.netty.NettyChannelBuilder
 import java.time.Duration
+import org.wfanet.measurement.common.crypto.SigningCerts
 
 /**
  * Builds a [ManagedChannel] for the specified target.
@@ -32,6 +34,10 @@ fun buildPlaintextChannel(target: String): ManagedChannel {
 
 fun buildChannel(target: String): ManagedChannel {
   return ManagedChannelBuilder.forTarget(target).build()
+}
+
+fun buildChannel(target: String, clientCerts: SigningCerts): ManagedChannel {
+  return NettyChannelBuilder.forTarget(target).sslContext(clientCerts.toClientTlsContext()).build()
 }
 
 /**

@@ -19,7 +19,6 @@ import io.grpc.Server
 import io.grpc.health.v1.HealthCheckRequest
 import io.grpc.health.v1.HealthCheckResponse
 import io.grpc.health.v1.HealthGrpcKt.HealthCoroutineStub
-import io.grpc.netty.NettyChannelBuilder
 import io.grpc.services.HealthStatusManager
 import io.grpc.testing.GrpcCleanupRule
 import io.netty.handler.ssl.ClientAuth
@@ -134,12 +133,7 @@ class TransportSecurityTest {
 
     startCommonServer(ClientAuth.NONE)
 
-    val channel =
-      grpcCleanup.register(
-        NettyChannelBuilder.forAddress(HOSTNAME, PORT)
-          .sslContext(clientCerts.toClientTlsContext())
-          .build()
-      )
+    val channel = grpcCleanup.register(buildChannel("$HOSTNAME:$PORT", clientCerts))
     val client = HealthCoroutineStub(channel)
 
     val response = runBlocking {
@@ -152,12 +146,7 @@ class TransportSecurityTest {
   @Test
   fun `mTLS RPC succeeds`() {
     startCommonServer(ClientAuth.REQUIRE)
-    val channel =
-      grpcCleanup.register(
-        NettyChannelBuilder.forAddress(HOSTNAME, PORT)
-          .sslContext(clientCerts.toClientTlsContext())
-          .build()
-      )
+    val channel = grpcCleanup.register(buildChannel("$HOSTNAME:$PORT", clientCerts))
     val client = HealthCoroutineStub(channel)
 
     val response = runBlocking {
