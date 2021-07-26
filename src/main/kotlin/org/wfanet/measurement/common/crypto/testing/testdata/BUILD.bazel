@@ -1,30 +1,8 @@
-load("//build/wfa:macros.bzl", "generate_root_certificate", "generate_user_certificate")
-
 # Test data for crypto utils.
 
 package(
     default_testonly = True,
     default_visibility = ["//visibility:public"],
-)
-
-generate_root_certificate(
-    name = "dynamic_1_root",
-)
-
-generate_user_certificate(
-    name = "dynamic_1",
-    root_certificate = ":dynamic_1_root.pem",
-    root_key = ":dynamic_1_root.key",
-)
-
-filegroup(
-    name = "dynamic_certs",
-    srcs = [
-        ":dynamic_1.key",
-        ":dynamic_1.pem",
-        ":dynamic_1_root.key",
-        ":dynamic_1_root.pem",
-    ],
 )
 
 filegroup(

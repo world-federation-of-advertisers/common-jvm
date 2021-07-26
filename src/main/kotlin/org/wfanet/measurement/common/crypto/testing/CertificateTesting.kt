@@ -14,7 +14,6 @@
 
 package org.wfanet.measurement.common.crypto.testing
 
-import java.io.File
 import java.nio.file.Paths
 import org.wfanet.measurement.common.getRuntimePath
 
@@ -42,19 +41,3 @@ val FIXED_SERVER_CERT_PEM_FILE =
   getRuntimePath(FIXED_TESTDATA_DIR_PATH.resolve("server.pem"))!!.toFile()
 val FIXED_SERVER_KEY_FILE = getRuntimePath(FIXED_TESTDATA_DIR_PATH.resolve("server.key"))!!.toFile()
 val FIXED_CA_CERT_PEM_FILE = getRuntimePath(FIXED_TESTDATA_DIR_PATH.resolve("ca.pem"))!!.toFile()
-
-private val DYNAMIC_TESTDATA_DIR_PATH =
-  Paths.get(
-    "src",
-    "main",
-    "kotlin",
-    "org",
-    "wfanet",
-    "measurement",
-    "common",
-    "crypto",
-    "testing",
-    "testdata"
-  )
-val DYNAMIC_SERVER_1_CERT_PEM_FILE = File("$DYNAMIC_TESTDATA_DIR_PATH/dynamic_1.pem")
-val DYNAMIC_SERVER_1_KEY_FILE = File("$DYNAMIC_TESTDATA_DIR_PATH/dynamic_1.key")

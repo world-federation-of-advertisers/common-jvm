@@ -23,7 +23,6 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 import org.wfanet.measurement.common.byteStringOf
-import org.wfanet.measurement.common.crypto.testing.DYNAMIC_SERVER_1_CERT_PEM_FILE
 import org.wfanet.measurement.common.crypto.testing.FIXED_CA_CERT_PEM_FILE
 import org.wfanet.measurement.common.crypto.testing.FIXED_SERVER_CERT_PEM_FILE
 import org.wfanet.measurement.common.crypto.testing.FIXED_SERVER_KEY_FILE
@@ -58,13 +57,6 @@ class SecurityProviderTest {
   @Test
   fun `readCertificate reads fixed cert from PEM file`() {
     val certificate: X509Certificate = readCertificate(FIXED_SERVER_CERT_PEM_FILE)
-
-    assertThat(certificate.subjectDN.name).isEqualTo("CN=server.example.com,O=Server")
-  }
-
-  @Test
-  fun `readCertificate reads dynamically created cert from PEM file`() {
-    val certificate: X509Certificate = readCertificate(DYNAMIC_SERVER_1_CERT_PEM_FILE)
 
     assertThat(certificate.subjectDN.name).isEqualTo("CN=server.example.com,O=Server")
   }
