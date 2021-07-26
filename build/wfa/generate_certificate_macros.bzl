@@ -71,8 +71,8 @@ def generate_user_certificate(
 
     Args:
         name: the entity owning the certificate
-        root_key: private key of root ca
-        root_certificate: pem of root ca
+        root_key: private key of root CA
+        root_certificate: pem of root CA
         org: org name on the ceritificate
         common_name: common name on the ceritificate
         visibility: the bazel visibility of the generated rule
@@ -95,15 +95,15 @@ def generate_user_certificate(
         "-out $(RULEDIR)/{}.pem".format(name),
         "-days 365",
         "-req",
-        "-CA $(RULEDIR)/{}".format(root_certificate.split(":")[1]),
-        "-CAkey $(RULEDIR)/{}".format(root_key.split(":")[1]),
+        "-CA $(location {})".format(root_certificate.split(":")[1]),
+        "-CAkey $(location {})".format(root_key.split(":")[1]),
         "-CAcreateserial",
         "-extfile $(location {})".format(ssl_conf),
         "-extensions usr_cert",
     ]
     native.genrule(
         name = name,
-        srcs = [root_key] + [root_certificate] + [ssl_conf],
+        srcs = [root_key, root_certificate, ssl_conf],
         outs = [
             name + ".key",
             name + ".pem",

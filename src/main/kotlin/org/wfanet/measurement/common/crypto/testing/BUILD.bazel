@@ -9,7 +9,6 @@ kt_jvm_library(
     name = "testing",
     srcs = glob(["*.kt"]),
     data = [
-        "//src/main/kotlin/org/wfanet/measurement/common/crypto/testing/testdata:dynamic_certs",
         "//src/main/kotlin/org/wfanet/measurement/common/crypto/testing/testdata:static_certs",
     ],
     deps = [
