@@ -22,7 +22,6 @@ import io.grpc.netty.NettyServerBuilder
 import io.grpc.services.HealthStatusManager
 import io.netty.handler.ssl.ClientAuth
 import io.netty.handler.ssl.SslContext
-import java.io.File
 import java.io.IOException
 import java.util.logging.Level
 import java.util.logging.Logger
@@ -89,28 +88,8 @@ private constructor(
     var port by Delegates.notNull<Int>()
       private set
 
-    @CommandLine.Option(
-      names = ["--tls-cert-file"],
-      description = ["TLS cert file."],
-      defaultValue = ""
-    )
-    lateinit var certFile: File
-      private set
-
-    @CommandLine.Option(
-      names = ["--tls-key-file"],
-      description = ["TLS key file."],
-      defaultValue = ""
-    )
-    lateinit var privateKeyFile: File
-      private set
-
-    @CommandLine.Option(
-      names = ["--cert-collection-file"],
-      description = ["Cert collection file."],
-      defaultValue = ""
-    )
-    lateinit var certCollectionFile: File
+    @CommandLine.Mixin
+    lateinit var tlsFlags: TlsFlags
       private set
 
     @set:CommandLine.Option(
@@ -158,9 +137,9 @@ private constructor(
     ): CommonServer {
       val certs =
         SigningCerts.fromPemFiles(
-          certificateFile = flags.certFile,
-          privateKeyFile = flags.privateKeyFile,
-          trustedCertCollectionFile = flags.certCollectionFile
+          certificateFile = flags.tlsFlags.certFile,
+          privateKeyFile = flags.tlsFlags.privateKeyFile,
+          trustedCertCollectionFile = flags.tlsFlags.certCollectionFile
         )
 
       return fromParameters(
