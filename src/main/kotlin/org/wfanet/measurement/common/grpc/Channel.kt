@@ -41,7 +41,10 @@ fun buildPlaintextChannel(target: String): ManagedChannel {
  * server certificates.
  */
 fun buildMutualTlsChannel(target: String, clientCerts: SigningCerts): ManagedChannel {
-  return NettyChannelBuilder.forTarget(target).sslContext(clientCerts.toClientTlsContext()).build()
+  return NettyChannelBuilder.forTarget(target)
+    .sslContext(clientCerts.toClientTlsContext())
+    .overrideAuthority("localhost") // TODO: try using custom DNS instead
+    .build()
 }
 
 /**
@@ -56,6 +59,7 @@ fun buildTlsChannel(
 ): ManagedChannel {
   return NettyChannelBuilder.forTarget(target)
     .sslContext(trustedServerCerts.toClientTlsContext())
+    .overrideAuthority("localhost") // TODO: try using custom DNS instead
     .build()
 }
 
