@@ -1,3 +1,5 @@
+#!/bin/bash
+#
 # Copyright 2021 The Cross-Media Measurement Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,27 +14,25 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set -ex
+set -e -o pipefail
 
 # Check that private key is proper EC key
-ec_key_check=$(openssl ec -check -noout -in $1 2>&1)
-if [ "$ec_key_check" != $'read EC key\nEC Key valid.' ]; then
-  echo "Invalid EC Key:"
-  echo $ec_key_check
+openssl ec -check -noout -in "${1}"
+if [[ $? -ne 0 ]]; then
+  err "Unable to check that private key is proper EC key"
   exit 1
 fi
 
 # Check that public keys match
-if [ "$(openssl pkey -pubout -in $1 2>&1)" != "$(openssl x509 -noout -pubkey -in $2 2>&1)" ]; then
-  echo "Public keys do not match"
+if [[ "$(openssl pkey -pubout -in "${1}" 2>&1)" != "$(openssl x509 -noout -pubkey -in "${2}" 2>&1)" ]]; then
+  err "Public keys do not match"
   exit 1
 fi
 
 # Check the certificate details
-certificate_details=$(openssl x509 -noout -subject -in  $2 2>&1)
-if [ "$certificate_details" != $'subject=O = Some Root Org CA, CN = some-ca.com' ]; then
-  echo "Invalid Certificate Details:"
-  echo $certificate_details
+certificate_details=$(openssl x509 -noout -subject -in "${2}" 2>&1)
+if [[ "${certificate_details}" != $'subject=O = Some Root Org CA, CN = some-ca.com' ]]; then
+  err "Invalid Certificate Details: ${certificate_details}"
   exit 1
 fi
 
