@@ -42,7 +42,7 @@ def generate_root_certificate(
         "-keyout $(RULEDIR)/{}.key".format(name),
         "-x509",
         "-days 365",
-        "-subj '/O={} CA/CN={}'".format(org, common_name),
+        "-subj '/O={}CA/CN={}'".format(org, common_name),
         "-config $(location {})".format(ssl_conf),
         "-extensions v3_ca",
     ]

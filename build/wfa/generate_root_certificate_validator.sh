@@ -1,4 +1,6 @@
-#!/bin/bash
+#!/usr/bin/env bash
+#
+# Validate that root certificates were generated correctly
 #
 # Copyright 2021 The Cross-Media Measurement Authors
 #
@@ -16,25 +18,41 @@
 
 set -e -o pipefail
 
-# Check that private key is proper EC key
-openssl ec -check -noout -in "${1}"
-if [[ $? -ne 0 ]]; then
-  err "Unable to check that private key is proper EC key"
-  exit 1
-fi
+err() {
+  echo "[$(date +'%Y-%m-%dT%H:%M:%S%z')]: $*" >&2
+}
 
-# Check that public keys match
-if [[ "$(openssl pkey -pubout -in "${1}" 2>&1)" != "$(openssl x509 -noout -pubkey -in "${2}" 2>&1)" ]]; then
-  err "Public keys do not match"
-  exit 1
-fi
+main() {
+  readonly root_key_file="$1"
+  readonly root_certificate_pem_file="$2"
 
-# Check the certificate details
-certificate_details=$(openssl x509 -noout -subject -in "${2}" 2>&1)
-if [[ "${certificate_details}" != $'subject=O = Some Root Org CA, CN = some-ca.com' ]]; then
-  err "Invalid Certificate Details: ${certificate_details}"
-  exit 1
-fi
+  # Check that certificate has correct validated hostname
+  if ! openssl verify -x509_strict -verbose -CAfile "${root_certificate_pem_file}" -verify_hostname 'some-ca.com' "${root_certificate_pem_file}"; then
+    err 'Unable to validate hostname'
+    exit 1
+  fi
 
-echo "Success"
-exit 0
+  # Check that private key is proper EC key
+  if ! openssl ec -check -noout -in "${root_key_file}"; then
+    err 'Unable to check that private key is proper EC key'
+    exit 1
+  fi
+
+  # Check that public keys match
+  if [[ "$(openssl pkey -pubout -in "${root_key_file}" 2>&1)" != "$(openssl x509 -noout -pubkey -in "${root_certificate_pem_file}" 2>&1)" ]]; then
+    err 'Public keys do not match'
+    exit 1
+  fi
+
+  # Check the certificate details
+  certificate_details=$(openssl x509 -noout -subject -in "${root_certificate_pem_file}" 2>&1)
+  if [[ "${certificate_details}" != $'subject=O = Some Root OrgCA, CN = some-ca.com' ]]; then
+    err "Invalid Certificate Details: ${certificate_details}"
+    exit 1
+  fi
+
+  echo 'Success'
+  exit 0
+}
+
+main "$@"
