@@ -28,8 +28,9 @@ main() {
   local -r user_key_file="$3"
   local -r user_certificate_pem_file="$4"
 
-  # Check that user certificate is signed by root CA and has correct hostname
-  if ! openssl verify -x509_strict -verbose -CAfile "${root_certificate_pem_file}" -verify_hostname 'some-user.com' "${user_certificate_pem_file}"; then
+  # Check that user certificate is signed by root CA. Note that because we include the SAN extension in openssl.cnf,
+  # `-verify_hostname` checks for localhost.
+  if ! openssl verify -x509_strict -verbose -CAfile "${root_certificate_pem_file}" -verify_hostname localhost "${user_certificate_pem_file}"; then
     err 'Unable to validate user certificate is signed by root CA with correct hostname'
     exit 1
   fi

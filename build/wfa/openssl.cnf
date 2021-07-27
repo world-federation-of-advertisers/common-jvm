@@ -1,1 +1,15 @@
 .include /etc/ssl/openssl.cnf
+# From https://wiki.openssl.org/index.php/Hostname_validation
+# As described in RFC 6125, it first tries to find a match
+# in the Subject Alternative Name extension. If the extension is not present in
+# the certificate, it checks the Common Name instead.
+
+[v3_ca]
+subjectAltName = @subject_alt_name
+
+[usr_cert]
+subjectAltName = @subject_alt_name
+
+[subject_alt_name]
+DNS=localhost
+IP=127.0.0.1
