@@ -23,8 +23,8 @@ err() {
 }
 
 main() {
-  readonly root_key_file="$1"
-  readonly root_certificate_pem_file="$2"
+  local -r root_key_file="$1"
+  local -r root_certificate_pem_file="$2"
 
   # Check that certificate has correct validated hostname
   if ! openssl verify -x509_strict -verbose -CAfile "${root_certificate_pem_file}" -verify_hostname 'some-ca.com' "${root_certificate_pem_file}"; then
@@ -51,8 +51,7 @@ main() {
     exit 1
   fi
 
-  echo 'Success'
-  exit 0
+  err 'Success'
 }
 
 main "$@"
