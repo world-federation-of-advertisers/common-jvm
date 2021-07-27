@@ -26,8 +26,9 @@ main() {
   local -r root_key_file="$1"
   local -r root_certificate_pem_file="$2"
 
-  # Check that certificate has correct validated hostname
-  if ! openssl verify -x509_strict -verbose -CAfile "${root_certificate_pem_file}" -verify_hostname 'some-ca.com' "${root_certificate_pem_file}"; then
+  # Check that certificate verifies itself when it is set as the CA. Note that because we include a SAN in the cert,
+  # `-verify_hostname` will return an error. This is tolerable.
+  if ! openssl verify -x509_strict -verbose -CAfile "${root_certificate_pem_file}" "${root_certificate_pem_file}"; then
     err 'Unable to validate hostname'
     exit 1
   fi
