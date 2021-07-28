@@ -39,9 +39,21 @@ fun buildPlaintextChannel(target: String): ManagedChannel {
  * @param target the URI or authority string for the target server.
  * @param clientCerts the collection of client certificate and private key, as well as the trusted
  * server certificates.
+ * @param hostName the expected DNS hostname from the Subject Alternative Name (SAN) of the server's
+ * certificate
  */
-fun buildMutualTlsChannel(target: String, clientCerts: SigningCerts): ManagedChannel {
-  return NettyChannelBuilder.forTarget(target).sslContext(clientCerts.toClientTlsContext()).build()
+fun buildMutualTlsChannel(
+  target: String,
+  clientCerts: SigningCerts,
+  hostName: String? = null
+): ManagedChannel {
+  val channelBuilder =
+    NettyChannelBuilder.forTarget(target).sslContext(clientCerts.toClientTlsContext())
+  return if (hostName == null) {
+    channelBuilder.build()
+  } else {
+    channelBuilder.overrideAuthority(hostName).build()
+  }
 }
 
 /**
@@ -49,14 +61,21 @@ fun buildMutualTlsChannel(target: String, clientCerts: SigningCerts): ManagedCha
  *
  * @param target the URI or authority string for the target server
  * @param trustedServerCerts trusted server certificates.
+ * @param hostName the expected DNS hostname from the Subject Alternative Name (SAN) of the server's
+ * certificate
  */
 fun buildTlsChannel(
   target: String,
-  trustedServerCerts: Collection<X509Certificate>
+  trustedServerCerts: Collection<X509Certificate>,
+  hostName: String? = null
 ): ManagedChannel {
-  return NettyChannelBuilder.forTarget(target)
-    .sslContext(trustedServerCerts.toClientTlsContext())
-    .build()
+  val channelBuilder =
+    NettyChannelBuilder.forTarget(target).sslContext(trustedServerCerts.toClientTlsContext())
+  return if (hostName == null) {
+    channelBuilder.build()
+  } else {
+    channelBuilder.overrideAuthority(hostName).build()
+  }
 }
 
 /** Add shutdownHook to a managedChannel */
