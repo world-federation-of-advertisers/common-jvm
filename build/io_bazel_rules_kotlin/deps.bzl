@@ -14,7 +14,8 @@
 
 """Repository rules/macros for rules_kotlin dependencies."""
 
-load("@io_bazel_rules_kotlin//kotlin:kotlin.bzl", "kotlin_repositories", "kt_register_toolchains")
+load("@io_bazel_rules_kotlin//kotlin:repositories.bzl", "kotlin_repositories")
+load("@io_bazel_rules_kotlin//kotlin:kotlin.bzl", "kt_register_toolchains")
 
 def rules_kotlin_deps():
     kotlin_repositories()
