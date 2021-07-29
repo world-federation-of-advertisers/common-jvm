@@ -19,7 +19,6 @@ Adds external repos necessary for common-jvm.
 load("//build/bazel_skylib:repo.bzl", "bazel_skylib_repo")
 load("//build/platforms:repo.bzl", "platforms_repo")
 load("//build/com_google_protobuf:repo.bzl", "com_google_protobuf_repo")
-load("//build/io_bazel_rules_kotlin:repo.bzl", "rules_kotlin_repo")
 load("//build/com_github_grpc_grpc_kotlin:repo.bzl", "com_github_grpc_grpc_kotlin_repo")
 load("//build/rules_jvm_external:repo.bzl", "rules_jvm_external_repo")
 load("//build/com_github_grpc_grpc:repo.bzl", "com_github_grpc_grpc_repo")
@@ -28,6 +27,10 @@ load("//build/cue:repo.bzl", "cue_binaries")
 load("//build/grpc_health_probe:repo.bzl", "grpc_health_probe_repo")
 load("//build/io_bazel_rules_docker:repo.bzl", "rules_docker_repo")
 load("//build/com_google_googleapis:repo.bzl", "com_google_googleapis_repo")
+load(
+    "//build/io_bazel_rules_kotlin:repo.bzl",
+    "rules_kotlin_repo",
+)
 
 def common_jvm_deps_repositories():
     """
