@@ -1,87 +1,12 @@
 workspace(name = "wfa_common_jvm")
 
-load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive", "http_file")
+load("//build:deps_step1.bzl", "common_jvm_deps_step1")
 
-# @bazel_skylib
+common_jvm_deps_step1()
 
-http_archive(
-    name = "bazel_skylib",
-    sha256 = "1c531376ac7e5a180e0237938a2536de0c54d93f5c278634818e0efc952dd56c",
-    urls = [
-        "https://github.com/bazelbuild/bazel-skylib/releases/download/1.0.3/bazel-skylib-1.0.3.tar.gz",
-        "https://mirror.bazel.build/github.com/bazelbuild/bazel-skylib/releases/download/1.0.3/bazel-skylib-1.0.3.tar.gz",
-    ],
-)
+load("//build:deps_step2.bzl", "common_jvm_deps_step2")
 
-load("@bazel_skylib//:workspace.bzl", "bazel_skylib_workspace")
-
-bazel_skylib_workspace()
-
-# @platforms
-
-http_archive(
-    name = "platforms",
-    sha256 = "079945598e4b6cc075846f7fd6a9d0857c33a7afc0de868c2ccb96405225135d",
-    urls = [
-        "https://mirror.bazel.build/github.com/bazelbuild/platforms/releases/download/0.0.4/platforms-0.0.4.tar.gz",
-        "https://github.com/bazelbuild/platforms/releases/download/0.0.4/platforms-0.0.4.tar.gz",
-    ],
-)
-
-http_archive(
-    name = "com_google_protobuf",
-    sha256 = "65e020a42bdab44a66664d34421995829e9e79c60e5adaa08282fd14ca552f57",
-    strip_prefix = "protobuf-3.15.6",
-    urls = [
-        "https://github.com/protocolbuffers/protobuf/archive/refs/tags/v3.15.6.tar.gz",
-    ],
-)
-
-http_archive(
-    name = "googletest",
-    sha256 = "94c634d499558a76fa649edb13721dce6e98fb1e7018dfaeba3cd7a083945e91",
-    strip_prefix = "googletest-release-1.10.0",
-    urls = ["https://github.com/google/googletest/archive/release-1.10.0.zip"],
-)
-
-# Abseil C++ libraries
-http_archive(
-    name = "com_google_absl",
-    sha256 = "dd7db6815204c2a62a2160e32c55e97113b0a0178b2f090d6bab5ce36111db4b",
-    strip_prefix = "abseil-cpp-20210324.0",
-    urls = [
-        "https://github.com/abseil/abseil-cpp/archive/refs/tags/20210324.0.tar.gz",
-    ],
-)
-
-# @com_google_truth_truth
-load("//build/com_google_truth:repo.bzl", "com_google_truth_artifact_dict")
-
-# @io_bazel_rules_kotlin
-
-load(
-    "//build/io_bazel_rules_kotlin:repo.bzl",
-    "IO_BAZEL_RULES_KOTLIN_OVERRIDE_TARGETS",
-    "rules_kotlin_repo",
-)
-
-rules_kotlin_repo()
-
-load("//build/io_bazel_rules_kotlin:deps.bzl", "rules_kotlin_deps")
-
-rules_kotlin_deps()
-
-# kotlinx.coroutines
-load("//build/kotlinx_coroutines:repo.bzl", "kotlinx_coroutines_artifact_dict")
-
-# @com_github_grpc_grpc_kotlin
-
-http_archive(
-    name = "com_github_grpc_grpc_kotlin",
-    sha256 = "08f06a797ec806d68e8811018cefd1d5a6b8bf1782b63937f2618a6be86a9e2d",
-    strip_prefix = "grpc-kotlin-0.2.1",
-    url = "https://github.com/grpc/grpc-kotlin/archive/v0.2.1.zip",
-)
+common_jvm_deps_step2()
 
 load(
     "@com_github_grpc_grpc_kotlin//:repositories.bzl",
@@ -100,14 +25,17 @@ load(
     "grpc_java_repositories",
 )
 
+# @com_google_truth_truth
+load("//build/com_google_truth:repo.bzl", "com_google_truth_artifact_dict")
+
+# kotlinx.coroutines
+load("//build/kotlinx_coroutines:repo.bzl", "kotlinx_coroutines_artifact_dict")
+
 # Maven
 
-http_archive(
-    name = "rules_jvm_external",
-    sha256 = "f36441aa876c4f6427bfb2d1f2d723b48e9d930b62662bf723ddfb8fc80f0140",
-    strip_prefix = "rules_jvm_external-4.1",
-    url = "https://github.com/bazelbuild/rules_jvm_external/archive/4.1.zip",
-)
+load("//build/rules_jvm_external:repo.bzl", "rules_jvm_external_repo")
+
+rules_jvm_external_repo()
 
 load("@rules_jvm_external//:defs.bzl", "maven_install")
 load("//build/maven:artifacts.bzl", "artifacts")
@@ -205,12 +133,10 @@ load(
 java_image_repositories()
 
 # gRPC
-http_archive(
-    name = "com_github_grpc_grpc",
-    sha256 = "8eb9d86649c4d4a7df790226df28f081b97a62bf12c5c5fe9b5d31a29cd6541a",
-    strip_prefix = "grpc-1.36.4",
-    urls = ["https://github.com/grpc/grpc/archive/v1.36.4.tar.gz"],
-)
+
+load("//build/com_github_grpc_grpc:repo.bzl", "com_github_grpc_grpc_repo")
+
+com_github_grpc_grpc_repo()
 
 load("@com_github_grpc_grpc//bazel:grpc_deps.bzl", "grpc_deps")
 
@@ -241,23 +167,16 @@ cue_binaries(
 )
 
 # gRPC Health Check Probe
-http_file(
-    name = "grpc_health_probe",
-    downloaded_file_path = "grpc-health-probe",
-    executable = True,
-    sha256 = "c78e988a4aad5e9e599c6a69e681ac68579c000b8f0571593325ccbc0c1638b7",
-    urls = [
-        "https://github.com/grpc-ecosystem/grpc-health-probe/releases/download/v0.3.6/grpc_health_probe-linux-amd64",
-    ],
-)
+
+load("//build/grpc_health_probe:repo.bzl", "grpc_health_probe_repo")
+
+grpc_health_probe_repo()
 
 # Google API protos
-http_archive(
-    name = "com_google_googleapis",
-    sha256 = "65b3c3c4040ba3fc767c4b49714b839fe21dbe8467451892403ba90432bb5851",
-    strip_prefix = "googleapis-a1af63efb82f54428ab35ea76869d9cd57ca52b8",
-    urls = ["https://github.com/googleapis/googleapis/archive/a1af63efb82f54428ab35ea76869d9cd57ca52b8.tar.gz"],
-)
+
+load("//build/com_google_googleapis:repo.bzl", "com_google_googleapis_repo")
+
+com_google_googleapis_repo()
 
 # Google APIs imports. Required to build googleapis.
 load("@com_google_googleapis//:repository_rules.bzl", "switched_rules_by_language")
