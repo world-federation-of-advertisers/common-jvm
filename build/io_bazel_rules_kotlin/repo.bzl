@@ -19,6 +19,14 @@ See https://github.com/bazelbuild/rules_kotlin
 
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
+IO_BAZEL_RULES_KOTLIN_OVERRIDE_TARGETS = {
+    "org.jetbrains.kotlin:kotlin.stdlib": "@com_github_jetbrains_kotlin//:kotlin-stdlib",
+    "org.jetbrains.kotlin:kotlin.stdlib-jdk7": "@com_github_jetbrains_kotlin//:kotlin-stdlib-jdk7",
+    "org.jetbrains.kotlin:kotlin.stdlib-jdk8": "@com_github_jetbrains_kotlin//:kotlin-stdlib-jdk8",
+    "org.jetbrains.kotlin:kotlin.reflect": "@com_github_jetbrains_kotlin//:kotlin-reflect",
+    "org.jetbrains.kotlin:kotlin.test": "@com_github_jetbrains_kotlin//:kotlin-test",
+}
+
 def _rules_kotlin_repo(version, sha256):
     http_archive(
         name = "io_bazel_rules_kotlin",
@@ -27,17 +35,7 @@ def _rules_kotlin_repo(version, sha256):
     )
 
 def rules_kotlin_repo():
-    # Import rules_android to work around known bug in rules_kotlin v1.5.0-beta-2.
-    # See https://github.com/bazelbuild/rules_kotlin/releases/tag/v1.5.0-beta-2
-    if "rules_android" not in native.existing_rules():
-        http_archive(
-            name = "rules_android",
-            urls = ["https://github.com/bazelbuild/rules_android/archive/v0.1.1.zip"],
-            sha256 = "cd06d15dd8bb59926e4d65f9003bfc20f9da4b2519985c27e190cddc8b7a7806",
-            strip_prefix = "rules_android-0.1.1",
-        )
-
     _rules_kotlin_repo(
-        version = "v1.5.0-beta-2",
-        sha256 = "e4185409c787c18f332ae83a73827aab6e77058a48ffee0cac01123408cbc89a",
+        version = "v1.5.0-beta-3",
+        sha256 = "58edd86f0f3c5b959c54e656b8e7eb0b0becabd412465c37a2078693c2571f7f",
     )
