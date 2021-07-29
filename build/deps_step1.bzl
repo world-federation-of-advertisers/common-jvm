@@ -19,8 +19,6 @@ Adds external repos necessary for common-jvm.
 load("//build/bazel_skylib:repo.bzl", "bazel_skylib_repo")
 load("//build/platforms:repo.bzl", "platforms_repo")
 load("//build/com_google_protobuf:repo.bzl", "com_google_protobuf_repo")
-load("//build/googletest:repo.bzl", "googletest_repo")
-load("//build/com_google_absl:repo.bzl", "com_google_absl_repo")
 load("//build/io_bazel_rules_kotlin:repo.bzl", "rules_kotlin_repo")
 
 def common_jvm_deps_step1():
@@ -30,7 +28,4 @@ def common_jvm_deps_step1():
     bazel_skylib_repo()
     platforms_repo()
     com_google_protobuf_repo()
-    googletest_repo()
-    com_google_absl_repo()
-
     rules_kotlin_repo()
