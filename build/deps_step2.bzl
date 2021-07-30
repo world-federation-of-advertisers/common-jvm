@@ -16,9 +16,21 @@
 Adds external repos necessary for common-jvm.
 """
 
+load(
+    "@io_bazel_rules_docker//repositories:repositories.bzl",
+    container_repositories = "repositories",
+)
 load("//build/io_bazel_rules_kotlin:deps.bzl", "rules_kotlin_deps")
-load("//build/com_github_grpc_grpc_kotlin:repo.bzl", "com_github_grpc_grpc_kotlin_repo")
+load("//build/io_bazel_rules_docker:base_images.bzl", "base_java_images")
+load("@com_github_grpc_grpc//bazel:grpc_deps.bzl", "grpc_deps")
 
 def common_jvm_deps_step2():
+    container_repositories()
     rules_kotlin_deps()
-    com_github_grpc_grpc_kotlin_repo()
+    base_java_images(
+        # gcr.io/distroless/java:11-debug
+        debug_digest = "sha256:c3fe781de55d375de2675c3f23beb3e76f007e53fed9366ba931cc6d1df4b457",
+        # gcr.io/distroless/java:11
+        digest = "sha256:7fc091e8686df11f7bf0b7f67fd7da9862b2b9a3e49978d1184f0ff62cb673cc",
+    )
+    grpc_deps()
