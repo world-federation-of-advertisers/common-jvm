@@ -174,18 +174,6 @@ cue_binaries(
     version = "0.2.2",
 )
 
-# gRPC Health Check Probe
-
-#load("//build/grpc_health_probe:repo.bzl", "grpc_health_probe_repo")
-#
-#grpc_health_probe_repo()
-
-# Google API protos
-
-#load("//build/com_google_googleapis:repo.bzl", "com_google_googleapis_repo")
-#
-#com_google_googleapis_repo()
-
 load("//build:deps_step3.bzl", "common_jvm_deps_step3")
 
 common_jvm_deps_step3()
