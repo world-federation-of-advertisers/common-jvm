@@ -4,6 +4,14 @@ load("//build:deps_step1.bzl", "common_jvm_deps_step1")
 
 common_jvm_deps_step1()
 
+load(
+    "//build/io_bazel_rules_kotlin:repo.bzl",
+    "IO_BAZEL_RULES_KOTLIN_OVERRIDE_TARGETS",
+    "rules_kotlin_repo",
+)
+
+rules_kotlin_repo()
+
 load("//build:deps_step2.bzl", "common_jvm_deps_step2")
 
 common_jvm_deps_step2()
@@ -168,15 +176,19 @@ cue_binaries(
 
 # gRPC Health Check Probe
 
-load("//build/grpc_health_probe:repo.bzl", "grpc_health_probe_repo")
-
-grpc_health_probe_repo()
+#load("//build/grpc_health_probe:repo.bzl", "grpc_health_probe_repo")
+#
+#grpc_health_probe_repo()
 
 # Google API protos
 
-load("//build/com_google_googleapis:repo.bzl", "com_google_googleapis_repo")
+#load("//build/com_google_googleapis:repo.bzl", "com_google_googleapis_repo")
+#
+#com_google_googleapis_repo()
 
-com_google_googleapis_repo()
+load("//build:deps_step3.bzl", "common_jvm_deps_step3")
+
+common_jvm_deps_step3()
 
 # Google APIs imports. Required to build googleapis.
 load("@com_google_googleapis//:repository_rules.bzl", "switched_rules_by_language")
