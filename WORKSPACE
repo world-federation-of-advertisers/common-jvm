@@ -1,12 +1,12 @@
 workspace(name = "wfa_common_jvm")
 
-load("//build:deps_step1.bzl", "common_jvm_deps_step1")
+load("//build:common_jvm_repositories.bzl", "common_jvm_deps_repositories")
 
-common_jvm_deps_step1()
+common_jvm_deps_repositories()
 
-load("//build:deps_step2.bzl", "common_jvm_deps_step2")
+load("//build:common_jvm_deps.bzl", "common_jvm_deps")
 
-common_jvm_deps_step2()
+common_jvm_deps()
 
 load(
     "//build/io_bazel_rules_kotlin:repo.bzl",
@@ -86,9 +86,9 @@ maven_install(
     ],
 )
 
-load("//build:deps_step3.bzl", "common_jvm_deps_step3")
+load("//build:common_jvm_extra_deps.bzl", "common_jvm_extra_deps")
 
-common_jvm_deps_step3()
+common_jvm_extra_deps()
 
 # Run after compat_repositories to ensure the maven_install-selected
 # dependencies are used.

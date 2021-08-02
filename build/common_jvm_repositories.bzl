@@ -28,7 +28,7 @@ load("//build/cue:repo.bzl", "cue_binaries")
 load("//build/grpc_health_probe:repo.bzl", "grpc_health_probe_repo")
 load("//build/io_bazel_rules_docker:repo.bzl", "rules_docker_repo")
 
-def common_jvm_deps_step1():
+def common_jvm_deps_repositories():
     """
     Adds all external repos necessary for common-jvm.
     """
