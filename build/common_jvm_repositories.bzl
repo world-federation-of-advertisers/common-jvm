@@ -27,6 +27,7 @@ load("//build/cloud_spanner_emulator:defs.bzl", "cloud_spanner_emulator_binaries
 load("//build/cue:repo.bzl", "cue_binaries")
 load("//build/grpc_health_probe:repo.bzl", "grpc_health_probe_repo")
 load("//build/io_bazel_rules_docker:repo.bzl", "rules_docker_repo")
+load("//build/com_google_googleapis:repo.bzl", "com_google_googleapis_repo")
 
 def common_jvm_deps_repositories():
     """
@@ -43,3 +44,4 @@ def common_jvm_deps_repositories():
     cue_binaries()
     grpc_health_probe_repo()
     rules_docker_repo()
+    com_google_googleapis_repo()
