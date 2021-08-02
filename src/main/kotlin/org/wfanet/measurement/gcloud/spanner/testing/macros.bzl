@@ -14,7 +14,7 @@
 
 """Macros for Spanner test targets."""
 
-load("@io_bazel_rules_kotlin//kotlin:kotlin.bzl", "kt_jvm_test")
+load("@io_bazel_rules_kotlin//kotlin:jvm.bzl", "kt_jvm_test")
 
 def spanner_emulator_test(name, data = [], **kwargs):
     kt_jvm_test(

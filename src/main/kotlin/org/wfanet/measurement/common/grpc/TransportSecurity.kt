@@ -18,9 +18,18 @@ import io.grpc.netty.GrpcSslContexts
 import io.netty.handler.ssl.ClientAuth
 import io.netty.handler.ssl.SslContext
 import io.netty.handler.ssl.SslContextBuilder
+import java.security.cert.X509Certificate
 import org.wfanet.measurement.common.crypto.SigningCerts
 
 private const val TLS_V13_PROTOCOL = "TLSv1.3"
+
+/**
+ * Converts a collection of [X509Certificate]s into an [SslContext] for a gRPC client with only
+ * server authentication (TLS).
+ */
+fun Collection<X509Certificate>.toClientTlsContext(): SslContext {
+  return GrpcSslContexts.forClient().protocols(TLS_V13_PROTOCOL).trustManager(this).build()
+}
 
 /**
  * Converts this [SigningCerts] into an [SslContext] for a gRPC client with client authentication

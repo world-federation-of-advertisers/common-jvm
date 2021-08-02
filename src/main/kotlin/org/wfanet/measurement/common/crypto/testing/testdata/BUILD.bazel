@@ -6,7 +6,7 @@ package(
 )
 
 filegroup(
-    name = "certs",
+    name = "static_certs",
     srcs = glob([
         "*.key",
         "*.pem",

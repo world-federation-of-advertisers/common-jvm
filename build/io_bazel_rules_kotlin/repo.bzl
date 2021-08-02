@@ -19,6 +19,14 @@ See https://github.com/bazelbuild/rules_kotlin
 
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
+IO_BAZEL_RULES_KOTLIN_OVERRIDE_TARGETS = {
+    "org.jetbrains.kotlin:kotlin.stdlib": "@com_github_jetbrains_kotlin//:kotlin-stdlib",
+    "org.jetbrains.kotlin:kotlin.stdlib-jdk7": "@com_github_jetbrains_kotlin//:kotlin-stdlib-jdk7",
+    "org.jetbrains.kotlin:kotlin.stdlib-jdk8": "@com_github_jetbrains_kotlin//:kotlin-stdlib-jdk8",
+    "org.jetbrains.kotlin:kotlin.reflect": "@com_github_jetbrains_kotlin//:kotlin-reflect",
+    "org.jetbrains.kotlin:kotlin.test": "@com_github_jetbrains_kotlin//:kotlin-test",
+}
+
 def _rules_kotlin_repo(version, sha256):
     http_archive(
         name = "io_bazel_rules_kotlin",
@@ -28,6 +36,6 @@ def _rules_kotlin_repo(version, sha256):
 
 def rules_kotlin_repo():
     _rules_kotlin_repo(
-        version = "v1.5.0-alpha-2",
-        sha256 = "6194a864280e1989b6d8118a4aee03bb50edeeae4076e5bc30eef8a98dcd4f07",
+        version = "v1.5.0-beta-3",
+        sha256 = "58edd86f0f3c5b959c54e656b8e7eb0b0becabd412465c37a2078693c2571f7f",
     )

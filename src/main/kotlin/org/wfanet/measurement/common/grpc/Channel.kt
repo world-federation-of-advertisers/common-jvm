@@ -16,7 +16,10 @@ package org.wfanet.measurement.common.grpc
 
 import io.grpc.ManagedChannel
 import io.grpc.ManagedChannelBuilder
+import io.grpc.netty.NettyChannelBuilder
+import java.security.cert.X509Certificate
 import java.time.Duration
+import org.wfanet.measurement.common.crypto.SigningCerts
 
 /**
  * Builds a [ManagedChannel] for the specified target.
@@ -30,17 +33,52 @@ fun buildPlaintextChannel(target: String): ManagedChannel {
     .build()
 }
 
-fun buildChannel(target: String): ManagedChannel {
-  return ManagedChannelBuilder.forTarget(target).build()
+/**
+ * Builds a [ManagedChannel] for the specified target with mTLS connection.
+ *
+ * @param target the URI or authority string for the target server.
+ * @param clientCerts the collection of client certificate and private key, as well as the trusted
+ * server certificates.
+ * @param hostName the expected DNS hostname from the Subject Alternative Name (SAN) of the server's
+ * certificate
+ */
+fun buildMutualTlsChannel(
+  target: String,
+  clientCerts: SigningCerts,
+  hostName: String? = null
+): ManagedChannel {
+  val channelBuilder =
+    NettyChannelBuilder.forTarget(target).sslContext(clientCerts.toClientTlsContext())
+  return if (hostName == null) {
+    channelBuilder.build()
+  } else {
+    channelBuilder.overrideAuthority(hostName).build()
+  }
 }
 
 /**
- * Builds a [ManagedChannel] for the specified target.
+ * Builds a [ManagedChannel] for the specified target with TLS connection.
  *
  * @param target the URI or authority string for the target server
- * @param shutdownTimeout duration of time to allow a channel to finish processing on server
- * shutdown
+ * @param trustedServerCerts trusted server certificates.
+ * @param hostName the expected DNS hostname from the Subject Alternative Name (SAN) of the server's
+ * certificate
  */
-fun buildChannel(target: String, shutdownTimeout: Duration): ManagedChannel {
-  return buildChannel(target).also { Runtime.getRuntime().addShutdownHook(it, shutdownTimeout) }
+fun buildTlsChannel(
+  target: String,
+  trustedServerCerts: Collection<X509Certificate>,
+  hostName: String? = null
+): ManagedChannel {
+  val channelBuilder =
+    NettyChannelBuilder.forTarget(target).sslContext(trustedServerCerts.toClientTlsContext())
+  return if (hostName == null) {
+    channelBuilder.build()
+  } else {
+    channelBuilder.overrideAuthority(hostName).build()
+  }
+}
+
+/** Add shutdownHook to a managedChannel */
+fun ManagedChannel.withShutdownTimeout(shutdownTimeout: Duration): ManagedChannel {
+  return this.also { Runtime.getRuntime().addShutdownHook(it, shutdownTimeout) }
 }
