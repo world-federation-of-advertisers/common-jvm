@@ -16,7 +16,7 @@
 
 load("@io_bazel_rules_docker//container:container.bzl", "container_pull")
 
-def base_java_images(digest, debug_digest):
+def base_java_images():
     """Default base Java image targets.
 
     These must come before calling repositories() in
