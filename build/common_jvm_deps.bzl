@@ -26,6 +26,9 @@ load("@com_github_grpc_grpc//bazel:grpc_deps.bzl", "grpc_deps")
 load("@com_google_googleapis//:repository_rules.bzl", "switched_rules_by_language")
 
 def common_jvm_deps():
+    """
+    Adds all external repos necessary for common-jvm.
+    """
     container_repositories()
     rules_kotlin_deps()
     base_java_images()
