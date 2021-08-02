@@ -15,5 +15,6 @@ kt_jvm_library(
         "//imports/java/com/google/protobuf/util",
         "//imports/java/picocli",
         "//imports/kotlin/kotlinx/coroutines:core",
+        "@com_google_googleapis//google/type:type_java_proto",
     ],
 )

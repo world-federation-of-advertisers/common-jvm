@@ -79,3 +79,16 @@ kt_jvm_test(
         "//src/main/kotlin/org/wfanet/measurement/common",
     ],
 )
+
+kt_jvm_test(
+    name = "DateUtilTest",
+    srcs = ["DateUtilTest.kt"],
+    test_class = "org.wfanet.measurement.common.DateUtilTest",
+    deps = [
+        "//src/main/kotlin/org/wfanet/measurement/common",
+        "@com_google_googleapis//google/type:type_java_proto",
+        "@wfa_common_jvm//imports/java/com/google/common/truth",
+        "@wfa_common_jvm//imports/java/com/google/common/truth/extensions/proto",
+        "@wfa_common_jvm//imports/java/com/google/protobuf",
+    ],
+)
