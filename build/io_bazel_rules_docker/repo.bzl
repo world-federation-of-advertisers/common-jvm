@@ -43,3 +43,10 @@ def rules_docker_repo(sha256, version = None, commit = None, name = "io_bazel_ru
         strip_prefix = "rules_docker-" + suffix,
         urls = [url],
     )
+
+def rules_docker():
+    rules_docker_repo(
+        name = "io_bazel_rules_docker",
+        commit = "f929d80c5a4363994968248d87a892b1c2ef61d4",
+        sha256 = "efda18e39a63ee3c1b187b1349f61c48c31322bf84227d319b5dece994380bb6",
+    )

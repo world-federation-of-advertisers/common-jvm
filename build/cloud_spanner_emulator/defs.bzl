@@ -15,8 +15,8 @@
 """Repository rules/macros for Google Cloud Spanner Emulator."""
 
 def _cloud_spanner_emulator_impl(rctx):
-    version = rctx.attr.version
-    sha256 = rctx.attr.sha256
+    version = "1.1.1"
+    sha256 = "7a3cdd5db7f5a427230ab67a8dc09cfcb6752dd7f0b28d51e8d08150b2641506"
 
     url = "https://storage.googleapis.com/cloud-spanner-emulator/releases/{version}/cloud-spanner-emulator_linux_amd64-{version}.tar.gz".format(version = version)
 
@@ -37,3 +37,10 @@ cloud_spanner_emulator_binaries = repository_rule(
         "sha256": attr.string(),
     },
 )
+
+def cloud_spanner_emulator():
+    cloud_spanner_emulator_binaries(
+        name = "cloud_spanner_emulator",
+        sha256 = "7a3cdd5db7f5a427230ab67a8dc09cfcb6752dd7f0b28d51e8d08150b2641506",
+        version = "1.1.1",
+    )
