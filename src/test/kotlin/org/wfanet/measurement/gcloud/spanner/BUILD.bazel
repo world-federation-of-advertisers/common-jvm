@@ -23,3 +23,15 @@ kt_jvm_test(
         "//src/main/kotlin/org/wfanet/measurement/gcloud/spanner",
     ],
 )
+
+kt_jvm_test(
+    name = "StatementsTest",
+    srcs = ["StatementsTest.kt"],
+    test_class = "org.wfanet.measurement.gcloud.spanner.StatementsTest",
+    deps = [
+        "//imports/java/com/google/cloud/spanner",
+        "//imports/java/com/google/common/truth",
+        "//imports/java/org/junit",
+        "//src/main/kotlin/org/wfanet/measurement/gcloud/spanner",
+    ],
+)
