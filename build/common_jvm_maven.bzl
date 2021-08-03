@@ -71,6 +71,9 @@ def common_jvm_maven():
     return MAVEN_ARTIFACTS
 
 def common_jvm_maven_artifacts(MAVEN_ARTIFACTS):
+    """
+    Return artifact parameter for maven_install.
+    """
     return artifacts.dict_to_list(MAVEN_ARTIFACTS)
 
 common_jvm_maven_targets = dict(
@@ -80,5 +83,8 @@ common_jvm_maven_targets = dict(
 )
 
 def common_jvm_maven_grpc():
+    """
+    Add external repos necessary for common-jvm.
+    """
     grpc_kt_repositories()
     grpc_java_repositories()
