@@ -34,7 +34,6 @@ load(
 )
 load("//build/com_google_truth:repo.bzl", "com_google_truth_artifact_dict")
 load("//build/kotlinx_coroutines:repo.bzl", "kotlinx_coroutines_artifact_dict")
-load("@rules_jvm_external//:defs.bzl", "maven_install")
 load("//build/maven:artifacts.bzl", "artifacts")
 
 def common_jvm_maven():
@@ -69,19 +68,17 @@ def common_jvm_maven():
         "com.squareup:kotlinpoet": "1.8.0",
     })
 
-    maven_install(
-        artifacts = artifacts.dict_to_list(MAVEN_ARTIFACTS),
-        fetch_sources = True,
-        generate_compat_repositories = True,
-        override_targets = dict(
-            IO_BAZEL_RULES_KOTLIN_OVERRIDE_TARGETS.items() +
-            IO_GRPC_GRPC_JAVA_OVERRIDE_TARGETS.items() +
-            IO_GRPC_GRPC_KOTLIN_OVERRIDE_TARGETS.items(),
-        ),
-        repositories = [
-            "https://repo.maven.apache.org/maven2/",
-        ],
-    )
+    return MAVEN_ARTIFACTS
 
+def common_jvm_maven_artifacts(MAVEN_ARTIFACTS):
+    return artifacts.dict_to_list(MAVEN_ARTIFACTS)
+
+common_jvm_maven_targets = dict(
+    IO_BAZEL_RULES_KOTLIN_OVERRIDE_TARGETS.items() +
+    IO_GRPC_GRPC_JAVA_OVERRIDE_TARGETS.items() +
+    IO_GRPC_GRPC_KOTLIN_OVERRIDE_TARGETS.items(),
+)
+
+def common_jvm_maven_grpc():
     grpc_kt_repositories()
     grpc_java_repositories()
