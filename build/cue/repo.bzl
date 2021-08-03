@@ -30,7 +30,14 @@ def _cue_binaries_impl(rctx):
         executable = False,
     )
 
-cue_binaries = repository_rule(
+_cue_binaries = repository_rule(
     implementation = _cue_binaries_impl,
     attrs = {"version": attr.string(mandatory = True), "sha256": attr.string()},
 )
+
+def cue_binaries():
+    _cue_binaries(
+        name = "cue_binaries",
+        sha256 = "810851e0e7d38192a6d0e09a6fa89ab5ff526ce29c9741f697995601edccb134",
+        version = "0.2.2",
+    )

@@ -16,17 +16,13 @@
 
 load("@io_bazel_rules_docker//container:container.bzl", "container_pull")
 
-def base_java_images(digest, debug_digest):
+def base_java_images():
     """Default base Java image targets.
 
     These must come before calling repositories() in
     @io_bazel_rules_docker//java:image.bzl. The target names are significant.
 
     See https://console.cloud.google.com/gcr/images/distroless/GLOBAL/java
-
-    Args:
-        digest: Digest of the standard base image.
-        debug_digest: Digest of the debug base image.
     """
 
     container_pull(

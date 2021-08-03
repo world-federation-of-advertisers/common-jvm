@@ -30,10 +30,17 @@ def _cloud_spanner_emulator_impl(rctx):
         executable = False,
     )
 
-cloud_spanner_emulator_binaries = repository_rule(
+_cloud_spanner_emulator_binaries = repository_rule(
     implementation = _cloud_spanner_emulator_impl,
     attrs = {
         "version": attr.string(mandatory = True),
         "sha256": attr.string(),
     },
 )
+
+def cloud_spanner_emulator_binaries():
+    _cloud_spanner_emulator_binaries(
+        name = "cloud_spanner_emulator",
+        sha256 = "7a3cdd5db7f5a427230ab67a8dc09cfcb6752dd7f0b28d51e8d08150b2641506",
+        version = "1.1.1",
+    )
