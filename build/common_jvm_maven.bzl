@@ -39,6 +39,9 @@ load("//build/maven:artifacts.bzl", "artifacts")
 def common_jvm_maven():
     """
     Adds external repos necessary for common-jvm.
+
+    Returns:
+        An updated dictionary from a list of Java and Kotlin artifacts
     """
     MAVEN_ARTIFACTS = artifacts.list_to_dict(
         IO_GRPC_GRPC_JAVA_ARTIFACTS +
