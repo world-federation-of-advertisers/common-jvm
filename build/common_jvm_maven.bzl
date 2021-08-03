@@ -73,6 +73,9 @@ def common_jvm_maven():
 def common_jvm_maven_artifacts(MAVEN_ARTIFACTS):
     """
     Return artifact parameter for maven_install.
+
+    Returns:
+        A list from a dictionary for the artifact parameter for maven_install
     """
     return artifacts.dict_to_list(MAVEN_ARTIFACTS)
 
