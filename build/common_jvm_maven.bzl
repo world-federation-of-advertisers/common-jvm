@@ -24,38 +24,36 @@ load(
     "@com_github_grpc_grpc_kotlin//:repositories.bzl",
     "IO_GRPC_GRPC_KOTLIN_ARTIFACTS",
     "IO_GRPC_GRPC_KOTLIN_OVERRIDE_TARGETS",
-    "grpc_kt_repositories",
 )
 load(
     "@io_grpc_grpc_java//:repositories.bzl",
     "IO_GRPC_GRPC_JAVA_ARTIFACTS",
     "IO_GRPC_GRPC_JAVA_OVERRIDE_TARGETS",
-    "grpc_java_repositories",
 )
 load("//build/com_google_truth:repo.bzl", "com_google_truth_artifact_dict")
 load("//build/kotlinx_coroutines:repo.bzl", "kotlinx_coroutines_artifact_dict")
 load("//build/maven:artifacts.bzl", "artifacts")
 
-def common_jvm_maven():
+def common_jvm_maven_artifacts():
     """
     Adds external repos necessary for common-jvm.
 
     Returns:
         An updated dictionary from a list of Java and Kotlin artifacts
     """
-    MAVEN_ARTIFACTS = artifacts.list_to_dict(
+    maven_artifacts = artifacts.list_to_dict(
         IO_GRPC_GRPC_JAVA_ARTIFACTS +
         IO_GRPC_GRPC_KOTLIN_ARTIFACTS,
     )
-    MAVEN_ARTIFACTS.update(com_google_truth_artifact_dict(version = "1.0.1"))
+    maven_artifacts.update(com_google_truth_artifact_dict(version = "1.0.1"))
 
     # kotlinx.coroutines version should be compatible with Kotlin release used by
     # rules_kotlin. See https://kotlinlang.org/docs/releases.html#release-details.
-    MAVEN_ARTIFACTS.update(kotlinx_coroutines_artifact_dict(version = "1.4.3"))
+    maven_artifacts.update(kotlinx_coroutines_artifact_dict(version = "1.4.3"))
 
     # Add Maven artifacts or override versions (e.g. those pulled in by gRPC Kotlin
     # or default dependency versions).
-    MAVEN_ARTIFACTS.update({
+    maven_artifacts.update({
         "com.google.api.grpc:grpc-google-cloud-pubsub-v1": "0.1.24",
         "com.google.cloud:google-cloud-nio": "0.122.0",
         "com.google.cloud:google-cloud-spanner": "3.0.3",
@@ -71,26 +69,10 @@ def common_jvm_maven():
         "com.squareup:kotlinpoet": "1.8.0",
     })
 
-    return MAVEN_ARTIFACTS
-
-def common_jvm_maven_artifacts(MAVEN_ARTIFACTS):
-    """
-    Return artifact parameter for maven_install.
-
-    Returns:
-        A list from a dictionary for the artifact parameter for maven_install
-    """
-    return artifacts.dict_to_list(MAVEN_ARTIFACTS)
+    return artifacts.dict_to_list(maven_artifacts)
 
 common_jvm_maven_targets = dict(
     IO_BAZEL_RULES_KOTLIN_OVERRIDE_TARGETS.items() +
     IO_GRPC_GRPC_JAVA_OVERRIDE_TARGETS.items() +
     IO_GRPC_GRPC_KOTLIN_OVERRIDE_TARGETS.items(),
 )
-
-def common_jvm_maven_grpc():
-    """
-    Add external repos necessary for common-jvm.
-    """
-    grpc_kt_repositories()
-    grpc_java_repositories()
