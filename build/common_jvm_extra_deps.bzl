@@ -27,6 +27,9 @@ load(
 load("@com_github_grpc_grpc//bazel:grpc_extra_deps.bzl", "grpc_extra_deps")
 
 def common_jvm_extra_deps():
+    """
+    Adds all external repos necessary for common-jvm.
+    """
     compat_repositories()
     container_deps()
     java_image_repositories()
