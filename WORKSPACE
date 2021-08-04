@@ -8,14 +8,14 @@ load("//build:common_jvm_deps.bzl", "common_jvm_deps")
 
 common_jvm_deps()
 
-load("//build:common_jvm_maven.bzl", "common_jvm_maven_artifacts", "common_jvm_maven_targets")
+load("//build:common_jvm_maven.bzl", "COMMON_JVM_MAVEN_TARGETS", "common_jvm_maven_artifacts")
 load("@rules_jvm_external//:defs.bzl", "maven_install")
 
 maven_install(
     artifacts = common_jvm_maven_artifacts(),
     fetch_sources = True,
     generate_compat_repositories = True,
-    override_targets = common_jvm_maven_targets,
+    override_targets = COMMON_JVM_MAVEN_TARGETS,
     repositories = [
         "https://repo.maven.apache.org/maven2/",
     ],

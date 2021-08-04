@@ -71,7 +71,7 @@ def common_jvm_maven_artifacts():
 
     return artifacts.dict_to_list(maven_artifacts)
 
-common_jvm_maven_targets = dict(
+COMMON_JVM_MAVEN_TARGETS = dict(
     IO_BAZEL_RULES_KOTLIN_OVERRIDE_TARGETS.items() +
     IO_GRPC_GRPC_JAVA_OVERRIDE_TARGETS.items() +
     IO_GRPC_GRPC_KOTLIN_OVERRIDE_TARGETS.items(),
