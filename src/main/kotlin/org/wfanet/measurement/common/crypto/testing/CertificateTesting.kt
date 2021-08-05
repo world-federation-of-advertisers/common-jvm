@@ -40,4 +40,12 @@ private val FIXED_TESTDATA_DIR_PATH =
 val FIXED_SERVER_CERT_PEM_FILE =
   getRuntimePath(FIXED_TESTDATA_DIR_PATH.resolve("server.pem"))!!.toFile()
 val FIXED_SERVER_KEY_FILE = getRuntimePath(FIXED_TESTDATA_DIR_PATH.resolve("server.key"))!!.toFile()
+val FIXED_SERVER_CERT_DER_FILE =
+  getRuntimePath(FIXED_TESTDATA_DIR_PATH.resolve("server-cert.der"))!!.toFile()
+val FIXED_SERVER_KEY_DER_FILE =
+  getRuntimePath(FIXED_TESTDATA_DIR_PATH.resolve("server-key.der"))!!.toFile()
 val FIXED_CA_CERT_PEM_FILE = getRuntimePath(FIXED_TESTDATA_DIR_PATH.resolve("ca.pem"))!!.toFile()
+val FIXED_ENCRYPTION_PRIVATE_KEY_DER_FILE =
+  getRuntimePath(FIXED_TESTDATA_DIR_PATH.resolve("ec-private.der"))!!.toFile()
+val FIXED_ENCRYPTION_PUBLIC_KEY_DER_FILE =
+  getRuntimePath(FIXED_TESTDATA_DIR_PATH.resolve("ec-public.der"))!!.toFile()
