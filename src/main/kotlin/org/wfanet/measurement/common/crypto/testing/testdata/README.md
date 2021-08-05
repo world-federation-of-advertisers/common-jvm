@@ -36,3 +36,9 @@ openssl genpkey -out ec.key -algorithm ec -pkeyopt ec_paramgen_curve:prime256v1
 ```
 openssl pkey -pubout -outform der -in ec.key -out ec-public.der
 ```
+
+### Convert the PEM-encoded private key to DER-encoded PKCS#8 ByteString
+
+```
+openssl pkcs8 -topk8 -inform pem -outform der -in ec.key -out ec-private.der -nocrypt
+```
