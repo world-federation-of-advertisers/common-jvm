@@ -124,3 +124,27 @@ inline fun updateMutation(table: String, bind: Mutation.WriteBuilder.() -> Unit)
 /** Builds an [INSERT_OR_UPDATE][Mutation.Op.INSERT_OR_UPDATE] [Mutation]. */
 inline fun insertOrUpdateMutation(table: String, bind: Mutation.WriteBuilder.() -> Unit): Mutation =
   Mutation.newInsertOrUpdateBuilder(table).apply(bind).build()
+
+/** Builds and buffers an [INSERT][Mutation.Op.INSERT] [Mutation]. */
+inline fun AsyncDatabaseClient.TransactionContext.bufferInsertMutation(
+  table: String,
+  bind: Mutation.WriteBuilder.() -> Unit
+) {
+  insertMutation(table, bind).bufferTo(this)
+}
+
+/** Builds and buffers an [UPDATE][Mutation.Op.UPDATE] [Mutation]. */
+inline fun AsyncDatabaseClient.TransactionContext.bufferUpdateMutation(
+  table: String,
+  bind: Mutation.WriteBuilder.() -> Unit
+) {
+  updateMutation(table, bind).bufferTo(this)
+}
+
+/** Builds and buffers an [INSERT_OR_UPDATE][Mutation.Op.INSERT_OR_UPDATE] [Mutation]. */
+inline fun AsyncDatabaseClient.TransactionContext.bufferInsertOrUpdateMutation(
+  table: String,
+  bind: Mutation.WriteBuilder.() -> Unit
+) {
+  insertOrUpdateMutation(table, bind).bufferTo(this)
+}
