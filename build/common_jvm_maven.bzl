@@ -67,6 +67,9 @@ def common_jvm_maven_artifacts():
         # For grpc-kotlin. This should be a version that is compatible with the
         # Kotlin release used by rules_kotlin.
         "com.squareup:kotlinpoet": "1.8.0",
+
+        # For kt_jvm_proto_library.
+        "com.google.protobuf:protobuf-kotlin": "3.17.3",
     })
 
     return artifacts.dict_to_list(maven_artifacts)
