@@ -1,0 +1,13 @@
+load("@io_bazel_rules_kotlin//kotlin:jvm.bzl", "kt_jvm_test")
+
+kt_jvm_test(
+    name = "KtJvmProtoLibraryTest",
+    srcs = ["KtJvmProtoLibraryTest.kt"],
+    test_class = "org.wfanet.bazel.KtJvmProtoLibraryTest",
+    deps = [
+        "//imports/java/com/google/common/truth",
+        "//imports/java/org/junit",
+        "//imports/kotlin/kotlin/test",
+        "//src/test/proto/wfa/measurement/common:fake_message_kt_jvm_proto",
+    ],
+)

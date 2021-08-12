@@ -33,6 +33,7 @@ load(
 load("//build/com_google_truth:repo.bzl", "com_google_truth_artifact_dict")
 load("//build/kotlinx_coroutines:repo.bzl", "kotlinx_coroutines_artifact_dict")
 load("//build/maven:artifacts.bzl", "artifacts")
+load("//build/com_google_protobuf:repo.bzl", "COM_GOOGLE_PROTOBUF_VERSION")
 
 def common_jvm_maven_artifacts():
     """
@@ -67,6 +68,10 @@ def common_jvm_maven_artifacts():
         # For grpc-kotlin. This should be a version that is compatible with the
         # Kotlin release used by rules_kotlin.
         "com.squareup:kotlinpoet": "1.8.0",
+
+        # For kt_jvm_proto_library.
+        # The version must match that in //build/com_google_protobuf/repo.bzl.
+        "com.google.protobuf:protobuf-kotlin": COM_GOOGLE_PROTOBUF_VERSION,
     })
 
     return artifacts.dict_to_list(maven_artifacts)
