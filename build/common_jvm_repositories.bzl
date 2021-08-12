@@ -32,7 +32,7 @@ load(
     "rules_kotlin_repo",
 )
 
-def common_jvm_deps_repositories():
+def common_jvm_repositories():
     """
     Adds all external repos necessary for common-jvm.
     """
