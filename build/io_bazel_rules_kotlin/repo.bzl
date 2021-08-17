@@ -21,6 +21,7 @@ load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
 IO_BAZEL_RULES_KOTLIN_OVERRIDE_TARGETS = {
     "org.jetbrains.kotlin:kotlin.stdlib": "@com_github_jetbrains_kotlin//:kotlin-stdlib",
+    "org.jetbrains.kotlin:kotlin-stdlib-common": "@com_github_jetbrains_kotlin//:kotlin-stdlib",
     "org.jetbrains.kotlin:kotlin.stdlib-jdk7": "@com_github_jetbrains_kotlin//:kotlin-stdlib-jdk7",
     "org.jetbrains.kotlin:kotlin.stdlib-jdk8": "@com_github_jetbrains_kotlin//:kotlin-stdlib-jdk8",
     "org.jetbrains.kotlin:kotlin.reflect": "@com_github_jetbrains_kotlin//:kotlin-reflect",
