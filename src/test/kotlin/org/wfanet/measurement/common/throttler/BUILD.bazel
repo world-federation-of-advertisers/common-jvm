@@ -5,6 +5,7 @@ kt_jvm_test(
     srcs = ["AdaptiveThrottlerTest.kt"],
     test_class = "org.wfanet.measurement.common.throttler.AdaptiveThrottlerTest",
     deps = [
+        "//imports/java/com/google/common:guava",
         "//imports/java/com/google/common/truth",
         "//imports/java/org/junit",
         "//imports/kotlin/kotlin/test",

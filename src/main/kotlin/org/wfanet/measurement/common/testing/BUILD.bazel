@@ -13,8 +13,8 @@ kt_jvm_library(
     ],
     deps = [
         "//imports/java/com/google/common/truth/extensions/proto",
+        "//imports/java/com/google/protobuf",
         "//imports/java/org/junit",
-        "//imports/java/org/mockito",
         "//imports/kotlin/kotlinx/coroutines:core",
         "//imports/kotlin/org/mockito/kotlin",
         "//src/main/kotlin/org/wfanet/measurement/common",

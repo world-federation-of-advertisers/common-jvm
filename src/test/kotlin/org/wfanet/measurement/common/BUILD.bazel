@@ -6,8 +6,10 @@ kt_jvm_test(
     test_class = "org.wfanet.measurement.common.BytesTest",
     deps = [
         "//imports/java/com/google/common/truth",
+        "//imports/java/com/google/protobuf",
         "//imports/java/org/junit",
         "//imports/kotlin/kotlin/test",
+        "//imports/kotlin/kotlinx/coroutines:core",
         "//imports/kotlin/kotlinx/coroutines/test",
         "//src/main/kotlin/org/wfanet/measurement/common",
     ],
@@ -20,6 +22,7 @@ kt_jvm_test(
     deps = [
         "//imports/java/com/google/common/truth",
         "//imports/java/com/google/common/truth/extensions/proto",
+        "//imports/java/com/google/protobuf",
         "//imports/java/org/junit",
         "//imports/kotlin/kotlin/test",
         "//src/main/kotlin/org/wfanet/measurement/common",
@@ -47,6 +50,7 @@ kt_jvm_test(
     deps = [
         "//imports/java/com/google/common/truth",
         "//imports/java/org/junit",
+        "//imports/kotlin/kotlin:stdlib_jdk7",
         "//imports/kotlin/kotlin/test",
         "//imports/kotlin/kotlinx/coroutines:core",
         "//imports/kotlin/kotlinx/coroutines/test",
@@ -85,10 +89,11 @@ kt_jvm_test(
     srcs = ["DateUtilTest.kt"],
     test_class = "org.wfanet.measurement.common.DateUtilTest",
     deps = [
+        "//imports/java/com/google/common/truth",
+        "//imports/java/com/google/common/truth/extensions/proto",
+        "//imports/java/com/google/protobuf",
+        "//imports/java/org/junit",
         "//src/main/kotlin/org/wfanet/measurement/common",
         "@com_google_googleapis//google/type:type_java_proto",
-        "@wfa_common_jvm//imports/java/com/google/common/truth",
-        "@wfa_common_jvm//imports/java/com/google/common/truth/extensions/proto",
-        "@wfa_common_jvm//imports/java/com/google/protobuf",
     ],
 )
