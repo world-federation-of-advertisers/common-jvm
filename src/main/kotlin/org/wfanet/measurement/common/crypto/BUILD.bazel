@@ -19,3 +19,9 @@ kt_jvm_library(
         ":security_provider",
     ],
 )
+
+kt_jvm_library(
+    name = "hashing",
+    srcs = ["Hashing.kt"],
+    deps = ["@wfa_common_jvm//imports/java/com/google/protobuf"],
+)
