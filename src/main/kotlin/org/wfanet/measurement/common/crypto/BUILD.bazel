@@ -3,6 +3,19 @@ load("@io_bazel_rules_kotlin//kotlin:jvm.bzl", "kt_jvm_library")
 package(default_visibility = ["//visibility:public"])
 
 kt_jvm_library(
+    name = "invalid_signature_exception",
+    srcs = ["InvalidSignatureException.kt"],
+    deps = [
+    ],
+)
+
+kt_jvm_library(
+    name = "hashing",
+    srcs = ["Hashing.kt"],
+    deps = ["@wfa_common_jvm//imports/java/com/google/protobuf"],
+)
+
+kt_jvm_library(
     name = "security_provider",
     srcs = ["SecurityProvider.kt"],
     deps = [
@@ -13,15 +26,19 @@ kt_jvm_library(
 )
 
 kt_jvm_library(
+    name = "signatures",
+    srcs = ["Signatures.kt"],
+    deps = [
+        "//imports/java/com/google/protobuf",
+        "//src/main/kotlin/org/wfanet/measurement/common/crypto:invalid_signature_exception",
+        "//src/main/kotlin/org/wfanet/measurement/common/crypto:security_provider",
+    ],
+)
+
+kt_jvm_library(
     name = "signing_certs",
     srcs = ["SigningCerts.kt"],
     deps = [
         ":security_provider",
     ],
-)
-
-kt_jvm_library(
-    name = "hashing",
-    srcs = ["Hashing.kt"],
-    deps = ["@wfa_common_jvm//imports/java/com/google/protobuf"],
 )
