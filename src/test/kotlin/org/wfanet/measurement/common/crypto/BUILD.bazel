@@ -1,6 +1,20 @@
 load("@io_bazel_rules_kotlin//kotlin:jvm.bzl", "kt_jvm_test")
 
 kt_jvm_test(
+    name = "HashingTest",
+    srcs = ["HashingTest.kt"],
+    test_class = "org.wfanet.measurement.common.crypto.HashingTest",
+    deps = [
+        "//imports/java/com/google/common/truth",
+        "//imports/java/com/google/protobuf",
+        "//imports/java/org/junit",
+        "//imports/kotlin/kotlin/test",
+        "//src/main/kotlin/org/wfanet/measurement/common",
+        "//src/main/kotlin/org/wfanet/measurement/common/crypto:hashing",
+    ],
+)
+
+kt_jvm_test(
     name = "SecurityProviderTest",
     srcs = ["SecurityProviderTest.kt"],
     test_class = "org.wfanet.measurement.common.crypto.SecurityProviderTest",
@@ -16,15 +30,17 @@ kt_jvm_test(
 )
 
 kt_jvm_test(
-    name = "HashingTest",
-    srcs = ["HashingTest.kt"],
-    test_class = "org.wfanet.measurement.common.crypto.HashingTest",
+    name = "SignaturesTest",
+    srcs = ["SignaturesTest.kt"],
+    test_class = "org.wfanet.measurement.common.crypto.SignaturesTest",
     deps = [
         "//imports/java/com/google/common/truth",
-        "//imports/java/com/google/protobuf",
         "//imports/java/org/junit",
         "//imports/kotlin/kotlin/test",
+        "//imports/kotlin/kotlinx/coroutines:core",
         "//src/main/kotlin/org/wfanet/measurement/common",
-        "//src/main/kotlin/org/wfanet/measurement/common/crypto:hashing",
+        "//src/main/kotlin/org/wfanet/measurement/common/crypto:security_provider",
+        "//src/main/kotlin/org/wfanet/measurement/common/crypto:signatures",
+        "//src/main/kotlin/org/wfanet/measurement/common/crypto/testing",
     ],
 )
