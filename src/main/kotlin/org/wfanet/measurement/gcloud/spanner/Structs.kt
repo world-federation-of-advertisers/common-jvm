@@ -18,8 +18,11 @@ import com.google.cloud.ByteArray
 import com.google.cloud.Date
 import com.google.cloud.Timestamp
 import com.google.cloud.spanner.Struct
+import com.google.cloud.spanner.StructReader
 import com.google.protobuf.Message
 import com.google.protobuf.ProtocolMessageEnum
+import org.wfanet.measurement.common.identity.ExternalId
+import org.wfanet.measurement.common.identity.InternalId
 
 /** Sets the value that should be bound to the specified column. */
 @JvmName("setBoolean")
@@ -111,6 +114,21 @@ fun Struct.Builder.setJson(columnValuePair: Pair<String, Message?>): Struct.Buil
   return set(columnName).toProtoJson(value)
 }
 
-/** Builds an [Struct]. */
-inline fun makeStruct(bind: Struct.Builder.() -> Unit): Struct =
-  Struct.newBuilder().apply(bind).build()
+/**
+ * Returns an [InternalId] with the value of a non-`NULL` column with type [Type.int64()]
+ * [com.google.cloud.spanner.Type.int64].
+ */
+fun StructReader.getInternalId(columnName: String) = InternalId(getLong(columnName))
+
+/**
+ * Returns an [ExternalId] with the value of a non-`NULL` column with type [Type.int64()]
+ * [com.google.cloud.spanner.Type.int64].
+ */
+fun StructReader.getExternalId(columnName: String) = ExternalId(getLong(columnName))
+
+/** Builds a [Struct]. */
+inline fun struct(bind: Struct.Builder.() -> Unit): Struct = Struct.newBuilder().apply(bind).build()
+
+/** Builds a [Struct]. */
+@Deprecated("Use struct instead", ReplaceWith("struct(bind)"))
+inline fun makeStruct(bind: Struct.Builder.() -> Unit) = struct(bind)

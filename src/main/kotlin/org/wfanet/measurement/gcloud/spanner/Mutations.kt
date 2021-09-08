@@ -20,6 +20,8 @@ import com.google.cloud.Timestamp
 import com.google.cloud.spanner.Mutation
 import com.google.protobuf.Message
 import com.google.protobuf.ProtocolMessageEnum
+import org.wfanet.measurement.common.identity.ExternalId
+import org.wfanet.measurement.common.identity.InternalId
 
 /** Sets the value that should be bound to the specified column. */
 @JvmName("setBoolean")
@@ -89,6 +91,20 @@ fun Mutation.WriteBuilder.set(columnValuePair: Pair<String, Date?>): Mutation.Wr
 fun Mutation.WriteBuilder.set(columnValuePair: Pair<String, ByteArray?>): Mutation.WriteBuilder {
   val (columnName, value) = columnValuePair
   return set(columnName).to(value)
+}
+
+/** Sets the value that should be bound to the specified column. */
+@JvmName("setInternalId")
+fun Mutation.WriteBuilder.set(columnValuePair: Pair<String, InternalId>): Mutation.WriteBuilder {
+  val (columnName, value) = columnValuePair
+  return set(columnName).to(value.value)
+}
+
+/** Sets the value that should be bound to the specified column. */
+@JvmName("setExternalId")
+fun Mutation.WriteBuilder.set(columnValuePair: Pair<String, ExternalId>): Mutation.WriteBuilder {
+  val (columnName, value) = columnValuePair
+  return set(columnName).to(value.value)
 }
 
 /** Sets the value that should be bound to the specified column. */

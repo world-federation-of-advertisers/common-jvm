@@ -20,97 +20,117 @@ import com.google.cloud.Timestamp
 import com.google.cloud.spanner.Statement
 import com.google.protobuf.Message
 import com.google.protobuf.ProtocolMessageEnum
+import org.wfanet.measurement.common.identity.ExternalId
+import org.wfanet.measurement.common.identity.InternalId
 
-/** Binds the value that should be bound to the specified column. */
+/** Binds the value that should be bound to the specified param. */
 @JvmName("bindBoolean")
-fun Statement.Builder.bind(columnValuePair: Pair<String, Boolean>): Statement.Builder {
-  val (columnName, value) = columnValuePair
-  return bind(columnName).to(value)
+fun Statement.Builder.bind(paramValuePair: Pair<String, Boolean>): Statement.Builder {
+  val (paramName, value) = paramValuePair
+  return bind(paramName).to(value)
 }
 
-/** Binds the value that should be bound to the specified column. */
+/** Binds the value that should be bound to the specified param. */
 @JvmName("bindBooleanBoxed")
-fun Statement.Builder.bind(columnValuePair: Pair<String, Boolean?>): Statement.Builder {
-  val (columnName, value) = columnValuePair
-  return bind(columnName).to(value)
+fun Statement.Builder.bind(paramValuePair: Pair<String, Boolean?>): Statement.Builder {
+  val (paramName, value) = paramValuePair
+  return bind(paramName).to(value)
 }
 
-/** Binds the value that should be bound to the specified column. */
+/** Binds the value that should be bound to the specified param. */
 @JvmName("bindLong")
-fun Statement.Builder.bind(columnValuePair: Pair<String, Long>): Statement.Builder {
-  val (columnName, value) = columnValuePair
-  return bind(columnName).to(value)
+fun Statement.Builder.bind(paramValuePair: Pair<String, Long>): Statement.Builder {
+  val (paramName, value) = paramValuePair
+  return bind(paramName).to(value)
 }
 
-/** Binds the value that should be bound to the specified column. */
+/** Binds the value that should be bound to the specified param. */
 @JvmName("bindLongBoxed")
-fun Statement.Builder.bind(columnValuePair: Pair<String, Long?>): Statement.Builder {
-  val (columnName, value) = columnValuePair
-  return bind(columnName).to(value)
+fun Statement.Builder.bind(paramValuePair: Pair<String, Long?>): Statement.Builder {
+  val (paramName, value) = paramValuePair
+  return bind(paramName).to(value)
 }
 
-/** Binds the value that should be bound to the specified column. */
+/** Binds the value that should be bound to the specified param. */
 @JvmName("bindDouble")
-fun Statement.Builder.bind(columnValuePair: Pair<String, Double>): Statement.Builder {
-  val (columnName, value) = columnValuePair
-  return bind(columnName).to(value)
+fun Statement.Builder.bind(paramValuePair: Pair<String, Double>): Statement.Builder {
+  val (paramName, value) = paramValuePair
+  return bind(paramName).to(value)
 }
 
-/** Binds the value that should be bound to the specified column. */
+/** Binds the value that should be bound to the specified param. */
 @JvmName("bindDoubleBoxed")
-fun Statement.Builder.bind(columnValuePair: Pair<String, Double?>): Statement.Builder {
-  val (columnName, value) = columnValuePair
-  return bind(columnName).to(value)
+fun Statement.Builder.bind(paramValuePair: Pair<String, Double?>): Statement.Builder {
+  val (paramName, value) = paramValuePair
+  return bind(paramName).to(value)
 }
 
-/** Binds the value that should be bound to the specified column. */
+/** Binds the value that should be bound to the specified param. */
 @JvmName("bindString")
-fun Statement.Builder.bind(columnValuePair: Pair<String, String?>): Statement.Builder {
-  val (columnName, value) = columnValuePair
-  return bind(columnName).to(value)
+fun Statement.Builder.bind(paramValuePair: Pair<String, String?>): Statement.Builder {
+  val (paramName, value) = paramValuePair
+  return bind(paramName).to(value)
 }
 
-/** Binds the value that should be bound to the specified column. */
+/** Binds the value that should be bound to the specified param. */
 @JvmName("bindTimestamp")
-fun Statement.Builder.bind(columnValuePair: Pair<String, Timestamp?>): Statement.Builder {
-  val (columnName, value) = columnValuePair
-  return bind(columnName).to(value)
+fun Statement.Builder.bind(paramValuePair: Pair<String, Timestamp?>): Statement.Builder {
+  val (paramName, value) = paramValuePair
+  return bind(paramName).to(value)
 }
 
-/** Binds the value that should be bound to the specified column. */
+/** Binds the value that should be bound to the specified param. */
 @JvmName("bindDate")
-fun Statement.Builder.bind(columnValuePair: Pair<String, Date?>): Statement.Builder {
-  val (columnName, value) = columnValuePair
-  return bind(columnName).to(value)
+fun Statement.Builder.bind(paramValuePair: Pair<String, Date?>): Statement.Builder {
+  val (paramName, value) = paramValuePair
+  return bind(paramName).to(value)
 }
 
-/** Binds the value that should be bound to the specified column. */
+/** Binds the value that should be bound to the specified param. */
 @JvmName("bindBytes")
-fun Statement.Builder.bind(columnValuePair: Pair<String, ByteArray?>): Statement.Builder {
-  val (columnName, value) = columnValuePair
-  return bind(columnName).to(value)
+fun Statement.Builder.bind(paramValuePair: Pair<String, ByteArray?>): Statement.Builder {
+  val (paramName, value) = paramValuePair
+  return bind(paramName).to(value)
 }
 
-/** Binds the value that should be bound to the specified column. */
+/** Binds the value that should be bound to the specified param. */
+@JvmName("bindInternalId")
+fun Statement.Builder.bind(paramValuePair: Pair<String, InternalId>): Statement.Builder {
+  val (paramName, value) = paramValuePair
+  return bind(paramName).to(value.value)
+}
+
+/** Binds the value that should be bound to the specified param. */
+@JvmName("bindExternalId")
+fun Statement.Builder.bind(paramValuePair: Pair<String, ExternalId>): Statement.Builder {
+  val (paramName, value) = paramValuePair
+  return bind(paramName).to(value.value)
+}
+
+/** Binds the value that should be bound to the specified param. */
 @JvmName("bindProtoEnum")
-fun Statement.Builder.bind(columnValuePair: Pair<String, ProtocolMessageEnum>): Statement.Builder {
-  val (columnName, value) = columnValuePair
-  return bind(columnName).toProtoEnum(value)
+fun Statement.Builder.bind(paramValuePair: Pair<String, ProtocolMessageEnum>): Statement.Builder {
+  val (paramName, value) = paramValuePair
+  return bind(paramName).toProtoEnum(value)
 }
 
-/** Binds the value that should be bound to the specified column. */
+/** Binds the value that should be bound to the specified param. */
 @JvmName("bindProtoMessageBytes")
-fun Statement.Builder.bind(columnValuePair: Pair<String, Message?>): Statement.Builder {
-  val (columnName, value) = columnValuePair
-  return bind(columnName).toProtoBytes(value)
+fun Statement.Builder.bind(paramValuePair: Pair<String, Message?>): Statement.Builder {
+  val (paramName, value) = paramValuePair
+  return bind(paramName).toProtoBytes(value)
 }
 
-/** Binds the JSON value that should be bound to the specified string column. */
-fun Statement.Builder.bindJson(columnValuePair: Pair<String, Message?>): Statement.Builder {
-  val (columnName, value) = columnValuePair
-  return bind(columnName).toProtoJson(value)
+/** Binds the JSON value that should be bound to the specified string param. */
+fun Statement.Builder.bindJson(paramValuePair: Pair<String, Message?>): Statement.Builder {
+  val (paramName, value) = paramValuePair
+  return bind(paramName).toProtoJson(value)
 }
 
 /** Builds a [Statement]. */
-fun makeStatement(sql: String, bind: Statement.Builder.() -> Unit): Statement =
+inline fun statement(sql: String, bind: Statement.Builder.() -> Unit): Statement =
   Statement.newBuilder(sql).apply(bind).build()
+
+/** Builds a [Statement]. */
+@Deprecated("Use statement instead", ReplaceWith("statement(sql, bind)"))
+inline fun makeStatement(sql: String, bind: Statement.Builder.() -> Unit) = statement(sql, bind)
