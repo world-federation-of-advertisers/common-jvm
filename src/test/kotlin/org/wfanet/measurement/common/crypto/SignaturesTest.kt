@@ -18,6 +18,7 @@ import com.google.common.collect.Range
 import com.google.common.truth.Truth.assertThat
 import com.google.protobuf.ByteString
 import java.security.cert.X509Certificate
+import kotlin.random.Random
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -29,10 +30,11 @@ import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 import org.wfanet.measurement.common.asBufferedFlow
 import org.wfanet.measurement.common.crypto.exception.InvalidSignatureException
+import org.wfanet.measurement.common.crypto.testing.*
 import org.wfanet.measurement.common.crypto.testing.FIXED_SERVER_CERT_PEM_FILE as SERVER_CERT_PEM_FILE
 import org.wfanet.measurement.common.crypto.testing.FIXED_SERVER_KEY_FILE as SERVER_KEY_FILE
-import org.wfanet.measurement.common.crypto.testing.KEY_ALGORITHM
 import org.wfanet.measurement.common.flatten
+import org.wfanet.measurement.common.toByteString
 
 private val DATA = ByteString.copyFromUtf8("I am some data to sign")
 private val LONG_DATA =
@@ -122,5 +124,48 @@ class SignaturesTest {
 
     val outFlow2 = certificate.verifySignedFlow(LONG_DATA.asBufferedFlow(24), deferredSig.await())
     assertFailsWith(InvalidSignatureException::class) { outFlow2.collect() }
+  }
+
+  @Test
+  fun `verifyDoubleSignature returns false when only first signature is valid`() {
+    val certificate1: X509Certificate = readCertificate(ORG1_SERVER_CERT_PEM_FILE)
+    val certificate2: X509Certificate = readCertificate(ORG2_SERVER_CERT_PEM_FILE)
+    val privateKey1 = readPrivateKey(ORG1_SERVER_CERT_KEY_FILE, KEY_ALGORITHM)
+    val signature1 = privateKey1.sign(certificate1, DATA)
+
+    assertFalse(
+      verifyDoubleSignature(DATA, signature1, randomSignature, certificate1, certificate2)
+    )
+  }
+
+  @Test
+  fun `verifyDoubleSignature returns false when only second signature is valid`() {
+    val certificate1: X509Certificate = readCertificate(ORG1_SERVER_CERT_PEM_FILE)
+    val certificate2: X509Certificate = readCertificate(ORG2_SERVER_CERT_PEM_FILE)
+    val privateKey2 = readPrivateKey(ORG2_SERVER_CERT_KEY_FILE, KEY_ALGORITHM)
+    val signature2 = privateKey2.sign(certificate2, DATA)
+
+    assertFalse(
+      verifyDoubleSignature(DATA, randomSignature, signature2, certificate1, certificate2)
+    )
+  }
+
+  @Test
+  fun `verifyDoubleSignature returns true when both signatures are valid`() {
+    val certificate1: X509Certificate = readCertificate(ORG1_SERVER_CERT_PEM_FILE)
+    val certificate2: X509Certificate = readCertificate(ORG2_SERVER_CERT_PEM_FILE)
+    val privateKey1 = readPrivateKey(ORG1_SERVER_CERT_KEY_FILE, KEY_ALGORITHM)
+    val privateKey2 = readPrivateKey(ORG2_SERVER_CERT_KEY_FILE, KEY_ALGORITHM)
+    val signature1 = privateKey1.sign(certificate1, DATA)
+    val signature2 = privateKey2.sign(certificate2, DATA)
+
+    assertTrue(
+      verifyDoubleSignature(DATA, signature1, signature2, certificate1, certificate2)
+    )
+  }
+
+  companion object {
+    private val random = Random.Default
+    private val randomSignature: ByteString = random.nextBytes(70).toByteString()
   }
 }

@@ -20,6 +20,22 @@ generate_user_certificate(
     root_key = ":test_root.key",
 )
 
+generate_root_certificate(
+    name = "test_root_2",
+    common_name = "Some CA 2",
+    hostname = "ca.someorg2.example.com",
+    org = "Some Organization 2",
+)
+
+generate_user_certificate(
+    name = "test_user_2",
+    common_name = "Some Server 2",
+    hostname = "server.someorg2.example.com",
+    org = "Some Organization 2",
+    root_certificate = ":test_root_2.pem",
+    root_key = ":test_root_2.key",
+)
+
 sh_test(
     name = "validate_root_certificate",
     srcs = [":generate_root_certificate_validator.sh"],

@@ -90,3 +90,17 @@ fun X509Certificate.verifySignedFlow(
     }
   }
 }
+
+/** Verifies that [data] was signed by both signatures [signature1] and [signature2]
+ * from the entities represented by [certificate1] and [certificate2] respectively
+ */
+fun verifyDoubleSignature(
+  data: ByteString,
+  signature1: ByteString,
+  signature2: ByteString,
+  certificate1: X509Certificate,
+  certificate2: X509Certificate,
+): Boolean {
+  return certificate1.verifySignature(data, signature1) &&
+    certificate2.verifySignature(data, signature2)
+}
