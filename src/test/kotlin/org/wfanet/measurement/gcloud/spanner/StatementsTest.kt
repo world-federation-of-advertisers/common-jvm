@@ -27,7 +27,7 @@ import org.wfanet.measurement.gcloud.common.toGcloudByteArray
 @RunWith(JUnit4::class)
 class StatementsTest {
   @Test
-  fun `makeStatement builds Statement`() {
+  fun `statement builds Statement`() {
     val boolValue = true
     val longValue = 1234L
     val doubleValue = 12.34
@@ -38,7 +38,7 @@ class StatementsTest {
     val table = "DummyTable"
 
     val statement: Statement =
-      makeStatement(table) {
+      statement(table) {
         bind("BoolColumn" to boolValue)
         bind("LongColumn" to longValue)
         bind("DoubleColumn" to doubleValue)
