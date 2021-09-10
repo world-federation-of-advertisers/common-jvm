@@ -130,7 +130,3 @@ fun Statement.Builder.bindJson(paramValuePair: Pair<String, Message?>): Statemen
 /** Builds a [Statement]. */
 inline fun statement(sql: String, bind: Statement.Builder.() -> Unit): Statement =
   Statement.newBuilder(sql).apply(bind).build()
-
-/** Builds a [Statement]. */
-@Deprecated("Use statement instead", ReplaceWith("statement(sql, bind)"))
-inline fun makeStatement(sql: String, bind: Statement.Builder.() -> Unit) = statement(sql, bind)
