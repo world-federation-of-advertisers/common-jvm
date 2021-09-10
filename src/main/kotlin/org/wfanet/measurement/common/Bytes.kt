@@ -14,7 +14,6 @@
 
 package org.wfanet.measurement.common
 
-import com.google.common.io.BaseEncoding
 import com.google.protobuf.ByteString
 import java.nio.ByteBuffer
 import java.nio.channels.ReadableByteChannel
@@ -188,8 +187,6 @@ fun ReadableByteChannel.asFlow(bufferSize: Int): Flow<ByteString> =
   flow {
       val buffer = ByteBuffer.allocate(bufferSize)
 
-      // Suppressed for https://youtrack.jetbrains.com/issue/IDEA-223285
-      @Suppress("BlockingMethodInNonBlockingContext")
       while (read(buffer) >= 0) {
         if (buffer.position() == 0) {
           // Nothing was read, so we may have a non-blocking channel that nothing
@@ -207,11 +204,7 @@ fun ReadableByteChannel.asFlow(bufferSize: Int): Flow<ByteString> =
     .flowOn(Dispatchers.IO)
 
 /** Converts a hex string to its equivalent [ByteString]. */
+@Deprecated("Use HexString for stronger typing")
 fun String.hexAsByteString(): ByteString {
-  return BaseEncoding.base16().decode(this.toUpperCase()).toByteString()
-}
-
-/** Converts a [ByteArray] into an upperbase hex string. */
-fun ByteArray.toHexString(): String {
-  return BaseEncoding.base16().upperCase().encode(this)
+  return HexString(this).bytes
 }
