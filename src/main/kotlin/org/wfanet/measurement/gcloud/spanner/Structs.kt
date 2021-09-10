@@ -128,7 +128,3 @@ fun StructReader.getExternalId(columnName: String) = ExternalId(getLong(columnNa
 
 /** Builds a [Struct]. */
 inline fun struct(bind: Struct.Builder.() -> Unit): Struct = Struct.newBuilder().apply(bind).build()
-
-/** Builds a [Struct]. */
-@Deprecated("Use struct instead", ReplaceWith("struct(bind)"))
-inline fun makeStruct(bind: Struct.Builder.() -> Unit) = struct(bind)
