@@ -12,21 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package org.wfanet.measurement.common.crypto
+package org.wfanet.measurement.common
 
-import com.google.common.truth.Truth.assertThat
+import com.google.common.io.BaseEncoding
 import com.google.protobuf.ByteString
-import org.junit.Test
-import org.junit.runner.RunWith
-import org.junit.runners.JUnit4
-import org.wfanet.measurement.common.HexString
 
-@RunWith(JUnit4::class)
-class HashingTest {
-  @Test
-  fun `hashSha256 get expected result`() {
-    val result = hashSha256(ByteString.copyFromUtf8("foo"))
-    assertThat(HexString(result))
-      .isEqualTo(HexString("2C26B46B68FFC68FF99B453C1D30413413422D706483BFA0F98A5E886266E7AE"))
-  }
+private val base16 = BaseEncoding.base16()
+
+/** Representation of an uppercase hexidecimal [String]. */
+data class HexString(val bytes: ByteString) {
+  val value: String
+    get() = base16.encode(bytes.toByteArray())
+
+  constructor(value: String) : this(ByteString.copyFrom(base16.decode(value)))
+
+  override fun toString(): String = value
 }
