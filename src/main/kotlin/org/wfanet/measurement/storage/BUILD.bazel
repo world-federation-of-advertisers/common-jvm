@@ -15,6 +15,17 @@ kt_jvm_library(
 )
 
 kt_jvm_library(
+    name = "store",
+    srcs = ["Store.kt"],
+    deps = [
+        ":client",
+        "//imports/java/com/google/protobuf",
+        "//imports/kotlin/kotlinx/coroutines:core",
+        "//src/main/kotlin/org/wfanet/measurement/common",
+    ],
+)
+
+kt_jvm_library(
     name = "verified_storage_extensions",
     srcs = ["VerifiedStorageExtensions.kt"],
     deps = [
