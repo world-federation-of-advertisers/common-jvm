@@ -35,12 +35,12 @@ def base_java_images():
         name = "java_image_base",
         digest = "sha256:12bfe4f3300b164b3b4adb0ed8c78e81fa5f49850c1882cca89fe70dc5deb8d4",
         registry = "gcr.io",
-        repository = "distroless/java",
+        repository = "distroless/java-debian11",
     )
 
     container_pull(
         name = "java_debug_image_base",
         digest = "sha256:bae3c77dc7f1500a252d17c101dbd4ae9324114a05d51c12451a42ff7961b54f",
         registry = "gcr.io",
-        repository = "distroless/java",
+        repository = "distroless/java-debian11",
     )
