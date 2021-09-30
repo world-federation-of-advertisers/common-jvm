@@ -23,7 +23,7 @@ def base_java_images():
     @io_bazel_rules_docker//java:image.bzl. The target names are significant.
 
     See https://console.cloud.google.com/gcr/images/distroless/GLOBAL/java
-    
+
     We currently use
     gcr.io/distroless/java-debian11:11-nonroot
     and
