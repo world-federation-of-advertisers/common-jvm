@@ -14,6 +14,9 @@
 
 package org.wfanet.measurement.common.throttler
 
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.isActive
+
 interface Throttler {
   /**
    * Helper for performing an operation after waiting to be unthrottled.
@@ -26,7 +29,7 @@ interface Throttler {
   suspend fun <T> onReady(block: suspend () -> T): T
 
   suspend fun loopOnReady(block: suspend () -> Unit) {
-    while (true) {
+    while (currentCoroutineContext().isActive) {
       onReady(block)
     }
   }
