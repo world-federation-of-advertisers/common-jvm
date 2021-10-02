@@ -14,6 +14,8 @@
 
 package org.wfanet.measurement.common.throttler
 
+import kotlinx.coroutines.yield
+
 interface Throttler {
   /**
    * Helper for performing an operation after waiting to be unthrottled.
@@ -28,6 +30,7 @@ interface Throttler {
   suspend fun loopOnReady(block: suspend () -> Unit) {
     while (true) {
       onReady(block)
+      yield()
     }
   }
 }
