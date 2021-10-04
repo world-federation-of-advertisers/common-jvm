@@ -1,0 +1,15 @@
+load("@io_bazel_rules_kotlin//kotlin:jvm.bzl", "kt_jvm_test")
+
+kt_jvm_test(
+    name = "DotTest",
+    srcs = ["DotTest.kt"],
+    test_class = "org.wfanet.measurement.common.graphviz.DotTest",
+    deps = [
+        "//imports/java/com/google/common/truth",
+        "//imports/java/org/junit",
+        "//imports/kotlin/kotlin/test",
+        "//imports/kotlin/kotlinx/coroutines:core",
+        "//imports/kotlin/kotlinx/coroutines/test",
+        "//src/main/kotlin/org/wfanet/measurement/common/graphviz",
+    ],
+)
