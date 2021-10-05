@@ -47,19 +47,23 @@ protected constructor(
    * @param content [Flow] producing the content to write
    * @return [Blob] with a key derived from [context]
    */
-  suspend fun write(context: T, content: Flow<ByteString>): Blob {
+  open suspend fun write(context: T, content: Flow<ByteString>): Blob {
     val blobKey = generateBlobKey(context)
     val privateBlobKey = blobKeyPrefix + blobKey
     val createdBlob = storageClient.createBlob(privateBlobKey, content)
     return Blob(blobKey, createdBlob)
   }
 
-  /** @see write */
+  /**
+   * Explicitly calls [write]
+   *
+   * @see write
+   */
   suspend fun write(context: T, content: ByteString): Blob =
     write(context, content.asBufferedFlow(storageClient.defaultBufferSizeBytes))
 
   /** Returns a [Blob] with the specified blob key, or `null` if not found. */
-  fun get(blobKey: String): Blob? {
+  open fun get(blobKey: String): Blob? {
     val privateBlobKey = blobKeyPrefix + blobKey
     return storageClient.getBlob(privateBlobKey)?.let { Blob(blobKey, it) }
   }

@@ -26,6 +26,15 @@ kt_jvm_library(
 )
 
 kt_jvm_library(
+    name = "aead_store",
+    srcs = ["AeadStore.kt"],
+    deps = [
+        ":store",
+        "//src/main/kotlin/org/wfanet/measurement/common/crypto:aead",
+    ],
+)
+
+kt_jvm_library(
     name = "verified_storage_extensions",
     srcs = ["VerifiedStorageExtensions.kt"],
     deps = [
