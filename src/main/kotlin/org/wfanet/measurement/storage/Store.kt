@@ -54,8 +54,12 @@ protected constructor(
     return Blob(blobKey, createdBlob)
   }
 
-  /** @see write */
-  open suspend fun write(context: T, content: ByteString): Blob =
+  /**
+   * Explicitly calls [write]
+   *
+   * @see write
+   */
+  suspend fun write(context: T, content: ByteString): Blob =
     write(context, content.asBufferedFlow(storageClient.defaultBufferSizeBytes))
 
   /** Returns a [Blob] with the specified blob key, or `null` if not found. */
