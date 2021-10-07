@@ -14,14 +14,14 @@
 
 package org.wfanet.measurement.common.crypto
 
-import com.google.crypto.tink.Aead as TinkAead
+import com.google.crypto.tink.Aead as TinkAeadInterface
 import com.google.protobuf.ByteString
 
 /** Tink specific implementation of [Aead] */
-class TinkAead(val aead: TinkAead) : Aead {
+class TinkAead(val aead: TinkAeadInterface) : Aead {
   /** @see encrypt */
   override fun encrypt(plaintext: ByteString): ByteString {
-    return ByteString.copyFrom(encrypt(plaintext.toByteArray(), byteArrayOf()))
+    return ByteString.copyFrom(encrypt(plaintext.toByteArray(), null))
   }
 
   /**
@@ -35,12 +35,12 @@ class TinkAead(val aead: TinkAead) : Aead {
    * @return resulting ciphertext
    */
   override fun encrypt(plaintext: ByteArray?, associatedData: ByteArray?): ByteArray {
-    return aead.encrypt(requireNotNull(plaintext), requireNotNull(associatedData))
+    return aead.encrypt(requireNotNull(plaintext), associatedData)
   }
 
   /** @see decrypt */
   override fun decrypt(ciphertext: ByteString): ByteString {
-    return ByteString.copyFrom(decrypt(ciphertext.toByteArray(), byteArrayOf()))
+    return ByteString.copyFrom(decrypt(ciphertext.toByteArray(), null))
   }
 
   /**
@@ -53,6 +53,6 @@ class TinkAead(val aead: TinkAead) : Aead {
    * @return resulting plaintext
    */
   override fun decrypt(ciphertext: ByteArray?, associatedData: ByteArray?): ByteArray {
-    return aead.decrypt(requireNotNull(ciphertext), requireNotNull(associatedData))
+    return aead.decrypt(requireNotNull(ciphertext), associatedData)
   }
 }
