@@ -59,6 +59,7 @@ def common_jvm_maven_artifacts():
         "com.google.cloud:google-cloud-nio": "0.122.0",
         "com.google.cloud:google-cloud-spanner": "3.0.3",
         "com.google.code.gson:gson": "2.8.6",
+        "com.google.crypto.tink:tink": "1.6.1",
         "com.google.guava:guava": "30.0-jre",
         "info.picocli:picocli": "4.4.0",
         "junit:junit": "4.13",
