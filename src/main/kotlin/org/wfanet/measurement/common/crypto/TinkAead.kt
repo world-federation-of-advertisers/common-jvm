@@ -15,6 +15,7 @@
 package org.wfanet.measurement.common.crypto
 
 import com.google.crypto.tink.Aead as TinkAeadInterface
+import com.google.crypto.tink.KmsClients
 import com.google.protobuf.ByteString
 
 /** Tink specific implementation of [Aead] */
@@ -54,5 +55,11 @@ class TinkAead(private val aead: TinkAeadInterface) : Aead, TinkAeadInterface {
    */
   override fun decrypt(ciphertext: ByteArray?, associatedData: ByteArray?): ByteArray {
     return aead.decrypt(requireNotNull(ciphertext), associatedData)
+  }
+
+  companion object {
+    fun fromKms(keyUri: String): TinkAead {
+      return TinkAead(KmsClients.get(keyUri).getAead(keyUri))
+    }
   }
 }
