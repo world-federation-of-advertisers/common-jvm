@@ -14,11 +14,10 @@
 
 package org.wfanet.measurement.common.crypto
 
-import com.google.crypto.tink.Aead as TinkAeadInterface
 import com.google.protobuf.ByteString
 
-/** Aead encryption/decryption that uses [ByteString] and implements [TinkAeadInterface] */
-interface Aead : TinkAeadInterface {
+/** Aead encryption/decryption that using [ByteString] */
+interface Aead {
   fun encrypt(plaintext: ByteString): ByteString
   fun decrypt(ciphertext: ByteString): ByteString
 }

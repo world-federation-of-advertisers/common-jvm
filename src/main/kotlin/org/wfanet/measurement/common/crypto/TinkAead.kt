@@ -18,7 +18,7 @@ import com.google.crypto.tink.Aead as TinkAeadInterface
 import com.google.protobuf.ByteString
 
 /** Tink specific implementation of [Aead] */
-class TinkAead(val aead: TinkAeadInterface) : Aead {
+class TinkAead(private val aead: TinkAeadInterface) : Aead, TinkAeadInterface {
   /** @see encrypt */
   override fun encrypt(plaintext: ByteString): ByteString {
     return ByteString.copyFrom(encrypt(plaintext.toByteArray(), null))
