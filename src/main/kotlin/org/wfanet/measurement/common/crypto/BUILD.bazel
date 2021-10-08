@@ -42,3 +42,15 @@ kt_jvm_library(
         ":security_provider",
     ],
 )
+
+kt_jvm_library(
+    name = "aead",
+    srcs = [
+        "Aead.kt",
+        "TinkAead.kt",
+    ],
+    deps = [
+        "//imports/java/com/google/crypto/tink",
+        "//imports/java/com/google/protobuf",
+    ],
+)
