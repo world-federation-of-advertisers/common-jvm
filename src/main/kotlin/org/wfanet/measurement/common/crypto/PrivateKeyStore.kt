@@ -14,10 +14,8 @@
 
 package org.wfanet.measurement.common.crypto
 
-import com.google.protobuf.ByteString
+interface PrivateKeyStore<T : PrivateKeyHandle> {
+  fun read(keyId: String): T
 
-/** Aead encryption/decryption that using [ByteString] */
-interface Aead {
-  fun encrypt(plaintext: ByteString): ByteString
-  fun decrypt(ciphertext: ByteString): ByteString
+  fun write(privateKey: T)
 }
