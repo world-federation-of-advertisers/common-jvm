@@ -12,12 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package org.wfanet.measurement.common.crypto
+package org.wfanet.measurement.common.crypto.tink
 
+import com.google.crypto.tink.Aead
 import com.google.protobuf.ByteString
+import kotlinx.coroutines.flow.Flow
+import org.wfanet.measurement.storage.StorageClient
 
-/** Aead encryption/decryption that using [ByteString] */
-interface Aead {
-  fun encrypt(plaintext: ByteString): ByteString
-  fun decrypt(ciphertext: ByteString): ByteString
+internal class KmsStorageClient(private val storageClient: StorageClient, private val aead: Aead) :
+  StorageClient {
+
+  override val defaultBufferSizeBytes: Int
+    get() = storageClient.defaultBufferSizeBytes
+
+  override suspend fun createBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
+    TODO("Not yet implemented")
+  }
+
+  override fun getBlob(blobKey: String): StorageClient.Blob? {
+    TODO("Not yet implemented")
+  }
 }
