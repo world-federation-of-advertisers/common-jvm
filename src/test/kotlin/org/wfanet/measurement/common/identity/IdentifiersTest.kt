@@ -25,7 +25,7 @@ class IdentifiersTest {
 
   @Test
   fun `round trips`() {
-    for (i in listOf(0, 1, 10, 64, 1L shl 32, Long.MAX_VALUE)) {
+    for (i in listOf(1, 10, 64, 1L shl 32, Long.MAX_VALUE)) {
       val externalId1 = ExternalId(i)
       val apiId1 = externalId1.apiId
       val externalId2 = ApiId(apiId1.value).externalId
@@ -34,6 +34,11 @@ class IdentifiersTest {
       assertThat(apiId1.value).isEqualTo(apiId2.value)
       assertThat(externalId1.value).isEqualTo(externalId2.value)
     }
+  }
+
+  @Test
+  fun `0 is invalid`() {
+    assertFailsWith<IllegalArgumentException> { ExternalId(0) }
   }
 
   @Test
