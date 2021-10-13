@@ -16,6 +16,20 @@ kt_jvm_library(
 )
 
 kt_jvm_library(
+    name = "key_storage",
+    srcs = [
+        "KeyHandle.kt",
+        "KeyStorageProvider.kt",
+        "PrivateKeyStore.kt",
+    ],
+    deps = [
+        "//imports/java/com/google/protobuf",
+        "//src/main/kotlin/org/wfanet/measurement/storage:client",
+        "//src/main/kotlin/org/wfanet/measurement/storage:store",
+    ],
+)
+
+kt_jvm_library(
     name = "security_provider",
     srcs = ["SecurityProvider.kt"],
     deps = [
@@ -40,17 +54,5 @@ kt_jvm_library(
     srcs = ["SigningCerts.kt"],
     deps = [
         ":security_provider",
-    ],
-)
-
-kt_jvm_library(
-    name = "aead",
-    srcs = [
-        "Aead.kt",
-        "TinkAead.kt",
-    ],
-    deps = [
-        "//imports/java/com/google/crypto/tink",
-        "//imports/java/com/google/protobuf",
     ],
 )
