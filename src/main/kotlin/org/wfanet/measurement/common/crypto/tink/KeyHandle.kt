@@ -47,8 +47,8 @@ class TinkPublicKeyHandle internal constructor(keyId: String, keysetHandle: Keys
 
   override fun hybridEncrypt(plaintext: ByteString, contextInfo: ByteString?): ByteString {
     val hybridEncrypt: HybridEncrypt = keysetHandle.getPrimitive(HybridEncrypt::class.java)
-    val encryptedData = hybridEncrypt.encrypt(plaintext.toByteArray(), byteArrayOf())
-    return ByteString.copyFrom(encryptedData)
+    val ciphertext = hybridEncrypt.encrypt(plaintext.toByteArray(), contextInfo?.toByteArray())
+    return ByteString.copyFrom(ciphertext)
   }
 
   companion object {
@@ -71,7 +71,7 @@ class TinkPrivateKeyHandle internal constructor(keyId: String, keysetHandle: Key
 
   override fun hybridDecrypt(ciphertext: ByteString, contextInfo: ByteString?): ByteString {
     val hybridDecrypt = keysetHandle.getPrimitive(HybridDecrypt::class.java)
-    val decryptedData = hybridDecrypt.decrypt(ciphertext.toByteArray(), byteArrayOf())
-    return ByteString.copyFrom(decryptedData)
+    val plaintext = hybridDecrypt.decrypt(ciphertext.toByteArray(), contextInfo?.toByteArray())
+    return ByteString.copyFrom(plaintext)
   }
 }

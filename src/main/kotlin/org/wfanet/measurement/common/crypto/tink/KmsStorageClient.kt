@@ -59,7 +59,7 @@ internal class KmsStorageClient(private val storageClient: StorageClient, privat
   }
 
   /** A blob that will decrypt the content when read */
-  inner class AeadBlob(val blob: StorageClient.Blob) : StorageClient.Blob {
+  private inner class AeadBlob(private val blob: StorageClient.Blob) : StorageClient.Blob {
     override val storageClient = this@KmsStorageClient.storageClient
 
     private val encryptedBytes: ByteString by lazy {
@@ -71,7 +71,7 @@ internal class KmsStorageClient(private val storageClient: StorageClient, privat
     override fun read(bufferSizeBytes: Int): Flow<ByteString> {
       return this@KmsStorageClient.aead
         .decrypt(encryptedBytes.toByteArray(), null)
-        .asBufferedFlow(storageClient.defaultBufferSizeBytes)
+        .asBufferedFlow(bufferSizeBytes)
     }
 
     override fun delete() = blob.delete()
