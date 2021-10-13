@@ -14,10 +14,19 @@
 
 package org.wfanet.measurement.common.crypto
 
-import com.google.protobuf.ByteString
+/** Store of [PrivateKeyHandle]s. */
+interface PrivateKeyStore<T : PrivateKeyHandle> {
+  /**
+   * Reads the [PrivateKeyHandle] with the specified [keyId] from storage.
+   *
+   * @return the [PrivateKeyHandle] or `null` if not found
+   */
+  suspend fun read(keyId: String): T?
 
-/** Aead encryption/decryption that using [ByteString] */
-interface Aead {
-  fun encrypt(plaintext: ByteString): ByteString
-  fun decrypt(ciphertext: ByteString): ByteString
+  /**
+   * Writes [privateKey] to storage.
+   *
+   * @return the ID (blob key) of the written [PrivateKeyHandle]
+   */
+  suspend fun write(privateKey: T): String
 }
