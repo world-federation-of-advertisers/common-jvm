@@ -16,10 +16,13 @@ package org.wfanet.measurement.common.crypto.tink
 
 import com.google.crypto.tink.BinaryKeysetReader
 import com.google.crypto.tink.BinaryKeysetWriter
+import com.google.crypto.tink.HybridDecrypt
+import com.google.crypto.tink.HybridEncrypt
 import com.google.crypto.tink.KeysetHandle
 import com.google.protobuf.ByteString
 import org.wfanet.measurement.common.crypto.PrivateKeyHandle
 import org.wfanet.measurement.common.crypto.PublicKeyHandle
+import org.wfanet.measurement.common.toByteString
 
 class TinkPublicKeyHandle internal constructor(internal val keysetHandle: KeysetHandle) :
   PublicKeyHandle {
@@ -38,7 +41,9 @@ class TinkPublicKeyHandle internal constructor(internal val keysetHandle: Keyset
   }
 
   override fun hybridEncrypt(plaintext: ByteString, contextInfo: ByteString?): ByteString {
-    TODO("Not yet implemented")
+    val hybridEncrypt: HybridEncrypt = keysetHandle.getPrimitive(HybridEncrypt::class.java)
+    val ciphertext = hybridEncrypt.encrypt(plaintext.toByteArray(), contextInfo?.toByteArray())
+    return ciphertext.toByteString()
   }
 
   companion object {
@@ -60,6 +65,8 @@ class TinkPrivateKeyHandle internal constructor(internal val keysetHandle: Keyse
   override val publicKey = TinkPublicKeyHandle(keysetHandle.publicKeysetHandle)
 
   override fun hybridDecrypt(ciphertext: ByteString, contextInfo: ByteString?): ByteString {
-    TODO("Not yet implemented")
+    val hybridDecrypt = keysetHandle.getPrimitive(HybridDecrypt::class.java)
+    val plaintext = hybridDecrypt.decrypt(ciphertext.toByteArray(), contextInfo?.toByteArray())
+    return plaintext.toByteString()
   }
 }
