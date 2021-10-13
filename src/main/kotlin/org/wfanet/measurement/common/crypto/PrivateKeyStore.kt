@@ -15,7 +15,7 @@
 package org.wfanet.measurement.common.crypto
 
 interface PrivateKeyStore<T : PrivateKeyHandle> {
-  fun read(keyId: String): T
+  suspend fun read(keyId: String): T
 
-  fun write(privateKey: T)
+  suspend fun write(privateKey: T)
 }
