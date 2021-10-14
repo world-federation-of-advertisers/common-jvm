@@ -30,6 +30,7 @@ kt_jvm_library(
     srcs = ["VerifiedStorageExtensions.kt"],
     deps = [
         "//src/main/kotlin/org/wfanet/measurement/common/crypto:invalid_signature_exception",
+        "//src/main/kotlin/org/wfanet/measurement/common/crypto:key_storage",
         "//src/main/kotlin/org/wfanet/measurement/common/crypto:signatures",
         "//src/main/kotlin/org/wfanet/measurement/storage:client",
     ],

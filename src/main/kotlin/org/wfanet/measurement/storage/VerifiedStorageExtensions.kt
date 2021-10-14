@@ -18,7 +18,8 @@ import com.google.protobuf.ByteString
 import java.security.PrivateKey
 import java.security.cert.X509Certificate
 import kotlinx.coroutines.flow.Flow
-import org.wfanet.measurement.common.crypto.signFlow
+import org.wfanet.measurement.common.crypto.newSigner
+import org.wfanet.measurement.common.crypto.createSignedBlob
 import org.wfanet.measurement.common.crypto.verifySignedFlow
 import org.wfanet.measurement.storage.StorageClient.Blob
 
@@ -43,13 +44,13 @@ suspend fun Blob.verifiedRead(
  * , this creates a signature in shared storage for the written blob that can be verified by the
  * other party using a pre-provided [X509Certificate].
  */
+@Deprecated("Use org.wfanet.measurement.common.crypto.createSignedBlob")
 suspend fun StorageClient.createSignedBlob(
   blobKey: String,
   content: Flow<ByteString>,
   privateKey: PrivateKey,
   cert: X509Certificate
 ): Pair<Blob, ByteString> {
-  val (contentFlow, deferredSig) = privateKey.signFlow(cert, content)
-  val resultBlob = this.createBlob(blobKey = blobKey, content = contentFlow)
-  return resultBlob to deferredSig.await()
+  val signedBlob = createSignedBlob(blobKey, content) { privateKey.newSigner(cert) }
+  return signedBlob to signedBlob.signature
 }
