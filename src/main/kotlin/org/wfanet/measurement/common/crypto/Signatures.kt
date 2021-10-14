@@ -21,8 +21,17 @@ import java.security.cert.X509Certificate
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.fold
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.onEach
+
+/** Returns a new [Signature] instance that has been initialized for signing. */
+fun PrivateKey.newSigner(certificate: X509Certificate): Signature {
+  val signer = Signature.getInstance(certificate.sigAlgName, jceProvider)
+  signer.initSign(this)
+  return signer
+}
 
 /**
  * Signs [data] using this [PrivateKey].
@@ -30,9 +39,26 @@ import kotlinx.coroutines.flow.onEach
  * @param certificate the [X509Certificate] that can be used to verify the signature
  */
 fun PrivateKey.sign(certificate: X509Certificate, data: ByteString): ByteString {
-  val signer = Signature.getInstance(certificate.sigAlgName, jceProvider)
-  signer.initSign(this)
+  val signer = newSigner(certificate)
   signer.update(data.asReadOnlyByteBuffer())
+  return ByteString.copyFrom(signer.sign())
+}
+
+/**
+ * Terminal flow operator that collects the given flow with the provided [action] and digitally
+ * signs the accumulated values.
+ *
+ * @return the digital signature of the accumulated values
+ */
+suspend inline fun Flow<ByteString>.collectAndSign(
+  newSigner: () -> Signature,
+  crossinline action: suspend (ByteString) -> Unit
+): ByteString {
+  val signer =
+    fold(newSigner()) { signer, bytes ->
+      action(bytes)
+      signer.apply { update(bytes.asReadOnlyByteBuffer()) }
+    }
   return ByteString.copyFrom(signer.sign())
 }
 
@@ -44,18 +70,23 @@ fun PrivateKey.sign(certificate: X509Certificate, data: ByteString): ByteString 
  *
  * @param certificate the [X509Certificate] that can be used to verify the signature
  */
+@Deprecated("Use Flow<ByteString>.collectAndSign or StorageClient.createSignedBlob")
 fun PrivateKey.signFlow(
   certificate: X509Certificate,
   data: Flow<ByteString>
 ): Pair<Flow<ByteString>, Deferred<ByteString>> {
-  val signer = Signature.getInstance(certificate.sigAlgName, jceProvider)
   val deferredSig = CompletableDeferred<ByteString>()
-  signer.initSign(this)
-  val outFlow =
-    data.onEach { signer.update(it.asReadOnlyByteBuffer()) }.onCompletion {
-      deferredSig.complete(ByteString.copyFrom(signer.sign()))
-    }
+  val outFlow = flow {
+    val signature = data.collectAndSign({ newSigner(certificate) }) { emit(it) }
+    deferredSig.complete(signature)
+  }
+
   return outFlow to deferredSig
+}
+
+/** Returns a new [Signature] instance that has been initialized for verification. */
+fun X509Certificate.newVerifier(): Signature {
+  return Signature.getInstance(sigAlgName, jceProvider).apply { initVerify(this@newVerifier) }
 }
 
 /**
@@ -63,10 +94,45 @@ fun PrivateKey.signFlow(
  * [X509Certificate].
  */
 fun X509Certificate.verifySignature(data: ByteString, signature: ByteString): Boolean {
-  val verifier = Signature.getInstance(this.sigAlgName, jceProvider)
-  verifier.initVerify(this)
-  verifier.update(data.asReadOnlyByteBuffer())
+  return newVerifier().apply { update(data.asReadOnlyByteBuffer()) }.verify(signature.toByteArray())
+}
+
+/**
+ * Terminal flow operator that collects the given flow with the provided [action] and verifies the
+ * digital [signature] of the accumulated values.
+ *
+ * @return whether the signature was verified
+ */
+suspend inline fun Flow<ByteString>.collectAndVerify(
+  certificate: X509Certificate,
+  signature: ByteString,
+  crossinline action: suspend (ByteString) -> Unit
+): Boolean {
+  val verifier =
+    fold(certificate.newVerifier()) { verifier, bytes ->
+      action(bytes)
+      verifier.apply { update(bytes.asReadOnlyByteBuffer()) }
+    }
   return verifier.verify(signature.toByteArray())
+}
+
+/**
+ * Intermediate [ByteString] flow operator which applies digital signature verification.
+ *
+ * Upon collection of the returned flow, it will throw an [InvalidSignatureException] if the
+ * [signature] was not created from the accumulated flow values by the entity represented by
+ * [certificate].
+ */
+fun Flow<ByteString>.verifying(
+  certificate: X509Certificate,
+  signature: ByteString
+): Flow<ByteString> {
+  val verifier = certificate.newVerifier()
+  return onEach { verifier.update(it.asReadOnlyByteBuffer()) }.onCompletion {
+    if (it == null && !verifier.verify(signature.toByteArray())) {
+      throw InvalidSignatureException("Signature is invalid")
+    }
+  }
 }
 
 /**
@@ -76,16 +142,8 @@ fun X509Certificate.verifySignature(data: ByteString, signature: ByteString): Bo
  * The output is the downstream Flow of [data]. If [data] is found to not match [signature] upon
  * collecting the flow, the flow will throw an [InvalidSignatureException].
  */
+@Deprecated("Use Flow<ByteString>.verifying")
 fun X509Certificate.verifySignedFlow(
   data: Flow<ByteString>,
   signature: ByteString,
-): Flow<ByteString> {
-  val verifier = Signature.getInstance(this.sigAlgName, jceProvider)
-
-  verifier.initVerify(this)
-  return data.onEach { verifier.update(it.asReadOnlyByteBuffer()) }.onCompletion {
-    if (it == null && !verifier.verify(signature.toByteArray())) {
-      throw InvalidSignatureException("Signature is invalid")
-    }
-  }
-}
+): Flow<ByteString> = data.verifying(this, signature)
