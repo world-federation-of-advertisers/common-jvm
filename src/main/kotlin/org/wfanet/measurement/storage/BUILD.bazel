@@ -15,15 +15,6 @@ kt_jvm_library(
 )
 
 kt_jvm_library(
-    name = "aead_client",
-    srcs = ["AeadStorageClient.kt"],
-    deps = [
-        ":client",
-        "//src/main/kotlin/org/wfanet/measurement/common/crypto:aead",
-    ],
-)
-
-kt_jvm_library(
     name = "store",
     srcs = ["Store.kt"],
     deps = [

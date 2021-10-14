@@ -16,8 +16,14 @@ package org.wfanet.measurement.common.crypto
 
 import com.google.protobuf.ByteString
 
-/** Aead encryption/decryption that using [ByteString] */
-interface Aead {
-  fun encrypt(plaintext: ByteString): ByteString
-  fun decrypt(ciphertext: ByteString): ByteString
+/** Handle to the public key of an encryption key pair. */
+interface PublicKeyHandle {
+  fun hybridEncrypt(plaintext: ByteString, contextInfo: ByteString? = null): ByteString
+}
+
+/** Handle to the private key of an encryption key pair. */
+interface PrivateKeyHandle {
+  val publicKey: PublicKeyHandle
+
+  fun hybridDecrypt(ciphertext: ByteString, contextInfo: ByteString? = null): ByteString
 }
