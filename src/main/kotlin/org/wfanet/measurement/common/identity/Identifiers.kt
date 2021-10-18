@@ -52,7 +52,11 @@ fun apiIdToExternalId(id: String): Long = ApiId(id).externalId.value
 fun externalIdToApiId(id: Long): String = ExternalId(id).apiId.value
 
 /** Typesafe wrapper around Long to represent the integer id format used internally. */
-data class InternalId(val value: Long)
+data class InternalId(val value: Long) {
+  init {
+    require(value != 0L) { "0 is not permitted" }
+  }
+}
 
 // An alternative is: toBigInteger().toByteArray(), but that includes the sign bit, which uses an
 // extra byte.

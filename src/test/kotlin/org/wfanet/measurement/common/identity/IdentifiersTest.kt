@@ -37,7 +37,7 @@ class IdentifiersTest {
   }
 
   @Test
-  fun `0 is invalid`() {
+  fun `0 is invalid for ExternalId`() {
     assertFailsWith<IllegalArgumentException> { ExternalId(0) }
   }
 
@@ -56,5 +56,10 @@ class IdentifiersTest {
   fun `invalid base64 string`() {
     assertFailsWith<IllegalArgumentException> { ApiId("12345678!") }
     assertFailsWith<IllegalArgumentException> { ApiId("012345678") }
+  }
+
+  @Test
+  fun `0 is invalid for InternalId`() {
+    assertFailsWith<IllegalArgumentException> { InternalId(0) }
   }
 }
