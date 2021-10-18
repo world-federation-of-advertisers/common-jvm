@@ -16,6 +16,7 @@ package org.wfanet.measurement.common.crypto
 
 import com.google.protobuf.ByteString
 import java.io.File
+import java.io.IOException
 import java.io.InputStream
 import java.security.KeyFactory
 import java.security.PrivateKey
@@ -23,9 +24,10 @@ import java.security.Provider
 import java.security.Security
 import java.security.cert.CertificateFactory
 import java.security.cert.X509Certificate
+import java.security.spec.KeySpec
 import java.security.spec.PKCS8EncodedKeySpec
+import kotlin.jvm.Throws
 import org.conscrypt.Conscrypt
-import org.wfanet.measurement.common.base64Decode
 
 private const val CERTIFICATE_TYPE = "X.509"
 private const val SUBJECT_KEY_IDENTIFIER_OID = "2.5.29.14"
@@ -68,8 +70,12 @@ fun readCertificate(pemFile: File): X509Certificate = readCertificate(pemFile::i
  */
 fun readCertificate(der: ByteString): X509Certificate = readCertificate(der::newInput)
 
+fun readCertificate(input: InputStream): X509Certificate {
+  return certFactory.generateCertificate(input) as X509Certificate
+}
+
 private inline fun readCertificate(newInputStream: () -> InputStream): X509Certificate {
-  return newInputStream().use { certFactory.generateCertificate(it) } as X509Certificate
+  return newInputStream().use { readCertificate(it) }
 }
 
 /**
@@ -77,6 +83,7 @@ private inline fun readCertificate(newInputStream: () -> InputStream): X509Certi
  *
  * @throws java.security.cert.CertificateException on parsing errors
  */
+@Throws(IOException::class)
 fun readCertificateCollection(pemFile: File): Collection<X509Certificate> {
   @Suppress("UNCHECKED_CAST") // Underlying mutable collection never exposed.
   return pemFile.inputStream().use { fileInputStream ->
@@ -91,43 +98,12 @@ fun readCertificateCollection(pemFile: File): Collection<X509Certificate> {
  * @throws java.security.spec.InvalidKeySpecException on parsing errors
  */
 fun readPrivateKey(data: ByteString, algorithm: String): PrivateKey {
-  return KeyFactory.getInstance(algorithm, jceProvider)
-    .generatePrivate(PKCS8EncodedKeySpec(data.toByteArray()))
+  return PKCS8EncodedKeySpec(data.toByteArray()).toPrivateKey(algorithm)
 }
 
-/** Reads a private key from a PKCS#8-encoded PEM file. */
-fun readPrivateKey(pemFile: File, algorithm: String): PrivateKey {
-  return KeyFactory.getInstance(algorithm, jceProvider).generatePrivate(readKey(pemFile))
-}
-
-private fun readKey(pemFile: File): PKCS8EncodedKeySpec {
-  return PKCS8EncodedKeySpec(PemIterable(pemFile).single())
-}
-
-private class PemIterable(private val pemFile: File) : Iterable<ByteArray> {
-  override fun iterator(): Iterator<ByteArray> = iterator {
-    pemFile.bufferedReader().use { reader ->
-      var line = reader.readLine()
-      while (line != null) {
-        check(line.startsWith(BEGIN_PREFIX)) { "Expected $BEGIN_PREFIX" }
-        line = reader.readLine() ?: error("Unexpected end of file")
-
-        val buffer = StringBuffer()
-        do {
-          buffer.append(line)
-          line = reader.readLine() ?: error("Unexpected end of file")
-        } while (!line.startsWith(END_PREFIX))
-
-        yield(buffer.toString().base64Decode())
-        line = reader.readLine()
-      }
-    }
-  }
-
-  companion object {
-    private const val BEGIN_PREFIX = "-----BEGIN"
-    private const val END_PREFIX = "-----END"
-  }
+/** Creates a [PrivateKey] from this [KeySpec]. */
+fun KeySpec.toPrivateKey(algorithm: String): PrivateKey {
+  return KeyFactory.getInstance(algorithm, jceProvider).generatePrivate(this)
 }
 
 /**
