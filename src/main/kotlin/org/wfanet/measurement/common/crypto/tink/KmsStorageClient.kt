@@ -11,33 +11,40 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-package org.wfanet.measurement.storage
 
+package org.wfanet.measurement.common.crypto.tink
+
+import com.google.crypto.tink.Aead
 import com.google.protobuf.ByteString
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.flow.flow
 import org.wfanet.measurement.common.asBufferedFlow
-import org.wfanet.measurement.common.crypto.Aead
-import org.wfanet.measurement.common.flatten
+import org.wfanet.measurement.common.toByteArray
+import org.wfanet.measurement.common.toByteString
+import org.wfanet.measurement.storage.StorageClient
+import org.wfanet.measurement.storage.read
 
 /**
  * A wrapper class for [StorageClient] interface that uses AEAD encryption/decryption for
  * blob/object storage operations.
  *
- * @param aead AEAD integration specific encrypt/decrypt
  * @param storageClient underlying client for accessing blob/object storage
+ * @param aead Tink AEAD integration specific encrypt/decrypt
  */
-class AeadStorageClient(val aead: Aead, val storageClient: StorageClient) : StorageClient {
+internal class KmsStorageClient(private val storageClient: StorageClient, private val aead: Aead) :
+  StorageClient {
+
   override val defaultBufferSizeBytes: Int
     get() = storageClient.defaultBufferSizeBytes
 
   /**
    * Creates a blob with the specified [blobKey] and [content] encrypted by [aead].
+   *
    * @param content [Flow] producing the content be encrypted and stored in the blob
    * @return [StorageClient.Blob] with [content] encrypted by [aead]
    */
   override suspend fun createBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
-    val ciphertext = aead.encrypt(content.flatten())
+    val ciphertext = aead.encrypt(content.toByteArray(), null)
     return storageClient.createBlob(
       blobKey,
       ciphertext.asBufferedFlow(storageClient.defaultBufferSizeBytes)
@@ -55,20 +62,17 @@ class AeadStorageClient(val aead: Aead, val storageClient: StorageClient) : Stor
   }
 
   /** A blob that will decrypt the content when read */
-  inner class AeadBlob(val blob: StorageClient.Blob) : StorageClient.Blob {
-    override val storageClient = this@AeadStorageClient.storageClient
+  private inner class AeadBlob(private val blob: StorageClient.Blob) : StorageClient.Blob {
+    override val storageClient = this@KmsStorageClient.storageClient
 
-    private val encryptedBytes: ByteString by lazy {
-      runBlocking { blob.read(storageClient.defaultBufferSizeBytes).flatten() }
-    }
+    override val size: Long
+      get() = blob.size
 
-    override val size: Long = encryptedBytes.size().toLong()
-
-    override fun read(bufferSizeBytes: Int): Flow<ByteString> {
-      return this@AeadStorageClient.aead
-        .decrypt(encryptedBytes)
-        .asBufferedFlow(storageClient.defaultBufferSizeBytes)
-    }
+    override fun read(bufferSizeBytes: Int) =
+      flow {
+          emit(this@KmsStorageClient.aead.decrypt(blob.read().toByteArray(), null).toByteString())
+        }
+        .asBufferedFlow(bufferSizeBytes)
 
     override fun delete() = blob.delete()
   }
