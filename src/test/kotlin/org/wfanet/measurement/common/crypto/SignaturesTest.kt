@@ -14,112 +14,114 @@
 
 package org.wfanet.measurement.common.crypto
 
-import com.google.common.collect.Range
-import com.google.common.truth.Truth.assertThat
 import com.google.protobuf.ByteString
+import java.security.PrivateKey
 import java.security.cert.X509Certificate
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.runBlocking
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
+import org.wfanet.measurement.common.HexString
 import org.wfanet.measurement.common.asBufferedFlow
-import org.wfanet.measurement.common.crypto.testing.FIXED_SERVER_CERT_PEM_FILE as SERVER_CERT_PEM_FILE
-import org.wfanet.measurement.common.crypto.testing.FIXED_SERVER_KEY_FILE as SERVER_KEY_FILE
-import org.wfanet.measurement.common.crypto.testing.KEY_ALGORITHM
+import org.wfanet.measurement.common.crypto.testing.FIXED_CA_CERT_PEM_FILE
+import org.wfanet.measurement.common.crypto.testing.FIXED_SERVER_CERT_PEM_FILE
+import org.wfanet.measurement.common.crypto.testing.FIXED_SERVER_KEY_FILE
+import org.wfanet.measurement.common.crypto.testing.SignatureSubject.Companion.assertThat
 import org.wfanet.measurement.common.flatten
 
-private val DATA = ByteString.copyFromUtf8("I am some data to sign")
-private val LONG_DATA =
+private val DATA =
   ByteString.copyFromUtf8("I am some data to sign. I am some data to sign. I am some data to sign.")
+private val SIGNATURE =
+  HexString(
+    "3046022100F7F72BFFD598D417C4E1F5265F6ECA617D1D5533FBC6C8B9662F1C08A9AD8E3A022100B93E9566DAC6" +
+      "F9706C8B7A0B6A003C1B427E8757EF95F84E7AECE23BE9A91453"
+  )
 private val ALT_DATA = ByteString.copyFromUtf8("I am some alternative data")
-
-// TODO: Consider migrating this a separate file if needed elsewhere in the repo.
-// kotlinx.coroutines.test.runBlockingTest complains about
-// "java.lang.IllegalStateException: This job has not completed yet".
-// This is a common issue: https://github.com/Kotlin/kotlinx.coroutines/issues/1204.
-private fun runBlockingTest(block: suspend CoroutineScope.() -> Unit) {
-  runBlocking { block() }
-}
+private val BOGUS_SIGNATURE =
+  HexString(
+    "304402200D3ACC867DA66D34586E9A7B3E73B319E35F169D13EC912761A2AC287EC46C1B02201DE3FD224D6D1DE0" +
+      "4FD7C5436DF41545D85ACE41B2AA5B815B4BDBB89CB33166"
+  )
 
 @RunWith(JUnit4::class)
 class SignaturesTest {
   @Test
-  fun `sign returns signature of correct size`() {
-    val privateKey = readPrivateKey(SERVER_KEY_FILE, KEY_ALGORITHM)
-    val certificate: X509Certificate = readCertificate(SERVER_CERT_PEM_FILE)
-
-    val signature = privateKey.sign(certificate, DATA)
-
-    // DER-encoded ECDSA signature using 256-bit key can be 70, 71, or 72 bytes.
-    assertThat(signature.size()).isIn(Range.closed(70, 72))
-  }
-
-  @Test
-  fun `signFlow returns signature of correct size`() = runBlockingTest {
-    val privateKey = readPrivateKey(SERVER_KEY_FILE, KEY_ALGORITHM)
-    val certificate: X509Certificate = readCertificate(SERVER_CERT_PEM_FILE)
-
-    val (outFlow, signature) = privateKey.signFlow(certificate, LONG_DATA.asBufferedFlow(24))
-
-    assertThat(outFlow.flatten()).isEqualTo(LONG_DATA)
-
-    // DER-encoded ECDSA signature using 256-bit key can be 70, 71, or 72 bytes.
-    assertThat(signature.await().size()).isIn(Range.closed(70, 72))
-  }
-
-  @Test
   fun `verifySignature returns true for valid signature`() {
-    val privateKey = readPrivateKey(SERVER_KEY_FILE, KEY_ALGORITHM)
-    val certificate: X509Certificate = readCertificate(SERVER_CERT_PEM_FILE)
-    val signature = privateKey.sign(certificate, DATA)
-
-    assertTrue(certificate.verifySignature(DATA, signature))
+    assertTrue(certificate.verifySignature(DATA, SIGNATURE.bytes))
   }
 
   @Test
-  fun `verifySignedFlow returns true for valid signatures`() = runBlockingTest {
-    val privateKey = readPrivateKey(SERVER_KEY_FILE, KEY_ALGORITHM)
-    val certificate: X509Certificate = readCertificate(SERVER_CERT_PEM_FILE)
-    val regularSig = privateKey.sign(certificate, LONG_DATA)
-
-    val (signFlow, deferredSig) = privateKey.signFlow(certificate, LONG_DATA.asBufferedFlow(24))
-    assertThat(signFlow.flatten()).isEqualTo(LONG_DATA)
-
-    val outFlow = certificate.verifySignedFlow(LONG_DATA.asBufferedFlow(24), regularSig)
-    val outFlow2 = certificate.verifySignedFlow(LONG_DATA.asBufferedFlow(24), deferredSig.await())
-    assertThat(outFlow.flatten()).isEqualTo(LONG_DATA)
-    assertThat(outFlow2.flatten()).isEqualTo(LONG_DATA)
+  fun `verifySignature returns false when signature does not match data`() {
+    assertFalse(certificate.verifySignature(ALT_DATA, SIGNATURE.bytes))
   }
 
   @Test
-  fun `verifySignature returns false for signature from different data`() {
-    val privateKey = readPrivateKey(SERVER_KEY_FILE, KEY_ALGORITHM)
-    val certificate: X509Certificate = readCertificate(SERVER_CERT_PEM_FILE)
-    val signature = privateKey.sign(certificate, DATA)
-
-    assertFalse(certificate.verifySignature(ALT_DATA, signature))
+  fun `verifySignature returns false when signature does not match certificate`() {
+    assertFalse(altCertificate.verifySignature(DATA, SIGNATURE.bytes))
   }
 
   @Test
-  fun `verifySignedFlow throws for invalid signed Flow`() = runBlockingTest {
-    val privateKey = readPrivateKey(SERVER_KEY_FILE, KEY_ALGORITHM)
-    val certificate: X509Certificate = readCertificate(SERVER_CERT_PEM_FILE)
-    val signature = privateKey.sign(certificate, DATA)
+  fun `verifyAndCollect returns true for valid signature`() {
+    val dataFlow = DATA.asBufferedFlow(24)
 
-    val outFlow = certificate.verifySignedFlow(LONG_DATA.asBufferedFlow(24), signature)
-    assertFailsWith(InvalidSignatureException::class) {
-      assertThat(outFlow.flatten()).isEqualTo(LONG_DATA)
+    var collected = ByteString.EMPTY
+    val verified = runBlocking {
+      dataFlow.collectAndVerify(certificate, SIGNATURE.bytes) { bytes ->
+        collected = collected.concat(bytes)
+      }
     }
 
-    val (signFlow, deferredSig) = privateKey.signFlow(certificate, DATA.asBufferedFlow(24))
-    assertThat(signFlow.flatten()).isEqualTo(DATA)
+    assertThat(collected).isEqualTo(DATA)
+    assertTrue(verified)
+  }
 
-    val outFlow2 = certificate.verifySignedFlow(LONG_DATA.asBufferedFlow(24), deferredSig.await())
-    assertFailsWith(InvalidSignatureException::class) { outFlow2.collect() }
+  @Test
+  fun `sign returns valid signature`() {
+    val signature = privateKey.sign(certificate, DATA)
+
+    assertThat(signature).isValidFor(certificate, DATA)
+  }
+
+  @Test
+  fun `collectAndSign returns valid signature`() {
+    val dataFlow = DATA.asBufferedFlow(24)
+
+    var collected = ByteString.EMPTY
+    val signature = runBlocking {
+      dataFlow.collectAndSign({ privateKey.newSigner(certificate) }) { bytes ->
+        collected = collected.concat(bytes)
+      }
+    }
+
+    assertThat(collected).isEqualTo(DATA)
+    assertThat(signature).isValidFor(certificate, DATA)
+  }
+
+  @Test
+  fun `verifying returns flow with input data when signature is valid`() {
+    val dataFlow = DATA.asBufferedFlow(24)
+
+    val verifyingFlow = dataFlow.verifying(certificate, SIGNATURE.bytes)
+
+    assertThat(runBlocking { verifyingFlow.flatten() }).isEqualTo(DATA)
+  }
+
+  @Test
+  fun `verifying throws for invalid flow signature`() {
+    val dataFlow = DATA.asBufferedFlow(24)
+
+    val verifyingFlow = dataFlow.verifying(certificate, BOGUS_SIGNATURE.bytes)
+
+    assertFailsWith(InvalidSignatureException::class) { runBlocking { verifyingFlow.flatten() } }
+  }
+
+  companion object {
+    val certificate: X509Certificate = readCertificate(FIXED_SERVER_CERT_PEM_FILE)
+    val altCertificate: X509Certificate = readCertificate(FIXED_CA_CERT_PEM_FILE)
+    val privateKey: PrivateKey =
+      readPrivateKey(FIXED_SERVER_KEY_FILE, certificate.publicKey.algorithm)
   }
 }
