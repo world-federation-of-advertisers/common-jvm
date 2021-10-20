@@ -22,11 +22,11 @@ import org.wfanet.measurement.common.base64UrlEncode
  * Typesafe wrapper around Long to represent the integer format used below the service layer for the
  * internal representation of external identifiers.
  *
- * @property[value] a non-negative integer identifier
+ * @property[value] a non-negative integer identifier greater than 0
  */
 data class ExternalId(val value: Long) {
   init {
-    require(value >= 0) { "Negative id numbers are not permitted: $value" }
+    require(value > 0) { "Negative id numbers and 0 are not permitted: $value" }
   }
 
   val apiId: ApiId by lazy { ApiId(value.toByteArray().base64UrlEncode()) }
@@ -52,7 +52,11 @@ fun apiIdToExternalId(id: String): Long = ApiId(id).externalId.value
 fun externalIdToApiId(id: Long): String = ExternalId(id).apiId.value
 
 /** Typesafe wrapper around Long to represent the integer id format used internally. */
-data class InternalId(val value: Long)
+data class InternalId(val value: Long) {
+  init {
+    require(value != 0L) { "0 is not permitted" }
+  }
+}
 
 // An alternative is: toBigInteger().toByteArray(), but that includes the sign bit, which uses an
 // extra byte.

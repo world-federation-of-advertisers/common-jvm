@@ -26,6 +26,11 @@ class RandomIdGenerator(
 
   override fun generateExternalId(): ExternalId = ExternalId(generateLong())
 
-  private fun generateLong(): Long =
-    abs((random.nextLong() shl 32) or (clock.millis() and 0xFFFFFFFF))
+  private fun generateLong(): Long {
+    var generated = 0L
+    while (generated == 0L) {
+      generated = abs((random.nextLong() shl 32) or (clock.millis() and 0xFFFFFFFF))
+    }
+    return generated
+  }
 }
