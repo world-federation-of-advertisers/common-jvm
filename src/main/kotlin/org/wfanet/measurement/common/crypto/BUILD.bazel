@@ -30,8 +30,29 @@ kt_jvm_library(
 )
 
 kt_jvm_library(
+    name = "signing_key_storage",
+    srcs = [
+        "SigningKeyHandle.kt",
+        "SigningKeyStore.kt",
+    ],
+    associates = [":security_provider"],
+    deps = [
+        ":signatures",
+        ":signed_blob",
+        "//imports/java/com/google/protobuf",
+        "//imports/kotlin/kotlinx/coroutines:core",
+        "//src/main/kotlin/org/wfanet/measurement/common",
+        "//src/main/kotlin/org/wfanet/measurement/storage:client",
+        "//src/main/kotlin/org/wfanet/measurement/storage:store",
+    ],
+)
+
+kt_jvm_library(
     name = "security_provider",
-    srcs = ["SecurityProvider.kt"],
+    srcs = [
+        "PemIo.kt",
+        "SecurityProvider.kt",
+    ],
     deps = [
         "//imports/java/com/google/protobuf",
         "//imports/java/org/conscrypt",
@@ -46,6 +67,17 @@ kt_jvm_library(
         "//imports/java/com/google/protobuf",
         "//src/main/kotlin/org/wfanet/measurement/common/crypto:invalid_signature_exception",
         "//src/main/kotlin/org/wfanet/measurement/common/crypto:security_provider",
+    ],
+)
+
+kt_jvm_library(
+    name = "signed_blob",
+    srcs = ["SignedBlob.kt"],
+    deps = [
+        ":signatures",
+        "//imports/java/com/google/protobuf",
+        "//imports/kotlin/kotlinx/coroutines:core",
+        "//src/main/kotlin/org/wfanet/measurement/storage:client",
     ],
 )
 
