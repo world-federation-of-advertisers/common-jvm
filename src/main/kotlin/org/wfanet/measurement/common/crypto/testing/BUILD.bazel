@@ -12,6 +12,9 @@ kt_jvm_library(
         "//src/main/kotlin/org/wfanet/measurement/common/crypto/testing/testdata:static_certs",
     ],
     deps = [
+        "//imports/java/com/google/common/truth",
+        "//imports/java/com/google/protobuf",
         "//src/main/kotlin/org/wfanet/measurement/common",
+        "//src/main/kotlin/org/wfanet/measurement/common/crypto:signatures",
     ],
 )
