@@ -12,7 +12,11 @@ kt_jvm_library(
 kt_jvm_library(
     name = "hashing",
     srcs = ["Hashing.kt"],
-    deps = ["@wfa_common_jvm//imports/java/com/google/protobuf"],
+    deps = [
+        "//imports/kotlin/kotlinx/coroutines:core",
+        "//src/main/kotlin/org/wfanet/measurement/common",
+        "@wfa_common_jvm//imports/java/com/google/protobuf",
+    ],
 )
 
 kt_jvm_library(

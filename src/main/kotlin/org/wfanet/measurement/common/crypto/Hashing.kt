@@ -16,11 +16,43 @@ package org.wfanet.measurement.common.crypto
 
 import com.google.protobuf.ByteString
 import java.security.MessageDigest
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.collect
+import org.wfanet.measurement.common.toByteString
 
-private const val SHA_256 = "SHA-256"
+@PublishedApi internal const val SHA_256 = "SHA-256"
 
 /** Generates a SHA-256 of [data]. */
 fun hashSha256(data: ByteString): ByteString {
-  val sha256MessageDigest = MessageDigest.getInstance(SHA_256)
-  return ByteString.copyFrom(sha256MessageDigest.digest(data.toByteArray()))
+  return MessageDigest.getInstance(SHA_256).digest(data)
+}
+
+/**
+ * Terminal flow operator that collects the given flow with the provided [action] and computes the
+ * SHA-256 hash of the accumulated values.
+ *
+ * @return the SHA-256 hash of the accumulated values
+ */
+suspend inline fun Flow<ByteString>.collectAndHashSha256(
+  crossinline action: suspend (ByteString) -> Unit
+): ByteString {
+  val hasher = MessageDigest.getInstance(SHA_256)
+  collect { bytes ->
+    action(bytes)
+    hasher.update(bytes)
+  }
+  return hasher.digest().toByteString()
+}
+
+@PublishedApi
+internal fun MessageDigest.digest(data: ByteString): ByteString {
+  update(data)
+  return digest().toByteString()
+}
+
+@PublishedApi
+internal fun MessageDigest.update(data: ByteString) {
+  for (buffer in data.asReadOnlyByteBufferList()) {
+    update(buffer)
+  }
 }
