@@ -18,14 +18,14 @@ Repository rules/macros for Protobuf.
 
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
-COM_GOOGLE_PROTOBUF_VERSION = "3.17.3"
+COM_GOOGLE_PROTOBUF_VERSION = "3.19.1"
 
 _URL_TEMPLATE = "https://github.com/protocolbuffers/protobuf/releases/download/v%s/protobuf-all-%s.tar.gz"
 
 def com_google_protobuf_repo():
     http_archive(
         name = "com_google_protobuf",
-        sha256 = "77ad26d3f65222fd96ccc18b055632b0bfedf295cb748b712a98ba1ac0b704b2",
+        sha256 = "80631d5a18d51daa3a1336e340001ad4937e926762f21144c62d26fe2a8d71fe",
         strip_prefix = "protobuf-" + COM_GOOGLE_PROTOBUF_VERSION,
         url = _URL_TEMPLATE % (COM_GOOGLE_PROTOBUF_VERSION, COM_GOOGLE_PROTOBUF_VERSION),
     )
