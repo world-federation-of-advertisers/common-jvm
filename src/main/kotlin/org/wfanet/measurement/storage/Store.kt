@@ -27,14 +27,18 @@ typealias BlobKeyGenerator<T> = (context: T) -> String
  * is enforced by use of a private per-[Store] [blobKeyPrefix].
  *
  * @param storageClient client for accessing blob/object storage
- * @param generateBlobKey generator for unique blob keys
+ * @param generateBlobKey generator for unique blob keys (the key should have no slash in the
+ * beginning)
  */
 abstract class Store<T>
 protected constructor(
   private val storageClient: StorageClient,
   private val generateBlobKey: BlobKeyGenerator<T>
 ) {
-  /** The private unique blob key prefix for this [Store]. */
+  /**
+   * The private unique blob key prefix for this [Store]. The value should contain no slash in the
+   * beginning or at the end.
+   */
   protected abstract val blobKeyPrefix: String
 
   class Blob(val blobKey: String, clientBlob: StorageClient.Blob) :
@@ -49,7 +53,7 @@ protected constructor(
    */
   suspend fun write(context: T, content: Flow<ByteString>): Blob {
     val blobKey = generateBlobKey(context)
-    val privateBlobKey = blobKeyPrefix + blobKey
+    val privateBlobKey = "$blobKeyPrefix/$blobKey"
     val createdBlob = storageClient.createBlob(privateBlobKey, content)
     return Blob(blobKey, createdBlob)
   }
@@ -60,7 +64,7 @@ protected constructor(
 
   /** Returns a [Blob] with the specified blob key, or `null` if not found. */
   fun get(blobKey: String): Blob? {
-    val privateBlobKey = blobKeyPrefix + blobKey
+    val privateBlobKey = "$blobKeyPrefix/$blobKey"
     return storageClient.getBlob(privateBlobKey)?.let { Blob(blobKey, it) }
   }
 }
