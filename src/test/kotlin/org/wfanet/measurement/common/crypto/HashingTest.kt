@@ -29,4 +29,15 @@ class HashingTest {
     assertThat(HexString(result))
       .isEqualTo(HexString("2C26B46B68FFC68FF99B453C1D30413413422D706483BFA0F98A5E886266E7AE"))
   }
+
+  @Test
+  fun `hashSha256 get expected result for Long`() {
+    val signedFixed64 = -5720240472533425799L // Hex: B09D9F98ECD52179
+
+    val result = hashSha256(signedFixed64)
+
+    // Compare to value obtained using `echo 'B09D9F98ECD52179' | xxd -r -p | sha256sum`
+    assertThat(HexString(result))
+      .isEqualTo(HexString("5258F08862A1715F8D95B310D0D509A88EC1FD79BF1F512DD4350961659E9884"))
+  }
 }
