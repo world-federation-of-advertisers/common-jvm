@@ -15,16 +15,25 @@
 package org.wfanet.measurement.common.crypto
 
 import com.google.protobuf.ByteString
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.security.MessageDigest
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collect
 import org.wfanet.measurement.common.toByteString
 
-@PublishedApi internal const val SHA_256 = "SHA-256"
+private const val SHA_256 = "SHA-256"
 
-/** Generates a SHA-256 of [data]. */
+/** Computes the SHA-256 hash of [data]. */
 fun hashSha256(data: ByteString): ByteString {
-  return MessageDigest.getInstance(SHA_256).digest(data)
+  return newSha256Hasher().digest(data)
+}
+
+/** Computes the SHA-256 hash of [data]. */
+fun hashSha256(data: Long): ByteString {
+  val buffer = ByteBuffer.allocate(8).order(ByteOrder.BIG_ENDIAN).putLong(data).asReadOnlyBuffer()
+  buffer.flip()
+  return newSha256Hasher().apply { update(buffer) }.digest().toByteString()
 }
 
 /**
@@ -36,12 +45,17 @@ fun hashSha256(data: ByteString): ByteString {
 suspend inline fun Flow<ByteString>.collectAndHashSha256(
   crossinline action: suspend (ByteString) -> Unit
 ): ByteString {
-  val hasher = MessageDigest.getInstance(SHA_256)
+  val hasher = newSha256Hasher()
   collect { bytes ->
     action(bytes)
     hasher.update(bytes)
   }
   return hasher.digest().toByteString()
+}
+
+@PublishedApi
+internal fun newSha256Hasher(): MessageDigest {
+  return MessageDigest.getInstance(SHA_256)
 }
 
 @PublishedApi
