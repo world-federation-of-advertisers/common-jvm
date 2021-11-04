@@ -55,7 +55,9 @@ def common_jvm_maven_artifacts():
     # Add Maven artifacts or override versions (e.g. those pulled in by gRPC Kotlin
     # or default dependency versions).
     maven_artifacts.update({
-        "com.google.api.grpc:grpc-google-cloud-pubsub-v1": "0.1.24",
+        "com.google.api:gax": "2.0.0",
+        "com.google.api:gax-grpc": "2.0.0",
+        "com.google.cloud:google-cloud-bigquery": "2.3.0",
         "com.google.cloud:google-cloud-nio": "0.122.0",
         "com.google.cloud:google-cloud-spanner": "3.0.3",
         "com.google.code.gson:gson": "2.8.6",
