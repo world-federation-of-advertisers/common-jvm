@@ -28,6 +28,7 @@ load(
     "@com_github_grpc_grpc_kotlin//:repositories.bzl",
     "io_grpc_grpc_java",
 )
+load("//build/io_bazel_rules_go:deps.bzl", "rules_go_deps")
 
 def common_jvm_deps():
     """
@@ -42,3 +43,4 @@ def common_jvm_deps():
         java = True,
     )
     io_grpc_grpc_java()
+    rules_go_deps()

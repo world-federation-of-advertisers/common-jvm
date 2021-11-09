@@ -31,6 +31,7 @@ load(
     "//build/io_bazel_rules_kotlin:repo.bzl",
     "rules_kotlin_repo",
 )
+load("//build/io_bazel_rules_go:repo.bzl", "rules_go_repo")
 
 def common_jvm_repositories():
     """
@@ -48,3 +49,4 @@ def common_jvm_repositories():
     grpc_health_probe_repo()
     rules_docker_repo()
     com_google_googleapis_repo()
+    rules_go_repo()
