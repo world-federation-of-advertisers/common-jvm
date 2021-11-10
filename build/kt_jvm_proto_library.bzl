@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@rules_proto//proto:defs.bzl", "ProtoInfo")
+
 """
 Provides kt_jvm_proto_library to generate Kotlin protos.
 """
@@ -19,13 +21,17 @@ Provides kt_jvm_proto_library to generate Kotlin protos.
 load("@io_bazel_rules_kotlin//kotlin:jvm.bzl", "kt_jvm_library")
 
 def _get_real_short_path(file):
-    """Returns the correct short path file name to be used by protoc."""
+    # For some reason, files from other archives have short paths that look like:
+    #   ../com_google_protobuf/google/protobuf/descriptor.proto
     short_path = file.short_path
     if short_path.startswith("../"):
         second_slash = short_path.index("/", 3)
         short_path = short_path[second_slash + 1:]
 
-    # TODO: see if ProtoInfo.proto_source_root can be used instead.
+    # Sometimes it has another few prefixes like:
+    #   _virtual_imports/any_proto/google/protobuf/any.proto
+    #   benchmarks/_virtual_imports/100_msgs_proto/benchmarks/100_msgs.proto
+    # We want just google/protobuf/any.proto.
     virtual_imports = "_virtual_imports/"
     if virtual_imports in short_path:
         short_path = short_path.split(virtual_imports)[1].split("/", 1)[1]
@@ -53,21 +59,22 @@ def _run_protoc(ctx, output_dir):
         outputs = [output_dir],
         executable = ctx.executable._protoc,
         arguments = [protoc_args],
+        mnemonic = "KtProtoc",
         progress_message = "Generating Kotlin protos for " + ctx.label.name,
     )
 
-def _build_srcjar(ctx, input_dir, source_jar):
+def _create_src_jar(ctx, java_runtime_info, input_dir, output_jar):
     """Bundles .kt files into a srcjar."""
-    args = ctx.actions.args()
-    args.add("c")
-    args.add(source_jar.path)
-    args.add_all(depset([input_dir]))
-    ctx.actions.run_shell(
-        outputs = [source_jar],
+    jar_args = ctx.actions.args()
+    jar_args.add("cf", output_jar)
+    jar_args.add_all([input_dir])
+
+    ctx.actions.run(
+        outputs = [output_jar],
         inputs = [input_dir],
-        tools = [ctx.executable._zipper],
-        arguments = [args],
-        command = "{zipper} $@".format(zipper = ctx.executable._zipper.path),
+        executable = "%s/bin/jar" % java_runtime_info.java_home,
+        tools = java_runtime_info.files,
+        arguments = [jar_args],
         mnemonic = "KtProtoSrcJar",
         progress_message = "Generating Kotlin proto srcjar for " + ctx.label.name,
     )
@@ -75,38 +82,32 @@ def _build_srcjar(ctx, input_dir, source_jar):
 def _kt_jvm_proto_library_helper_impl(ctx):
     """Implementation of _kt_jvm_proto_library_helper rule."""
     name = ctx.label.name
+    java_runtime = ctx.attr._jdk[java_common.JavaRuntimeInfo]
 
     gen_src_dir_name = "%s/ktproto" % name
     gen_src_dir = ctx.actions.declare_directory(gen_src_dir_name)
-    source_jar = ctx.actions.declare_file("%s.srcjar" % name)
 
     _run_protoc(ctx, gen_src_dir)
-    _build_srcjar(ctx, gen_src_dir, source_jar)
-
-    java_info = ctx.attr.java_proto_dep[JavaInfo]
-    default_info = DefaultInfo(files = depset([source_jar, gen_src_dir]))
-
-    return [java_info, default_info]
+    _create_src_jar(ctx, java_runtime, gen_src_dir, ctx.outputs.srcjar)
 
 _kt_jvm_proto_library_helper = rule(
-    attrs = dict(
-        java_proto_dep = attr.label(providers = [JavaInfo]),
-        proto_dep = attr.label(providers = [ProtoInfo]),
-        _zipper = attr.label(
-            # TODO: use bin/jar from java toolchain instead of zipper.
-            executable = True,
-            cfg = "host",
-            default = Label("@bazel_tools//tools/zip:zipper"),
-            allow_files = True,
+    attrs = {
+        "java_proto_dep": attr.label(providers = [JavaInfo]),
+        "proto_dep": attr.label(providers = [ProtoInfo]),
+        "srcjar": attr.output(
+            doc = "Generated Java source jar.",
+            mandatory = True,
         ),
-        _protoc = attr.label(
+        "_jdk": attr.label(
+            default = Label("@bazel_tools//tools/jdk:current_java_runtime"),
+            providers = [java_common.JavaRuntimeInfo],
+        ),
+        "_protoc": attr.label(
             default = Label("@com_google_protobuf//:protoc"),
             cfg = "host",
             executable = True,
         ),
-    ),
-    fragments = ["java"],
-    provides = [JavaInfo],  # Hack -- this shouldn't be needed
+    },
     implementation = _kt_jvm_proto_library_helper_impl,
 )
 
@@ -132,17 +133,18 @@ def kt_jvm_proto_library(name, srcs = None, deps = None, **kwargs):
         fail("Expected exactly one dep", "deps")
 
     generated_kt_name = name + "_DO_NOT_DEPEND_generated_kt"
-    generated_kt_label = ":" + generated_kt_name
+    generated_srcjar = generated_kt_name + ".srcjar"
     _kt_jvm_proto_library_helper(
         name = generated_kt_name,
         java_proto_dep = deps[0],
         proto_dep = srcs[0],
+        srcjar = generated_srcjar,
         visibility = ["//visibility:private"],
     )
 
     kt_jvm_library(
         name = name,
-        srcs = [generated_kt_label],
+        srcs = [generated_srcjar],
         # TODO: add Bazel rule in protobuf instead of relying on Maven
         deps = deps + ["@maven//:com_google_protobuf_protobuf_kotlin"],
         **kwargs
