@@ -15,18 +15,15 @@
 package org.wfanet.measurement.common.crypto
 
 import java.io.File
-import java.security.PrivateKey
 import java.security.cert.X509Certificate
 
 /** Certificates and associated private key for digital signatures. */
 data class SigningCerts(
-  /** [X509Certificate] for verifying digital signatures made with [privateKey]. */
-  val certificate: X509Certificate,
-  /** [PrivateKey] matching the public key in [certificate]. */
-  val privateKey: PrivateKey,
+  val privateKeyHandle: SigningKeyHandle,
   val trustedCertificates: Collection<X509Certificate>
 ) {
   companion object {
+    @Deprecated("Load SigningKeyHandle from SigningKeyStore, or use SigningCertsTesting.")
     fun fromPemFiles(
       certificateFile: File,
       privateKeyFile: File,
@@ -36,8 +33,7 @@ data class SigningCerts(
       val keyAlgorithm = certificate.publicKey.algorithm
 
       return SigningCerts(
-        certificate,
-        readPrivateKey(privateKeyFile, keyAlgorithm),
+        SigningKeyHandle(certificate, readPrivateKey(privateKeyFile, keyAlgorithm)),
         readCertificateCollection(trustedCertCollectionFile)
       )
     }

@@ -13,6 +13,7 @@ kt_jvm_library(
         "//imports/java/picocli",
         "//src/main/kotlin/org/wfanet/measurement/common",
         "//src/main/kotlin/org/wfanet/measurement/common/crypto:signing_certs",
+        "//src/main/kotlin/org/wfanet/measurement/common/crypto:signing_key_storage",
         "//src/main/kotlin/org/wfanet/measurement/common/throttler",
     ],
 )

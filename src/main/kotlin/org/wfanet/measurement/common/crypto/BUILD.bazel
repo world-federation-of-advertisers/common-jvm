@@ -44,6 +44,7 @@ kt_jvm_library(
         ":signatures",
         ":signed_blob",
         "//imports/java/com/google/protobuf",
+        "//imports/java/io/netty/handler",
         "//imports/kotlin/kotlinx/coroutines:core",
         "//src/main/kotlin/org/wfanet/measurement/common",
         "//src/main/kotlin/org/wfanet/measurement/storage:client",
@@ -90,5 +91,6 @@ kt_jvm_library(
     srcs = ["SigningCerts.kt"],
     deps = [
         ":security_provider",
+        ":signing_key_storage",
     ],
 )

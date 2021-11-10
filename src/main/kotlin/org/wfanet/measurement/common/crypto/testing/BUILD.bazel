@@ -16,5 +16,6 @@ kt_jvm_library(
         "//imports/java/com/google/protobuf",
         "//src/main/kotlin/org/wfanet/measurement/common",
         "//src/main/kotlin/org/wfanet/measurement/common/crypto:signatures",
+        "//src/main/kotlin/org/wfanet/measurement/common/crypto:signing_certs",
     ],
 )

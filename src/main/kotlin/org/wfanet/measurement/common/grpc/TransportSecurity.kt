@@ -17,9 +17,9 @@ package org.wfanet.measurement.common.grpc
 import io.grpc.netty.GrpcSslContexts
 import io.netty.handler.ssl.ClientAuth
 import io.netty.handler.ssl.SslContext
-import io.netty.handler.ssl.SslContextBuilder
 import java.security.cert.X509Certificate
 import org.wfanet.measurement.common.crypto.SigningCerts
+import org.wfanet.measurement.common.crypto.SigningKeyHandle.Companion.keyManager
 
 private const val TLS_V13_PROTOCOL = "TLSv1.3"
 
@@ -38,14 +38,14 @@ fun Collection<X509Certificate>.toClientTlsContext(): SslContext {
 fun SigningCerts.toClientTlsContext(): SslContext {
   return GrpcSslContexts.forClient()
     .protocols(TLS_V13_PROTOCOL)
-    .keyManager(privateKey, certificate)
+    .keyManager(privateKeyHandle)
     .trustManager(trustedCertificates)
     .build()
 }
 
 /** Converts this [SigningCerts] into an [SslContext] for a gRPC server with TLS. */
 fun SigningCerts.toServerTlsContext(clientAuth: ClientAuth = ClientAuth.NONE): SslContext {
-  return GrpcSslContexts.configure(SslContextBuilder.forServer(privateKey, certificate))
+  return GrpcSslContexts.configure(privateKeyHandle.newServerSslContextBuilder())
     .protocols(TLS_V13_PROTOCOL)
     .trustManager(trustedCertificates)
     .clientAuth(clientAuth)
