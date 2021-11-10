@@ -47,8 +47,9 @@ class MinimumIntervalThrottler(private val clock: Clock, private val interval: D
         val delta = Duration.between(nextAttempt, clock.instant())
         if (delta > Duration.ZERO) {
           break
+        } else {
+          delay(-delta.toMillis())
         }
-        delay(delta.toMillis())
       }
       lastAttempt = clock.instant()
       return block()
