@@ -15,6 +15,7 @@
 package org.wfanet.measurement.common.crypto
 
 import com.google.protobuf.ByteString
+import io.netty.handler.ssl.SslContextBuilder
 import java.security.PrivateKey
 import java.security.Signature
 import java.security.cert.X509Certificate
@@ -29,6 +30,15 @@ data class SigningKeyHandle(val certificate: X509Certificate, private val privat
 
   suspend fun write(keyStore: SigningKeyStore): String {
     return keyStore.write(certificate, privateKey)
+  }
+
+  /** Returns a new server [SslContextBuilder] using this key handle. */
+  fun newServerSslContextBuilder() = SslContextBuilder.forServer(privateKey, certificate)
+
+  companion object {
+    /** @see SslContextBuilder.keyManager */
+    fun SslContextBuilder.keyManager(keyHandle: SigningKeyHandle) =
+      keyManager(keyHandle.privateKey, keyHandle.certificate)
   }
 }
 
