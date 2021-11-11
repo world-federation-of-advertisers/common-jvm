@@ -17,6 +17,7 @@ package org.wfanet.measurement.common.throttler
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
+import kotlin.math.max
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -43,14 +44,7 @@ class MinimumIntervalThrottler(private val clock: Clock, private val interval: D
   override suspend fun <T> onReady(block: suspend () -> T): T {
     mutex.withLock {
       val nextAttempt = lastAttempt.plus(interval)
-      while (true) {
-        val delta = Duration.between(nextAttempt, clock.instant())
-        if (delta > Duration.ZERO) {
-          break
-        } else {
-          delay(-delta.toMillis())
-        }
-      }
+      delay(max(Duration.between(clock.instant(), nextAttempt).toMillis(), 0))
       lastAttempt = clock.instant()
       return block()
     }
