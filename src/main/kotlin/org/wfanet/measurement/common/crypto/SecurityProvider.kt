@@ -19,6 +19,8 @@ import java.io.File
 import java.io.IOException
 import java.io.InputStream
 import java.security.KeyFactory
+import java.security.KeyPair
+import java.security.KeyPairGenerator
 import java.security.PrivateKey
 import java.security.Provider
 import java.security.Security
@@ -138,3 +140,8 @@ val X509Certificate.authorityKeyIdentifier: ByteString?
     val length = extension[5].toInt() // Assuming short form, where length <= 127 bytes.
     return ByteString.copyFrom(extension, 6, length)
   }
+
+/** Generates a new [KeyPair]. */
+fun generateKeyPair(keyAlgorithm: String): KeyPair {
+  return KeyPairGenerator.getInstance(keyAlgorithm, jceProvider).genKeyPair()
+}
