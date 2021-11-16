@@ -36,11 +36,12 @@ kt_jvm_library(
 kt_jvm_library(
     name = "signing_key_storage",
     srcs = [
+        "PemIo.kt",
         "SigningKeyHandle.kt",
         "SigningKeyStore.kt",
     ],
-    associates = [":security_provider"],
     deps = [
+        ":security_provider",
         ":signatures",
         ":signed_blob",
         "//imports/java/com/google/protobuf",
@@ -55,7 +56,6 @@ kt_jvm_library(
 kt_jvm_library(
     name = "security_provider",
     srcs = [
-        "PemIo.kt",
         "SecurityProvider.kt",
     ],
     deps = [
@@ -70,6 +70,8 @@ kt_jvm_library(
     srcs = ["Signatures.kt"],
     deps = [
         "//imports/java/com/google/protobuf",
+        "//imports/kotlin/kotlinx/coroutines:core",
+        "//src/main/kotlin/org/wfanet/measurement/common",
         "//src/main/kotlin/org/wfanet/measurement/common/crypto:invalid_signature_exception",
         "//src/main/kotlin/org/wfanet/measurement/common/crypto:security_provider",
     ],
@@ -82,6 +84,7 @@ kt_jvm_library(
         ":signatures",
         "//imports/java/com/google/protobuf",
         "//imports/kotlin/kotlinx/coroutines:core",
+        "//src/main/kotlin/org/wfanet/measurement/common",
         "//src/main/kotlin/org/wfanet/measurement/storage:client",
     ],
 )
