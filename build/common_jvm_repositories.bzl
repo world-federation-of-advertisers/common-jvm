@@ -32,6 +32,7 @@ load(
     "rules_kotlin_repo",
 )
 load("//build/io_bazel_rules_go:repo.bzl", "rules_go_repo")
+load("//build/tink:repo.bzl", "tink_java")
 
 def common_jvm_repositories():
     """
@@ -50,3 +51,4 @@ def common_jvm_repositories():
     rules_docker_repo()
     com_google_googleapis_repo()
     rules_go_repo()
+    tink_java()
