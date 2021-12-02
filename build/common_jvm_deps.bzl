@@ -29,6 +29,7 @@ load(
     "io_grpc_grpc_java",
 )
 load("//build/io_bazel_rules_go:deps.bzl", "rules_go_deps")
+load("@tink_java//:tink_java_deps.bzl", "tink_java_deps")
 
 def common_jvm_deps():
     """
@@ -44,3 +45,4 @@ def common_jvm_deps():
     )
     io_grpc_grpc_java()
     rules_go_deps()
+    tink_java_deps()

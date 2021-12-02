@@ -34,6 +34,7 @@ load("//build/com_google_truth:repo.bzl", "com_google_truth_artifact_dict")
 load("//build/kotlinx_coroutines:repo.bzl", "kotlinx_coroutines_artifact_dict")
 load("//build/maven:artifacts.bzl", "artifacts")
 load("//build/com_google_protobuf:repo.bzl", "COM_GOOGLE_PROTOBUF_VERSION")
+load("//build/tink:repo.bzl", "TINK_JAVA_KMS_MAVEN_ARTIFACTS")
 
 def common_jvm_maven_artifacts():
     """
@@ -46,6 +47,7 @@ def common_jvm_maven_artifacts():
         IO_GRPC_GRPC_JAVA_ARTIFACTS +
         IO_GRPC_GRPC_KOTLIN_ARTIFACTS,
     )
+    maven_artifacts.update(TINK_JAVA_KMS_MAVEN_ARTIFACTS)
     maven_artifacts.update(com_google_truth_artifact_dict(version = "1.0.1"))
 
     # kotlinx.coroutines version should be compatible with Kotlin release used by
@@ -61,7 +63,6 @@ def common_jvm_maven_artifacts():
         "com.google.cloud:google-cloud-nio": "0.122.0",
         "com.google.cloud:google-cloud-spanner": "3.0.3",
         "com.google.code.gson:gson": "2.8.6",
-        "com.google.crypto.tink:tink": "1.6.1",
         "com.google.guava:guava": "30.0-jre",
         "info.picocli:picocli": "4.4.0",
         "junit:junit": "4.13",
