@@ -12,37 +12,25 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("@rules_proto//proto:defs.bzl", "ProtoInfo")
-
 """
 Provides kt_jvm_proto_library to generate Kotlin protos.
 """
 
+load("//build:defs.bzl", "get_real_short_path")
+load("@rules_proto//proto:defs.bzl", "ProtoInfo")
 load("@io_bazel_rules_kotlin//kotlin:jvm.bzl", "kt_jvm_library")
 
-def _get_real_short_path(file):
-    # For some reason, files from other archives have short paths that look like:
-    #   ../com_google_protobuf/google/protobuf/descriptor.proto
-    short_path = file.short_path
-    if short_path.startswith("../"):
-        second_slash = short_path.index("/", 3)
-        short_path = short_path[second_slash + 1:]
+KtProtoLibInfo = provider(
+    "Information for a Kotlin JVM proto library.",
+    fields = {"srcjars": "depset of .srcjar Files"},
+)
 
-    # Sometimes it has another few prefixes like:
-    #   _virtual_imports/any_proto/google/protobuf/any.proto
-    #   benchmarks/_virtual_imports/100_msgs_proto/benchmarks/100_msgs.proto
-    # We want just google/protobuf/any.proto.
-    virtual_imports = "_virtual_imports/"
-    if virtual_imports in short_path:
-        short_path = short_path.split(virtual_imports)[1].split("/", 1)[1]
-    return short_path
-
-def _run_protoc(ctx, output_dir):
+def _run_protoc(ctx, proto_lib, output_dir):
     """Executes protoc to generate Kotlin files."""
-    proto_info = ctx.attr.proto_dep[ProtoInfo]
+    proto_info = proto_lib[ProtoInfo]
     descriptor_sets = proto_info.transitive_descriptor_sets
     transitive_descriptor_set = depset(transitive = [descriptor_sets])
-    proto_sources = [_get_real_short_path(file) for file in proto_info.direct_sources]
+    proto_sources = [get_real_short_path(file) for file in proto_info.direct_sources]
 
     protoc_args = ctx.actions.args()
     protoc_args.set_param_file_format("multiline")
@@ -63,47 +51,101 @@ def _run_protoc(ctx, output_dir):
         progress_message = "Generating Kotlin protos for " + ctx.label.name,
     )
 
-def _create_src_jar(ctx, java_runtime_info, input_dir, output_jar):
+def _create_srcjar(ctx, input_dir, output_jar):
     """Bundles .kt files into a srcjar."""
-    jar_args = ctx.actions.args()
-    jar_args.add("cf", output_jar)
-    jar_args.add_all([input_dir])
+    zipper_args = ctx.actions.args()
+    zipper_args.add("c", output_jar)
+    zipper_args.add_all([input_dir])
 
     ctx.actions.run(
         outputs = [output_jar],
         inputs = [input_dir],
-        executable = "%s/bin/jar" % java_runtime_info.java_home,
-        tools = java_runtime_info.files,
-        arguments = [jar_args],
+        executable = ctx.executable._zipper,
+        arguments = [zipper_args],
         mnemonic = "KtProtoSrcJar",
         progress_message = "Generating Kotlin proto srcjar for " + ctx.label.name,
     )
 
+def _merge_srcjars(ctx, input_jars, output_jar):
+    """Merges multiple srcjars into a single srcjar."""
+    tmp_dir_name = ctx.label.name + "_srcjars"
+    tmp_dir = ctx.actions.declare_directory(tmp_dir_name)
+
+    merge_args = ctx.actions.args()
+    merge_args.add(ctx.executable._zipper)
+    merge_args.add(tmp_dir.path)
+    merge_args.add_all(input_jars)
+
+    ctx.actions.run(
+        outputs = [tmp_dir],
+        inputs = input_jars,
+        executable = ctx.executable._extract_srcjars,
+        tools = [ctx.executable._zipper],
+        arguments = [merge_args],
+        mnemonic = "KtProtoExtractSrcJars",
+    )
+
+    _create_srcjar(ctx, tmp_dir, output_jar)
+
+def _kt_jvm_proto_aspect_impl(target, ctx):
+    name = target.label.name
+
+    gen_src_dir_name = name + "/ktproto"
+    gen_src_dir = ctx.actions.declare_directory(gen_src_dir_name)
+    _run_protoc(ctx, target, gen_src_dir)
+
+    srcjar_name = name + "_kt_jvm_proto.srcjar"
+    srcjar = ctx.actions.declare_file(srcjar_name)
+    _create_srcjar(ctx, gen_src_dir, srcjar)
+
+    transitive = [
+        dep[KtProtoLibInfo].srcjars
+        for dep in ctx.rule.attr.deps
+        if KtProtoLibInfo in dep
+    ]
+    return [KtProtoLibInfo(
+        srcjars = depset(direct = [srcjar], transitive = transitive),
+    )]
+
+_kt_jvm_proto_aspect = aspect(
+    attrs = {
+        "_zipper": attr.label(
+            default = Label("@bazel_tools//tools/zip:zipper"),
+            cfg = "host",
+            executable = True,
+        ),
+        "_protoc": attr.label(
+            default = Label("@com_google_protobuf//:protoc"),
+            cfg = "host",
+            executable = True,
+        ),
+    },
+    implementation = _kt_jvm_proto_aspect_impl,
+    attr_aspects = ["deps"],
+)
+
 def _kt_jvm_proto_library_helper_impl(ctx):
     """Implementation of _kt_jvm_proto_library_helper rule."""
-    name = ctx.label.name
-    java_runtime = ctx.attr._jdk[java_common.JavaRuntimeInfo]
-
-    gen_src_dir_name = "%s/ktproto" % name
-    gen_src_dir = ctx.actions.declare_directory(gen_src_dir_name)
-
-    _run_protoc(ctx, gen_src_dir)
-    _create_src_jar(ctx, java_runtime, gen_src_dir, ctx.outputs.srcjar)
+    proto_lib_info = ctx.attr.proto_dep[KtProtoLibInfo]
+    _merge_srcjars(ctx, proto_lib_info.srcjars, ctx.outputs.srcjar)
 
 _kt_jvm_proto_library_helper = rule(
     attrs = {
-        "java_proto_dep": attr.label(providers = [JavaInfo]),
-        "proto_dep": attr.label(providers = [ProtoInfo]),
+        "proto_dep": attr.label(
+            providers = [ProtoInfo],
+            aspects = [_kt_jvm_proto_aspect],
+        ),
         "srcjar": attr.output(
             doc = "Generated Java source jar.",
             mandatory = True,
         ),
-        "_jdk": attr.label(
-            default = Label("@bazel_tools//tools/jdk:current_java_runtime"),
-            providers = [java_common.JavaRuntimeInfo],
+        "_zipper": attr.label(
+            default = Label("@bazel_tools//tools/zip:zipper"),
+            cfg = "host",
+            executable = True,
         ),
-        "_protoc": attr.label(
-            default = Label("@com_google_protobuf//:protoc"),
+        "_extract_srcjars": attr.label(
+            default = Label("@wfa_common_jvm//build:extract_srcjars"),
             cfg = "host",
             executable = True,
         ),
@@ -136,7 +178,6 @@ def kt_jvm_proto_library(name, srcs = None, deps = None, **kwargs):
     generated_srcjar = generated_kt_name + ".srcjar"
     _kt_jvm_proto_library_helper(
         name = generated_kt_name,
-        java_proto_dep = deps[0],
         proto_dep = srcs[0],
         srcjar = generated_srcjar,
         visibility = ["//visibility:private"],
@@ -147,5 +188,6 @@ def kt_jvm_proto_library(name, srcs = None, deps = None, **kwargs):
         srcs = [generated_srcjar],
         # TODO: add Bazel rule in protobuf instead of relying on Maven
         deps = deps + ["@maven//:com_google_protobuf_protobuf_kotlin"],
+        exports = deps,
         **kwargs
     )
