@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # Copyright 2021 The Cross-Media Measurement Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,21 +13,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Temporary forwarding macro for kt_jvm_proto_library."""
 
-load("//build/kt_jvm_proto:defs.bzl", _kt_jvm_proto_library = "kt_jvm_proto_library")
+# Extracts multiple srcjars to a single output directory.
 
-def kt_jvm_proto_library(**kwargs):
-    """Forwarding macro for kt_jvm_proto_library.
+readonly zipper="$1"
+readonly output_dir="$2"
+shift 2
 
-    Deprecated:
-        Load from @wfa_common_jvm//build/kt_jvm_proto:defs.bzl
-    """
-
-    # buildifier: disable=print
-    print(
-        "{context}: kt_jvm_proto_library should be loaded from @wfa_common_jvm//build/kt_jvm_proto:defs.bzl".format(
-            context = native.package_name(),
-        ),
-    )
-    _kt_jvm_proto_library(**kwargs)
+mkdir -p "${output_dir}"
+for input_jar in "$@"; do
+  $zipper x "${input_jar}" -d "${output_dir}"
+done

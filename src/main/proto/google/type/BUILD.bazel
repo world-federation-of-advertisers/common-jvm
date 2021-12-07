@@ -1,4 +1,4 @@
-load("//build:kt_jvm_proto_library.bzl", "kt_jvm_proto_library")
+load("//build/kt_jvm_proto:defs.bzl", "kt_jvm_proto_library")
 
 package(default_visibility = ["//visibility:public"])
 
