@@ -18,7 +18,9 @@ import com.google.crypto.tink.BinaryKeysetReader
 import com.google.crypto.tink.BinaryKeysetWriter
 import com.google.crypto.tink.HybridDecrypt
 import com.google.crypto.tink.HybridEncrypt
+import com.google.crypto.tink.KeyTemplates
 import com.google.crypto.tink.KeysetHandle
+import com.google.crypto.tink.hybrid.HybridConfig
 import com.google.protobuf.ByteString
 import org.wfanet.measurement.common.crypto.PrivateKeyHandle
 import org.wfanet.measurement.common.crypto.PublicKeyHandle
@@ -68,5 +70,18 @@ class TinkPrivateKeyHandle internal constructor(internal val keysetHandle: Keyse
     val hybridDecrypt = keysetHandle.getPrimitive(HybridDecrypt::class.java)
     val plaintext = hybridDecrypt.decrypt(ciphertext.toByteArray(), contextInfo?.toByteArray())
     return plaintext.toByteString()
+  }
+
+  companion object {
+    init {
+      HybridConfig.register()
+    }
+
+    private val ECIES_KEY_TEMPLATE = KeyTemplates.get("ECIES_P256_HKDF_HMAC_SHA256_AES128_GCM")
+
+    /** Generates a new ECIES key pair. */
+    fun generateEcies(): TinkPrivateKeyHandle {
+      return TinkPrivateKeyHandle(KeysetHandle.generateNew(ECIES_KEY_TEMPLATE))
+    }
   }
 }
