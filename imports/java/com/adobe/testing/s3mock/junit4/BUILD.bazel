@@ -1,0 +1,6 @@
+package(default_visibility = ["//visibility:public"])
+
+alias(
+    name = "junit4",
+    actual = "@maven//:com_adobe_testing_s3mock_junit4",
+)

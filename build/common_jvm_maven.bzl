@@ -57,6 +57,7 @@ def common_jvm_maven_artifacts():
     # Add Maven artifacts or override versions (e.g. those pulled in by gRPC Kotlin
     # or default dependency versions).
     maven_artifacts.update({
+        "com.adobe.testing:s3mock-junit4": "2.2.3",
         "com.google.api:gax": "2.0.0",
         "com.google.api:gax-grpc": "2.0.0",
         "com.google.cloud:google-cloud-bigquery": "2.3.0",
@@ -68,6 +69,9 @@ def common_jvm_maven_artifacts():
         "junit:junit": "4.13",
         "org.conscrypt:conscrypt-openjdk-uber": "2.5.2",
         "org.mockito.kotlin:mockito-kotlin": "3.2.0",
+        "software.amazon.awssdk:http-client-spi": "2.17.98",
+        "software.amazon.awssdk:s3": "2.17.98",
+        "software.amazon.awssdk:sdk-core": "2.17.98",
 
         # For grpc-kotlin. This should be a version that is compatible with the
         # Kotlin release used by rules_kotlin.
