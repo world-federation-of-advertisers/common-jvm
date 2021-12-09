@@ -15,12 +15,14 @@
 package org.wfanet.measurement.common
 
 import com.google.protobuf.ByteString
+import java.io.InputStream
 import java.nio.ByteBuffer
 import java.nio.channels.ReadableByteChannel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.FlowCollector
+import kotlinx.coroutines.flow.asFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
@@ -202,6 +204,25 @@ fun ReadableByteChannel.asFlow(bufferSize: Int): Flow<ByteString> =
     }
     .onCompletion { withContext(Dispatchers.IO) { close() } }
     .flowOn(Dispatchers.IO)
+
+/**
+ * Converts an [InputStream] into a [Flow] of [ByteString]s.
+ *
+ * This will close the receiver.
+ *
+ * @param bufferSize size of all except last output ByteString (which may be smaller)
+ */
+fun InputStream.asFlow(bufferSize: Int): Flow<ByteString> {
+  return use {
+    val buffer = ByteArray(bufferSize)
+    val iterator = iterator {
+      while (it.read(buffer) >= 0) {
+        yield(ByteString.copyFrom(buffer))
+      }
+    }
+    iterator.asFlow()
+  }
+}
 
 /** Converts a hex string to its equivalent [ByteString]. */
 @Deprecated("Use HexString for stronger typing")

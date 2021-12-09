@@ -1,0 +1,16 @@
+load("@io_bazel_rules_kotlin//kotlin:jvm.bzl", "kt_jvm_library")
+
+package(default_visibility = ["//visibility:public"])
+
+kt_jvm_library(
+    name = "s3",
+    srcs = glob(["*.kt"]),
+    deps = [
+        "//imports/java/picocli",
+        "//imports/java/software/amazon/awssdk:http-client-spi",
+        "//imports/java/software/amazon/awssdk:s3",
+        "//imports/java/software/amazon/awssdk:sdk-core",
+        "//imports/kotlin/kotlinx/coroutines:core",
+        "//src/main/kotlin/org/wfanet/measurement/storage:client",
+    ],
+)
