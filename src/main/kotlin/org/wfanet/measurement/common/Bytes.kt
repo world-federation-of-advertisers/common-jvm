@@ -15,6 +15,7 @@
 package org.wfanet.measurement.common
 
 import com.google.protobuf.ByteString
+import java.io.InputStream
 import java.nio.ByteBuffer
 import java.nio.channels.ReadableByteChannel
 import kotlinx.coroutines.Dispatchers
@@ -203,8 +204,31 @@ fun ReadableByteChannel.asFlow(bufferSize: Int): Flow<ByteString> =
     .onCompletion { withContext(Dispatchers.IO) { close() } }
     .flowOn(Dispatchers.IO)
 
+/**
+ * Converts an [InputStream] into a [Flow] of [ByteString]s.
+ *
+ * This will close the receiver.
+ *
+ * @param bufferSize size of all except last output ByteString (which may be smaller)
+ */
+fun InputStream.asFlow(bufferSize: Int): Flow<ByteString> =
+  flow {
+      val buffer = ByteArray(bufferSize)
+      while (true) {
+        @Suppress("BlockingMethodInNonBlockingContext") // Runs on Dispatchers.IO
+        val length = read(buffer)
+        if (length < 0) break
+        emit(ByteString.copyFrom(buffer, 0, length))
+      }
+    }
+    .onCompletion { withContext(Dispatchers.IO) { this@asFlow.close() } }
+    .flowOn(Dispatchers.IO)
+
 /** Converts a hex string to its equivalent [ByteString]. */
-@Deprecated("Use HexString for stronger typing")
+@Deprecated(
+  "Use HexString for stronger typing",
+  ReplaceWith("HexString(this).bytes", "org.wfanet.measurement.common.HexString")
+)
 fun String.hexAsByteString(): ByteString {
   return HexString(this).bytes
 }
