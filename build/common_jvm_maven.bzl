@@ -68,6 +68,9 @@ def common_jvm_maven_artifacts():
         "junit:junit": "4.13",
         "org.conscrypt:conscrypt-openjdk-uber": "2.5.2",
         "org.mockito.kotlin:mockito-kotlin": "3.2.0",
+        "software.amazon.awssdk:s3": "2.17.98",
+        "software.amazon.awssdk:sdk-core": "2.17.98",
+        "software.amazon.awssdk:http-client-spi": "2.17.98",
 
         # For grpc-kotlin. This should be a version that is compatible with the
         # Kotlin release used by rules_kotlin.
