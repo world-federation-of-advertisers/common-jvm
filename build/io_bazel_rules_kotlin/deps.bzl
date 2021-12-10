@@ -14,10 +14,15 @@
 
 """Repository rules/macros for rules_kotlin dependencies."""
 
-load("@io_bazel_rules_kotlin//kotlin:repositories.bzl", "kotlin_repositories")
+load("@io_bazel_rules_kotlin//kotlin:repositories.bzl", "kotlin_repositories", "kotlinc_version")
 load("@io_bazel_rules_kotlin//kotlin:kotlin.bzl", "kt_register_toolchains")
 
 def rules_kotlin_deps():
-    kotlin_repositories()
+    kotlin_repositories(
+        compiler_release = kotlinc_version(
+            release = "1.3.31", # just the numeric version
+            sha256 = "107325d56315af4f59ff28db6837d03c2660088e3efeb7d4e41f3e01bb848d6a"
+        )
+    )
 
     kt_register_toolchains()

@@ -37,6 +37,6 @@ def _rules_kotlin_repo(version, sha256):
 
 def rules_kotlin_repo():
     _rules_kotlin_repo(
-        version = "v1.5.0-beta-3",
-        sha256 = "58edd86f0f3c5b959c54e656b8e7eb0b0becabd412465c37a2078693c2571f7f",
+        version = "v1.5.0-beta-4",
+        sha256 = "6cbd4e5768bdfae1598662e40272729ec9ece8b7bded8f0d2c81c8ff96dc139d",
     )

@@ -52,7 +52,7 @@ def common_jvm_maven_artifacts():
 
     # kotlinx.coroutines version should be compatible with Kotlin release used by
     # rules_kotlin. See https://kotlinlang.org/docs/releases.html#release-details.
-    maven_artifacts.update(kotlinx_coroutines_artifact_dict(version = "1.4.3"))
+    maven_artifacts.update(kotlinx_coroutines_artifact_dict(version = "1.4.1"))
 
     # Add Maven artifacts or override versions (e.g. those pulled in by gRPC Kotlin
     # or default dependency versions).
