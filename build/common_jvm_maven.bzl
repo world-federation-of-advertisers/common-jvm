@@ -85,3 +85,12 @@ COMMON_JVM_MAVEN_OVERRIDE_TARGETS = dict(
     IO_GRPC_GRPC_JAVA_OVERRIDE_TARGETS.items() +
     IO_GRPC_GRPC_KOTLIN_OVERRIDE_TARGETS.items(),
 )
+
+# Until the log2shell has been more widely mitigated, prohibit log4j totally.
+COMMON_JVM_EXCLUDED_ARTIFACTS = [
+    "org.apache.logging.log4j:log4j",
+    "org.apache.logging.log4j:log4j-api",
+    "org.apache.logging.log4j:log4j-core",
+    "org.slf4j:log4j-over-slf4j",
+    "org.slf4j:slf4j-log4j12",
+]
