@@ -16,13 +16,13 @@ package org.wfanet.measurement.storage.testing
 
 import com.google.common.truth.Truth.assertThat
 import com.google.protobuf.ByteString
+import com.google.protobuf.kotlin.toByteString
 import kotlin.random.Random
 import kotlin.test.assertNotNull
 import kotlinx.coroutines.runBlocking
 import org.junit.Test
 import org.wfanet.measurement.common.BYTES_PER_MIB
 import org.wfanet.measurement.common.size
-import org.wfanet.measurement.common.toByteString
 import org.wfanet.measurement.storage.StorageClient
 import org.wfanet.measurement.storage.createBlob
 import org.wfanet.measurement.storage.testing.BlobSubject.Companion.assertThat

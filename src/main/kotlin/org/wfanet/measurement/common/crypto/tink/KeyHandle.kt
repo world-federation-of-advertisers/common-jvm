@@ -22,9 +22,9 @@ import com.google.crypto.tink.KeyTemplates
 import com.google.crypto.tink.KeysetHandle
 import com.google.crypto.tink.hybrid.HybridConfig
 import com.google.protobuf.ByteString
+import com.google.protobuf.kotlin.toByteString
 import org.wfanet.measurement.common.crypto.PrivateKeyHandle
 import org.wfanet.measurement.common.crypto.PublicKeyHandle
-import org.wfanet.measurement.common.toByteString
 
 class TinkPublicKeyHandle internal constructor(internal val keysetHandle: KeysetHandle) :
   PublicKeyHandle {

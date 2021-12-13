@@ -15,6 +15,7 @@
 package org.wfanet.measurement.common.crypto
 
 import com.google.protobuf.ByteString
+import com.google.protobuf.kotlin.toByteString
 import java.security.PrivateKey
 import java.security.Signature
 import java.security.cert.X509Certificate
@@ -25,7 +26,6 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.onEach
-import org.wfanet.measurement.common.toByteString
 
 /** @see [Signature.update] */
 fun Signature.update(bytes: ByteString) {
