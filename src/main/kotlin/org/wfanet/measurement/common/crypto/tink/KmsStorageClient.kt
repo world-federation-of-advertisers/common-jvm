@@ -31,7 +31,8 @@ import org.wfanet.measurement.storage.read
  * @param storageClient underlying client for accessing blob/object storage
  * @param aead Tink AEAD integration specific encrypt/decrypt
  */
-internal class KmsStorageClient(private val storageClient: StorageClient, private val aead: Aead) :
+class KmsStorageClient
+internal constructor(private val storageClient: StorageClient, private val aead: Aead) :
   StorageClient {
 
   override val defaultBufferSizeBytes: Int
@@ -45,10 +46,12 @@ internal class KmsStorageClient(private val storageClient: StorageClient, privat
    */
   override suspend fun createBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
     val ciphertext = aead.encrypt(content.toByteArray(), null)
-    return storageClient.createBlob(
-      blobKey,
-      ciphertext.asBufferedFlow(storageClient.defaultBufferSizeBytes)
-    )
+    val wrappedBlob =
+      storageClient.createBlob(
+        blobKey,
+        ciphertext.asBufferedFlow(storageClient.defaultBufferSizeBytes)
+      )
+    return AeadBlob(wrappedBlob)
   }
 
   /**
