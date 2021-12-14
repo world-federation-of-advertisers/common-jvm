@@ -68,3 +68,17 @@ kt_jvm_test(
         "//src/main/kotlin/org/wfanet/measurement/storage/testing",
     ],
 )
+
+kt_jvm_test(
+    name = "SigningKeyHandleTest",
+    srcs = ["SigningKeyHandleTest.kt"],
+    test_class = "org.wfanet.measurement.common.crypto.SigningKeyHandleTest",
+    deps = [
+        "//imports/java/com/google/common/truth",
+        "//imports/java/org/junit",
+        "//imports/kotlin/com/google/protobuf/kotlin",
+        "//src/main/kotlin/org/wfanet/measurement/common/crypto:signatures",
+        "//src/main/kotlin/org/wfanet/measurement/common/crypto:signing_key_storage",
+        "//src/main/kotlin/org/wfanet/measurement/common/crypto/testing",
+    ],
+)
