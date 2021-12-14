@@ -29,6 +29,15 @@ import org.junit.runners.JUnit4
 @OptIn(ExperimentalCoroutinesApi::class) // For `runBlockingTest`.
 class BytesTest {
   @Test
+  fun `ByteString is bidirectionally convertible with Long`() {
+    val longValue = -3519155157501101422L
+    val binaryValue = HexString("CF2973078FA9BA92").bytes
+
+    assertThat(longValue.toByteString()).isEqualTo(binaryValue)
+    assertThat(binaryValue.toLong()).isEqualTo(longValue)
+  }
+
+  @Test
   fun `ByteString asBufferedFlow with non-full last part`() = runBlockingTest {
     val flow = ByteString.copyFromUtf8("Hello World").asBufferedFlow(3)
     assertThat(flow.map { it.toStringUtf8() }.toList())

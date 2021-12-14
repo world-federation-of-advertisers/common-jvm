@@ -14,9 +14,9 @@
 
 package org.wfanet.measurement.common.identity
 
-import java.math.BigInteger
 import org.wfanet.measurement.common.base64UrlDecode
 import org.wfanet.measurement.common.base64UrlEncode
+import org.wfanet.measurement.common.toLong
 
 /**
  * Typesafe wrapper around Long to represent the integer format used below the service layer for the
@@ -29,7 +29,7 @@ data class ExternalId(val value: Long) {
     require(value > 0) { "Negative id numbers and 0 are not permitted: $value" }
   }
 
-  val apiId: ApiId by lazy { ApiId(value.toByteArray().base64UrlEncode()) }
+  val apiId: ApiId by lazy { ApiId(value.base64UrlEncode()) }
 
   override fun toString(): String = "ExternalId($value / ${apiId.value})"
 }
@@ -55,17 +55,5 @@ fun externalIdToApiId(id: Long): String = ExternalId(id).apiId.value
 data class InternalId(val value: Long) {
   init {
     require(value != 0L) { "0 is not permitted" }
-  }
-}
-
-// An alternative is: toBigInteger().toByteArray(), but that includes the sign bit, which uses an
-// extra byte.
-private fun Long.toByteArray(): ByteArray =
-  ByteArray(8) { ((this shr ((7 - it) * 8)) and 0xFF).toByte() }
-
-private fun ByteArray.toLong(): Long {
-  require(size == 8) { "Invalid conversion: $this is not 8 bytes" }
-  return BigInteger(this).toLong().also {
-    require(it >= 0L) { "Negative id numbers are not permitted: $it" }
   }
 }
