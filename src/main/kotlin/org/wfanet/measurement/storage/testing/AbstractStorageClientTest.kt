@@ -17,7 +17,9 @@ package org.wfanet.measurement.storage.testing
 import com.google.common.truth.Truth.assertThat
 import com.google.protobuf.ByteString
 import com.google.protobuf.kotlin.toByteString
+import com.google.protobuf.kotlin.toByteStringUtf8
 import kotlin.random.Random
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlinx.coroutines.runBlocking
 import org.junit.Test
@@ -29,6 +31,13 @@ import org.wfanet.measurement.storage.testing.BlobSubject.Companion.assertThat
 
 /** Abstract base class for testing implementations of [StorageClient]. */
 abstract class AbstractStorageClientTest<T : StorageClient> {
+  protected val testBlobContent: ByteString
+    get() = Companion.testBlobContent
+
+  open fun computeStoredBlobSize(content: ByteString, blobKey: String): Int {
+    return content.size
+  }
+
   protected lateinit var storageClient: T
 
   @Test
@@ -38,6 +47,16 @@ abstract class AbstractStorageClientTest<T : StorageClient> {
     val blob = storageClient.createBlob(blobKey, testBlobContent)
 
     assertThat(blob).contentEqualTo(testBlobContent)
+  }
+
+  @Test
+  fun `createBlob throws if blobKey exists`(): Unit = runBlocking {
+    val blobKey = "new-blob"
+    storageClient.createBlob(blobKey, testBlobContent)
+
+    assertFailsWith<IllegalArgumentException> {
+      storageClient.createBlob(blobKey, "other content".toByteStringUtf8())
+    }
   }
 
   @Test
@@ -53,17 +72,16 @@ abstract class AbstractStorageClientTest<T : StorageClient> {
 
     val blob = assertNotNull(storageClient.getBlob(blobKey))
 
-    assertThat(blob).hasSize(testBlobContent.size)
     assertThat(blob).contentEqualTo(testBlobContent)
   }
 
   @Test
   fun `Blob size returns content size`() = runBlocking {
-    val blobKey = "blob-to-check-size"
+    val blobKey = "blob-to-check-size-" + random.nextInt().toString()
 
     val blob = storageClient.createBlob(blobKey, testBlobContent)
 
-    assertThat(blob).hasSize(testBlobContent.size)
+    assertThat(blob).hasSize(computeStoredBlobSize(testBlobContent, blobKey))
   }
 
   @Test
