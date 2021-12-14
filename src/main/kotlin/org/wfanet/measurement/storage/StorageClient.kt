@@ -29,7 +29,11 @@ interface StorageClient {
   /** Default size in bytes of each [Flow] value. */
   val defaultBufferSizeBytes: Int
 
-  /** Creates a blob with the specified key and content. */
+  /**
+   * Creates a blob with the specified key and content.
+   *
+   * @throws IllegalArgumentException if a blob with [blobKey] already exists.
+   */
   suspend fun createBlob(blobKey: String, content: Flow<ByteString>): Blob
 
   /** Returns a [Blob] for the specified key, or `null` if it cannot be found. */

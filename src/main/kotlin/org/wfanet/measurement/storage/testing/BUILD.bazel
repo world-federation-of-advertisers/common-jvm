@@ -12,6 +12,7 @@ kt_jvm_library(
         "//imports/java/com/google/common/truth",
         "//imports/java/com/google/protobuf",
         "//imports/java/org/junit",
+        "//imports/kotlin/com/google/protobuf/kotlin",
         "//imports/kotlin/kotlin/test",
         "//imports/kotlin/kotlinx/coroutines:core",
         "//src/main/kotlin/org/wfanet/measurement/common",

@@ -23,6 +23,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.yield
 import org.wfanet.measurement.common.BYTES_PER_MIB
 import org.wfanet.measurement.common.asBufferedFlow
 import org.wfanet.measurement.common.asFlow
@@ -44,7 +45,14 @@ class GcsStorageClient(private val storage: Storage, private val bucketName: Str
     get() = BYTE_BUFFER_SIZE
 
   override suspend fun createBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
-    val blob = storage.create(BlobInfo.newBuilder(bucketName, blobKey).build())
+    // TODO(googleapis/java-storage-nio#775): Pass generationMatch option to `create` once test GCS
+    // supports it rather than making a separate `get` call.
+    require(getBlob(blobKey) == null) { "Blob with key $blobKey already exists" }
+
+    val blob =
+      storage.create(
+        BlobInfo.newBuilder(bucketName, blobKey, 0L).build(),
+      )
 
     blob.writer().use { byteChannel ->
       content.collect { bytes ->
@@ -55,7 +63,7 @@ class GcsStorageClient(private val storage: Storage, private val bucketName: Str
               // Nothing was written, so we may have a non-blocking channel
               // that nothing can be written to right now. Suspend this
               // coroutine to avoid monopolizing the thread.
-              delay(1L)
+              yield()
             }
           }
         }
