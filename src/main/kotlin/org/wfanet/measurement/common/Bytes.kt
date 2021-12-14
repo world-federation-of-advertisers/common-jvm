@@ -15,9 +15,11 @@
 package org.wfanet.measurement.common
 
 import com.google.protobuf.ByteString
+import java.io.InputStream
 import java.nio.ByteBuffer
 import java.nio.channels.ReadableByteChannel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.FlowCollector
@@ -25,8 +27,9 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.fold
+import kotlinx.coroutines.flow.isActive
 import kotlinx.coroutines.flow.onCompletion
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.isActive
 
 const val BYTES_PER_MIB = 1024 * 1024
 
@@ -200,11 +203,34 @@ fun ReadableByteChannel.asFlow(bufferSize: Int): Flow<ByteString> =
         buffer.clear()
       }
     }
-    .onCompletion { withContext(Dispatchers.IO) { close() } }
+    .onCompletion { close() }
+    .flowOn(Dispatchers.IO)
+
+/**
+ * Converts an [InputStream] into a [Flow] of [ByteString]s.
+ *
+ * This will close the receiver.
+ *
+ * @param bufferSize size of all except last output ByteString (which may be smaller)
+ */
+fun InputStream.asFlow(bufferSize: Int): Flow<ByteString> =
+  flow {
+      val buffer = ByteArray(bufferSize)
+      while (currentCoroutineContext().isActive) {
+        @Suppress("BlockingMethodInNonBlockingContext") // Runs on Dispatchers.IO
+        val length = read(buffer)
+        if (length < 0) break
+        emit(ByteString.copyFrom(buffer, 0, length))
+      }
+    }
+    .onCompletion { this@asFlow.close() }
     .flowOn(Dispatchers.IO)
 
 /** Converts a hex string to its equivalent [ByteString]. */
-@Deprecated("Use HexString for stronger typing")
+@Deprecated(
+  "Use HexString for stronger typing",
+  ReplaceWith("HexString(this).bytes", "org.wfanet.measurement.common.HexString")
+)
 fun String.hexAsByteString(): ByteString {
   return HexString(this).bytes
 }

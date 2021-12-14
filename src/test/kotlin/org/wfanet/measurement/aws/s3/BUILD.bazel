@@ -1,0 +1,13 @@
+load("@io_bazel_rules_kotlin//kotlin:jvm.bzl", "kt_jvm_test")
+
+kt_jvm_test(
+    name = "S3StorageClientTest",
+    srcs = ["S3StorageClientTest.kt"],
+    test_class = "org.wfanet.measurement.aws.s3.S3StorageClientTest",
+    deps = [
+        "//imports/java/com/adobe/testing/s3mock/junit4",
+        "//imports/java/org/junit",
+        "//src/main/kotlin/org/wfanet/measurement/aws/s3",
+        "//src/main/kotlin/org/wfanet/measurement/storage/testing",
+    ],
+)
