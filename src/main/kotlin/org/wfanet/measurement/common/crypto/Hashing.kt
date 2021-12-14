@@ -15,12 +15,12 @@
 package org.wfanet.measurement.common.crypto
 
 import com.google.protobuf.ByteString
+import com.google.protobuf.kotlin.toByteString
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.security.MessageDigest
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collect
-import org.wfanet.measurement.common.toByteString
 
 private const val SHA_256 = "SHA-256"
 
