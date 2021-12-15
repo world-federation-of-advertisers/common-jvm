@@ -16,11 +16,36 @@
 
 package org.wfanet.measurement.storage.testing
 
+import com.google.common.truth.Truth.assertThat
+import com.google.protobuf.kotlin.toByteStringUtf8
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.runBlocking
 import org.junit.Before
+import org.junit.Test
+import org.wfanet.measurement.common.flatten
+import org.wfanet.measurement.storage.read
 
 class InMemoryStorageClientTest : AbstractStorageClientTest<InMemoryStorageClient>() {
   @Before
   fun initStorageClient() {
     storageClient = InMemoryStorageClient()
+  }
+
+  @Test
+  fun contents() = runBlocking {
+    val client = InMemoryStorageClient()
+    assertThat(client.contents).isEmpty()
+
+    val blobKey = "some-blob-key"
+    val contents = "some-contents".toByteStringUtf8()
+
+    client.createBlob(blobKey, flowOf(contents))
+
+    assertThat(client.contents.mapValues { it.value.read().flatten() })
+      .containsExactly(blobKey, contents)
+
+    client.getBlob(blobKey)?.delete()
+
+    assertThat(client.contents).isEmpty()
   }
 }
