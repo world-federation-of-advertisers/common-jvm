@@ -27,7 +27,6 @@ import java.security.cert.X509Certificate
 import java.security.spec.PKCS8EncodedKeySpec
 import java.util.Base64
 import kotlin.jvm.Throws
-import org.wfanet.measurement.common.base64Decode
 
 private const val LINE_FEED: Byte = 0x0A
 private const val LINE_FEED_INT: Int = LINE_FEED.toInt()
@@ -136,3 +135,6 @@ fun readPrivateKey(pemFile: File, algorithm: String): PrivateKey {
     reader.readPrivateKeySpec().toPrivateKey(algorithm)
   }
 }
+
+/** Decodes this base64-encoded [String] to a [ByteArray]. */
+private fun String.base64Decode(): ByteArray = Base64.getDecoder().decode(this)

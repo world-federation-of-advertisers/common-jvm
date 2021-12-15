@@ -16,6 +16,18 @@ kt_jvm_test(
 )
 
 kt_jvm_test(
+    name = "Base64Test",
+    srcs = ["Base64Test.kt"],
+    test_class = "org.wfanet.measurement.common.Base64Test",
+    deps = [
+        "//imports/java/com/google/common/truth",
+        "//imports/java/com/google/protobuf",
+        "//imports/java/org/junit",
+        "//src/main/kotlin/org/wfanet/measurement/common",
+    ],
+)
+
+kt_jvm_test(
     name = "ProtoUtilsTest",
     srcs = ["ProtoUtilsTest.kt"],
     test_class = "org.wfanet.measurement.common.ProtoUtilsTest",

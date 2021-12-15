@@ -19,6 +19,7 @@ import com.google.protobuf.kotlin.toByteString
 import java.io.File
 import java.io.InputStream
 import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.nio.channels.ReadableByteChannel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
@@ -66,6 +67,21 @@ fun Iterable<ByteString>.toByteArray(): ByteArray {
 /** @see ByteString.size(). */
 val ByteString.size: Int
   get() = size()
+
+fun ByteString.toLong(): Long {
+  require(size == 8) { "Expected 8 bytes, got $size" }
+  return asReadOnlyByteBuffer().long
+}
+
+fun Long.toByteString(): ByteString {
+  return ByteString.copyFrom(toReadOnlyByteBuffer())
+}
+
+fun Long.toReadOnlyByteBuffer(): ByteBuffer {
+  val buffer = ByteBuffer.allocate(8).order(ByteOrder.BIG_ENDIAN).putLong(this)
+  buffer.flip()
+  return buffer.asReadOnlyBuffer()
+}
 
 /**
  * Returns a [ByteString] with the same contents, padded with zeros in its most-significant bits

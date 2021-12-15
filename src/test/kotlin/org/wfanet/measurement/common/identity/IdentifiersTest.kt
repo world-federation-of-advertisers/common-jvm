@@ -15,6 +15,7 @@
 package org.wfanet.measurement.common.identity
 
 import com.google.common.truth.Truth.assertThat
+import java.io.IOException
 import kotlin.test.assertFailsWith
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -54,8 +55,8 @@ class IdentifiersTest {
 
   @Test
   fun `invalid base64 string`() {
-    assertFailsWith<IllegalArgumentException> { ApiId("12345678!") }
-    assertFailsWith<IllegalArgumentException> { ApiId("012345678") }
+    assertFailsWith<IOException> { ApiId("12345678!") }
+    assertFailsWith<IOException> { ApiId("012345678") }
   }
 
   @Test
