@@ -16,7 +16,10 @@ package org.wfanet.measurement.storage.testing
 
 import com.google.protobuf.ByteString
 import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import org.wfanet.measurement.common.BYTES_PER_MIB
 import org.wfanet.measurement.common.asBufferedFlow
 import org.wfanet.measurement.common.flatten
@@ -28,11 +31,9 @@ import org.wfanet.measurement.storage.StorageClient
  */
 private const val BYTE_BUFFER_SIZE = BYTES_PER_MIB * 1
 
-/** [StorageClient] for InMemoryStorage service. */
-class InMemoryStorageClient(
-  private var storageMap: ConcurrentHashMap<String, StorageClient.Blob> =
-    ConcurrentHashMap<String, StorageClient.Blob>()
-) : StorageClient {
+/** In-memory [StorageClient]. */
+class InMemoryStorageClient : StorageClient {
+  private val storageMap = ConcurrentHashMap<String, StorageClient.Blob>()
 
   private fun deleteKey(path: String) {
     storageMap.remove(path)
@@ -42,29 +43,33 @@ class InMemoryStorageClient(
     get() = BYTE_BUFFER_SIZE
 
   override suspend fun createBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
-    require(!storageMap.containsKey(blobKey)) { "Cannot write to an existing key: $blobKey" }
-
-    // As we're using this primarily for unit tests, we want to collect the input to record
-    // size and to emulate "writing out" to memory.
-    val newBlob = Blob(content.flatten(), blobKey)
-    storageMap[blobKey] = newBlob
-
-    return newBlob
+    return withContext(Dispatchers.IO) {
+      var created = false
+      val blob =
+        storageMap.getOrPut(blobKey) {
+          created = true
+          Blob(blobKey, runBlocking { content.flatten() })
+        }
+      require(created) { "Blob with key $blobKey already exists" }
+      blob
+    }
   }
 
   override fun getBlob(blobKey: String): StorageClient.Blob? {
     return storageMap[blobKey]
   }
 
-  private inner class Blob(private val byteData: ByteString, private val blobKey: String) :
+  private inner class Blob(private val blobKey: String, private val content: ByteString) :
     StorageClient.Blob {
 
-    override val size: Long = byteData.size().toLong()
+    override val size: Long
+      get() = content.size().toLong()
 
-    override val storageClient: InMemoryStorageClient = this@InMemoryStorageClient
+    override val storageClient: InMemoryStorageClient
+      get() = this@InMemoryStorageClient
 
     override fun read(bufferSizeBytes: Int): Flow<ByteString> =
-      byteData.asBufferedFlow(bufferSizeBytes)
+      content.asBufferedFlow(bufferSizeBytes)
 
     override fun delete() = storageClient.deleteKey(blobKey)
   }
