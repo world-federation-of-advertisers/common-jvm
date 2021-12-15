@@ -16,11 +16,11 @@ package org.wfanet.measurement.common.crypto.tink
 
 import com.google.crypto.tink.Aead
 import com.google.protobuf.ByteString
+import com.google.protobuf.kotlin.toByteString
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import org.wfanet.measurement.common.asBufferedFlow
 import org.wfanet.measurement.common.toByteArray
-import org.wfanet.measurement.common.toByteString
 import org.wfanet.measurement.storage.StorageClient
 import org.wfanet.measurement.storage.read
 

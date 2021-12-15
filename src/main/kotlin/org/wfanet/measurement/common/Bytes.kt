@@ -15,6 +15,7 @@
 package org.wfanet.measurement.common
 
 import com.google.protobuf.ByteString
+import com.google.protobuf.kotlin.toByteString
 import java.io.InputStream
 import java.nio.ByteBuffer
 import java.nio.channels.ReadableByteChannel
@@ -33,7 +34,11 @@ import kotlinx.coroutines.isActive
 
 const val BYTES_PER_MIB = 1024 * 1024
 
-fun ByteArray.toByteString(): ByteString = ByteString.copyFrom(this)
+@Deprecated(
+  "Use com.google.protobuf.kotlin.toByteString",
+  ReplaceWith("toByteString()", "com.google.protobuf.kotlin.toByteString")
+)
+fun ByteArray.toByteString(): ByteString = toByteString()
 
 fun Iterable<ByteArray>.toByteString(): ByteString {
   val totalSize = sumBy { it.size }
