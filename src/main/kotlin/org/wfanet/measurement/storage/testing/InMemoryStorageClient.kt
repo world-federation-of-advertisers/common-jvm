@@ -35,6 +35,10 @@ private const val BYTE_BUFFER_SIZE = BYTES_PER_MIB * 1
 class InMemoryStorageClient : StorageClient {
   private val storageMap = ConcurrentHashMap<String, StorageClient.Blob>()
 
+  /** Exposes all the blobs in the [StorageClient]. */
+  val contents: Map<String, StorageClient.Blob>
+    get() = storageMap
+
   private fun deleteKey(path: String) {
     storageMap.remove(path)
   }
