@@ -11,3 +11,16 @@ kt_jvm_test(
         "//src/main/kotlin/org/wfanet/measurement/common/crypto/tink/testing",
     ],
 )
+
+kt_jvm_test(
+    name = "KmsStorageClientTest",
+    srcs = ["KmsStorageClientTest.kt"],
+    deps = [
+        "//imports/java/com/google/common/truth",
+        "//imports/java/org/junit",
+        "//src/main/kotlin/org/wfanet/measurement/common/crypto/tink",
+        "//src/main/kotlin/org/wfanet/measurement/common/crypto/tink/testing",
+        "//src/main/kotlin/org/wfanet/measurement/storage/testing",
+        "@tink_java//src/main/java/com/google/crypto/tink/aead:aead_config",
+    ],
+)
