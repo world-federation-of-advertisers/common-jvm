@@ -10,6 +10,7 @@ kt_jvm_library(
         "//imports/java/software/amazon/awssdk/core",
         "//imports/java/software/amazon/awssdk/http",
         "//imports/java/software/amazon/awssdk/services/s3",
+        "//imports/kotlin/com/google/protobuf/kotlin",
         "//imports/kotlin/kotlinx/coroutines:core",
         "//src/main/kotlin/org/wfanet/measurement/storage:client",
     ],
