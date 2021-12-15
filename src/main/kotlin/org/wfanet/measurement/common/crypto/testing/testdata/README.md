@@ -22,23 +22,3 @@ openssl req -out server.csr -new -newkey ec -pkeyopt ec_paramgen_curve:prime256v
 ```
 openssl x509 -in server.csr -out server.pem -days 3650 -req -CA ca.pem -CAkey ca.key -CAcreateserial -extfile openssl.cnf -extensions usr_cert
 ```
-
-## Key Pairs
-
-### Generate Private Key
-
-```
-openssl genpkey -out ec.key -algorithm ec -pkeyopt ec_paramgen_curve:prime256v1
-```
-
-### Extract Public Key as SubjectPublicKeyInfo
-
-```
-openssl pkey -pubout -outform der -in ec.key -out ec-public.der
-```
-
-### Convert the PEM-encoded private key to DER-encoded PKCS#8 ByteString
-
-```
-openssl pkcs8 -topk8 -inform pem -outform der -in ec.key -out ec-private.der -nocrypt
-```

@@ -16,6 +16,7 @@ package org.wfanet.measurement.common
 
 import com.google.protobuf.ByteString
 import com.google.protobuf.kotlin.toByteString
+import java.io.File
 import java.io.InputStream
 import java.nio.ByteBuffer
 import java.nio.channels.ReadableByteChannel
@@ -230,6 +231,11 @@ fun InputStream.asFlow(bufferSize: Int): Flow<ByteString> =
     }
     .onCompletion { this@asFlow.close() }
     .flowOn(Dispatchers.IO)
+
+/** Reads all of the bytes from this [File] into a [ByteString]. */
+fun File.readByteString(): ByteString {
+  return inputStream().use { input -> ByteString.readFrom(input) }
+}
 
 /** Converts a hex string to its equivalent [ByteString]. */
 @Deprecated(
