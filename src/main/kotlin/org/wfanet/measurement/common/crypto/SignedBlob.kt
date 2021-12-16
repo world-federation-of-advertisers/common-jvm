@@ -15,11 +15,11 @@
 package org.wfanet.measurement.common.crypto
 
 import com.google.protobuf.ByteString
+import com.google.protobuf.kotlin.toByteString
 import java.security.Signature
 import java.security.cert.X509Certificate
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.onEach
-import org.wfanet.measurement.common.toByteString
 import org.wfanet.measurement.storage.StorageClient
 
 class SignedBlob(wrapped: StorageClient.Blob, val signature: ByteString) :

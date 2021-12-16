@@ -15,6 +15,7 @@
 package org.wfanet.measurement.aws.s3
 
 import com.google.protobuf.ByteString
+import com.google.protobuf.kotlin.toByteString
 import java.security.MessageDigest
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -24,7 +25,6 @@ import org.wfanet.measurement.common.BYTES_PER_MIB
 import org.wfanet.measurement.common.HexString
 import org.wfanet.measurement.common.asBufferedFlow
 import org.wfanet.measurement.common.asFlow
-import org.wfanet.measurement.common.toByteString
 import org.wfanet.measurement.storage.StorageClient
 import software.amazon.awssdk.core.sync.RequestBody
 import software.amazon.awssdk.services.s3.S3Client

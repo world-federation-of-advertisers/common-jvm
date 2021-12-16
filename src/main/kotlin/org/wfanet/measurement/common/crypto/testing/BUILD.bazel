@@ -10,6 +10,7 @@ kt_jvm_library(
     srcs = glob(["*.kt"]),
     data = [
         "//src/main/kotlin/org/wfanet/measurement/common/crypto/testing/testdata:static_certs",
+        "//src/main/kotlin/org/wfanet/measurement/common/crypto/testing/testdata:static_keysets",
     ],
     deps = [
         "//imports/java/com/google/common/truth",

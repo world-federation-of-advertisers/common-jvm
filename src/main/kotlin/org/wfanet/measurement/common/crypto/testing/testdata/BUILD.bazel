@@ -13,3 +13,8 @@ filegroup(
         "*.der",
     ]),
 )
+
+filegroup(
+    name = "static_keysets",
+    srcs = glob(["*.tink"]),
+)

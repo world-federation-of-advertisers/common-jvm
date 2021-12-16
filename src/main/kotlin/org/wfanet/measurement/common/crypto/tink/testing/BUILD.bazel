@@ -1,0 +1,18 @@
+load("@io_bazel_rules_kotlin//kotlin:jvm.bzl", "kt_jvm_library")
+
+package(
+    default_testonly = True,
+    default_visibility = ["//visibility:public"],
+)
+
+kt_jvm_library(
+    name = "testing",
+    srcs = glob(["*.kt"]),
+    associates = ["//src/main/kotlin/org/wfanet/measurement/common/crypto/tink"],
+    deps = [
+        "@tink_java//src/main/java/com/google/crypto/tink:binary_keyset_reader",
+        "@tink_java//src/main/java/com/google/crypto/tink:cleartext_keyset_handle",
+        "@tink_java//src/main/java/com/google/crypto/tink:kms_client",
+        "@tink_java//src/main/java/com/google/crypto/tink:registry_cluster",
+    ],
+)
