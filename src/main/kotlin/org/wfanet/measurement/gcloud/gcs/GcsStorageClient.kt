@@ -37,14 +37,25 @@ import org.wfanet.measurement.storage.StorageClient
 private const val BYTE_BUFFER_SIZE = BYTES_PER_MIB * 1
 
 /** Google Cloud Storage (GCS) implementation of [StorageClient] for a single bucket. */
-class GcsStorageClient(private val storage: Storage, private val bucketName: String) :
-  StorageClient {
+class GcsStorageClient(
+  private val storage: Storage,
+  private val bucketName: String,
+  private val bucketPath: String? = null
+) : StorageClient {
 
   override val defaultBufferSizeBytes: Int
     get() = BYTE_BUFFER_SIZE
 
+  private fun getBlobKeyWithPath(blobKey: String): String =
+    if (bucketPath.isNullOrEmpty()) {
+      blobKey
+    } else {
+      "$bucketPath/$blobKey"
+    }
+
   override suspend fun createBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
-    val blob = storage.create(BlobInfo.newBuilder(bucketName, blobKey).build())
+    val blobKeyWithPath = getBlobKeyWithPath(blobKey)
+    val blob = storage.create(BlobInfo.newBuilder(bucketName, blobKeyWithPath).build())
 
     blob.writer().use { byteChannel ->
       content.collect { bytes ->
@@ -65,7 +76,8 @@ class GcsStorageClient(private val storage: Storage, private val bucketName: Str
   }
 
   override fun getBlob(blobKey: String): StorageClient.Blob? {
-    val blob: Blob? = storage.get(bucketName, blobKey)
+    val blobKeyWithPath = getBlobKeyWithPath(blobKey)
+    val blob: Blob? = storage.get(bucketName, blobKeyWithPath)
     return if (blob == null) null else ClientBlob(blob)
   }
 
