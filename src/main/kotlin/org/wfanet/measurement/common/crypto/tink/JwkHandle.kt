@@ -26,42 +26,42 @@ import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 
-class JwtTinkPublicKeyHandle internal constructor(private val keysetHandle: KeysetHandle) {
+class PublicJwkHandle internal constructor(private val keysetHandle: KeysetHandle) {
   val verifier: JwtPublicKeyVerify = keysetHandle.getPrimitive(JwtPublicKeyVerify::class.java)
 
-  fun getJwkKey(): JsonObject {
-    val jwkKeyset =
+  fun getJwk(): JsonObject {
+    val jwkSet =
       JsonParser.parseString(
           JwkSetConverter.fromKeysetHandle(keysetHandle, KeyAccess.publicAccess())
         )
         .asJsonObject
-    return jwkKeyset.getAsJsonArray("keys").get(0).asJsonObject
+    return jwkSet.getAsJsonArray("keys").get(0).asJsonObject
   }
 
   companion object {
-    fun createJwtPublicKeyHandle(jwkKey: JsonObject): JwtTinkPublicKeyHandle {
+    fun fromJwk(jwk: JsonObject): PublicJwkHandle {
       val keyset = JsonObject()
       val keys = JsonArray()
-      keys.add(jwkKey)
+      keys.add(jwk)
       keyset.add("keys", keys)
 
-      return JwtTinkPublicKeyHandle(
+      return PublicJwkHandle(
         JwkSetConverter.toKeysetHandle(keyset.toString(), KeyAccess.publicAccess())
       )
     }
   }
 }
 
-class JwtTinkPrivateKeyHandle constructor(private val keysetHandle: KeysetHandle) {
-  private val publicKey = JwtTinkPublicKeyHandle(keysetHandle.publicKeysetHandle)
+class PrivateJwkHandle constructor(private val keysetHandle: KeysetHandle) {
+  val publicKey = PrivateJwkHandle(keysetHandle.publicKeysetHandle)
 
   fun sign(rawJwt: RawJwt): String {
     val signer = keysetHandle.getPrimitive(JwtPublicKeySign::class.java)
     return signer.signAndEncode(rawJwt)
   }
 
-  fun getJwkKey(): JsonObject {
-    return publicKey.getJwkKey()
+  fun getJwk(): JsonObject {
+    return publicKey.getJwk()
   }
 
   companion object {
@@ -72,8 +72,8 @@ class JwtTinkPrivateKeyHandle constructor(private val keysetHandle: KeysetHandle
     private val RSA_KEY_TEMPLATE = KeyTemplates.get("JWT_RS256_2048_F4_RAW")
 
     /** Generates a new RSA key pair. */
-    fun generateRSA(): JwtTinkPrivateKeyHandle {
-      return JwtTinkPrivateKeyHandle(KeysetHandle.generateNew(RSA_KEY_TEMPLATE))
+    fun generateRsa(): PrivateJwkHandle {
+      return PrivateJwkHandle(KeysetHandle.generateNew(RSA_KEY_TEMPLATE))
     }
   }
 }

@@ -13,7 +13,7 @@
 // limitations under the License.
 
 /*
- * Contains methods for working with self-issued Id tokens.
+ * Contains methods for working with self-issued id tokens.
  */
 
 package org.wfanet.measurement.common.crypto.tink
@@ -52,7 +52,7 @@ object SelfIssuedIdTokens {
    * requirements for self-issued, or doesn't include state and nonce.
    */
   fun generateIdToken(uriString: String, clock: Clock): String {
-    return generateIdToken(JwtTinkPrivateKeyHandle.generateRSA(), uriString, clock)
+    return generateIdToken(PrivateJwkHandle.generateRsa(), uriString, clock)
   }
 
   /**
@@ -61,39 +61,34 @@ object SelfIssuedIdTokens {
    * @throws IllegalArgumentException if the uriString doesn't match the open id connect
    * requirements for self-issued, or doesn't include state and nonce.
    */
-  fun generateIdToken(
-    jwtPrivateKeyHandle: JwtTinkPrivateKeyHandle,
-    uriString: String,
-    clock: Clock
-  ): String {
+  fun generateIdToken(privateJwkHandle: PrivateJwkHandle, uriString: String, clock: Clock): String {
     val uri = URI.create(uriString)
 
-    if (uri.scheme.equals("openid")) {
-      val queryParamMap = buildQueryParamMap(uri)
-      if (!isQueryValid(queryParamMap)) {
-        throw IllegalArgumentException("URI query parameters are invalid")
-      }
-
-      val jwkKey = jwtPrivateKeyHandle.getJwkKey()
-      val now = clock.instant()
-
-      val rawJwtBuilder =
-        RawJwt.newBuilder()
-          .setIssuer(SELF_ISSUED_ISSUER)
-          .setSubject(calculateRSAThumbprint(jwkKey.toString()))
-          .addAudience(queryParamMap["client_id"])
-          .setTypeHeader(HEADER)
-          .setExpiration(now.plusSeconds(EXP_TIME))
-          .setIssuedAt(now)
-          .addJsonObjectClaim("sub_jwk", jwkKey.toString())
-
-      rawJwtBuilder.addStringClaim(STATE, queryParamMap[STATE])
-      rawJwtBuilder.addStringClaim(NONCE, queryParamMap[NONCE])
-
-      return jwtPrivateKeyHandle.sign(rawJwtBuilder.build())
-    } else {
-      throw IllegalArgumentException()
+    require(uri.scheme.equals("openid")) {
+      "Invalid scheme for Self-Issued OpenID Provider: ${uri.scheme}"
     }
+
+    val queryParamMap = buildQueryParamMap(uri)
+    if (!isQueryValid(queryParamMap)) {
+      throw IllegalArgumentException("URI query parameters are invalid")
+    }
+
+    val jwk = privateJwkHandle.getJwk()
+    val now = clock.instant()
+
+    val rawJwtBuilder =
+      RawJwt.newBuilder()
+        .setIssuer(SELF_ISSUED_ISSUER)
+        .setSubject(calculateRsaThumbprint(jwk.toString()))
+        .addAudience(queryParamMap["client_id"])
+        .setTypeHeader(HEADER)
+        .setExpiration(now.plusSeconds(EXP_TIME))
+        .setIssuedAt(now)
+        .addJsonObjectClaim("sub_jwk", jwk.toString())
+        .addStringClaim(STATE, queryParamMap[STATE])
+        .addStringClaim(NONCE, queryParamMap[NONCE])
+
+    return privateJwkHandle.sign(rawJwtBuilder.build())
   }
 
   private fun buildQueryParamMap(uri: URI): Map<String, String> {
@@ -108,17 +103,15 @@ object SelfIssuedIdTokens {
   }
 
   private fun isQueryValid(queryParamMap: Map<String, String>): Boolean {
-    queryParamMap["scope"]?.contains("openid") ?: return false
-    queryParamMap["response_type"]?.equals("id_token") ?: return false
-    queryParamMap[STATE] ?: return false
-    queryParamMap[NONCE] ?: return false
-    return true
+    return queryParamMap.getOrDefault("scope", "").contains("openid") &&
+      queryParamMap.getOrDefault("response_type", "") == "id_token" &&
+      queryParamMap.contains(STATE) &&
+      queryParamMap.contains(NONCE)
   }
 
-  fun calculateRSAThumbprint(jwtKey: String): String {
-    val hash = hashSha256(ByteString.copyFromUtf8(jwtKey))
-
-    return hash.toByteArray().base64UrlEncode()
+  fun calculateRsaThumbprint(jwk: String): String {
+    val hash = hashSha256(ByteString.copyFromUtf8(jwk))
+    return hash.base64UrlEncode()
   }
 
   /**
