@@ -24,3 +24,15 @@ kt_jvm_test(
         "@tink_java//src/main/java/com/google/crypto/tink/aead:aead_config",
     ],
 )
+
+kt_jvm_test(
+    name = "SelfIssuedIdTokensTest",
+    srcs = ["SelfIssuedIdTokensTest.kt"],
+    deps = [
+        "//imports/java/com/google/common/truth",
+        "//imports/java/org/junit",
+        "//imports/kotlin/kotlin/test",
+        "//src/main/kotlin/org/wfanet/measurement/common/crypto/tink",
+        "//src/main/kotlin/org/wfanet/measurement/common/identity",
+    ],
+)

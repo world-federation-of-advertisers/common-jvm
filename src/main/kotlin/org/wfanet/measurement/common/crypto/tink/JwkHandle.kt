@@ -53,7 +53,7 @@ class PublicJwkHandle internal constructor(private val keysetHandle: KeysetHandl
 }
 
 class PrivateJwkHandle constructor(private val keysetHandle: KeysetHandle) {
-  val publicKey = PrivateJwkHandle(keysetHandle.publicKeysetHandle)
+  val publicKey = PublicJwkHandle(keysetHandle.publicKeysetHandle)
 
   fun sign(rawJwt: RawJwt): String {
     val signer = keysetHandle.getPrimitive(JwtPublicKeySign::class.java)

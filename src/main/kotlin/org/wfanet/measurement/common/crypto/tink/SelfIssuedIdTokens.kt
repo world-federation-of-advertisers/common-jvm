@@ -30,7 +30,7 @@ import java.time.Clock
 import org.wfanet.measurement.common.base64UrlEncode
 import org.wfanet.measurement.common.crypto.hashSha256
 
-private const val EXP_TIME = 1000L
+private const val EXP_TIME = 5000L
 
 object SelfIssuedIdTokens {
   private val HEADER: String
