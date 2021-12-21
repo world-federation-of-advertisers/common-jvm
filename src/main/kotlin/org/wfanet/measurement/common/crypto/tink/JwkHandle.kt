@@ -60,10 +60,6 @@ class PrivateJwkHandle constructor(private val keysetHandle: KeysetHandle) {
     return signer.signAndEncode(rawJwt)
   }
 
-  fun getJwk(): JsonObject {
-    return publicKey.getJwk()
-  }
-
   companion object {
     init {
       JwtSignatureConfig.register()

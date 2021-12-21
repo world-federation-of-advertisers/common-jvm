@@ -13,7 +13,7 @@
 // limitations under the License.
 
 /*
- * Contains methods for working with self-issued id tokens.
+ * Contains methods for working with self-issued ID tokens.
  */
 
 package org.wfanet.measurement.common.crypto.tink
@@ -23,27 +23,27 @@ import com.google.crypto.tink.jwt.JwtValidator
 import com.google.crypto.tink.jwt.RawJwt
 import com.google.crypto.tink.jwt.VerifiedJwt
 import com.google.gson.JsonObject
-import com.google.protobuf.ByteString
+import com.google.protobuf.kotlin.toByteStringUtf8
 import java.net.URI
 import java.security.GeneralSecurityException
 import java.time.Clock
 import org.wfanet.measurement.common.base64UrlEncode
 import org.wfanet.measurement.common.crypto.hashSha256
 
-private const val EXP_TIME = 5000L
+private const val EXPIRATION_SECONDS = 5000L
 
 object SelfIssuedIdTokens {
-  private val HEADER: String
   private const val STATE = "state"
   private const val NONCE = "nonce"
   private const val SELF_ISSUED_ISSUER = "https://self-issued.me"
-
-  init {
-    val headerObject = JsonObject()
-    headerObject.addProperty("typ", "JWT")
-    headerObject.addProperty("alg", "RS256")
-    HEADER = headerObject.toString()
-  }
+  private const val OPEN_ID_SCHEME = "openid"
+  private val HEADER: String =
+    JsonObject()
+      .apply {
+        addProperty("typ", "JWT")
+        addProperty("alg", "RS256")
+      }
+      .toString()
 
   /**
    * Returns a self-issued id token using a generated private key.
@@ -64,7 +64,7 @@ object SelfIssuedIdTokens {
   fun generateIdToken(privateJwkHandle: PrivateJwkHandle, uriString: String, clock: Clock): String {
     val uri = URI.create(uriString)
 
-    require(uri.scheme.equals("openid")) {
+    require(uri.scheme.equals(OPEN_ID_SCHEME)) {
       "Invalid scheme for Self-Issued OpenID Provider: ${uri.scheme}"
     }
 
@@ -73,22 +73,22 @@ object SelfIssuedIdTokens {
       throw IllegalArgumentException("URI query parameters are invalid")
     }
 
-    val jwk = privateJwkHandle.getJwk()
+    val jwk = privateJwkHandle.publicKey.getJwk()
     val now = clock.instant()
 
-    val rawJwtBuilder =
+    return privateJwkHandle.sign(
       RawJwt.newBuilder()
         .setIssuer(SELF_ISSUED_ISSUER)
         .setSubject(calculateRsaThumbprint(jwk.toString()))
         .addAudience(queryParamMap["client_id"])
         .setTypeHeader(HEADER)
-        .setExpiration(now.plusSeconds(EXP_TIME))
+        .setExpiration(now.plusSeconds(EXPIRATION_SECONDS))
         .setIssuedAt(now)
         .addJsonObjectClaim("sub_jwk", jwk.toString())
         .addStringClaim(STATE, queryParamMap[STATE])
         .addStringClaim(NONCE, queryParamMap[NONCE])
-
-    return privateJwkHandle.sign(rawJwtBuilder.build())
+        .build()
+    )
   }
 
   private fun buildQueryParamMap(uri: URI): Map<String, String> {
@@ -110,7 +110,7 @@ object SelfIssuedIdTokens {
   }
 
   fun calculateRsaThumbprint(jwk: String): String {
-    val hash = hashSha256(ByteString.copyFromUtf8(jwk))
+    val hash = hashSha256(jwk.toByteStringUtf8())
     return hash.base64UrlEncode()
   }
 
