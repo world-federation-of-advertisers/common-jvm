@@ -25,7 +25,9 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 import org.wfanet.measurement.common.base64UrlDecode
+import org.wfanet.measurement.common.identity.apiIdToExternalId
 import org.wfanet.measurement.common.identity.externalIdToApiId
+import org.wfanet.measurement.common.idtoken.createRequestUri
 
 private const val SCHEME = "openid"
 private const val STATE = 5L
@@ -40,7 +42,15 @@ class SelfIssuedIdTokensTest {
   @Test
   fun `Self issued id token generation is successful`() {
     val idToken =
-      SelfIssuedIdTokens.generateIdToken(generateRequestUri(SCHEME, STATE, NONCE, SCOPE), clock)
+      SelfIssuedIdTokens.generateIdToken(
+        createRequestUri(
+          state = STATE,
+          nonce = NONCE,
+          redirectUri = REDIRECT_URI,
+          isSelfIssued = true
+        ),
+        clock
+      )
     val tokenParts = idToken.split(".")
     val claims =
       JsonParser.parseString(tokenParts[1].base64UrlDecode().toString(Charsets.UTF_8)).asJsonObject
@@ -54,6 +64,8 @@ class SelfIssuedIdTokensTest {
         verifier = publicJwkHandle.verifier
       )
 
+    assertThat(apiIdToExternalId(claims.get("state").asString) == STATE).isTrue()
+    assertThat(apiIdToExternalId(claims.get("nonce").asString) == NONCE).isTrue()
     assertThat(
         verifiedJwt.subject.equals(SelfIssuedIdTokens.calculateRsaThumbprint(jwk.toString()))
       )
