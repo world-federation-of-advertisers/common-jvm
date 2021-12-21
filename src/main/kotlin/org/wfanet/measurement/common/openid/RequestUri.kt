@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package org.wfanet.measurement.common.idtoken
+package org.wfanet.measurement.common.openid
 
 import java.net.URLEncoder
 import org.wfanet.measurement.common.identity.externalIdToApiId

@@ -27,7 +27,7 @@ import org.junit.runners.JUnit4
 import org.wfanet.measurement.common.base64UrlDecode
 import org.wfanet.measurement.common.identity.apiIdToExternalId
 import org.wfanet.measurement.common.identity.externalIdToApiId
-import org.wfanet.measurement.common.idtoken.createRequestUri
+import org.wfanet.measurement.common.openid.createRequestUri
 
 private const val SCHEME = "openid"
 private const val STATE = 5L
