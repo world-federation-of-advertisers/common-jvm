@@ -9,6 +9,7 @@ kt_jvm_library(
         "//imports/java/com/google/protobuf",
         "//imports/kotlin/kotlinx/coroutines:core",
         "//src/main/kotlin/org/wfanet/measurement/common",
+        "//src/main/kotlin/org/wfanet/measurement/common/crypto:hashing",
         "//src/main/kotlin/org/wfanet/measurement/common/crypto:key_storage",
         "//src/main/kotlin/org/wfanet/measurement/storage:client",
         "//src/main/kotlin/org/wfanet/measurement/storage:store",
@@ -21,5 +22,7 @@ kt_jvm_library(
         "@tink_java//src/main/java/com/google/crypto/tink:kms_clients",
         "@tink_java//src/main/java/com/google/crypto/tink:registry_cluster",
         "@tink_java//src/main/java/com/google/crypto/tink/hybrid:hybrid_config",
+        "@tink_java//src/main/java/com/google/crypto/tink/jwt:jwk_set_converter",
+        "@tink_java//src/main/java/com/google/crypto/tink/jwt:jwt_signature_config",
     ],
 )
