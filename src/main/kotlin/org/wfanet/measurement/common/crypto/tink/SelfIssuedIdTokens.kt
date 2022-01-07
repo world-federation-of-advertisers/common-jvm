@@ -18,10 +18,8 @@
 
 package org.wfanet.measurement.common.crypto.tink
 
-import com.google.crypto.tink.jwt.JwtPublicKeyVerify
 import com.google.crypto.tink.jwt.JwtValidator
 import com.google.crypto.tink.jwt.RawJwt
-import com.google.crypto.tink.jwt.VerifiedJwt
 import com.google.gson.JsonObject
 import com.google.protobuf.kotlin.toByteStringUtf8
 import java.net.URI
@@ -119,7 +117,11 @@ object SelfIssuedIdTokens {
    *
    * @throws GeneralSecurityException if the validation fails
    */
-  fun validateJwt(redirectUri: String, idToken: String, verifier: JwtPublicKeyVerify): VerifiedJwt {
+  fun validateJwt(
+    idToken: String,
+    publicJwkHandle: PublicJwkHandle,
+    redirectUri: String
+  ): VerifiedJwt {
     val validator =
       JwtValidator.newBuilder()
         .expectIssuer(SELF_ISSUED_ISSUER)
@@ -127,6 +129,6 @@ object SelfIssuedIdTokens {
         .expectTypeHeader(HEADER)
         .build()
 
-    return verifier.verifyAndDecode(idToken, validator)
+    return publicJwkHandle.verifyAndDecode(idToken, validator)
   }
 }

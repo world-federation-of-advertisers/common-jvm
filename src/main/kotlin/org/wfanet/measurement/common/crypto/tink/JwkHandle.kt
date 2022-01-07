@@ -20,14 +20,18 @@ import com.google.crypto.tink.jwt.JwkSetConverter
 import com.google.crypto.tink.jwt.JwtPublicKeySign
 import com.google.crypto.tink.jwt.JwtPublicKeyVerify
 import com.google.crypto.tink.jwt.JwtSignatureConfig
+import com.google.crypto.tink.jwt.JwtValidator
 import com.google.crypto.tink.jwt.RawJwt
 import com.google.crypto.tink.tinkkey.KeyAccess
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
+import java.io.IOException
+import java.security.GeneralSecurityException
 
 class PublicJwkHandle internal constructor(private val keysetHandle: KeysetHandle) {
-  val verifier: JwtPublicKeyVerify = keysetHandle.getPrimitive(JwtPublicKeyVerify::class.java)
+  private val verifier: JwtPublicKeyVerify =
+    keysetHandle.getPrimitive(JwtPublicKeyVerify::class.java)
 
   fun getJwk(): JsonObject {
     val jwkSet =
@@ -38,7 +42,21 @@ class PublicJwkHandle internal constructor(private val keysetHandle: KeysetHandl
     return jwkSet.getAsJsonArray("keys").get(0).asJsonObject
   }
 
+  /**
+   * Verifies and decodes an ID token using the passed-in validator.
+   *
+   * @throws GeneralSecurityException when the ID token is not valid
+   */
+  fun verifyAndDecode(idToken: String, validator: JwtValidator): VerifiedJwt {
+    return VerifiedJwt(verifier.verifyAndDecode(idToken, validator))
+  }
+
   companion object {
+    /**
+     * Creates a PublicJwkHandle from a jwk.
+     *
+     * @throws IOException when the format of the jwk is invalid
+     */
     fun fromJwk(jwk: JsonObject): PublicJwkHandle {
       val keyset = JsonObject()
       val keys = JsonArray()
