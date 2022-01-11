@@ -61,7 +61,7 @@ class SelfIssuedIdTokensTest {
       SelfIssuedIdTokens.validateJwt(
         redirectUri = REDIRECT_URI,
         idToken = idToken,
-        verifier = publicJwkHandle.verifier
+        publicJwkHandle = publicJwkHandle
       )
 
     assertThat(apiIdToExternalId(claims.get("state").asString) == STATE).isTrue()
