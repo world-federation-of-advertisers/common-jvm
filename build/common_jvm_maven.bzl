@@ -60,6 +60,7 @@ def common_jvm_maven_artifacts():
         "com.adobe.testing:s3mock-junit4": "2.2.3",
         "com.google.api:gax": "2.7.0",
         "com.google.api:gax-grpc": "2.7.0",
+        "com.google.api.grpc:grpc-core-proto": "0.0.6",
         "com.google.cloud:google-cloud-bigquery": "2.4.1",
         "com.google.cloud:google-cloud-nio": "0.123.10",
         "com.google.cloud:google-cloud-spanner": "3.0.3",
