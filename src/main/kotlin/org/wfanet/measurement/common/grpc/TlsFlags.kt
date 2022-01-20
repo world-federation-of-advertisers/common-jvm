@@ -37,8 +37,8 @@ class TlsFlags {
   @CommandLine.Option(
     names = ["--cert-collection-file"],
     description = ["Trusted root Cert collection file."],
-    defaultValue = ""
+    required = false
   )
-  lateinit var certCollectionFile: File
+  var certCollectionFile: File? = null
     private set
 }

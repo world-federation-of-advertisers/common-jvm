@@ -15,6 +15,7 @@
 package org.wfanet.measurement.storage.filesystem
 
 import java.io.File
+import java.nio.file.Files
 import java.util.logging.Logger
 import org.wfanet.measurement.common.commandLineMain
 import org.wfanet.measurement.common.grpc.CommonServer
@@ -41,7 +42,7 @@ private fun run(
   @CommandLine.Mixin serverFlags: CommonServer.Flags,
   @CommandLine.Mixin flags: Flags
 ) {
-  val directory = flags.directory ?: createTempDir()
+  val directory = flags.directory ?: Files.createTempDirectory(null).toFile()
   logger.info("Storing blobs in $directory")
 
   CommonServer.fromFlags(serverFlags, SERVER_NAME, FileSystemStorageService(directory))

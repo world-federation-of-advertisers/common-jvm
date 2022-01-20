@@ -14,7 +14,9 @@
 
 package org.wfanet.measurement.storage.forwarded
 
-import org.wfanet.measurement.common.grpc.buildPlaintextChannel
+import org.wfanet.measurement.common.crypto.readCertificateCollection
+import org.wfanet.measurement.common.grpc.TlsFlags
+import org.wfanet.measurement.common.grpc.buildTlsChannel
 import org.wfanet.measurement.internal.testing.ForwardedStorageGrpcKt.ForwardedStorageCoroutineStub
 import org.wfanet.measurement.storage.StorageClient
 import picocli.CommandLine
@@ -23,18 +25,37 @@ import picocli.CommandLine
 class ForwardedStorageFromFlags(private val flags: Flags) {
 
   val storageClient: StorageClient by lazy {
+    val trustedCerts = readCertificateCollection(requireNotNull(flags.tls.certCollectionFile))
     ForwardedStorageClient(
-      ForwardedStorageCoroutineStub(buildPlaintextChannel(flags.forwardedStorageServiceTarget))
+      ForwardedStorageCoroutineStub(
+        buildTlsChannel(
+          flags.forwardedStorageServiceTarget,
+          trustedCerts,
+          flags.forwardedStorageCertHost
+        )
+      )
     )
   }
 
   class Flags {
+    @CommandLine.Mixin
+    lateinit var tls: TlsFlags
+      private set
+
     @CommandLine.Option(
       names = ["--forwarded-storage-service-target"],
       description = ["gRPC target (authority string or URI) for ForwardedStorage service."],
       required = true
     )
     lateinit var forwardedStorageServiceTarget: String
+      private set
+
+    @CommandLine.Option(
+      names = ["--forwarded-storage-cert-host"],
+      description = ["Expected hostname of ForwardedStorage service's TLS certificate."],
+      required = false
+    )
+    var forwardedStorageCertHost: String? = null
       private set
   }
 }
