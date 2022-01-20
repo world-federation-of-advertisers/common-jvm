@@ -27,14 +27,14 @@ data class SigningCerts(
     fun fromPemFiles(
       certificateFile: File,
       privateKeyFile: File,
-      trustedCertCollectionFile: File
+      trustedCertCollectionFile: File? = null
     ): SigningCerts {
       val certificate = readCertificate(certificateFile)
       val keyAlgorithm = certificate.publicKey.algorithm
 
       return SigningCerts(
         SigningKeyHandle(certificate, readPrivateKey(privateKeyFile, keyAlgorithm)),
-        readCertificateCollection(trustedCertCollectionFile)
+        trustedCertCollectionFile?.let { readCertificateCollection(it) } ?: listOf()
       )
     }
   }
