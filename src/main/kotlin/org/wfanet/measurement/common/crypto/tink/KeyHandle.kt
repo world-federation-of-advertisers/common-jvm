@@ -49,6 +49,10 @@ class TinkPublicKeyHandle internal constructor(internal val keysetHandle: Keyset
   }
 
   companion object {
+    init {
+      HybridConfig.register()
+    }
+
     private fun parseKeyset(serialized: ByteString): KeysetHandle {
       return serialized.newInput().use {
         KeysetHandle.readNoSecret(BinaryKeysetReader.withInputStream(it))
