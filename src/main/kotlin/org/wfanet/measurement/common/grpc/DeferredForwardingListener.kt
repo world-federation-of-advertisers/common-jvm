@@ -16,8 +16,11 @@ package org.wfanet.measurement.common.grpc
 
 import io.grpc.ServerCall
 
-/** gRPC [ServerCall.Listener] that defers events */
-class DeferredListener<ReqT> : ServerCall.Listener<ReqT>() {
+/**
+ * gRPC [ServerCall.Listener] that defers forwarding events to a delegate until setDelegate is
+ * called.
+ */
+class DeferredForwardingListener<ReqT> : ServerCall.Listener<ReqT>() {
   private lateinit var delegate: ServerCall.Listener<ReqT>
   private val events = arrayListOf<Runnable>()
 
