@@ -52,6 +52,10 @@ class PublicJwkHandle internal constructor(private val keysetHandle: KeysetHandl
   }
 
   companion object {
+    init {
+      JwtSignatureConfig.register()
+    }
+
     /**
      * Creates a PublicJwkHandle from a jwk.
      *
