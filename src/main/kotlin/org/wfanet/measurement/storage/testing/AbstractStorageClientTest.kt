@@ -40,7 +40,7 @@ abstract class AbstractStorageClientTest<T : StorageClient> {
 
   @Test
   fun `createBlob returns new readable blob`() = runBlocking {
-    val blobKey = "new-blob"
+    val blobKey = "new-blob-" + random.nextInt().toString()
 
     val blob = storageClient.createBlob(blobKey, testBlobContent)
 
@@ -49,13 +49,13 @@ abstract class AbstractStorageClientTest<T : StorageClient> {
 
   @Test
   fun `getBlob returns null for non-existant blob`() {
-    val blobKey = "non-existant-blob"
+    val blobKey = "non-existant-blob-" + random.nextInt().toString()
     assertThat(storageClient.getBlob(blobKey)).isNull()
   }
 
   @Test
   fun `getBlob returns readable Blob`() = runBlocking {
-    val blobKey = "blob-to-get"
+    val blobKey = "blob-to-get-" + random.nextInt().toString()
     storageClient.createBlob(blobKey, testBlobContent)
 
     val blob = assertNotNull(storageClient.getBlob(blobKey))
@@ -74,7 +74,7 @@ abstract class AbstractStorageClientTest<T : StorageClient> {
 
   @Test
   fun `Blob delete deletes blob`() = runBlocking {
-    val blobKey = "blob-to-delete"
+    val blobKey = "blob-to-delete-" + random.nextInt().toString()
     val blob = storageClient.createBlob(blobKey, testBlobContent)
 
     blob.delete()
