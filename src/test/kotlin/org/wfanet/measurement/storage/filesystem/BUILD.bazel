@@ -26,6 +26,6 @@ kt_jvm_test(
         "//src/main/kotlin/org/wfanet/measurement/storage/filesystem:service",
         "//src/main/kotlin/org/wfanet/measurement/storage/forwarded",
         "//src/main/kotlin/org/wfanet/measurement/storage/testing",
-        "//src/main/proto/wfa/measurement/internal/testing:forwarded_storage_service_kt_jvm_grpc",
+        "//src/main/proto/wfa/measurement/internal/testing:forwarded_storage_service_kt_jvm_grpc_proto",
     ],
 )

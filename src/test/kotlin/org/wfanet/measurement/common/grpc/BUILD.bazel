@@ -12,7 +12,7 @@ kt_jvm_test(
         "//imports/kotlin/kotlinx/coroutines:core",
         "//imports/kotlin/kotlinx/coroutines/test",
         "//src/main/kotlin/org/wfanet/measurement/common/grpc",
-        "//src/test/proto/wfa/measurement/common:fake_service_kt_jvm_grpc",
+        "//src/test/proto/wfa/measurement/common:fake_service_kt_jvm_grpc_proto",
         "@io_grpc_grpc_java//core",
         "@io_grpc_grpc_java//testing",
     ],

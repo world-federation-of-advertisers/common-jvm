@@ -111,12 +111,12 @@ _kt_jvm_proto_aspect = aspect(
     attrs = {
         "_zipper": attr.label(
             default = Label("@bazel_tools//tools/zip:zipper"),
-            cfg = "host",
+            cfg = "exec",
             executable = True,
         ),
         "_protoc": attr.label(
             default = Label("@com_google_protobuf//:protoc"),
-            cfg = "host",
+            cfg = "exec",
             executable = True,
         ),
     },
@@ -141,12 +141,12 @@ _kt_jvm_proto_library_helper = rule(
         ),
         "_zipper": attr.label(
             default = Label("@bazel_tools//tools/zip:zipper"),
-            cfg = "host",
+            cfg = "exec",
             executable = True,
         ),
         "_extract_srcjars": attr.label(
             default = Label("@wfa_common_jvm//build/kt_jvm_proto:extract_srcjars"),
-            cfg = "host",
+            cfg = "exec",
             executable = True,
         ),
     },
