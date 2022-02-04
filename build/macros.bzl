@@ -20,6 +20,7 @@ load(
     "@com_github_grpc_grpc_kotlin//:kt_jvm_grpc.bzl",
     _kt_jvm_grpc_library = "kt_jvm_grpc_library",
 )
+load("//build/kt_jvm_proto:defs.bzl", "kt_jvm_proto_library")
 
 def kt_jvm_grpc_library(
         name,
@@ -30,9 +31,7 @@ def kt_jvm_grpc_library(
         **kwargs):
     """Wrapper macro for regular kt_jvm_grpc_library rule from grpc_kotlin.
 
-    This includes a convenience export for the java_proto_library dep as well as
-    some transitive dependencies that IntelliJ doesn't pick up from
-    kt_jvm_library rules.
+    This includes a convenience export for the java_proto_library dep.
 
     Args:
       name: Target name.
@@ -58,19 +57,22 @@ def kt_jvm_grpc_library(
         name = name,
         exports = [
             internal_name,
-            "@wfa_common_jvm//imports/java/io/grpc/stub",
         ] + deps,
         visibility = visibility,
         **kwargs
     )
 
-def kt_jvm_grpc_and_java_proto_library(
+def kt_jvm_grpc_proto_library(
         name,
         srcs,
         flavor = None,
         visibility = None,
         **kwargs):
-    """kt_jvm_grpc_library with java_proto_library generated from srcs.
+    """java_library that exports Kotlin JVM gRPC service and proto libraries.
+
+    Given a proto_library named `<prefix>_proto`, this will create additional
+    `<prefix>_java_proto`, `<prefix>_kt_jvm_proto`, and `<prefix>_kt_jvm_grpc`
+    targets.
 
     Args:
       name: Target name.
@@ -87,8 +89,10 @@ def kt_jvm_grpc_and_java_proto_library(
     proto_name = to_label(srcs[0]).name
     if not proto_name.endswith("_proto"):
         fail("proto_library target names should end with '_proto'")
-    proto_name_parts = proto_name.rsplit("_", 1)
-    java_proto_name = proto_name_parts[0] + "_java_proto"
+    name_prefix = proto_name.rsplit("_", 1)[0]
+    java_proto_name = name_prefix + "_java_proto"
+    kt_jvm_proto_name = name_prefix + "_kt_jvm_proto"
+    kt_jvm_grpc_name = name_prefix + "_kt_jvm_grpc"
 
     java_proto_library(
         name = java_proto_name,
@@ -97,10 +101,29 @@ def kt_jvm_grpc_and_java_proto_library(
         **kwargs
     )
 
-    kt_jvm_grpc_library(
-        name = name,
+    kt_jvm_proto_library(
+        name = kt_jvm_proto_name,
         srcs = srcs,
         deps = [java_proto_name],
+        visibility = visibility,
+        **kwargs
+    )
+
+    _kt_jvm_grpc_library(
+        name = kt_jvm_grpc_name,
+        srcs = srcs,
+        deps = [java_proto_name],
+        flavor = flavor,
+        visibility = visibility,
+        **kwargs
+    )
+
+    java_library(
+        name = name,
+        exports = [
+            kt_jvm_grpc_name,
+            kt_jvm_proto_name,
+        ],
         visibility = visibility,
         **kwargs
     )
