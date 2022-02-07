@@ -43,7 +43,7 @@ class GcsStorageClient(private val storage: Storage, private val bucketName: Str
   override val defaultBufferSizeBytes: Int
     get() = BYTE_BUFFER_SIZE
 
-  override suspend fun createBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
+  override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
     val blob = storage.create(BlobInfo.newBuilder(bucketName, blobKey).build())
 
     blob.writer().use { byteChannel ->

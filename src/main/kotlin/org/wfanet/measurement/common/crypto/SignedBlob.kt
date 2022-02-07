@@ -58,7 +58,7 @@ suspend fun StorageClient.createSignedBlob(
 ): SignedBlob {
   val signer = newSigner()
   val outFlow = content.onEach(signer::update)
-  val blob = createBlob(blobKey, outFlow)
+  val blob = writeBlob(blobKey, outFlow)
   val signature = signer.sign().toByteString()
 
   return SignedBlob(blob, signature)

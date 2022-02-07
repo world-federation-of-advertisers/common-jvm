@@ -39,7 +39,7 @@ class InMemoryStorageClientTest : AbstractStorageClientTest<InMemoryStorageClien
     val blobKey = "some-blob-key"
     val contents = "some-contents".toByteStringUtf8()
 
-    client.createBlob(blobKey, flowOf(contents))
+    client.writeBlob(blobKey, flowOf(contents))
 
     assertThat(client.contents.mapValues { it.value.read().flatten() })
       .containsExactly(blobKey, contents)
