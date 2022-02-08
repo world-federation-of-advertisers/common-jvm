@@ -53,9 +53,7 @@ class FileSystemStorageService(directory: File) : ForwardedStorageCoroutineServi
     BlobMetadata.newBuilder().setSize(getBlob(request.blobKey).size).build()
 
   override fun readBlob(request: ReadBlobRequest): Flow<ReadBlobResponse> =
-    getBlob(request.blobKey).read(request.chunkSize).map {
-      ReadBlobResponse.newBuilder().setChunk(it).build()
-    }
+    getBlob(request.blobKey).read().map { ReadBlobResponse.newBuilder().setChunk(it).build() }
 
   override suspend fun deleteBlob(request: DeleteBlobRequest): DeleteBlobResponse {
     getBlob(request.blobKey).delete()

@@ -19,10 +19,9 @@ import com.google.protobuf.ByteString
 import com.google.protobuf.kotlin.toByteString
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
-import org.wfanet.measurement.common.asBufferedFlow
+import kotlinx.coroutines.flow.flowOf
 import org.wfanet.measurement.common.toByteArray
 import org.wfanet.measurement.storage.StorageClient
-import org.wfanet.measurement.storage.read
 
 /**
  * A wrapper class for [StorageClient] interface that uses AEAD encryption/decryption for
@@ -35,9 +34,6 @@ class KmsStorageClient
 internal constructor(private val storageClient: StorageClient, private val aead: Aead) :
   StorageClient {
 
-  override val defaultBufferSizeBytes: Int
-    get() = storageClient.defaultBufferSizeBytes
-
   /**
    * Creates a blob with the specified [blobKey] and [content] encrypted by [aead].
    *
@@ -47,11 +43,7 @@ internal constructor(private val storageClient: StorageClient, private val aead:
    */
   override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
     val ciphertext = aead.encrypt(content.toByteArray(), blobKey.encodeToByteArray())
-    val wrappedBlob =
-      storageClient.writeBlob(
-        blobKey,
-        ciphertext.asBufferedFlow(storageClient.defaultBufferSizeBytes)
-      )
+    val wrappedBlob = storageClient.writeBlob(blobKey, flowOf(ciphertext.toByteString()))
     return AeadBlob(wrappedBlob, blobKey)
   }
 
@@ -73,15 +65,13 @@ internal constructor(private val storageClient: StorageClient, private val aead:
     override val size: Long
       get() = blob.size
 
-    override fun read(bufferSizeBytes: Int) =
-      flow {
-          emit(
-            this@KmsStorageClient.aead
-              .decrypt(blob.read().toByteArray(), blobKey.encodeToByteArray())
-              .toByteString()
-          )
-        }
-        .asBufferedFlow(bufferSizeBytes)
+    override fun read() = flow {
+      emit(
+        this@KmsStorageClient.aead
+          .decrypt(blob.read().toByteArray(), blobKey.encodeToByteArray())
+          .toByteString()
+      )
+    }
 
     override fun delete() = blob.delete()
   }

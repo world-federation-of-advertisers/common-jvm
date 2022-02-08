@@ -24,16 +24,13 @@ import org.wfanet.measurement.common.asFlow
 import org.wfanet.measurement.common.base64UrlEncode
 import org.wfanet.measurement.storage.StorageClient
 
-private const val DEFAULT_BUFFER_SIZE_BYTES = 1024 * 4 // 4 KiB
+private const val READ_BUFFER_SIZE = 1024 * 4 // 4 KiB
 
 /** [StorageClient] implementation that utilizes flat files in the specified directory as blobs. */
 class FileSystemStorageClient(private val directory: File) : StorageClient {
   init {
     require(directory.isDirectory) { "$directory is not a directory" }
   }
-
-  override val defaultBufferSizeBytes: Int
-    get() = DEFAULT_BUFFER_SIZE_BYTES
 
   override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
     val file = File(directory, blobKey.base64UrlEncode())
@@ -63,8 +60,7 @@ class FileSystemStorageClient(private val directory: File) : StorageClient {
     override val size: Long
       get() = file.length()
 
-    override fun read(bufferSizeBytes: Int): Flow<ByteString> =
-      file.inputStream().channel.asFlow(bufferSizeBytes)
+    override fun read(): Flow<ByteString> = file.inputStream().channel.asFlow(READ_BUFFER_SIZE)
 
     override fun delete() {
       file.delete()

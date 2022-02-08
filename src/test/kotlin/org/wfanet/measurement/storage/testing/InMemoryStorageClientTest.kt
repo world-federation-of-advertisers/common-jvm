@@ -23,7 +23,6 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Before
 import org.junit.Test
 import org.wfanet.measurement.common.flatten
-import org.wfanet.measurement.storage.read
 
 class InMemoryStorageClientTest : AbstractStorageClientTest<InMemoryStorageClient>() {
   @Before

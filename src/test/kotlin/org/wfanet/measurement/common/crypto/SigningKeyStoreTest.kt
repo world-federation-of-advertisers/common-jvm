@@ -29,7 +29,6 @@ import org.wfanet.measurement.common.crypto.testing.FIXED_SERVER_KEY_FILE
 import org.wfanet.measurement.common.flatten
 import org.wfanet.measurement.storage.Store
 import org.wfanet.measurement.storage.filesystem.FileSystemStorageClient
-import org.wfanet.measurement.storage.read
 
 @RunWith(JUnit4::class)
 class SigningKeyStoreTest {
