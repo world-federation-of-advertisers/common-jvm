@@ -21,6 +21,7 @@ import com.google.protobuf.MessageOrBuilder
 import com.google.protobuf.ProtocolMessageEnum
 import com.google.protobuf.TextFormat
 import com.google.protobuf.Timestamp
+import com.google.protobuf.TypeRegistry
 import com.google.protobuf.util.JsonFormat
 import java.io.File
 import java.time.Clock
@@ -96,15 +97,29 @@ fun Clock.protoTimestamp(): Timestamp = instant().toProtoTime()
 val ProtocolMessageEnum.numberAsLong: Long
   get() = number.toLong()
 
-fun Message.Builder.mergeFromTextProto(textProto: Readable) {
-  TextFormat.merge(textProto, this)
+fun Message.Builder.mergeFromTextProto(textProto: Readable, typeRegistry: TypeRegistry) {
+  TextFormat.Parser.newBuilder().setTypeRegistry(typeRegistry).build().merge(textProto, this)
 }
 
 @Suppress("UNCHECKED_CAST") // Safe per Message contract.
-fun <T : Message> parseTextProto(textProto: Readable, messageInstance: T): T {
-  return messageInstance.newBuilderForType().apply { mergeFromTextProto(textProto) }.build() as T
+fun <T : Message> parseTextProto(
+  textProto: Readable,
+  messageInstance: T,
+  typeRegistry: TypeRegistry = TypeRegistry.getEmptyTypeRegistry()
+): T {
+  return messageInstance
+    .newBuilderForType()
+    .apply { mergeFromTextProto(textProto, typeRegistry) }
+    .build() as
+    T
 }
 
-fun <T : Message> parseTextProto(textProto: File, messageInstance: T): T {
-  return textProto.bufferedReader().use { reader -> parseTextProto(reader, messageInstance) }
+fun <T : Message> parseTextProto(
+  textProto: File,
+  messageInstance: T,
+  typeRegistry: TypeRegistry = TypeRegistry.getEmptyTypeRegistry()
+): T {
+  return textProto.bufferedReader().use { reader ->
+    parseTextProto(reader, messageInstance, typeRegistry)
+  }
 }
