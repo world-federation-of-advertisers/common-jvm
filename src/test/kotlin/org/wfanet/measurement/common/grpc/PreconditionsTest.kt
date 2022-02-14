@@ -16,8 +16,8 @@ package org.wfanet.measurement.common.grpc
 
 import com.google.common.truth.Truth.assertThat
 import io.grpc.Status
-import io.grpc.StatusException
 import io.grpc.StatusRuntimeException
+import kotlin.IllegalArgumentException
 import kotlin.test.assertFailsWith
 import org.junit.Test
 
@@ -38,14 +38,13 @@ class PreconditionsTest {
   fun `failGrpc with cause`() {
     val exception =
       assertFailsWith<StatusRuntimeException> {
-        failGrpc(Status.FAILED_PRECONDITION, StatusException(Status.INTERNAL)) {
+        failGrpc(Status.FAILED_PRECONDITION, IllegalArgumentException()) {
           "Cause of internal error"
         }
       }
     assertThat(exception.status.code).isEqualTo(Status.Code.FAILED_PRECONDITION)
-    assertThat(exception.status.cause.toString())
-      .isEqualTo(StatusException(Status.INTERNAL).toString())
+    assertThat(exception.status.cause.toString()).isEqualTo(IllegalArgumentException().toString())
     assertThat(exception.status.description).isEqualTo("Cause of internal error")
-    assertThat(exception.cause.toString()).isEqualTo(StatusException(Status.INTERNAL).toString())
+    assertThat(exception.cause.toString()).isEqualTo(IllegalArgumentException().toString())
   }
 }
