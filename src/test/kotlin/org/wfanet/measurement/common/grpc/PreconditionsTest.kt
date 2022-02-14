@@ -39,12 +39,12 @@ class PreconditionsTest {
     val exception =
       assertFailsWith<StatusRuntimeException> {
         failGrpc(Status.FAILED_PRECONDITION, IllegalArgumentException()) {
-          "Cause of internal error"
+          "Cause of illegal argument exception"
         }
       }
     assertThat(exception.status.code).isEqualTo(Status.Code.FAILED_PRECONDITION)
     assertThat(exception.status.cause.toString()).isEqualTo(IllegalArgumentException().toString())
-    assertThat(exception.status.description).isEqualTo("Cause of internal error")
+    assertThat(exception.status.description).isEqualTo("Cause of illegal argument exception")
     assertThat(exception.cause.toString()).isEqualTo(IllegalArgumentException().toString())
   }
 }
