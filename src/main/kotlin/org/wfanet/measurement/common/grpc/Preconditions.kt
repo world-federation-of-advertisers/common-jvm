@@ -27,7 +27,7 @@ import io.grpc.StatusRuntimeException
  * @throws StatusRuntimeException if [predicate] is false
  */
 fun grpcRequire(predicate: Boolean, provideDescription: () -> String) {
-  if (!predicate) failGrpc(Status.INVALID_ARGUMENT, provideDescription)
+  if (!predicate) failGrpc(Status.INVALID_ARGUMENT, null, provideDescription)
 }
 
 /**
@@ -38,15 +38,24 @@ fun grpcRequire(predicate: Boolean, provideDescription: () -> String) {
  * @return the non-null [subject]
  */
 fun <T> grpcRequireNotNull(subject: T?, provideDescription: () -> String = { "" }): T {
-  return subject ?: failGrpc(Status.INVALID_ARGUMENT, provideDescription)
+  return subject ?: failGrpc(Status.INVALID_ARGUMENT, null, provideDescription)
 }
 
 /**
  * Throws [StatusRuntimeException] with a description.
  *
  * @param status what gRPC error code to use
+ * @param cause the cause of the gRPC error
  * @param provideDescription lazy generator for the error message
  * @throws StatusRuntimeException
  */
-fun failGrpc(status: Status = Status.INVALID_ARGUMENT, provideDescription: () -> String): Nothing =
-  throw status.withDescription(provideDescription()).asRuntimeException()
+fun failGrpc(
+  status: Status = Status.INVALID_ARGUMENT,
+  cause: Throwable? = null,
+  provideDescription: () -> String
+): Nothing =
+  if (cause == null) {
+    throw status.withDescription(provideDescription()).asRuntimeException()
+  } else {
+    throw status.withDescription(provideDescription()).withCause(cause).asRuntimeException()
+  }
