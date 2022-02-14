@@ -22,13 +22,13 @@ import org.junit.Test
 
 class PreconditionsTest {
   @Test
-  fun `failGrpc use null as default cause`() {
+  fun `failGrpc without cause`() {
     try {
-      failGrpc(Status.FAILED_PRECONDITION) { "Unknown cause" }
+      failGrpc(Status.FAILED_PRECONDITION) { "No cause" }
     } catch (e: StatusRuntimeException) {
       assertThat(e.status.code).isEqualTo(Status.Code.FAILED_PRECONDITION)
       assertThat(e.status.cause).isEqualTo(null)
-      assertThat(e.status.description).isEqualTo("Unknown cause")
+      assertThat(e.status.description).isEqualTo("No cause")
       assertThat(e.status.cause).isEqualTo(null)
     }
   }
