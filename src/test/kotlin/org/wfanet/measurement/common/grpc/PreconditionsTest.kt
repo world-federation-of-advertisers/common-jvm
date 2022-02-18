@@ -29,9 +29,9 @@ class PreconditionsTest {
         failGrpc(Status.FAILED_PRECONDITION) { "No cause" }
       }
     assertThat(exception.status.code).isEqualTo(Status.Code.FAILED_PRECONDITION)
-    assertThat(exception.status.cause).isEqualTo(null)
+    assertThat(exception.status.cause).isNull()
     assertThat(exception.status.description).isEqualTo("No cause")
-    assertThat(exception.status.cause).isEqualTo(null)
+    assertThat(exception.status.cause).isNull()
   }
 
   @Test
@@ -43,8 +43,8 @@ class PreconditionsTest {
         }
       }
     assertThat(exception.status.code).isEqualTo(Status.Code.FAILED_PRECONDITION)
-    assertThat(exception.status.cause.toString()).isEqualTo(IllegalArgumentException().toString())
+    assertThat(exception.status.cause).isInstanceOf(IllegalArgumentException::class.java)
     assertThat(exception.status.description).isEqualTo("Cause of illegal argument exception")
-    assertThat(exception.cause.toString()).isEqualTo(IllegalArgumentException().toString())
+    assertThat(exception.cause).isInstanceOf(IllegalArgumentException::class.java)
   }
 }
