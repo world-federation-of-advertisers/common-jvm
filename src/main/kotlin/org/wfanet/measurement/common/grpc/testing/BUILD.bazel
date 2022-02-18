@@ -14,6 +14,8 @@ kt_jvm_library(
         "//imports/java/io/grpc/inprocess",
         "//imports/java/io/grpc/testing",
         "//imports/java/org/junit",
+        "//imports/kotlin/io/grpc/kotlin:stub",
+        "//imports/kotlin/org/mockito/kotlin",
         "//src/main/kotlin/org/wfanet/measurement/common/grpc",
     ],
 )

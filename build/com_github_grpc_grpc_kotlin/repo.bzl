@@ -22,7 +22,15 @@ def com_github_grpc_grpc_kotlin_repo():
     if "com_github_grpc_grpc_kotlin" not in native.existing_rules():
         http_archive(
             name = "com_github_grpc_grpc_kotlin",
-            sha256 = "08f06a797ec806d68e8811018cefd1d5a6b8bf1782b63937f2618a6be86a9e2d",
-            strip_prefix = "grpc-kotlin-0.2.1",
-            url = "https://github.com/grpc/grpc-kotlin/archive/v0.2.1.zip",
+            sha256 = "fe0b50b833ce2c6edfdf6e98f45e02c162b936f89de55768173936103b3b11ce",
+            strip_prefix = "grpc-kotlin-1.2.1",
+            url = "https://github.com/grpc/grpc-kotlin/archive/refs/tags/v1.2.1.tar.gz",
+        )
+    if "io_grpc_grpc_java" not in native.existing_rules():
+        http_archive(
+            name = "io_grpc_grpc_java",
+            sha256 = "85927f857e0b3ad5c4e51c2e6d29213d3e0319f20784aa2113552f71311ba74c",
+            # Latest compatible version per https://github.com/grpc/grpc-kotlin/blob/v1.2.1/compiler/README.md
+            strip_prefix = "grpc-java-1.39.0",
+            url = "https://github.com/grpc/grpc-java/archive/refs/tags/v1.39.0.tar.gz",
         )
