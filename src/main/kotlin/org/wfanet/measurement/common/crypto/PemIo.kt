@@ -23,6 +23,7 @@ import java.io.InputStreamReader
 import java.io.OutputStream
 import java.nio.charset.StandardCharsets
 import java.security.PrivateKey
+import java.security.PublicKey
 import java.security.cert.X509Certificate
 import java.security.spec.PKCS8EncodedKeySpec
 import java.util.Base64
@@ -39,7 +40,8 @@ private val base64Encoder = Base64.getMimeEncoder(LINE_LENGTH, byteArrayOf(LINE_
 
 private enum class PemType(private val header: String) {
   CERTIFICATE("CERTIFICATE"),
-  PRIVATE_KEY("PRIVATE KEY");
+  PRIVATE_KEY("PRIVATE KEY"),
+  PUBLIC_KEY("PUBLIC KEY");
 
   val begin = BEGIN_PREFIX + header + SUFFIX
   val end = END_PREFIX + header + SUFFIX
@@ -50,7 +52,7 @@ private enum class PemType(private val header: String) {
  *
  * See [RFC 7468](https://datatracker.ietf.org/doc/html/rfc7468)
  */
-internal class PemWriter(private val output: OutputStream) : AutoCloseable {
+class PemWriter(private val output: OutputStream) : AutoCloseable {
   @Throws(IOException::class)
   private fun write(type: PemType, der: ByteArray) {
     with(output) {
@@ -71,6 +73,11 @@ internal class PemWriter(private val output: OutputStream) : AutoCloseable {
   @Throws(IOException::class)
   fun write(privateKey: PrivateKey) {
     write(PemType.PRIVATE_KEY, privateKey.encoded)
+  }
+  
+  @Throws(IOException::class)
+  fun write(publicKey: PublicKey) {
+    write(PemType.PUBLIC_KEY, publicKey.encoded)
   }
 
   @Throws(IOException::class)
