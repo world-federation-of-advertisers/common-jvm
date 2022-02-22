@@ -74,7 +74,7 @@ class PemWriter(private val output: OutputStream) : AutoCloseable {
   fun write(privateKey: PrivateKey) {
     write(PemType.PRIVATE_KEY, privateKey.encoded)
   }
-  
+
   @Throws(IOException::class)
   fun write(publicKey: PublicKey) {
     write(PemType.PUBLIC_KEY, publicKey.encoded)
