@@ -34,7 +34,7 @@ kt_jvm_library(
 )
 
 kt_jvm_library(
-    name = "signing_key_converter",
+    name = "pem_io",
     srcs = [
         "PemIo.kt",
     ],
@@ -50,9 +50,9 @@ kt_jvm_library(
         "SigningKeyStore.kt",
     ],
     deps = [
+        ":pem_io",
         ":signatures",
         ":signed_blob",
-        ":signing_key_converter",
         "//imports/java/com/google/protobuf",
         "//imports/java/io/netty/handler",
         "//imports/kotlin/kotlinx/coroutines:core",
@@ -101,8 +101,8 @@ kt_jvm_library(
     name = "signing_certs",
     srcs = ["SigningCerts.kt"],
     deps = [
+        ":pem_io",
         ":security_provider",
-        ":signing_key_converter",
         ":signing_key_storage",
     ],
 )
