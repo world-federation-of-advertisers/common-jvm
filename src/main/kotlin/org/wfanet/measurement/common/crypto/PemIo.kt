@@ -1,3 +1,4 @@
+
 // Copyright 2021 The Cross-Media Measurement Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -91,7 +92,7 @@ class PemWriter(private val output: OutputStream) : AutoCloseable {
  *
  * See [RFC 7468](https://datatracker.ietf.org/doc/html/rfc7468)
  */
-internal class PemReader private constructor(private val reader: BufferedReader) : AutoCloseable {
+class PemReader private constructor(private val reader: BufferedReader) : AutoCloseable {
   constructor(input: InputStream) : this(input.bufferedReader(CHARSET))
 
   constructor(inputReader: InputStreamReader) : this(inputReader.buffered()) {
