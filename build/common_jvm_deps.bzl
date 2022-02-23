@@ -24,10 +24,6 @@ load("//build/io_bazel_rules_kotlin:deps.bzl", "rules_kotlin_deps")
 load("//build/io_bazel_rules_docker:base_images.bzl", "base_java_images")
 load("@com_github_grpc_grpc//bazel:grpc_deps.bzl", "grpc_deps")
 load("@com_google_googleapis//:repository_rules.bzl", "switched_rules_by_language")
-load(
-    "@com_github_grpc_grpc_kotlin//:repositories.bzl",
-    "io_grpc_grpc_java",
-)
 load("//build/io_bazel_rules_go:deps.bzl", "rules_go_deps")
 load("@tink_java//:tink_java_deps.bzl", "tink_java_deps")
 
@@ -43,6 +39,5 @@ def common_jvm_deps():
         name = "com_google_googleapis_imports",
         java = True,
     )
-    io_grpc_grpc_java()
     rules_go_deps()
     tink_java_deps()
