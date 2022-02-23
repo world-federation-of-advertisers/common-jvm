@@ -50,3 +50,18 @@ fun <T> grpcRequireNotNull(subject: T?, provideDescription: () -> String = { "" 
  */
 fun failGrpc(status: Status = Status.INVALID_ARGUMENT, provideDescription: () -> String): Nothing =
   throw status.withDescription(provideDescription()).asRuntimeException()
+
+/**
+ * Throws [StatusRuntimeException] with a cause and a description.
+ *
+ * @param status what gRPC error code to use
+ * @param cause the cause of the gRPC error
+ * @param provideDescription lazy generator for the error message
+ * @throws StatusRuntimeException
+ */
+fun failGrpc(
+  status: Status = Status.INVALID_ARGUMENT,
+  cause: Throwable,
+  provideDescription: () -> String
+): Nothing =
+  throw status.withDescription(provideDescription()).withCause(cause).asRuntimeException()

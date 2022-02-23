@@ -35,3 +35,15 @@ kt_jvm_test(
         "//src/main/kotlin/org/wfanet/measurement/common/grpc",
     ],
 )
+
+kt_jvm_test(
+    name = "PreconditionsTest",
+    srcs = ["PreconditionsTest.kt"],
+    test_class = "org.wfanet.measurement.common.grpc.PreconditionsTest",
+    deps = [
+        "//imports/java/io/grpc/testing",
+        "//imports/java/org/junit",
+        "//imports/kotlin/kotlin/test",
+        "//src/main/kotlin/org/wfanet/measurement/common/grpc",
+    ],
+)
