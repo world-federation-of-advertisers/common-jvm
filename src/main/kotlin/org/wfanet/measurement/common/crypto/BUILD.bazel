@@ -101,8 +101,8 @@ kt_jvm_library(
     name = "signing_certs",
     srcs = ["SigningCerts.kt"],
     deps = [
-        ":signing_key_converter",
         ":security_provider",
+        ":signing_key_converter",
         ":signing_key_storage",
     ],
 )
