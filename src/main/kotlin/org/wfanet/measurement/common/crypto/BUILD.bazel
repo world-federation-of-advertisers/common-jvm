@@ -34,14 +34,23 @@ kt_jvm_library(
 )
 
 kt_jvm_library(
-    name = "signing_key_storage",
+    name = "pem_io",
     srcs = [
         "PemIo.kt",
+    ],
+    deps = [
+        ":security_provider",
+    ],
+)
+
+kt_jvm_library(
+    name = "signing_key_storage",
+    srcs = [
         "SigningKeyHandle.kt",
         "SigningKeyStore.kt",
     ],
     deps = [
-        ":security_provider",
+        ":pem_io",
         ":signatures",
         ":signed_blob",
         "//imports/java/com/google/protobuf",
@@ -92,6 +101,7 @@ kt_jvm_library(
     name = "signing_certs",
     srcs = ["SigningCerts.kt"],
     deps = [
+        ":pem_io",
         ":security_provider",
         ":signing_key_storage",
     ],
