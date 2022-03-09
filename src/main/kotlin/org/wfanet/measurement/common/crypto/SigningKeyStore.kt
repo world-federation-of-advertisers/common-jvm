@@ -23,7 +23,6 @@ import kotlinx.coroutines.withContext
 import org.wfanet.measurement.common.HexString
 import org.wfanet.measurement.common.flatten
 import org.wfanet.measurement.storage.Store
-import org.wfanet.measurement.storage.read
 
 /** Store of private signing keys. */
 class SigningKeyStore(private val store: Store<Context>) {

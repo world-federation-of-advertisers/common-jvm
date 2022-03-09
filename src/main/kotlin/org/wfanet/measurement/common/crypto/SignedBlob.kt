@@ -33,21 +33,17 @@ class SignedBlob(wrapped: StorageClient.Blob, val signature: ByteString) :
    */
   suspend inline fun readAndVerify(
     certificate: X509Certificate,
-    bufferSizeBytes: Int = storageClient.defaultBufferSizeBytes,
     crossinline action: suspend (ByteString) -> Unit
   ): Boolean {
-    return read(bufferSizeBytes).collectAndVerify(certificate, signature, action)
+    return read().collectAndVerify(certificate, signature, action)
   }
 
   /**
    * Returns a [Flow] for the blob content which throws an [InvalidSignatureException] on collection
    * if [signature] is not valid for the blob content.
    */
-  fun readVerifying(
-    certificate: X509Certificate,
-    bufferSizeBytes: Int = storageClient.defaultBufferSizeBytes
-  ): Flow<ByteString> {
-    return read(bufferSizeBytes).verifying(certificate, signature)
+  fun readVerifying(certificate: X509Certificate): Flow<ByteString> {
+    return read().verifying(certificate, signature)
   }
 }
 

@@ -21,25 +21,31 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.runBlocking
+import org.wfanet.measurement.common.asBufferedFlow
 import org.wfanet.measurement.internal.testing.DeleteBlobRequest
 import org.wfanet.measurement.internal.testing.ForwardedStorageGrpcKt.ForwardedStorageCoroutineStub
 import org.wfanet.measurement.internal.testing.GetBlobMetadataRequest
-import org.wfanet.measurement.internal.testing.ReadBlobRequest
 import org.wfanet.measurement.internal.testing.WriteBlobRequest
+import org.wfanet.measurement.internal.testing.readBlobRequest
 import org.wfanet.measurement.storage.StorageClient
 
-private const val DEFAULT_BUFFER_SIZE_BYTES = 1024 * 32 // 32 KiB
+/**
+ * Size of byte buffer used for blob writes.
+ *
+ * See https://github.com/grpc/grpc.github.io/issues/371.
+ */
+private const val WRITE_BUFFER_SIZE = 1024 * 32 // 32 KiB
 
 /** [StorageClient] for ForwardedStorage service. */
 class ForwardedStorageClient(private val storageStub: ForwardedStorageCoroutineStub) :
   StorageClient {
 
-  override val defaultBufferSizeBytes: Int
-    get() = DEFAULT_BUFFER_SIZE_BYTES
-
   override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
+    // gRPC has a hard limit on message size, so we always rebuffer to make sure we're under that.
+    val rebufferedContent = content.asBufferedFlow(WRITE_BUFFER_SIZE)
+
     val requests =
-      content
+      rebufferedContent
         .map { WriteBlobRequest.newBuilder().apply { bodyChunkBuilder.content = it }.build() }
         .onStart {
           emit(WriteBlobRequest.newBuilder().apply { headerBuilder.blobKey = blobKey }.build())
@@ -75,11 +81,9 @@ class ForwardedStorageClient(private val storageStub: ForwardedStorageCoroutineS
     override val storageClient: StorageClient
       get() = this@ForwardedStorageClient
 
-    override fun read(bufferSizeBytes: Int): Flow<ByteString> =
-      storageStub.readBlob(
-          ReadBlobRequest.newBuilder().setBlobKey(blobKey).setChunkSize(bufferSizeBytes).build()
-        )
-        .map { it.chunk }
+    override fun read(): Flow<ByteString> {
+      return storageStub.readBlob(readBlobRequest { blobKey = this@Blob.blobKey }).map { it.chunk }
+    }
 
     override fun delete() =
       runBlocking<Unit> {

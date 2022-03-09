@@ -51,7 +51,6 @@ message GetBlobMetadataRequest {
 
 message ReadBlobRequest {
   string blob_key = 1;
-  int32 chunk_size = 2;
 }
 
 message ReadBlobResponse {

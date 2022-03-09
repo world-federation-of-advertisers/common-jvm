@@ -18,18 +18,11 @@ import com.google.protobuf.ByteString
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
-import org.wfanet.measurement.common.BYTES_PER_MIB
-import org.wfanet.measurement.common.asBufferedFlow
 import org.wfanet.measurement.common.flatten
 import org.wfanet.measurement.storage.StorageClient
-
-/**
- * The default byte buffer size. Chosen as it is a commonly used default buffer size in an attempt
- * to keep the tests as close to actual usage as possible.
- */
-private const val BYTE_BUFFER_SIZE = BYTES_PER_MIB * 1
 
 /** In-memory [StorageClient]. */
 class InMemoryStorageClient : StorageClient {
@@ -42,9 +35,6 @@ class InMemoryStorageClient : StorageClient {
   private fun deleteKey(path: String) {
     storageMap.remove(path)
   }
-
-  override val defaultBufferSizeBytes: Int
-    get() = BYTE_BUFFER_SIZE
 
   override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
     return withContext(Dispatchers.IO) {
@@ -65,8 +55,7 @@ class InMemoryStorageClient : StorageClient {
     override val storageClient: InMemoryStorageClient
       get() = this@InMemoryStorageClient
 
-    override fun read(bufferSizeBytes: Int): Flow<ByteString> =
-      content.asBufferedFlow(bufferSizeBytes)
+    override fun read(): Flow<ByteString> = flowOf(content)
 
     override fun delete() = storageClient.deleteKey(blobKey)
   }

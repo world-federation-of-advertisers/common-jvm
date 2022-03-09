@@ -73,10 +73,7 @@ class FileSystemStorageServiceTest : AbstractStorageClientTest<ForwardedStorageC
         runBlocking {
           storageStub
             .readBlob(
-              ReadBlobRequest.newBuilder()
-                .setBlobKey("read/blob/returns/not/found")
-                .setChunkSize(4096)
-                .build()
+              ReadBlobRequest.newBuilder().setBlobKey("read/blob/returns/not/found").build()
             )
             .toList()
         }
