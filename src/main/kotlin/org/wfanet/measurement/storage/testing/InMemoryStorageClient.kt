@@ -42,7 +42,7 @@ class InMemoryStorageClient : StorageClient {
     }
   }
 
-  override fun getBlob(blobKey: String): StorageClient.Blob? {
+  override suspend fun getBlob(blobKey: String): StorageClient.Blob? {
     return storageMap[blobKey]
   }
 
@@ -57,6 +57,6 @@ class InMemoryStorageClient : StorageClient {
 
     override fun read(): Flow<ByteString> = flowOf(content)
 
-    override fun delete() = storageClient.deleteKey(blobKey)
+    override suspend fun delete() = storageClient.deleteKey(blobKey)
   }
 }

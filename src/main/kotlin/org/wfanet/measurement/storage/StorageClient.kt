@@ -37,7 +37,7 @@ interface StorageClient {
   suspend fun writeBlob(blobKey: String, content: ByteString) = writeBlob(blobKey, flowOf(content))
 
   /** Returns a [Blob] for the specified key, or `null` if it cannot be found. */
-  fun getBlob(blobKey: String): Blob?
+  suspend fun getBlob(blobKey: String): Blob?
 
   /** Reference to a blob in a storage system. */
   interface Blob {
@@ -51,6 +51,6 @@ interface StorageClient {
     fun read(): Flow<ByteString>
 
     /** Deletes the blob. */
-    fun delete()
+    suspend fun delete()
   }
 }

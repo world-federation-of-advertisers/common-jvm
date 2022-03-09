@@ -48,7 +48,7 @@ class FileSystemStorageClient(private val directory: File) : StorageClient {
     return Blob(file)
   }
 
-  override fun getBlob(blobKey: String): StorageClient.Blob? {
+  override suspend fun getBlob(blobKey: String): StorageClient.Blob? {
     val file = File(directory, blobKey.base64UrlEncode())
     return if (file.exists()) Blob(file) else null
   }
@@ -62,7 +62,7 @@ class FileSystemStorageClient(private val directory: File) : StorageClient {
 
     override fun read(): Flow<ByteString> = file.inputStream().channel.asFlow(READ_BUFFER_SIZE)
 
-    override fun delete() {
+    override suspend fun delete() {
       file.delete()
     }
   }

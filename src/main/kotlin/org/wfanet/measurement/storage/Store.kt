@@ -62,7 +62,7 @@ protected constructor(
   suspend fun write(context: T, content: ByteString): Blob = write(context, flowOf(content))
 
   /** Returns a [Blob] with the specified blob key, or `null` if not found. */
-  fun get(blobKey: String): Blob? {
+  suspend fun get(blobKey: String): Blob? {
     val privateBlobKey = "$blobKeyPrefix/$blobKey"
     return storageClient.getBlob(privateBlobKey)?.let { Blob(blobKey, it) }
   }
