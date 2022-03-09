@@ -29,8 +29,8 @@ interface StorageClient {
   /** Default size in bytes of each [Flow] value. */
   val defaultBufferSizeBytes: Int
 
-  /** Creates a blob with the specified key and content. */
-  suspend fun createBlob(blobKey: String, content: Flow<ByteString>): Blob
+  /** Writes [content] to a blob with [blobKey]. */
+  suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): Blob
 
   /** Returns a [Blob] for the specified key, or `null` if it cannot be found. */
   fun getBlob(blobKey: String): Blob?
@@ -52,11 +52,11 @@ interface StorageClient {
 }
 
 /**
- * [Creates][StorageClient.createBlob] a [StorageClient.Blob] using a [Flow] with [ByteString]s of
+ * [Writes][StorageClient.writeBlob] a [StorageClient.Blob] using a [Flow] with [ByteString]s of
  * [StorageClient.defaultBufferSizeBytes] size.
  */
-suspend fun StorageClient.createBlob(blobKey: String, content: ByteString) =
-  createBlob(blobKey, content.asBufferedFlow(defaultBufferSizeBytes))
+suspend fun StorageClient.writeBlob(blobKey: String, content: ByteString) =
+  writeBlob(blobKey, content.asBufferedFlow(defaultBufferSizeBytes))
 
 /**
  * [Reads][StorageClient.Blob.read] this [StorageClient.Blob]'s content using

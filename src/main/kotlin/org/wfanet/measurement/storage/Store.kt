@@ -54,7 +54,7 @@ protected constructor(
   suspend fun write(context: T, content: Flow<ByteString>): Blob {
     val blobKey = generateBlobKey(context)
     val privateBlobKey = "$blobKeyPrefix/$blobKey"
-    val createdBlob = storageClient.createBlob(privateBlobKey, content)
+    val createdBlob = storageClient.writeBlob(privateBlobKey, content)
     return Blob(blobKey, createdBlob)
   }
 

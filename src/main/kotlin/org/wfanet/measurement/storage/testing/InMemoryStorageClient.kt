@@ -46,16 +46,9 @@ class InMemoryStorageClient : StorageClient {
   override val defaultBufferSizeBytes: Int
     get() = BYTE_BUFFER_SIZE
 
-  override suspend fun createBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
+  override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
     return withContext(Dispatchers.IO) {
-      var created = false
-      val blob =
-        storageMap.getOrPut(blobKey) {
-          created = true
-          Blob(blobKey, runBlocking { content.flatten() })
-        }
-      require(created) { "Blob with key $blobKey already exists" }
-      blob
+      storageMap.getOrPut(blobKey) { Blob(blobKey, runBlocking { content.flatten() }) }
     }
   }
 
