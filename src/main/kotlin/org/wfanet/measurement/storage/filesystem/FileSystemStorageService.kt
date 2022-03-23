@@ -21,21 +21,21 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import org.wfanet.measurement.common.consumeFirstOr
 import org.wfanet.measurement.internal.testing.BlobMetadata
-import org.wfanet.measurement.internal.testing.CreateBlobRequest
 import org.wfanet.measurement.internal.testing.DeleteBlobRequest
 import org.wfanet.measurement.internal.testing.DeleteBlobResponse
 import org.wfanet.measurement.internal.testing.ForwardedStorageGrpcKt.ForwardedStorageCoroutineImplBase as ForwardedStorageCoroutineService
 import org.wfanet.measurement.internal.testing.GetBlobMetadataRequest
 import org.wfanet.measurement.internal.testing.ReadBlobRequest
 import org.wfanet.measurement.internal.testing.ReadBlobResponse
+import org.wfanet.measurement.internal.testing.WriteBlobRequest
 
 /** [ForwardedStorageCoroutineService] implementation that uses [FileSystemStorageClient]. */
 class FileSystemStorageService(directory: File) : ForwardedStorageCoroutineService() {
   val storageClient: FileSystemStorageClient = FileSystemStorageClient(directory)
 
-  override suspend fun createBlob(requests: Flow<CreateBlobRequest>): BlobMetadata {
+  override suspend fun writeBlob(requests: Flow<WriteBlobRequest>): BlobMetadata {
     val blob =
-      requests.consumeFirstOr { CreateBlobRequest.getDefaultInstance() }.use { consumed ->
+      requests.consumeFirstOr { WriteBlobRequest.getDefaultInstance() }.use { consumed ->
         val headerRequest = consumed.item
         val blobKey = headerRequest.header.blobKey
         if (blobKey.isBlank()) {
@@ -43,7 +43,7 @@ class FileSystemStorageService(directory: File) : ForwardedStorageCoroutineServi
         }
 
         val content = consumed.remaining.map { it.bodyChunk.content }
-        storageClient.createBlob(blobKey, content)
+        storageClient.writeBlob(blobKey, content)
       }
 
     return BlobMetadata.newBuilder().setSize(blob.size).build()

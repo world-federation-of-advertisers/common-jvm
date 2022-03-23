@@ -45,10 +45,10 @@ internal constructor(private val storageClient: StorageClient, private val aead:
    * @param content [Flow] producing the content be encrypted and stored in the blob
    * @return [StorageClient.Blob] with [content] encrypted by [aead]
    */
-  override suspend fun createBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
+  override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
     val ciphertext = aead.encrypt(content.toByteArray(), blobKey.encodeToByteArray())
     val wrappedBlob =
-      storageClient.createBlob(
+      storageClient.writeBlob(
         blobKey,
         ciphertext.asBufferedFlow(storageClient.defaultBufferSizeBytes)
       )

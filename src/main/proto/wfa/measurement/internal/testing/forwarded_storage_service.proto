@@ -21,7 +21,7 @@ option java_multiple_files = true;
 
 // Blob storage which is forwarded over gRPC.
 service ForwardedStorage {
-  rpc CreateBlob(stream CreateBlobRequest) returns (BlobMetadata) {}
+  rpc WriteBlob(stream WriteBlobRequest) returns (BlobMetadata) {}
   rpc GetBlobMetadata(GetBlobMetadataRequest) returns (BlobMetadata) {}
   rpc ReadBlob(ReadBlobRequest) returns (stream ReadBlobResponse) {}
   rpc DeleteBlob(DeleteBlobRequest) returns (DeleteBlobResponse) {}
@@ -31,7 +31,7 @@ message BlobMetadata {
   int64 size = 1;
 }
 
-message CreateBlobRequest {
+message WriteBlobRequest {
   message Header {
     string blob_key = 1;
   }
@@ -55,7 +55,7 @@ message ReadBlobRequest {
 }
 
 message ReadBlobResponse {
-  bytes chunk = 2;
+  bytes chunk = 1;
 }
 
 message DeleteBlobRequest {

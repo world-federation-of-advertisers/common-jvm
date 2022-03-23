@@ -33,10 +33,10 @@ import org.junit.runners.JUnit4
 import org.wfanet.measurement.common.crypto.tink.testing.FakeKmsClient
 import org.wfanet.measurement.common.size
 import org.wfanet.measurement.common.toByteArray
-import org.wfanet.measurement.storage.createBlob
 import org.wfanet.measurement.storage.read
 import org.wfanet.measurement.storage.testing.AbstractStorageClientTest
 import org.wfanet.measurement.storage.testing.InMemoryStorageClient
+import org.wfanet.measurement.storage.writeBlob
 
 @RunWith(JUnit4::class)
 class KmsStorageClientTest : AbstractStorageClientTest<KmsStorageClient>() {
@@ -59,7 +59,7 @@ class KmsStorageClientTest : AbstractStorageClientTest<KmsStorageClient>() {
   fun `wrapped blob is encrypted`() = runBlocking {
     val blobKey = "kms-blob"
 
-    storageClient.createBlob(blobKey, testBlobContent)
+    storageClient.writeBlob(blobKey, testBlobContent)
 
     val wrappedBlob = assertNotNull(wrappedStorageClient.getBlob(blobKey))
     val plainTextContent =

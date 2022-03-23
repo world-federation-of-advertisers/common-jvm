@@ -17,6 +17,7 @@ package org.wfanet.measurement.storage.testing
 import com.google.common.truth.Truth.assertThat
 import com.google.protobuf.ByteString
 import com.google.protobuf.kotlin.toByteString
+import com.google.protobuf.kotlin.toByteStringUtf8
 import kotlin.random.Random
 import kotlin.test.assertNotNull
 import kotlinx.coroutines.runBlocking
@@ -24,8 +25,8 @@ import org.junit.Test
 import org.wfanet.measurement.common.BYTES_PER_MIB
 import org.wfanet.measurement.common.size
 import org.wfanet.measurement.storage.StorageClient
-import org.wfanet.measurement.storage.createBlob
 import org.wfanet.measurement.storage.testing.BlobSubject.Companion.assertThat
+import org.wfanet.measurement.storage.writeBlob
 
 /** Abstract base class for testing implementations of [StorageClient]. */
 abstract class AbstractStorageClientTest<T : StorageClient> {
@@ -39,10 +40,20 @@ abstract class AbstractStorageClientTest<T : StorageClient> {
   protected lateinit var storageClient: T
 
   @Test
-  fun `createBlob returns new readable blob`() = runBlocking {
+  fun `writeBlob returns new readable blob`() = runBlocking {
     val blobKey = "new-blob"
 
-    val blob = storageClient.createBlob(blobKey, testBlobContent)
+    val blob = storageClient.writeBlob(blobKey, testBlobContent)
+
+    assertThat(blob).contentEqualTo(testBlobContent)
+  }
+
+  @Test
+  fun `writeBlob overwrites existing blob`() = runBlocking {
+    val blobKey = "new-blob"
+    storageClient.writeBlob(blobKey, "initial content".toByteStringUtf8())
+
+    val blob = storageClient.writeBlob(blobKey, testBlobContent)
 
     assertThat(blob).contentEqualTo(testBlobContent)
   }
@@ -56,7 +67,7 @@ abstract class AbstractStorageClientTest<T : StorageClient> {
   @Test
   fun `getBlob returns readable Blob`() = runBlocking {
     val blobKey = "blob-to-get"
-    storageClient.createBlob(blobKey, testBlobContent)
+    storageClient.writeBlob(blobKey, testBlobContent)
 
     val blob = assertNotNull(storageClient.getBlob(blobKey))
 
@@ -67,7 +78,7 @@ abstract class AbstractStorageClientTest<T : StorageClient> {
   fun `Blob size returns content size`() = runBlocking {
     val blobKey = "blob-to-check-size-" + random.nextInt().toString()
 
-    val blob = storageClient.createBlob(blobKey, testBlobContent)
+    val blob = storageClient.writeBlob(blobKey, testBlobContent)
 
     assertThat(blob).hasSize(computeStoredBlobSize(testBlobContent, blobKey))
   }
@@ -75,7 +86,7 @@ abstract class AbstractStorageClientTest<T : StorageClient> {
   @Test
   fun `Blob delete deletes blob`() = runBlocking {
     val blobKey = "blob-to-delete"
-    val blob = storageClient.createBlob(blobKey, testBlobContent)
+    val blob = storageClient.writeBlob(blobKey, testBlobContent)
 
     blob.delete()
 
