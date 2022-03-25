@@ -20,12 +20,11 @@ import io.grpc.StatusException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
-import kotlinx.coroutines.runBlocking
 import org.wfanet.measurement.common.asBufferedFlow
-import org.wfanet.measurement.internal.testing.DeleteBlobRequest
 import org.wfanet.measurement.internal.testing.ForwardedStorageGrpcKt.ForwardedStorageCoroutineStub
-import org.wfanet.measurement.internal.testing.GetBlobMetadataRequest
 import org.wfanet.measurement.internal.testing.WriteBlobRequest
+import org.wfanet.measurement.internal.testing.deleteBlobRequest
+import org.wfanet.measurement.internal.testing.getBlobMetadataRequest
 import org.wfanet.measurement.internal.testing.readBlobRequest
 import org.wfanet.measurement.storage.StorageClient
 
@@ -55,16 +54,11 @@ class ForwardedStorageClient(private val storageStub: ForwardedStorageCoroutineS
     return Blob(blobKey, metadata.size)
   }
 
-  override fun getBlob(blobKey: String): StorageClient.Blob? {
+  override suspend fun getBlob(blobKey: String): StorageClient.Blob? {
     // Check if the blob exists
     val blobSize =
       try {
-        runBlocking {
-          storageStub.getBlobMetadata(
-              GetBlobMetadataRequest.newBuilder().setBlobKey(blobKey).build()
-            )
-            .size
-        }
+        storageStub.getBlobMetadata(getBlobMetadataRequest { this.blobKey = blobKey }).size
       } catch (e: StatusException) {
         if (e.status.code == Status.NOT_FOUND.code) {
           return null
@@ -85,9 +79,8 @@ class ForwardedStorageClient(private val storageStub: ForwardedStorageCoroutineS
       return storageStub.readBlob(readBlobRequest { blobKey = this@Blob.blobKey }).map { it.chunk }
     }
 
-    override fun delete() =
-      runBlocking<Unit> {
-        storageStub.deleteBlob(DeleteBlobRequest.newBuilder().setBlobKey(blobKey).build())
-      }
+    override suspend fun delete() {
+      storageStub.deleteBlob(deleteBlobRequest { blobKey = this@Blob.blobKey })
+    }
   }
 }

@@ -63,9 +63,9 @@ class GcsStorageClient(private val storage: Storage, private val bucketName: Str
       ClientBlob(blob.reload())
     }
 
-  override fun getBlob(blobKey: String): StorageClient.Blob? {
-    val blob: Blob? = storage.get(bucketName, blobKey)
-    return if (blob == null) null else ClientBlob(blob)
+  override suspend fun getBlob(blobKey: String): StorageClient.Blob? {
+    val blob: Blob? = withContext(Dispatchers.IO) { storage.get(bucketName, blobKey) }
+    return blob?.let { ClientBlob(blob) }
   }
 
   /** [StorageClient.Blob] implementation for [GcsStorageClient]. */
@@ -80,8 +80,10 @@ class GcsStorageClient(private val storage: Storage, private val bucketName: Str
       return blob.reader().asFlow(READ_BUFFER_SIZE)
     }
 
-    override fun delete() {
-      check(blob.delete()) { "Failed to delete blob ${blob.blobId}" }
+    override suspend fun delete() {
+      check(withContext(Dispatchers.IO) { blob.delete() }) {
+        "Failed to delete blob ${blob.blobId}"
+      }
     }
   }
 

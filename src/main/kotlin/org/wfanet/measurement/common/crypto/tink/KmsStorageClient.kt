@@ -17,8 +17,10 @@ package org.wfanet.measurement.common.crypto.tink
 import com.google.crypto.tink.Aead
 import com.google.protobuf.ByteString
 import com.google.protobuf.kotlin.toByteString
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.withContext
 import org.wfanet.measurement.common.toByteArray
 import org.wfanet.measurement.storage.StorageClient
 
@@ -41,7 +43,10 @@ internal constructor(private val storageClient: StorageClient, private val aead:
    * @return [StorageClient.Blob] with [content] encrypted by [aead]
    */
   override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
-    val ciphertext = aead.encrypt(content.toByteArray(), blobKey.encodeToByteArray())
+    val ciphertext =
+      withContext(Dispatchers.IO) {
+        aead.encrypt(content.toByteArray(), blobKey.encodeToByteArray())
+      }
     val wrappedBlob = storageClient.writeBlob(blobKey, ciphertext.toByteString())
     return AeadBlob(wrappedBlob, blobKey)
   }
@@ -51,7 +56,7 @@ internal constructor(private val storageClient: StorageClient, private val aead:
    *
    * Blob content is not decrypted until [AeadBlob.read]
    */
-  override fun getBlob(blobKey: String): StorageClient.Blob? {
+  override suspend fun getBlob(blobKey: String): StorageClient.Blob? {
     val blob = storageClient.getBlob(blobKey)
     return blob?.let { AeadBlob(it, blobKey) }
   }
@@ -72,6 +77,6 @@ internal constructor(private val storageClient: StorageClient, private val aead:
       )
     }
 
-    override fun delete() = blob.delete()
+    override suspend fun delete() = blob.delete()
   }
 }
