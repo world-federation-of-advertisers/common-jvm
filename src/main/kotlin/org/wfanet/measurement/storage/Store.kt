@@ -16,7 +16,7 @@ package org.wfanet.measurement.storage
 
 import com.google.protobuf.ByteString
 import kotlinx.coroutines.flow.Flow
-import org.wfanet.measurement.common.asBufferedFlow
+import kotlinx.coroutines.flow.flowOf
 
 typealias BlobKeyGenerator<T> = (context: T) -> String
 
@@ -59,8 +59,7 @@ protected constructor(
   }
 
   /** @see write */
-  suspend fun write(context: T, content: ByteString): Blob =
-    write(context, content.asBufferedFlow(storageClient.defaultBufferSizeBytes))
+  suspend fun write(context: T, content: ByteString): Blob = write(context, flowOf(content))
 
   /** Returns a [Blob] with the specified blob key, or `null` if not found. */
   fun get(blobKey: String): Blob? {

@@ -16,7 +16,7 @@ package org.wfanet.measurement.storage
 
 import com.google.protobuf.ByteString
 import kotlinx.coroutines.flow.Flow
-import org.wfanet.measurement.common.asBufferedFlow
+import kotlinx.coroutines.flow.flowOf
 
 /**
  * Interface for blob/object storage operations.
@@ -26,11 +26,15 @@ import org.wfanet.measurement.common.asBufferedFlow
  * existing blob.
  */
 interface StorageClient {
-  /** Default size in bytes of each [Flow] value. */
-  val defaultBufferSizeBytes: Int
-
   /** Writes [content] to a blob with [blobKey]. */
   suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): Blob
+
+  /**
+   * Writes [content] to a blob with [blobKey].
+   *
+   * Prefer the [Flow] overload if your content is not already a [ByteString] and not all in memory.
+   */
+  suspend fun writeBlob(blobKey: String, content: ByteString) = writeBlob(blobKey, flowOf(content))
 
   /** Returns a [Blob] for the specified key, or `null` if it cannot be found. */
   fun getBlob(blobKey: String): Blob?
@@ -44,22 +48,9 @@ interface StorageClient {
     val size: Long
 
     /** Returns a [Flow] for the blob content. */
-    fun read(bufferSizeBytes: Int): Flow<ByteString>
+    fun read(): Flow<ByteString>
 
     /** Deletes the blob. */
     fun delete()
   }
 }
-
-/**
- * [Writes][StorageClient.writeBlob] a [StorageClient.Blob] using a [Flow] with [ByteString]s of
- * [StorageClient.defaultBufferSizeBytes] size.
- */
-suspend fun StorageClient.writeBlob(blobKey: String, content: ByteString) =
-  writeBlob(blobKey, content.asBufferedFlow(defaultBufferSizeBytes))
-
-/**
- * [Reads][StorageClient.Blob.read] this [StorageClient.Blob]'s content using
- * [StorageClient.defaultBufferSizeBytes].
- */
-fun StorageClient.Blob.read(): Flow<ByteString> = read(storageClient.defaultBufferSizeBytes)

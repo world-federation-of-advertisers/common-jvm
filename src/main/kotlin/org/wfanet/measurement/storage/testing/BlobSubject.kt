@@ -21,7 +21,6 @@ import com.google.protobuf.ByteString
 import org.wfanet.measurement.common.flatten
 import org.wfanet.measurement.common.size
 import org.wfanet.measurement.storage.StorageClient.Blob
-import org.wfanet.measurement.storage.read
 
 class BlobSubject private constructor(failureMetadata: FailureMetadata, subject: Blob) :
   Subject(failureMetadata, subject) {

@@ -26,7 +26,6 @@ import org.wfanet.measurement.common.BYTES_PER_MIB
 import org.wfanet.measurement.common.size
 import org.wfanet.measurement.storage.StorageClient
 import org.wfanet.measurement.storage.testing.BlobSubject.Companion.assertThat
-import org.wfanet.measurement.storage.writeBlob
 
 /** Abstract base class for testing implementations of [StorageClient]. */
 abstract class AbstractStorageClientTest<T : StorageClient> {
