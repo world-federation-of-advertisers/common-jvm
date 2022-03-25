@@ -58,7 +58,7 @@ abstract class AbstractStorageClientTest<T : StorageClient> {
   }
 
   @Test
-  fun `getBlob returns null for non-existant blob`() {
+  fun `getBlob returns null for non-existant blob`() = runBlocking {
     val blobKey = "non-existant-blob"
     assertThat(storageClient.getBlob(blobKey)).isNull()
   }
