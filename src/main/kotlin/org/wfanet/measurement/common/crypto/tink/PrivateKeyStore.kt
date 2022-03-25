@@ -22,7 +22,6 @@ import com.google.protobuf.ByteString
 import org.wfanet.measurement.common.crypto.PrivateKeyStore as CryptoPrivateKeyStore
 import org.wfanet.measurement.common.flatten
 import org.wfanet.measurement.storage.Store
-import org.wfanet.measurement.storage.read
 
 internal class PrivateKeyStore(private val store: Store<String>, private val aead: Aead) :
   CryptoPrivateKeyStore<TinkPrivateKeyHandle> {

@@ -35,12 +35,11 @@ import software.amazon.awssdk.services.s3.model.NoSuchKeyException
 import software.amazon.awssdk.services.s3.model.UploadPartRequest
 
 /** S3 requires each part of a multipart upload (except the last) is at least 5 MB. */
-private const val BYTE_BUFFER_SIZE = BYTES_PER_MIB * 5
+private const val WRITE_BUFFER_SIZE = BYTES_PER_MIB * 5
+private const val READ_BUFFER_SIZE = WRITE_BUFFER_SIZE
 
 /** Amazon Web Services (AWS) S3 implementation of [StorageClient] for a single bucket. */
 class S3StorageClient(private val s3: S3Client, private val bucketName: String) : StorageClient {
-  override val defaultBufferSizeBytes: Int = BYTE_BUFFER_SIZE
-
   override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
     val uploadId = createMultipartUpload(blobKey)
 
@@ -70,7 +69,7 @@ class S3StorageClient(private val s3: S3Client, private val bucketName: String) 
     val digest = MessageDigest.getInstance("MD5")
     val builder = UploadPartRequest.builder().uploadId(uploadId).key(blobKey).bucket(bucketName)
     return content
-      .asBufferedFlow(BYTE_BUFFER_SIZE)
+      .asBufferedFlow(WRITE_BUFFER_SIZE)
       .withIndex()
       .map { (i, bytes) ->
         bytes.asReadOnlyByteBufferList().forEach(digest::update)
@@ -136,14 +135,14 @@ class S3StorageClient(private val s3: S3Client, private val bucketName: String) 
 
     override val size: Long = head.contentLength()
 
-    override fun read(bufferSizeBytes: Int): Flow<ByteString> {
+    override fun read(): Flow<ByteString> {
       val input =
         s3.getObject {
           it.bucket(bucketName)
           it.key(blobKey)
         }
 
-      return input.asFlow(bufferSizeBytes)
+      return input.asFlow(READ_BUFFER_SIZE)
     }
 
     override fun delete() {
