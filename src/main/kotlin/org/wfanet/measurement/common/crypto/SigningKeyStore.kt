@@ -17,7 +17,6 @@ package org.wfanet.measurement.common.crypto
 import com.google.protobuf.ByteString
 import java.security.PrivateKey
 import java.security.cert.X509Certificate
-import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.wfanet.measurement.common.HexString
@@ -26,10 +25,11 @@ import org.wfanet.measurement.storage.Store
 
 /** Store of private signing keys. */
 class SigningKeyStore(private val store: Store<Context>) {
-  data class Context(val subjectKeyIdentifier: ByteString) {
-    fun generateBlobKey(): String {
-      return "/${HexString(subjectKeyIdentifier).value}/${UUID.randomUUID()}"
-    }
+  data class Context(val subjectKeyIdentifier: HexString) {
+    constructor(subjectKeyIdentifier: ByteString) : this(HexString(subjectKeyIdentifier))
+
+    val blobKey: String
+      get() = subjectKeyIdentifier.value
 
     companion object {
       fun fromCertificate(certificate: X509Certificate): Context {

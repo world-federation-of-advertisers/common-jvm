@@ -18,8 +18,6 @@ import com.google.protobuf.ByteString
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 
-typealias BlobKeyGenerator<T> = (context: T) -> String
-
 /**
  * Blob/object store.
  *
@@ -27,19 +25,24 @@ typealias BlobKeyGenerator<T> = (context: T) -> String
  * is enforced by use of a private per-[Store] [blobKeyPrefix].
  *
  * @param storageClient client for accessing blob/object storage
- * @param generateBlobKey generator for unique blob keys (the key should have no slash in the
- * beginning)
  */
-abstract class Store<T>
-protected constructor(
-  private val storageClient: StorageClient,
-  private val generateBlobKey: BlobKeyGenerator<T>
-) {
+abstract class Store<in T> protected constructor(private val storageClient: StorageClient) {
   /**
-   * The private unique blob key prefix for this [Store]. The value should contain no slash in the
-   * beginning or at the end.
+   * The private unique blob key prefix for this [Store].
+   *
+   * This should neither begin nor end in a slash (`/`).
    */
   protected abstract val blobKeyPrefix: String
+
+  /**
+   * Deterministically derives a blob key from [context].
+   *
+   * Derived blob keys should be equal for equal contexts, and should not be equal for unequal
+   * contexts.
+   *
+   * @return the blob key, without any leading or trailing slash (`/`).
+   */
+  protected abstract fun deriveBlobKey(context: T): String
 
   class Blob(val blobKey: String, clientBlob: StorageClient.Blob) :
     StorageClient.Blob by clientBlob
@@ -52,7 +55,7 @@ protected constructor(
    * @return [Blob] with a key derived from [context]
    */
   suspend fun write(context: T, content: Flow<ByteString>): Blob {
-    val blobKey = generateBlobKey(context)
+    val blobKey = deriveBlobKey(context)
     val privateBlobKey = "$blobKeyPrefix/$blobKey"
     val createdBlob = storageClient.writeBlob(privateBlobKey, content)
     return Blob(blobKey, createdBlob)
@@ -66,4 +69,7 @@ protected constructor(
     val privateBlobKey = "$blobKeyPrefix/$blobKey"
     return storageClient.getBlob(privateBlobKey)?.let { Blob(blobKey, it) }
   }
+
+  /** Returns a [Blob] for the specified [context], or `null` if not found. */
+  suspend fun get(context: T): Blob? = get(deriveBlobKey(context))
 }
