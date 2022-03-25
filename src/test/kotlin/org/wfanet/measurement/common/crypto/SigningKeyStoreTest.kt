@@ -41,9 +41,10 @@ class SigningKeyStoreTest {
   fun initSigningKeyStore() {
     val storageClient = FileSystemStorageClient(tempDir.root)
     store =
-      object :
-        Store<SigningKeyStore.Context>(storageClient, SigningKeyStore.Context::generateBlobKey) {
-        override val blobKeyPrefix: String = "/sigKeys"
+      object : Store<SigningKeyStore.Context>(storageClient) {
+        override val blobKeyPrefix: String = "sigKeys"
+
+        override fun deriveBlobKey(context: SigningKeyStore.Context): String = context.blobKey
       }
     signingKeyStore = SigningKeyStore(store)
   }

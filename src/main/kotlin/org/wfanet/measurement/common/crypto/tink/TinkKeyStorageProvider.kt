@@ -16,20 +16,20 @@ package org.wfanet.measurement.common.crypto.tink
 
 import com.google.crypto.tink.Aead
 import com.google.crypto.tink.KmsClients
+import org.wfanet.measurement.common.crypto.KeyBlobStore
 import org.wfanet.measurement.common.crypto.KeyStorageProvider
 import org.wfanet.measurement.common.crypto.PrivateKeyStore as CryptoPrivateKeyStore
 import org.wfanet.measurement.storage.StorageClient
-import org.wfanet.measurement.storage.Store
 
-class TinkKeyStorageProvider : KeyStorageProvider<TinkPrivateKeyHandle> {
+class TinkKeyStorageProvider : KeyStorageProvider<TinkKeyId, TinkPrivateKeyHandle> {
   override fun makeKmsStorageClient(storageClient: StorageClient, keyUri: String): StorageClient {
     return KmsStorageClient(storageClient, getKmsAead(keyUri))
   }
 
   override fun makeKmsPrivateKeyStore(
-    store: Store<String>,
+    store: KeyBlobStore,
     keyUri: String
-  ): CryptoPrivateKeyStore<TinkPrivateKeyHandle> {
+  ): CryptoPrivateKeyStore<TinkKeyId, TinkPrivateKeyHandle> {
     return PrivateKeyStore(store, getKmsAead(keyUri))
   }
 }
