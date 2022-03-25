@@ -16,10 +16,7 @@ package org.wfanet.measurement.storage.testing
 
 import com.google.protobuf.ByteString
 import java.util.concurrent.ConcurrentHashMap
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withContext
 import org.wfanet.measurement.common.BYTES_PER_MIB
 import org.wfanet.measurement.common.asBufferedFlow
 import org.wfanet.measurement.common.flatten
@@ -46,17 +43,10 @@ class InMemoryStorageClient : StorageClient {
   override val defaultBufferSizeBytes: Int
     get() = BYTE_BUFFER_SIZE
 
-  override suspend fun createBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
-    return withContext(Dispatchers.IO) {
-      var created = false
-      val blob =
-        storageMap.getOrPut(blobKey) {
-          created = true
-          Blob(blobKey, runBlocking { content.flatten() })
-        }
-      require(created) { "Blob with key $blobKey already exists" }
-      blob
-    }
+  override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
+    val blob = Blob(blobKey, content.flatten())
+    storageMap[blobKey] = blob
+    return blob
   }
 
   override fun getBlob(blobKey: String): StorageClient.Blob? {

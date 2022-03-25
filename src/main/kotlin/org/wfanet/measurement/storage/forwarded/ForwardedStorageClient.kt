@@ -21,11 +21,11 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.runBlocking
-import org.wfanet.measurement.internal.testing.CreateBlobRequest
 import org.wfanet.measurement.internal.testing.DeleteBlobRequest
 import org.wfanet.measurement.internal.testing.ForwardedStorageGrpcKt.ForwardedStorageCoroutineStub
 import org.wfanet.measurement.internal.testing.GetBlobMetadataRequest
 import org.wfanet.measurement.internal.testing.ReadBlobRequest
+import org.wfanet.measurement.internal.testing.WriteBlobRequest
 import org.wfanet.measurement.storage.StorageClient
 
 private const val DEFAULT_BUFFER_SIZE_BYTES = 1024 * 32 // 32 KiB
@@ -37,14 +37,14 @@ class ForwardedStorageClient(private val storageStub: ForwardedStorageCoroutineS
   override val defaultBufferSizeBytes: Int
     get() = DEFAULT_BUFFER_SIZE_BYTES
 
-  override suspend fun createBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
+  override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
     val requests =
       content
-        .map { CreateBlobRequest.newBuilder().apply { bodyChunkBuilder.content = it }.build() }
+        .map { WriteBlobRequest.newBuilder().apply { bodyChunkBuilder.content = it }.build() }
         .onStart {
-          emit(CreateBlobRequest.newBuilder().apply { headerBuilder.blobKey = blobKey }.build())
+          emit(WriteBlobRequest.newBuilder().apply { headerBuilder.blobKey = blobKey }.build())
         }
-    val metadata = storageStub.createBlob(requests)
+    val metadata = storageStub.writeBlob(requests)
 
     return Blob(blobKey, metadata.size)
   }

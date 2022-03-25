@@ -35,15 +35,15 @@ class FileSystemStorageClient(private val directory: File) : StorageClient {
   override val defaultBufferSizeBytes: Int
     get() = DEFAULT_BUFFER_SIZE_BYTES
 
-  override suspend fun createBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
+  override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
     val file = File(directory, blobKey.base64UrlEncode())
     withContext(Dispatchers.IO) {
-      require(file.createNewFile()) { "$blobKey already exists" }
-
       file.outputStream().channel.use { byteChannel ->
         content.collect { bytes ->
-          @Suppress("BlockingMethodInNonBlockingContext") // Flow context preservation.
-          byteChannel.write(bytes.asReadOnlyByteBuffer())
+          for (buffer in bytes.asReadOnlyByteBufferList()) {
+            @Suppress("BlockingMethodInNonBlockingContext") // Flow context preservation.
+            byteChannel.write(buffer)
+          }
         }
       }
     }

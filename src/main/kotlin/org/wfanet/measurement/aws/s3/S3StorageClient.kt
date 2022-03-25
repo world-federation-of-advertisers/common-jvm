@@ -41,7 +41,7 @@ private const val BYTE_BUFFER_SIZE = BYTES_PER_MIB * 5
 class S3StorageClient(private val s3: S3Client, private val bucketName: String) : StorageClient {
   override val defaultBufferSizeBytes: Int = BYTE_BUFFER_SIZE
 
-  override suspend fun createBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
+  override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
     val uploadId = createMultipartUpload(blobKey)
 
     try {
