@@ -24,6 +24,7 @@ import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 import org.wfanet.measurement.common.byteStringOf
 import org.wfanet.measurement.common.crypto.testing.FIXED_CA_CERT_PEM_FILE
+import org.wfanet.measurement.common.crypto.testing.FIXED_CLIENT_CERT_PEM_FILE
 import org.wfanet.measurement.common.crypto.testing.FIXED_SERVER_CERT_PEM_FILE
 import org.wfanet.measurement.common.crypto.testing.FIXED_SERVER_KEY_FILE
 
@@ -50,6 +51,52 @@ private val SERVER_SKID =
     0x2C,
     0x63,
     0xA8
+  )
+private val CLIENT_SKID =
+  byteStringOf(
+    0x48,
+    0x32,
+    0x98,
+    0xE2,
+    0x03,
+    0xFE,
+    0xA1,
+    0xAF,
+    0xA0,
+    0x8D,
+    0x10,
+    0x7C,
+    0x92,
+    0x37,
+    0xCE,
+    0x19,
+    0x11,
+    0x6A,
+    0xA7,
+    0x8F,
+  )
+private val CLIENT_AKID =
+  byteStringOf(
+    0x57,
+    0xE8,
+    0x9A,
+    0x06,
+    0x76,
+    0xBE,
+    0xBA,
+    0x1E,
+    0xA0,
+    0x71,
+    0x50,
+    0x5C,
+    0x40,
+    0x87,
+    0x9B,
+    0x98,
+    0xF1,
+    0xF5,
+    0x0C,
+    0x9E,
   )
 
 @RunWith(JUnit4::class)
@@ -96,5 +143,19 @@ class SecurityProviderTest {
     val certificate: X509Certificate = readCertificate(FIXED_SERVER_CERT_PEM_FILE)
 
     assertThat(certificate.authorityKeyIdentifier).isEqualTo(issuerCertificate.subjectKeyIdentifier)
+  }
+
+  @Test
+  fun `subjectKeyIdentifier returns SKID of issuer for client certificate`() {
+    val certificate: X509Certificate = readCertificate(FIXED_CLIENT_CERT_PEM_FILE)
+
+    assertThat(certificate.subjectKeyIdentifier).isEqualTo(CLIENT_SKID)
+  }
+
+  @Test
+  fun `authorityKeyIdentifier returns AKID of issuer for client certificate`() {
+    val certificate: X509Certificate = readCertificate(FIXED_CLIENT_CERT_PEM_FILE)
+
+    assertThat(certificate.authorityKeyIdentifier).isEqualTo(CLIENT_AKID)
   }
 }

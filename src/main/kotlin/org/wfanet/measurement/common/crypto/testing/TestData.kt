@@ -46,6 +46,7 @@ val FIXED_SERVER_KEY_FILE = FIXED_TESTDATA_DIR_PATH.resolve("server.key").toFile
 val FIXED_SERVER_CERT_DER_FILE = FIXED_TESTDATA_DIR_PATH.resolve("server-cert.der").toFile()
 val FIXED_SERVER_KEY_DER_FILE = FIXED_TESTDATA_DIR_PATH.resolve("server-key.der").toFile()
 val FIXED_CA_CERT_PEM_FILE = FIXED_TESTDATA_DIR_PATH.resolve("ca.pem").toFile()
+val FIXED_CLIENT_CERT_PEM_FILE = FIXED_TESTDATA_DIR_PATH.resolve("client-cert.pem").toFile()
 
 val FIXED_ENCRYPTION_PRIVATE_KEYSET = FIXED_TESTDATA_DIR_PATH.resolve("enc-private.tink").toFile()
 val FIXED_ENCRYPTION_PUBLIC_KEYSET = FIXED_TESTDATA_DIR_PATH.resolve("enc-public.tink").toFile()

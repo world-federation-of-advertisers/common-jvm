@@ -111,10 +111,18 @@ fun KeySpec.toPrivateKey(algorithm: String): PrivateKey {
   return KeyFactory.getInstance(algorithm, jceProvider).generatePrivate(this)
 }
 
+/**
+ * This function naively parses ANS1 for a Key Identifier of length 20. It assumes that the Key
+ * Identifier will be prefaced by a octet equal to 20. If it is not able to successfully parse
+ * a 20 octet identifier, it returns null.
+ */
 fun X509Certificate.parseExtensionValue(oid: String): ByteString? {
   val extension: ByteArray = getExtensionValue(oid) ?: return null
   val index = extension.indexOf(OID_KEY_LENGTH.toByte())
   if (index == -1) {
+    return null
+  }
+  if (index + 1 + OID_KEY_LENGTH > extension.size) {
     return null
   }
   val bytes = ByteString.copyFrom(extension, index + 1, OID_KEY_LENGTH)
