@@ -35,6 +35,9 @@ private const val CERTIFICATE_TYPE = "X.509"
 private const val SUBJECT_KEY_IDENTIFIER_OID = "2.5.29.14"
 private const val AUTHORITY_KEY_IDENTIFIER_OID = "2.5.29.35"
 
+/** All Ski and Aki must have length 20. */
+private const val OID_KEY_LENGTH: Int = 20
+
 /**
  * Known ASN.1 DER tags.
  *
@@ -47,7 +50,7 @@ private enum class Asn1Tag(val byte: Byte) {
   /** Constructed tag for SEQUENCE type. */
   SEQUENCE(0x30.toByte()),
   /** Context-specific tag for keyIdentifier within AuthorityKeyIdentifier extension. */
-  KEY_IDENTIFIER(0x80.toByte())
+  KEY_IDENTIFIER(0x80.toByte()),
 }
 
 private val conscryptProvider: Provider =
@@ -108,19 +111,26 @@ fun KeySpec.toPrivateKey(algorithm: String): PrivateKey {
   return KeyFactory.getInstance(algorithm, jceProvider).generatePrivate(this)
 }
 
+fun X509Certificate.parseExtensionValue(oid: String): ByteString? {
+  val extension: ByteArray = getExtensionValue(oid) ?: return null
+  val index = extension.indexOf(OID_KEY_LENGTH.toByte())
+  if (index == -1) {
+    return null
+  }
+  val bytes = ByteString.copyFrom(extension, index + 1, OID_KEY_LENGTH)
+  if (bytes.size() != OID_KEY_LENGTH) {
+    return null
+  }
+  return bytes
+}
+
 /**
  * The keyIdentifier from the SubjectKeyIdentifier (AKI) X.509 extension, or `null` if it cannot be
  * found.
  */
 val X509Certificate.subjectKeyIdentifier: ByteString?
   get() {
-    val extension: ByteArray = getExtensionValue(SUBJECT_KEY_IDENTIFIER_OID) ?: return null
-    if (extension.size < 4 || extension[2] != Asn1Tag.OCTET_STRING.byte) {
-      return null
-    }
-
-    val length = extension[3].toInt() // Assuming short form, where length <= 127 bytes.
-    return ByteString.copyFrom(extension, 4, length)
+    return parseExtensionValue(SUBJECT_KEY_IDENTIFIER_OID)
   }
 
 /**
@@ -129,16 +139,7 @@ val X509Certificate.subjectKeyIdentifier: ByteString?
  */
 val X509Certificate.authorityKeyIdentifier: ByteString?
   get() {
-    val extension: ByteArray = getExtensionValue(AUTHORITY_KEY_IDENTIFIER_OID) ?: return null
-    if (extension.size < 6 ||
-        extension[2] != Asn1Tag.SEQUENCE.byte ||
-        extension[4] != Asn1Tag.KEY_IDENTIFIER.byte
-    ) {
-      return null
-    }
-
-    val length = extension[5].toInt() // Assuming short form, where length <= 127 bytes.
-    return ByteString.copyFrom(extension, 6, length)
+    return parseExtensionValue(AUTHORITY_KEY_IDENTIFIER_OID)
   }
 
 /** Generates a new [KeyPair]. */
