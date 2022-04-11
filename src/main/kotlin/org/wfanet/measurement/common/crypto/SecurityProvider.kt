@@ -114,8 +114,8 @@ fun KeySpec.toPrivateKey(algorithm: String): PrivateKey {
 /**
  * Extracts a key identifier from an extension.
  *
- * Assumes that the key identifier starts at byte index [KEY_IDENTIFIER_START_INDEX] of the
- * extension and is [KEY_IDENTIFIER_LENGTH] bytes long.
+ * Assumes that the key identifier starts immediately after the length octet of
+ * [KEY_IDENTIFIER_LENGTH] and is [KEY_IDENTIFIER_LENGTH] bytes long.
  */
 fun X509Certificate.extractExtensionKeyIdentifier(extensionOid: String): ByteString? {
   val extension: ByteArray = getExtensionValue(extensionOid) ?: return null
