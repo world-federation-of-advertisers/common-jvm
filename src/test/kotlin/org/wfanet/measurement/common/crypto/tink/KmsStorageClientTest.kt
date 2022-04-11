@@ -20,7 +20,6 @@ import com.google.common.truth.Truth.assertThat
 import com.google.crypto.tink.Aead
 import com.google.crypto.tink.KeyTemplates
 import com.google.crypto.tink.KeysetHandle
-import com.google.crypto.tink.KmsClients
 import com.google.crypto.tink.aead.AeadConfig
 import com.google.protobuf.ByteString
 import com.google.protobuf.kotlin.toByteString
@@ -80,7 +79,7 @@ class KmsStorageClientTest : AbstractStorageClientTest<KmsStorageClient>() {
     private val aead = KEY_ENCRYPTION_KEY.getPrimitive(Aead::class.java)
 
     init {
-      KmsClients.add(FakeKmsClient().apply { addAead(KEK_URI, aead) })
+      FakeKmsClient.register(KEK_URI, aead)
     }
   }
 }

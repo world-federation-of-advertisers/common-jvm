@@ -1,0 +1,17 @@
+load("@io_bazel_rules_kotlin//kotlin:jvm.bzl", "kt_jvm_test")
+
+package(default_testonly = True)
+
+kt_jvm_test(
+    name = "FakeKmsClientTest",
+    srcs = ["FakeKmsClientTest.kt"],
+    test_class = "org.wfanet.measurement.common.crypto.tink.testing.FakeKmsClientTest",
+    deps = [
+        "//imports/java/com/google/common/truth",
+        "//imports/java/org/junit",
+        "//imports/kotlin/kotlin/test",
+        "//src/main/kotlin/org/wfanet/measurement/common/crypto/tink/testing",
+        "@tink_java//src/main/java/com/google/crypto/tink:kms_clients",
+        "@tink_java//src/main/java/com/google/crypto/tink:kms_clients_test_util",
+    ],
+)
