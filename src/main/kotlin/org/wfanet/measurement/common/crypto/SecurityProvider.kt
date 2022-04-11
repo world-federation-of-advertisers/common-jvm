@@ -36,7 +36,7 @@ private const val SUBJECT_KEY_IDENTIFIER_OID = "2.5.29.14"
 private const val AUTHORITY_KEY_IDENTIFIER_OID = "2.5.29.35"
 
 /** All Ski and Aki must have length 20. */
-private const val OID_KEY_LENGTH: Int = 20
+private const val KEY_IDENTIFIER_LENGTH: Int = 20
 
 /**
  * Known ASN.1 DER tags.
@@ -113,20 +113,20 @@ fun KeySpec.toPrivateKey(algorithm: String): PrivateKey {
 
 /**
  * This function naively parses ANS1 for a Key Identifier of length 20. It assumes that the Key
- * Identifier will be prefaced by a octet equal to 20. If it is not able to successfully parse
- * a 20 octet identifier, it returns null.
+ * Identifier will be prefaced by a octet equal to 20. If it is not able to successfully parse a 20
+ * octet identifier, it returns null.
  */
-fun X509Certificate.parseExtensionValue(oid: String): ByteString? {
+fun X509Certificate.parseKeyIdentifierExtensionValue(oid: String): ByteString? {
   val extension: ByteArray = getExtensionValue(oid) ?: return null
-  val index = extension.indexOf(OID_KEY_LENGTH.toByte())
+  val index = extension.indexOf(KEY_IDENTIFIER_LENGTH.toByte())
   if (index == -1) {
     return null
   }
-  if (index + 1 + OID_KEY_LENGTH > extension.size) {
+  if (index + 1 + KEY_IDENTIFIER_LENGTH > extension.size) {
     return null
   }
-  val bytes = ByteString.copyFrom(extension, index + 1, OID_KEY_LENGTH)
-  if (bytes.size() != OID_KEY_LENGTH) {
+  val bytes = ByteString.copyFrom(extension, index + 1, KEY_IDENTIFIER_LENGTH)
+  if (bytes.size() != KEY_IDENTIFIER_LENGTH) {
     return null
   }
   return bytes
@@ -138,7 +138,7 @@ fun X509Certificate.parseExtensionValue(oid: String): ByteString? {
  */
 val X509Certificate.subjectKeyIdentifier: ByteString?
   get() {
-    return parseExtensionValue(SUBJECT_KEY_IDENTIFIER_OID)
+    return parseKeyIdentifierExtensionValue(SUBJECT_KEY_IDENTIFIER_OID)
   }
 
 /**
@@ -147,7 +147,7 @@ val X509Certificate.subjectKeyIdentifier: ByteString?
  */
 val X509Certificate.authorityKeyIdentifier: ByteString?
   get() {
-    return parseExtensionValue(AUTHORITY_KEY_IDENTIFIER_OID)
+    return parseKeyIdentifierExtensionValue(AUTHORITY_KEY_IDENTIFIER_OID)
   }
 
 /** Generates a new [KeyPair]. */
