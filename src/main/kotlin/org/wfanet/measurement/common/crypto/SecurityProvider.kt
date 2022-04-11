@@ -112,12 +112,13 @@ fun KeySpec.toPrivateKey(algorithm: String): PrivateKey {
 }
 
 /**
- * This function naively parses ANS1 for a Key Identifier of length 20. It assumes that the Key
- * Identifier will be prefaced by a octet equal to 20. If it is not able to successfully parse a 20
- * octet identifier, it returns null.
+ * Extracts a key identifier from an extension.
+ *
+ * Assumes that the key identifier starts at byte index [KEY_IDENTIFIER_START_INDEX] of the
+ * extension and is [KEY_IDENTIFIER_LENGTH] bytes long.
  */
-fun X509Certificate.parseKeyIdentifierExtensionValue(oid: String): ByteString? {
-  val extension: ByteArray = getExtensionValue(oid) ?: return null
+fun X509Certificate.extractExtensionKeyIdentifier(extensionOid: String): ByteString? {
+  val extension: ByteArray = getExtensionValue(extensionOid) ?: return null
   val index = extension.indexOf(KEY_IDENTIFIER_LENGTH.toByte())
   if (index == -1) {
     return null
@@ -138,7 +139,7 @@ fun X509Certificate.parseKeyIdentifierExtensionValue(oid: String): ByteString? {
  */
 val X509Certificate.subjectKeyIdentifier: ByteString?
   get() {
-    return parseKeyIdentifierExtensionValue(SUBJECT_KEY_IDENTIFIER_OID)
+    return extractExtensionKeyIdentifier(SUBJECT_KEY_IDENTIFIER_OID)
   }
 
 /**
@@ -147,7 +148,7 @@ val X509Certificate.subjectKeyIdentifier: ByteString?
  */
 val X509Certificate.authorityKeyIdentifier: ByteString?
   get() {
-    return parseKeyIdentifierExtensionValue(AUTHORITY_KEY_IDENTIFIER_OID)
+    return extractExtensionKeyIdentifier(AUTHORITY_KEY_IDENTIFIER_OID)
   }
 
 /** Generates a new [KeyPair]. */

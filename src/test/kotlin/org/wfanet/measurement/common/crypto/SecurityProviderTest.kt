@@ -146,14 +146,14 @@ class SecurityProviderTest {
   }
 
   @Test
-  fun `subjectKeyIdentifier returns correct SKID of certificate`() {
+  fun `subjectKeyIdentifier returns SKID of certificate with another format`() {
     val certificate: X509Certificate = readCertificate(FIXED_CLIENT_CERT_PEM_FILE)
 
     assertThat(certificate.subjectKeyIdentifier).isEqualTo(CLIENT_SKID)
   }
 
   @Test
-  fun `authorityKeyIdentifier returns correct AKID of certificate`() {
+  fun `authorityKeyIdentifier returns AKID of certificate with another format`() {
     val certificate: X509Certificate = readCertificate(FIXED_CLIENT_CERT_PEM_FILE)
 
     assertThat(certificate.authorityKeyIdentifier).isEqualTo(CLIENT_AKID)
