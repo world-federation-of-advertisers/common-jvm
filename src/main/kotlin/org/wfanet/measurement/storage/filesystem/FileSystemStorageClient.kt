@@ -26,15 +26,16 @@ import org.wfanet.measurement.storage.StorageClient
 
 private const val READ_BUFFER_SIZE = 1024 * 4 // 4 KiB
 
-/** [StorageClient] implementation that utilizes flat files in the specified directory as blobs. */
+/** [StorageClient] implementation that stores blobs as files under [directory]. */
 class FileSystemStorageClient(private val directory: File) : StorageClient {
   init {
     require(directory.isDirectory) { "$directory is not a directory" }
   }
 
   override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
-    val file = File(directory, blobKey.base64UrlEncode())
+    val file: File = resolvePath(blobKey)
     withContext(Dispatchers.IO) {
+      file.parentFile.mkdirs()
       file.outputStream().channel.use { byteChannel ->
         content.collect { bytes ->
           for (buffer in bytes.asReadOnlyByteBufferList()) {
@@ -49,8 +50,18 @@ class FileSystemStorageClient(private val directory: File) : StorageClient {
   }
 
   override suspend fun getBlob(blobKey: String): StorageClient.Blob? {
-    val file = File(directory, blobKey.base64UrlEncode())
-    return if (file.exists()) Blob(file) else null
+    val file: File = resolvePath(blobKey)
+    return withContext(Dispatchers.IO) { if (file.exists()) Blob(file) else null }
+  }
+
+  private fun resolvePath(blobKey: String): File {
+    val relativePath =
+      if (File.separatorChar == '/') {
+        blobKey
+      } else {
+        blobKey.replace('/', File.separatorChar)
+      }
+    return directory.resolve(relativePath)
   }
 
   private inner class Blob(private val file: File) : StorageClient.Blob {
