@@ -33,10 +33,10 @@ fun commandLineMain(command: KFunction<*>, args: Array<String>) {
 /**
  * A `main` function for a [CommandLine] application.
  *
- * @param command a [Runnable] annotated with [@Command][CommandLine.Command] to execute
+ * @param command an object annotated with [@Command][CommandLine.Command] to execute
  * @param args command-line arguments
  */
-fun commandLineMain(command: Runnable, args: Array<String>) {
+fun commandLineMain(command: Any, args: Array<String>) {
   exitProcess(command.toCommandLine().execute(*args))
 }
 
@@ -44,7 +44,7 @@ private fun KFunction<*>.toCommandLine(): CommandLine {
   return CommandLine(javaMethod).apply { registerConverters() }
 }
 
-private fun Runnable.toCommandLine(): CommandLine {
+private fun Any.toCommandLine(): CommandLine {
   return CommandLine(this).apply { registerConverters() }
 }
 

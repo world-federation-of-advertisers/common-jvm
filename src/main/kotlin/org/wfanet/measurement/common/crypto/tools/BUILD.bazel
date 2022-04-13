@@ -1,0 +1,33 @@
+load("@rules_java//java:defs.bzl", "java_binary")
+load("@io_bazel_rules_kotlin//kotlin:jvm.bzl", "kt_jvm_library")
+
+package(default_visibility = ["//visibility:private"])
+
+kt_jvm_library(
+    name = "key_store_util",
+    srcs = ["KeyStoreUtil.kt"],
+    deps = [
+        "//imports/java/picocli",
+        "//imports/kotlin/kotlinx/coroutines:core",
+        "//src/main/kotlin/org/wfanet/measurement/common/crypto:security_provider",
+        "//src/main/kotlin/org/wfanet/measurement/common/crypto:signing_key_storage",
+        "//src/main/kotlin/org/wfanet/measurement/storage:client",
+    ],
+)
+
+kt_jvm_library(
+    name = "file_system_key_store_util",
+    srcs = ["FileSystemKeyStoreUtil.kt"],
+    deps = [
+        ":key_store_util",
+        "//src/main/kotlin/org/wfanet/measurement/common",
+        "//src/main/kotlin/org/wfanet/measurement/storage/filesystem:client",
+    ],
+)
+
+java_binary(
+    name = "FileSystemKeyStoreUtil",
+    main_class = "org.wfanet.measurement.common.crypto.tools.FileSystemKeyStoreUtil",
+    runtime_deps = [":file_system_key_store_util"],
+    visibility = ["//visibility:public"]
+)
