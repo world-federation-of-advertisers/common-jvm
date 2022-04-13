@@ -28,6 +28,11 @@ data class SigningKeyHandle(val certificate: X509Certificate, private val privat
 
   fun newSigner(): Signature = privateKey.newSigner(certificate)
 
+  /**
+   * Writes this [SigningKeyHandle] to [keyStore].
+   *
+   * @return the blob key
+   */
   suspend fun write(keyStore: SigningKeyStore): String {
     return keyStore.write(certificate, privateKey)
   }

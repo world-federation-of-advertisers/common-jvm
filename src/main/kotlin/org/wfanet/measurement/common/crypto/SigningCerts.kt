@@ -14,7 +14,6 @@
 
 package org.wfanet.measurement.common.crypto
 
-import java.io.File
 import java.security.cert.X509Certificate
 
 /** Certificates and associated private key for digital signatures. */
@@ -22,20 +21,5 @@ data class SigningCerts(
   val privateKeyHandle: SigningKeyHandle,
   val trustedCertificates: Collection<X509Certificate>
 ) {
-  companion object {
-    @Deprecated("Load SigningKeyHandle from SigningKeyStore, or use SigningCertsTesting.")
-    fun fromPemFiles(
-      certificateFile: File,
-      privateKeyFile: File,
-      trustedCertCollectionFile: File? = null
-    ): SigningCerts {
-      val certificate = readCertificate(certificateFile)
-      val keyAlgorithm = certificate.publicKey.algorithm
-
-      return SigningCerts(
-        SigningKeyHandle(certificate, readPrivateKey(privateKeyFile, keyAlgorithm)),
-        trustedCertCollectionFile?.let { readCertificateCollection(it) } ?: listOf()
-      )
-    }
-  }
+  companion object
 }

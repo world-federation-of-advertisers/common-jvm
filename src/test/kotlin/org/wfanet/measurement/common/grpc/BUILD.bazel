@@ -24,7 +24,7 @@ kt_jvm_test(
     test_class = "org.wfanet.measurement.common.grpc.TransportSecurityTest",
     deps = [
         "//imports/java/io/grpc/netty",
-        "//imports/java/io/grpc/services:health",
+        "//imports/java/io/grpc/protobuf/services:health",
         "//imports/java/io/grpc/testing",
         "//imports/java/org/junit",
         "//imports/kotlin/io/grpc/health/v1:health_kt_jvm_grpc",

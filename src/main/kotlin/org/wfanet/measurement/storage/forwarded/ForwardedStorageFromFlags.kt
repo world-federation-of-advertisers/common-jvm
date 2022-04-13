@@ -14,17 +14,19 @@
 
 package org.wfanet.measurement.storage.forwarded
 
+import java.io.File
+import java.security.cert.X509Certificate
 import org.wfanet.measurement.common.crypto.readCertificateCollection
-import org.wfanet.measurement.common.grpc.TlsFlags
 import org.wfanet.measurement.common.grpc.buildTlsChannel
 import org.wfanet.measurement.internal.testing.ForwardedStorageGrpcKt.ForwardedStorageCoroutineStub
 import org.wfanet.measurement.storage.StorageClient
 import picocli.CommandLine
 
 /** Client access provider for Forwarded Storage via command-line flags. */
-class ForwardedStorageFromFlags(flags: Flags, tlsFlags: TlsFlags) {
+class ForwardedStorageFromFlags(flags: Flags) {
   val storageClient: StorageClient by lazy {
-    val trustedCerts = readCertificateCollection(requireNotNull(tlsFlags.certCollectionFile))
+    val trustedCerts: Collection<X509Certificate> =
+      readCertificateCollection(flags.trustedCertCollectionPem)
     ForwardedStorageClient(
       ForwardedStorageCoroutineStub(
         buildTlsChannel(
@@ -51,6 +53,13 @@ class ForwardedStorageFromFlags(flags: Flags, tlsFlags: TlsFlags) {
       required = false
     )
     var forwardedStorageCertHost: String? = null
+      private set
+
+    @CommandLine.Option(
+      names = ["--trusted-cert-collection"],
+      description = ["Collection of trusted X.509 certificates in PEM format"],
+    )
+    lateinit var trustedCertCollectionPem: File
       private set
   }
 }

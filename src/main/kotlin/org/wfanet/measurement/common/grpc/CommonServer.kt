@@ -19,29 +19,39 @@ import io.grpc.Server
 import io.grpc.ServerServiceDefinition
 import io.grpc.health.v1.HealthCheckResponse.ServingStatus
 import io.grpc.netty.NettyServerBuilder
-import io.grpc.services.HealthStatusManager
+import io.grpc.protobuf.services.HealthStatusManager
 import io.netty.handler.ssl.ClientAuth
-import io.netty.handler.ssl.SslContext
+import java.io.File
 import java.io.IOException
+import java.security.cert.X509Certificate
 import java.util.logging.Level
 import java.util.logging.Logger
 import kotlin.properties.Delegates
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.wfanet.measurement.common.crypto.SigningCerts
+import org.wfanet.measurement.common.crypto.SigningKeyHandle
+import org.wfanet.measurement.common.crypto.SigningKeyStore
+import org.wfanet.measurement.common.crypto.readCertificateCollection
 import picocli.CommandLine
 
 class CommonServer
 private constructor(
   private val nameForLogging: String,
   private val port: Int,
+  signingCerts: SigningCerts,
+  clientAuth: ClientAuth,
   services: Iterable<ServerServiceDefinition>,
-  sslContext: SslContext?
 ) {
   private val healthStatusManager = HealthStatusManager()
+
+  /** [X509Certificate]s trusted by this server. */
+  val trustedCertificates: Collection<X509Certificate> = signingCerts.trustedCertificates
 
   val server: Server by lazy {
     NettyServerBuilder.forPort(port)
       .apply {
-        sslContext?.let { sslContext(it) }
+        sslContext(signingCerts.toServerTlsContext(clientAuth))
         addService(healthStatusManager.healthService)
         services.forEach { addService(it) }
       }
@@ -82,14 +92,29 @@ private constructor(
   class Flags {
     @set:CommandLine.Option(
       names = ["--port", "-p"],
-      description = ["TCP port for gRPC server."],
+      description = ["TCP port for gRPC server"],
       defaultValue = "8080"
     )
     var port by Delegates.notNull<Int>()
       private set
 
-    @CommandLine.Mixin
-    lateinit var tlsFlags: TlsFlags
+    @CommandLine.Option(
+      names = ["--tls-signing-key-id"],
+      description = ["ID (blob key) of the TLS signing key"],
+      required = true,
+    )
+    lateinit var tlsSigningKeyId: String
+      private set
+
+    @CommandLine.Option(
+      names = ["--trusted-cert-collection"],
+      description =
+        [
+          "Collection of trusted X.509 certificates in PEM format",
+          "Required if --require-client-auth is true",
+        ],
+    )
+    var trustedCertCollectionPem: File? = null
       private set
 
     @set:CommandLine.Option(
@@ -116,7 +141,7 @@ private constructor(
     fun fromParameters(
       port: Int,
       verboseGrpcLogging: Boolean,
-      certs: SigningCerts?,
+      certs: SigningCerts,
       clientAuth: ClientAuth,
       nameForLogging: String,
       services: Iterable<ServerServiceDefinition>
@@ -124,28 +149,23 @@ private constructor(
       return CommonServer(
         nameForLogging,
         port,
+        certs,
+        clientAuth,
         services.run { if (verboseGrpcLogging) map { it.withVerboseLogging() } else this },
-        certs?.toServerTlsContext(clientAuth)
       )
     }
 
     @JvmName("fromFlagsServiceDefinition")
-    fun fromFlags(
+    suspend fun fromFlags(
       flags: Flags,
       nameForLogging: String,
+      signingKeyStore: SigningKeyStore,
       services: Iterable<ServerServiceDefinition>
     ): CommonServer {
-      val certs =
-        SigningCerts.fromPemFiles(
-          certificateFile = flags.tlsFlags.certFile,
-          privateKeyFile = flags.tlsFlags.privateKeyFile,
-          trustedCertCollectionFile = flags.tlsFlags.certCollectionFile
-        )
-
       return fromParameters(
         flags.port,
         flags.debugVerboseGrpcLogging,
-        certs,
+        SigningCerts.fromFlags(flags, signingKeyStore),
         if (flags.clientAuthRequired) ClientAuth.REQUIRE else ClientAuth.NONE,
         nameForLogging,
         services
@@ -153,24 +173,50 @@ private constructor(
     }
 
     /** Constructs a [CommonServer] from command-line flags. */
-    fun fromFlags(
+    suspend fun fromFlags(
       flags: Flags,
       nameForLogging: String,
+      signingKeyStore: SigningKeyStore,
       vararg services: ServerServiceDefinition
-    ): CommonServer = fromFlags(flags, nameForLogging, services.asIterable())
+    ): CommonServer = fromFlags(flags, nameForLogging, signingKeyStore, services.asIterable())
 
     /** Constructs a [CommonServer] from command-line flags. */
-    fun fromFlags(
+    suspend fun fromFlags(
       flags: Flags,
       nameForLogging: String,
+      signingKeyStore: SigningKeyStore,
       services: Iterable<BindableService>
-    ): CommonServer = fromFlags(flags, nameForLogging, services.map { it.bindService() })
+    ): CommonServer =
+      fromFlags(flags, nameForLogging, signingKeyStore, services.map { it.bindService() })
 
     /** Constructs a [CommonServer] from command-line flags. */
-    fun fromFlags(
+    suspend fun fromFlags(
       flags: Flags,
       nameForLogging: String,
+      signingKeyStore: SigningKeyStore,
       vararg services: BindableService
-    ): CommonServer = fromFlags(flags, nameForLogging, services.map { it.bindService() })
+    ): CommonServer =
+      fromFlags(flags, nameForLogging, signingKeyStore, services.map { it.bindService() })
   }
+}
+
+private suspend fun SigningCerts.Companion.fromFlags(
+  flags: CommonServer.Flags,
+  signingKeyStore: SigningKeyStore,
+): SigningCerts {
+  val trustedCertCollectionPem = flags.trustedCertCollectionPem
+  val trustedCerts: Collection<X509Certificate> =
+    if (trustedCertCollectionPem == null) {
+      listOf()
+    } else {
+      withContext(Dispatchers.IO) {
+        @Suppress("BlockingMethodInNonBlockingContext") // In non-blocking context.
+        readCertificateCollection(trustedCertCollectionPem)
+      }
+    }
+  val privateKeyHandle: SigningKeyHandle =
+    requireNotNull(signingKeyStore.read(flags.tlsSigningKeyId)) {
+      "Signing key with ID ${flags.tlsSigningKeyId} not found in key store"
+    }
+  return SigningCerts(privateKeyHandle, trustedCerts)
 }

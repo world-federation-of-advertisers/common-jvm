@@ -64,7 +64,6 @@ kt_jvm_test(
         "//src/main/kotlin/org/wfanet/measurement/common/crypto/testing",
         "//src/main/kotlin/org/wfanet/measurement/storage:client",
         "//src/main/kotlin/org/wfanet/measurement/storage:store",
-        "//src/main/kotlin/org/wfanet/measurement/storage/filesystem:client",
         "//src/main/kotlin/org/wfanet/measurement/storage/testing",
     ],
 )

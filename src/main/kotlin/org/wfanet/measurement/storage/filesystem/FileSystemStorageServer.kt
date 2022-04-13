@@ -17,7 +17,9 @@ package org.wfanet.measurement.storage.filesystem
 import java.io.File
 import java.nio.file.Files
 import java.util.logging.Logger
+import kotlinx.coroutines.runBlocking
 import org.wfanet.measurement.common.commandLineMain
+import org.wfanet.measurement.common.crypto.SigningKeyStore
 import org.wfanet.measurement.common.grpc.CommonServer
 import picocli.CommandLine
 
@@ -31,9 +33,18 @@ private class Flags {
     description =
       [
         "Directory to store blobs on the file system.",
-        "If not specified, a new temporary directory will be created and used."]
+        "If not specified, a new temporary directory will be created and used.",
+      ]
   )
   var directory: File? = null
+    private set
+
+  @CommandLine.Option(
+    names = ["--key-storage-directory"],
+    description = ["Path to key storage directory"],
+    required = true,
+  )
+  lateinit var keyStoreDirectory: File
     private set
 }
 
@@ -45,9 +56,15 @@ private fun run(
   val directory = flags.directory ?: Files.createTempDirectory(null).toFile()
   logger.info("Storing blobs in $directory")
 
-  CommonServer.fromFlags(serverFlags, SERVER_NAME, FileSystemStorageService(directory))
-    .start()
-    .blockUntilShutdown()
+  val server = runBlocking {
+    CommonServer.fromFlags(
+      serverFlags,
+      SERVER_NAME,
+      SigningKeyStore(FileSystemStorageClient(flags.keyStoreDirectory)),
+      FileSystemStorageService(directory)
+    )
+  }
+  server.start().blockUntilShutdown()
 }
 
 fun main(args: Array<String>) = commandLineMain(::run, args)
