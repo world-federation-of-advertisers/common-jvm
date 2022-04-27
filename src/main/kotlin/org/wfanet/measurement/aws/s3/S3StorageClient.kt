@@ -89,11 +89,7 @@ class S3StorageClient(
         val md5 = String(Base64.getEncoder().encode(digest.digest(bytes.toByteArray())))
 
         val uploadPartRequest =
-          builder
-            .partNumber(i + 1)
-            .contentLength(bytes.size().toLong())
-            .contentMD5(md5)
-            .build()
+          builder.partNumber(i + 1).contentLength(bytes.size().toLong()).contentMD5(md5).build()
 
         val uploadPartResponse =
           s3.uploadPart(uploadPartRequest, RequestBody.fromByteBuffer(bytes.asReadOnlyByteBuffer()))
