@@ -15,8 +15,8 @@
 package org.wfanet.measurement.aws.s3
 
 import com.google.protobuf.ByteString
-import com.google.protobuf.kotlin.toByteString
 import java.security.MessageDigest
+import java.util.Base64
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
@@ -27,7 +27,6 @@ import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.flow.withIndex
 import kotlinx.coroutines.withContext
 import org.wfanet.measurement.common.BYTES_PER_MIB
-import org.wfanet.measurement.common.HexString
 import org.wfanet.measurement.common.asBufferedFlow
 import org.wfanet.measurement.common.asFlow
 import org.wfanet.measurement.storage.StorageClient
@@ -88,14 +87,10 @@ class S3StorageClient(
       .withIndex()
       .map { (i, bytes) ->
         bytes.asReadOnlyByteBufferList().forEach(digest::update)
-        val md5 = HexString(digest.digest().toByteString())
+        val md5 = String(Base64.getEncoder().encode(digest.digest()))
 
         val uploadPartRequest =
-          builder
-            .partNumber(i + 1)
-            .contentLength(bytes.size().toLong())
-            .contentMD5(md5.value)
-            .build()
+          builder.partNumber(i + 1).contentLength(bytes.size().toLong()).contentMD5(md5).build()
 
         val uploadPartResponse =
           s3.uploadPart(uploadPartRequest, RequestBody.fromByteBuffer(bytes.asReadOnlyByteBuffer()))
