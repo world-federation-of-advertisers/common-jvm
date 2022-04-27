@@ -52,29 +52,6 @@ private val SERVER_SKID =
     0x63,
     0xA8
   )
-private val CLIENT_SKID =
-  byteStringOf(
-    0x48,
-    0x32,
-    0x98,
-    0xE2,
-    0x03,
-    0xFE,
-    0xA1,
-    0xAF,
-    0xA0,
-    0x8D,
-    0x10,
-    0x7C,
-    0x92,
-    0x37,
-    0xCE,
-    0x19,
-    0x11,
-    0x6A,
-    0xA7,
-    0x8F,
-  )
 private val CLIENT_AKID =
   byteStringOf(
     0x57,
@@ -146,14 +123,9 @@ class SecurityProviderTest {
   }
 
   @Test
-  fun `subjectKeyIdentifier returns SKID of certificate with another format`() {
-    val certificate: X509Certificate = readCertificate(FIXED_CLIENT_CERT_PEM_FILE)
-
-    assertThat(certificate.subjectKeyIdentifier).isEqualTo(CLIENT_SKID)
-  }
-
-  @Test
-  fun `authorityKeyIdentifier returns AKID of certificate with another format`() {
+  fun `authorityKeyIdentifier returns AKID of certificate with long extension`() {
+    // Load a certificate whose AKI extension has all optional fields specified, resulting in an
+    // octet string that has a content length of >127 bytes.
     val certificate: X509Certificate = readCertificate(FIXED_CLIENT_CERT_PEM_FILE)
 
     assertThat(certificate.authorityKeyIdentifier).isEqualTo(CLIENT_AKID)

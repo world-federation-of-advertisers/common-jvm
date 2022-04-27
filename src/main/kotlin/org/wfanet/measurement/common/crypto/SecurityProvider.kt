@@ -32,26 +32,6 @@ import kotlin.jvm.Throws
 import org.conscrypt.Conscrypt
 
 private const val CERTIFICATE_TYPE = "X.509"
-private const val SUBJECT_KEY_IDENTIFIER_OID = "2.5.29.14"
-private const val AUTHORITY_KEY_IDENTIFIER_OID = "2.5.29.35"
-
-/** All Ski and Aki must have length 20. */
-private const val KEY_IDENTIFIER_LENGTH: Int = 20
-
-/**
- * Known ASN.1 DER tags.
- *
- * See
- * [A Layman's Guide to a Subset of ASN.1, BER, and DER](https://luca.ntop.org/Teaching/Appunti/asn1.html)
- */
-private enum class Asn1Tag(val byte: Byte) {
-  /** Universal tag for OCTET_STRING type. */
-  OCTET_STRING(0x04.toByte()),
-  /** Constructed tag for SEQUENCE type. */
-  SEQUENCE(0x30.toByte()),
-  /** Context-specific tag for keyIdentifier within AuthorityKeyIdentifier extension. */
-  KEY_IDENTIFIER(0x80.toByte()),
-}
 
 private val conscryptProvider: Provider =
   Conscrypt.newProvider().also { Security.insertProviderAt(it, 1) }
@@ -110,47 +90,6 @@ fun readPrivateKey(data: ByteString, algorithm: String): PrivateKey {
 fun KeySpec.toPrivateKey(algorithm: String): PrivateKey {
   return KeyFactory.getInstance(algorithm, jceProvider).generatePrivate(this)
 }
-
-/**
- * Extracts a key identifier from an extension.
- *
- * Assumes that the first instance of a byte of [KEY_IDENTIFIER_LENGTH] is the length octet and that
- * the key identifier of length [KEY_IDENTIFIER_LENGTH] immediately follows. TODO: Implement a more
- * secure method of extracting key identifiers.
- */
-fun X509Certificate.extractExtensionKeyIdentifier(extensionOid: String): ByteString? {
-  val extension: ByteArray = getExtensionValue(extensionOid) ?: return null
-  val index = extension.indexOf(KEY_IDENTIFIER_LENGTH.toByte())
-  if (index == -1) {
-    return null
-  }
-  if (index + 1 + KEY_IDENTIFIER_LENGTH > extension.size) {
-    return null
-  }
-  val bytes = ByteString.copyFrom(extension, index + 1, KEY_IDENTIFIER_LENGTH)
-  if (bytes.size() != KEY_IDENTIFIER_LENGTH) {
-    return null
-  }
-  return bytes
-}
-
-/**
- * The keyIdentifier from the SubjectKeyIdentifier (AKI) X.509 extension, or `null` if it cannot be
- * found.
- */
-val X509Certificate.subjectKeyIdentifier: ByteString?
-  get() {
-    return extractExtensionKeyIdentifier(SUBJECT_KEY_IDENTIFIER_OID)
-  }
-
-/**
- * The keyIdentifier from the AuthorityKeyIdentifier (AKI) X.509 extension, or `null` if it cannot
- * be found.
- */
-val X509Certificate.authorityKeyIdentifier: ByteString?
-  get() {
-    return extractExtensionKeyIdentifier(AUTHORITY_KEY_IDENTIFIER_OID)
-  }
 
 /** Generates a new [KeyPair]. */
 fun generateKeyPair(keyAlgorithm: String): KeyPair {
