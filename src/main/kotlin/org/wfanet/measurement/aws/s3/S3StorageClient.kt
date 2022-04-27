@@ -80,12 +80,12 @@ class S3StorageClient(
     content: Flow<ByteString>,
     uploadId: String
   ): List<CompletedPart> {
+    val digest = MessageDigest.getInstance("MD5")
     val builder = UploadPartRequest.builder().uploadId(uploadId).key(blobKey).bucket(bucketName)
     return content
       .asBufferedFlow(WRITE_BUFFER_SIZE)
       .withIndex()
       .map { (i, bytes) ->
-        val digest = MessageDigest.getInstance("MD5")
         val md5 = String(Base64.getEncoder().encode(digest.digest(bytes.toByteArray())))
 
         val uploadPartRequest =
