@@ -86,7 +86,8 @@ class S3StorageClient(
       .asBufferedFlow(WRITE_BUFFER_SIZE)
       .withIndex()
       .map { (i, bytes) ->
-        val md5 = String(Base64.getEncoder().encode(digest.digest(bytes.toByteArray())))
+        bytes.asReadOnlyByteBufferList().forEach(digest::update)
+        val md5 = String(Base64.getEncoder().encode(digest.digest()))
 
         val uploadPartRequest =
           builder.partNumber(i + 1).contentLength(bytes.size().toLong()).contentMD5(md5).build()
