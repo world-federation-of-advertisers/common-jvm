@@ -65,11 +65,13 @@ kt_jvm_library(
 kt_jvm_library(
     name = "security_provider",
     srcs = [
+        "DerEncoding.kt",
         "SecurityProvider.kt",
     ],
     deps = [
         "//imports/java/com/google/protobuf",
         "//imports/java/org/conscrypt",
+        "//src/main/kotlin/org/wfanet/measurement/common",
     ],
 )
 

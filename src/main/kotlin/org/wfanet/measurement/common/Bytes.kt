@@ -296,6 +296,10 @@ fun File.readByteString(): ByteString {
   return inputStream().use { input -> ByteString.readFrom(input) }
 }
 
+fun Byte.toStringHex(): String {
+  return "%2x".format(this)
+}
+
 /** Converts a hex string to its equivalent [ByteString]. */
 @Deprecated(
   "Use HexString for stronger typing",
