@@ -15,6 +15,7 @@
 package org.wfanet.measurement.gcloud.spanner.testing
 
 import com.google.cloud.spanner.Statement
+import java.nio.file.Path
 import java.time.Instant
 import kotlinx.coroutines.flow.single
 import kotlinx.coroutines.runBlocking
@@ -43,8 +44,8 @@ import org.wfanet.measurement.gcloud.spanner.AsyncDatabaseClient
  * }
  * ```
  */
-abstract class UsingSpannerEmulator(schema: SpannerSchema) {
-  @get:Rule val spannerDatabase = SpannerEmulatorDatabaseRule(schema)
+abstract class UsingSpannerEmulator(changeLogResourcePath: Path) {
+  @get:Rule val spannerDatabase = SpannerEmulatorDatabaseRule(changeLogResourcePath)
 
   val databaseClient: AsyncDatabaseClient
     get() = spannerDatabase.databaseClient

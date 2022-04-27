@@ -14,6 +14,7 @@
 
 package org.wfanet.measurement.gcloud.spanner.testing
 
+import com.google.cloud.spanner.DatabaseId
 import java.net.ServerSocket
 import java.nio.file.Files
 import java.nio.file.Path
@@ -86,6 +87,12 @@ class SpannerEmulator(private val port: Int = 0) : AutoCloseable {
     if (this::emulator.isInitialized) {
       emulator.destroy()
     }
+  }
+
+  fun getJdbcConnectionString(databaseId: DatabaseId): String {
+    val instanceId = databaseId.instanceId
+    return "jdbc:cloudspanner://$emulatorHost/projects/${instanceId.project}/instances/" +
+      "${instanceId.instance}/databases/${databaseId.database};usePlainText=true"
   }
 
   companion object {

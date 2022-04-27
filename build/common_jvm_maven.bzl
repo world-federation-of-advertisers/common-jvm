@@ -72,6 +72,10 @@ def common_jvm_maven_artifacts():
         "software.amazon.awssdk:s3": "2.17.98",
         "software.amazon.awssdk:sdk-core": "2.17.98",
 
+        # Liquibase.
+        "org.liquibase:liquibase-core": "4.9.1",
+        "com.google.cloudspannerecosystem:liquibase-spanner": "4.6.1",
+
         # For grpc-kotlin. This should be a version that is compatible with the
         # Kotlin release used by rules_kotlin.
         "com.squareup:kotlinpoet": "1.8.0",
