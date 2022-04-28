@@ -17,14 +17,14 @@
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
 _REPO_NAME = "io_bazel_rules_go"
-_VERSION = "0.29.0"
+_VERSION = "0.31.0"
 _GAZELLE_VERSION = "0.24.0"
 
 def rules_go_repo():
     if _REPO_NAME not in native.existing_rules():
         http_archive(
             name = _REPO_NAME,
-            sha256 = "2b1641428dff9018f9e85c0384f03ec6c10660d935b750e3fa1492a281a53b0f",
+#            sha256 = "2b1641428dff9018f9e85c0384f03ec6c10660d935b750e3fa1492a281a53b0f",
             urls = [
                 "https://mirror.bazel.build/github.com/bazelbuild/rules_go/releases/download/v{version}/rules_go-v{version}.zip".format(version = _VERSION),
                 "https://github.com/bazelbuild/rules_go/releases/download/v{version}/rules_go-v{version}.zip".format(version = _VERSION),

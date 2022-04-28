@@ -13,8 +13,9 @@
 # limitations under the License.
 
 """Repository rules/macros for rules_kotlin dependencies."""
+# rules_kotlin v1.5.0: kotlin_repositories() has to be initialized first
 
-load("@io_bazel_rules_kotlin//kotlin:repositories.bzl", "kotlin_repositories")
+load("@io_bazel_rules_kotlin//kotlin:core.bzl", "kt_register_toolchains")
 
-def rules_kotlin_deps():
-    kotlin_repositories()
+def rules_kotlin_extra_deps():
+    kt_register_toolchains()

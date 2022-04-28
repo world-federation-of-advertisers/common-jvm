@@ -15,7 +15,7 @@
 """
 Adds external repos necessary for common-jvm.
 """
-
+load("//build/io_bazel_rules_kotlin:extra_deps.bzl", "rules_kotlin_extra_deps")
 load("@com_github_grpc_grpc_kotlin//:repositories.bzl", "grpc_kt_repositories")
 load("@io_grpc_grpc_java//:repositories.bzl", "grpc_java_repositories")
 load("@maven//:compat.bzl", "compat_repositories")
@@ -30,6 +30,7 @@ def common_jvm_extra_deps():
     """
     Adds all external repos necessary for common-jvm.
     """
+    rules_kotlin_extra_deps()
     compat_repositories()
     container_deps()
     java_image_repositories()
