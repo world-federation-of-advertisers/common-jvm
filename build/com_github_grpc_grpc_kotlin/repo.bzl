@@ -30,7 +30,7 @@ def com_github_grpc_grpc_kotlin_repo():
         http_archive(
             name = "io_grpc_grpc_java",
             sha256 = "51bac553d269b97214dbd6aee4e65fc616d8ccd414fc12d708e85979ed4c19b4",
-            # Use latest grpc-java version
+            # Use the latest grpc-java version
             strip_prefix = "grpc-java-1.45.1",
             url = "https://github.com/grpc/grpc-java/archive/refs/tags/v1.45.1.tar.gz",
         )
