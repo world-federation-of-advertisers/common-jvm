@@ -37,20 +37,17 @@ internal class EmulatorWithInstance : AutoCloseable {
     spanner = spannerOptions.service
   }
 
-  val instance: Instance
-  init {
-    instance =
-      spanner
-        .instanceAdminClient
-        .createInstance(
-          InstanceInfo.newBuilder(InstanceId.of(PROJECT_ID, INSTANCE_NAME))
-            .setDisplayName(INSTANCE_DISPLAY_NAME)
-            .setInstanceConfigId(InstanceConfigId.of(PROJECT_ID, INSTANCE_CONFIG))
-            .setNodeCount(1)
-            .build()
-        )
-        .get()
-  }
+  val instance: Instance =
+    spanner
+      .instanceAdminClient
+      .createInstance(
+        InstanceInfo.newBuilder(InstanceId.of(PROJECT_ID, INSTANCE_NAME))
+          .setDisplayName(INSTANCE_DISPLAY_NAME)
+          .setInstanceConfigId(InstanceConfigId.of(PROJECT_ID, INSTANCE_CONFIG))
+          .setNodeCount(1)
+          .build()
+      )
+      .get()
 
   override fun close() {
     instance.delete()
@@ -60,6 +57,9 @@ internal class EmulatorWithInstance : AutoCloseable {
 
   fun getDatabaseClient(databaseId: DatabaseId): DatabaseClient =
     spanner.getDatabaseClient(databaseId)
+
+  fun getJdbcConnectionString(databaseId: DatabaseId): String =
+    spannerEmulator.getJdbcConnectionString(databaseId)
 
   companion object {
     private const val PROJECT_ID = "test-project"
