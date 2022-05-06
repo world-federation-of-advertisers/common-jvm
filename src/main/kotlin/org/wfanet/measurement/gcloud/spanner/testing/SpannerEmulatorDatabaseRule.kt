@@ -16,40 +16,53 @@ package org.wfanet.measurement.gcloud.spanner.testing
 
 import com.google.cloud.spanner.Database
 import com.google.cloud.spanner.DatabaseClient
+import java.nio.file.Path
+import java.sql.DriverManager
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.logging.Level
+import liquibase.Contexts
+import liquibase.Scope
 import org.junit.rules.TestRule
+import org.wfanet.measurement.common.db.liquibase.Liquibase
+import org.wfanet.measurement.common.db.liquibase.setLogLevel
 import org.wfanet.measurement.common.testing.CloseableResource
 import org.wfanet.measurement.gcloud.spanner.AsyncDatabaseClient
 import org.wfanet.measurement.gcloud.spanner.asAsync
-import org.wfanet.measurement.gcloud.spanner.createDatabase
 
 /**
  * JUnit rule exposing a temporary Google Cloud Spanner database.
  *
  * All instances share a single [SpannerEmulator].
+ *
+ * @param changelogPath [Path] to a Liquibase changelog.
  */
-class SpannerEmulatorDatabaseRule(schema: SpannerSchema) : DatabaseRule by DatabaseRuleImpl(schema)
+class SpannerEmulatorDatabaseRule(changelogPath: Path) :
+  DatabaseRule by DatabaseRuleImpl(changelogPath)
 
 private interface DatabaseRule : TestRule {
   val databaseClient: AsyncDatabaseClient
 }
 
-private class DatabaseRuleImpl(schema: SpannerSchema) :
-  DatabaseRule, CloseableResource<TemporaryDatabase>({ TemporaryDatabase(schema) }) {
+private class DatabaseRuleImpl(changelogPath: Path) :
+  DatabaseRule, CloseableResource<TemporaryDatabase>({ TemporaryDatabase(changelogPath) }) {
 
   override val databaseClient: AsyncDatabaseClient
     get() = resource.databaseClient.asAsync()
 }
 
-private class TemporaryDatabase(schema: SpannerSchema) : AutoCloseable {
-
+private class TemporaryDatabase(changelogPath: Path) : AutoCloseable {
   private val database: Database
   init {
     val databaseName = "test-db-${instanceCounter.incrementAndGet()}"
-    database =
-      schema.definitionReader().useLines { lines ->
-        createDatabase(emulator.instance, lines, databaseName)
+    database = emulator.instance.createDatabase(databaseName, listOf()).get()
+
+    val connectionString = emulator.getJdbcConnectionString(database.id)
+    DriverManager.getConnection(connectionString).use { connection ->
+      Liquibase.fromPath(connection, changelogPath).use { liquibase ->
+        Scope.getCurrentScope().setLogLevel(Level.FINE)
+        liquibase.update(Contexts())
       }
+    }
   }
 
   val databaseClient: DatabaseClient by lazy { emulator.getDatabaseClient(database.id) }
