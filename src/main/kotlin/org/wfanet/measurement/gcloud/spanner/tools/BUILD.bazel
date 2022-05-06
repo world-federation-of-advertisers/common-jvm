@@ -1,0 +1,15 @@
+load("@io_bazel_rules_kotlin//kotlin:jvm.bzl", "kt_jvm_library")
+
+package(default_visibility = ["//visibility:public"])
+
+kt_jvm_library(
+    name = "update_schema",
+    srcs = ["UpdateSchema.kt"],
+    resources = ["//src/main/resources/META-INF/services:grpclb"],
+    runtime_deps = ["//imports/java/liquibase/ext/spanner"],
+    deps = [
+        "//src/main/kotlin/org/wfanet/measurement/common",
+        "//src/main/kotlin/org/wfanet/measurement/common/db/liquibase",
+        "//src/main/kotlin/org/wfanet/measurement/gcloud/spanner:flags",
+    ],
+)

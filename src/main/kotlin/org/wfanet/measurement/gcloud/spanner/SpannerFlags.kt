@@ -56,25 +56,6 @@ class SpannerFlags {
     description = ["Host name and port of the spanner emulator."],
     required = false
   )
-  var spannerEmulatorHost: String? = null
+  var emulatorHost: String? = null
     private set
-
-  /** Builds a [SpannerDatabaseConnector] from these flags. */
-  private fun toSpannerDatabaseConnector(): SpannerDatabaseConnector {
-    return SpannerDatabaseConnector(
-      projectName = projectName,
-      instanceName = instanceName,
-      databaseName = databaseName,
-      readyTimeout = readyTimeout,
-      emulatorHost = spannerEmulatorHost
-    )
-  }
-
-  /**
-   * Executes [block] with a [SpannerDatabaseConnector] resource once it's ready, ensuring that the
-   * resource is closed.
-   */
-  suspend fun <R> usingSpanner(block: suspend (spanner: SpannerDatabaseConnector) -> R): R {
-    return toSpannerDatabaseConnector().usingSpanner(block)
-  }
 }
