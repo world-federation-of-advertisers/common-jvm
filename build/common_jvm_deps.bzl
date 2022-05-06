@@ -24,20 +24,18 @@ load("//build/io_bazel_rules_kotlin:deps.bzl", "rules_kotlin_deps")
 load("//build/io_bazel_rules_docker:base_images.bzl", "base_java_images")
 load("@com_github_grpc_grpc//bazel:grpc_deps.bzl", "grpc_deps")
 load("@com_google_googleapis//:repository_rules.bzl", "switched_rules_by_language")
-load("//build/io_bazel_rules_go:deps.bzl", "rules_go_deps")
 load("@tink_java//:tink_java_deps.bzl", "tink_java_deps")
 
 def common_jvm_deps():
     """
     Adds all external repos necessary for common-jvm.
     """
+    grpc_deps()
     container_repositories()
     rules_kotlin_deps()
     base_java_images()
-    grpc_deps()
     switched_rules_by_language(
         name = "com_google_googleapis_imports",
         java = True,
     )
-    rules_go_deps()
     tink_java_deps()
