@@ -71,7 +71,7 @@ class FileSystemStorageClient(private val directory: File) : StorageClient {
     override val size: Long
       get() = file.length()
 
-    override fun read(): Flow<ByteString> = file.inputStream().channel.asFlow(READ_BUFFER_SIZE)
+    override fun read(): Flow<ByteString> = file.inputStream().asFlow(READ_BUFFER_SIZE)
 
     override suspend fun delete() {
       file.delete()
