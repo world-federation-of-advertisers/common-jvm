@@ -1,0 +1,8 @@
+package(default_visibility = ["//visibility:public"])
+
+# TODO(grpc/grpc-java#9149): Remove once @io_grpc_grpc_java//grpclb contains
+# these resources.
+filegroup(
+    name = "grpclb",
+    srcs = glob(["io.grpc.*"]),
+)
