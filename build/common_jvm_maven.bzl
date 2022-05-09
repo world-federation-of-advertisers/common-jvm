@@ -58,11 +58,10 @@ def common_jvm_maven_artifacts():
     # or default dependency versions).
     maven_artifacts.update({
         "com.adobe.testing:s3mock-junit4": "2.2.3",
-        "com.google.api:gax-grpc": "2.12.2",
-        "com.google.api.grpc:grpc-core-proto": "0.0.6",
-        "com.google.cloud:google-cloud-bigquery": "2.4.1",
-        "com.google.cloud:google-cloud-nio": "0.123.10",
-        "com.google.cloud:google-cloud-spanner": "3.0.3",
+        "com.google.cloud:google-cloud-bigquery": "2.10.10",
+        "com.google.cloud:google-cloud-nio": "0.123.28",
+        "com.google.cloud:google-cloud-spanner": "6.23.3",
+        "com.google.cloud:google-cloud-storage": "2.6.1",
         "com.google.guava:guava": "31.0.1-jre",
         "info.picocli:picocli": "4.4.0",
         "junit:junit": "4.13",
