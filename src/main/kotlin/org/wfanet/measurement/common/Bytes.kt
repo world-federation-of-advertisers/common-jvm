@@ -18,6 +18,7 @@ import com.google.protobuf.ByteString
 import com.google.protobuf.kotlin.toByteString
 import java.io.File
 import java.io.InputStream
+import java.nio.Buffer
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.channels.ReadableByteChannel
@@ -79,7 +80,8 @@ fun Long.toByteString(): ByteString {
 
 fun Long.toReadOnlyByteBuffer(): ByteBuffer {
   val buffer = ByteBuffer.allocate(8).order(ByteOrder.BIG_ENDIAN).putLong(this)
-  buffer.flip()
+  // Cast to Buffer for Java 8 compatibility when compiled from Java 11
+  (buffer as Buffer).flip()
   return buffer.asReadOnlyBuffer()
 }
 
@@ -264,9 +266,10 @@ fun ReadableByteChannel.asFlow(bufferSize: Int): Flow<ByteString> {
 }
 
 private suspend fun FlowCollector<ByteString>.emitFrom(buffer: ByteBuffer) {
-  buffer.flip()
+  // Cast to Buffer for Java 8 compatibility when compiled from Java 11
+  (buffer as Buffer).flip()
   emit(buffer.toByteString())
-  buffer.clear()
+  (buffer as Buffer).clear()
 }
 
 /**
