@@ -78,3 +78,24 @@ class SpannerDatabaseConnector(
     private val logger = Logger.getLogger(this::class.java.name)
   }
 }
+
+/** Builds a [SpannerDatabaseConnector] from these flags. */
+private fun SpannerFlags.toSpannerDatabaseConnector(): SpannerDatabaseConnector {
+  return SpannerDatabaseConnector(
+    projectName = projectName,
+    instanceName = instanceName,
+    databaseName = databaseName,
+    readyTimeout = readyTimeout,
+    emulatorHost = emulatorHost
+  )
+}
+
+/**
+ * Executes [block] with a [SpannerDatabaseConnector] resource once it's ready, ensuring that the
+ * resource is closed.
+ */
+suspend fun <R> SpannerFlags.usingSpanner(
+  block: suspend (spanner: SpannerDatabaseConnector) -> R
+): R {
+  return toSpannerDatabaseConnector().usingSpanner(block)
+}
