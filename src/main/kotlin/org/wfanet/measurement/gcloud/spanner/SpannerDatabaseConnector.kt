@@ -16,7 +16,6 @@ package org.wfanet.measurement.gcloud.spanner
 
 import com.google.cloud.spanner.DatabaseClient
 import com.google.cloud.spanner.DatabaseId
-import com.google.cloud.spanner.Instance
 import com.google.cloud.spanner.Spanner
 import java.time.Duration
 import java.util.logging.Logger
@@ -27,10 +26,10 @@ import kotlinx.coroutines.TimeoutCancellationException
  * [DatabaseId], waiting for the connection to be ready, etc.
  */
 class SpannerDatabaseConnector(
-  private val instanceName: String,
-  private val projectName: String,
-  private val readyTimeout: Duration,
+  projectName: String,
+  instanceName: String,
   databaseName: String,
+  private val readyTimeout: Duration,
   emulatorHost: String?
 ) : AutoCloseable {
 
@@ -44,20 +43,6 @@ class SpannerDatabaseConnector(
 
   val databaseClient: AsyncDatabaseClient
     get() = internalDatabaseClient.asAsync()
-
-  fun createInstance(
-    configId: String,
-    nodeCount: Int,
-    displayName: String = instanceName
-  ): Instance {
-    return spanner.createInstance(
-      projectName = projectName,
-      instanceName = instanceName,
-      displayName = displayName,
-      instanceConfigId = configId,
-      instanceNodeCount = nodeCount
-    )
-  }
 
   /**
    * Suspends until [databaseClient] is ready, throwing a

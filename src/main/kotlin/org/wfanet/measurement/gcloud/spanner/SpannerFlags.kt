@@ -62,11 +62,11 @@ class SpannerFlags {
   /** Builds a [SpannerDatabaseConnector] from these flags. */
   private fun toSpannerDatabaseConnector(): SpannerDatabaseConnector {
     return SpannerDatabaseConnector(
-      instanceName,
-      projectName,
-      readyTimeout,
-      databaseName,
-      spannerEmulatorHost
+      projectName = projectName,
+      instanceName = instanceName,
+      databaseName = databaseName,
+      readyTimeout = readyTimeout,
+      emulatorHost = spannerEmulatorHost
     )
   }
 
