@@ -22,7 +22,7 @@ def com_github_grpc_grpc_repo():
     if "com_github_grpc_grpc" not in native.existing_rules():
         http_archive(
             name = "com_github_grpc_grpc",
-            sha256 = "e18b16f7976aab9a36c14c38180f042bb0fd196b75c9fd6a20a2b5f934876ad6",
-            strip_prefix = "grpc-1.45.2",
-            urls = ["https://github.com/grpc/grpc/archive/v1.45.2.tar.gz"],
+            sha256 = "67423a4cd706ce16a88d1549297023f0f9f0d695a96dd684adc21e67b021f9bc",
+            strip_prefix = "grpc-1.46.0",
+            urls = ["https://github.com/grpc/grpc/archive/v1.46.0.tar.gz"],
         )

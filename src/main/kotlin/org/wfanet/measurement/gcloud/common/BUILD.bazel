@@ -9,9 +9,9 @@ kt_jvm_library(
     srcs = glob(["*.kt"]),
     deps = [
         "//imports/java/com/google/api/core",
-        "//imports/java/com/google/api/grpc",
         "//imports/java/com/google/cloud:core",
         "//imports/java/com/google/protobuf",
+        "//imports/java/com/google/type:type_java_proto",
         "//imports/kotlin/kotlinx/coroutines:core",
     ],
 )
