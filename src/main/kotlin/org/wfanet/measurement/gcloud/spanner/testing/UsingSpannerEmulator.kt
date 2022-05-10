@@ -14,12 +14,8 @@
 
 package org.wfanet.measurement.gcloud.spanner.testing
 
-import com.google.cloud.spanner.Statement
-import java.time.Instant
-import kotlinx.coroutines.flow.single
-import kotlinx.coroutines.runBlocking
+import java.nio.file.Path
 import org.junit.Rule
-import org.wfanet.measurement.gcloud.common.toInstant
 import org.wfanet.measurement.gcloud.spanner.AsyncDatabaseClient
 
 /**
@@ -43,21 +39,9 @@ import org.wfanet.measurement.gcloud.spanner.AsyncDatabaseClient
  * }
  * ```
  */
-abstract class UsingSpannerEmulator(schema: SpannerSchema) {
-  @get:Rule val spannerDatabase = SpannerEmulatorDatabaseRule(schema)
+abstract class UsingSpannerEmulator(changeLogResourcePath: Path) {
+  @get:Rule val spannerDatabase = SpannerEmulatorDatabaseRule(changeLogResourcePath)
 
   val databaseClient: AsyncDatabaseClient
     get() = spannerDatabase.databaseClient
-
-  val currentSpannerTimestamp: Instant
-    get() = runBlocking { getCurrentSpannerTimestamp() }
-
-  suspend fun getCurrentSpannerTimestamp(): Instant {
-    return databaseClient
-      .singleUse()
-      .executeQuery(Statement.of("SELECT CURRENT_TIMESTAMP()"))
-      .single()
-      .getTimestamp(0)
-      .toInstant()
-  }
 }

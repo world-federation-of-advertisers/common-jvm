@@ -1,6 +1,4 @@
 load("@io_bazel_rules_kotlin//kotlin:jvm.bzl", "kt_jvm_library")
-load("@rules_java//java:defs.bzl", "java_binary")
-load("@io_bazel_rules_docker//java:image.bzl", "java_image")
 
 package(
     default_testonly = True,
@@ -8,16 +6,10 @@ package(
 )
 
 kt_jvm_library(
-    name = "spanner_schema",
-    srcs = ["SpannerSchema.kt"],
-)
-
-kt_jvm_library(
     name = "spanner_emulator",
     srcs = ["SpannerEmulator.kt"],
     visibility = ["//visibility:private"],
     deps = [
-        "//imports/java/com/google/cloud/spanner",
         "//imports/kotlin/kotlinx/coroutines:core",
         "//src/main/kotlin/org/wfanet/measurement/common",
     ],
@@ -29,53 +21,24 @@ kt_jvm_library(
         ["*.kt"],
         exclude = [
             "SpannerEmulator.kt",
-            "SpannerEmulatorMain.kt",
-            "SpannerSchema.kt",
         ],
     ),
     exports = [":spanner_emulator"],
+    runtime_deps = [
+        "//imports/java/liquibase/ext/spanner",
+    ],
     deps = [
         ":spanner_emulator",
-        ":spanner_schema",
         "//imports/java/com/google/api/core",
         "//imports/java/com/google/cloud/spanner",
         "//imports/java/com/google/common/truth",
+        "//imports/java/liquibase:core",
         "//imports/java/org/junit",
         "//imports/kotlin/kotlinx/coroutines:core",
         "//src/main/kotlin/org/wfanet/measurement/common",
+        "//src/main/kotlin/org/wfanet/measurement/common/db/liquibase",
         "//src/main/kotlin/org/wfanet/measurement/common/testing",
         "//src/main/kotlin/org/wfanet/measurement/gcloud/common",
         "//src/main/kotlin/org/wfanet/measurement/gcloud/spanner",
     ],
-)
-
-kt_jvm_library(
-    name = "spanner_emulator_main",
-    srcs = ["SpannerEmulatorMain.kt"],
-    data = ["@cloud_spanner_emulator//:emulator"],
-    runtime_deps = [
-        # Workaround for `NoClassDefFoundError: kotlin/jdk7/AutoCloseableKt`.
-        # See https://github.com/bazelbuild/rules_kotlin/issues/333
-        "//imports/kotlin/kotlin:stdlib_jdk7",
-    ],
-    deps = [
-        ":spanner_emulator",
-        ":spanner_schema",
-        "//imports/java/com/google/cloud/spanner",
-        "//imports/java/picocli",
-        "//src/main/kotlin/org/wfanet/measurement/common",
-        "//src/main/kotlin/org/wfanet/measurement/gcloud/spanner",
-    ],
-)
-
-java_binary(
-    name = "SpannerEmulator",
-    main_class = "org.wfanet.measurement.db.gcp.testing.SpannerEmulatorMainKt",
-    runtime_deps = [":spanner_emulator_main"],
-)
-
-java_image(
-    name = "spanner_emulator_image",
-    main_class = "org.wfanet.measurement.db.gcp.testing.SpannerEmulatorMainKt",
-    runtime_deps = [":spanner_emulator_main"],
 )
