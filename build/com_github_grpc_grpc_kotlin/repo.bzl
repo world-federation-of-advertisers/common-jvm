@@ -17,6 +17,7 @@ Repository rules/macros for Github GPRC Kotlin.
 """
 
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+load("//build:versions.bzl", "GRPC_JAVA")
 
 def com_github_grpc_grpc_kotlin_repo():
     if "com_github_grpc_grpc_kotlin" not in native.existing_rules():
@@ -29,7 +30,7 @@ def com_github_grpc_grpc_kotlin_repo():
     if "io_grpc_grpc_java" not in native.existing_rules():
         http_archive(
             name = "io_grpc_grpc_java",
-            sha256 = "c1b80883511ceb1e433fb2d4b2f6d85dca0c62a265a6a3e6695144610d6f65b8",
-            strip_prefix = "grpc-java-1.46.0",
-            url = "https://github.com/grpc/grpc-java/archive/refs/tags/v1.46.0.tar.gz",
+            sha256 = GRPC_JAVA.sha256,
+            strip_prefix = "grpc-java-{version}".format(version = GRPC_JAVA.version),
+            url = "https://github.com/grpc/grpc-java/archive/refs/tags/v{version}.tar.gz".format(version = GRPC_JAVA.version),
         )
