@@ -15,10 +15,10 @@
 """Repository targets for Tink (https://github.com/google/tink)."""
 
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+load("//build:versions.bzl", "TINK_COMMIT")
 
-_COMMIT = "9753ffddd4d04aa56e0605ff4a0db46f2fb80529"  # HEAD on 2021-11-30.
-_SHA256 = "8399247fc7aec54062f757ce83e07f2ed2e80e8d1765a8e9eab4027b228c1c9e"
-_URL = "https://github.com/google/tink/archive/{commit}.tar.gz".format(commit = _COMMIT)
+_SHA256 = "0b8bbaffee4903faea66dbad76f8eb6d0eea3f94367807bebc49180f9f417031"
+_URL = "https://github.com/google/tink/archive/{commit}.tar.gz".format(commit = TINK_COMMIT)
 
 # Dict of Maven artifacts for Tink Java KMS integration.
 TINK_JAVA_KMS_MAVEN_ARTIFACTS = {
@@ -39,11 +39,13 @@ def tink_java():
     _tink_base()
 
     if "tink_java" not in native.existing_rules():
+        # TODO(@SanjayVas): Depend on Maven artifact instead once everything
+        # we use from Tink is included in a Maven release.
         http_archive(
             name = "tink_java",
             url = _URL,
             sha256 = _SHA256,
-            strip_prefix = "tink-{commit}/java_src".format(commit = _COMMIT),
+            strip_prefix = "tink-{commit}/java_src".format(commit = TINK_COMMIT),
         )
 
 def _tink_base():
@@ -52,5 +54,5 @@ def _tink_base():
             name = "tink_base",
             url = _URL,
             sha256 = _SHA256,
-            strip_prefix = "tink-{commit}".format(commit = _COMMIT),
+            strip_prefix = "tink-{commit}".format(commit = TINK_COMMIT),
         )

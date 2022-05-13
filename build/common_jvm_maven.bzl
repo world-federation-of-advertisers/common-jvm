@@ -33,26 +33,55 @@ load(
 load("//build/com_google_truth:repo.bzl", "com_google_truth_artifact_dict")
 load("//build/kotlinx_coroutines:repo.bzl", "kotlinx_coroutines_artifact_dict")
 load("//build/maven:artifacts.bzl", "artifacts")
-load("//build/com_google_protobuf:repo.bzl", "COM_GOOGLE_PROTOBUF_VERSION")
 load("//build/tink:repo.bzl", "TINK_JAVA_KMS_MAVEN_ARTIFACTS")
+load(
+    "//build:versions.bzl",
+    "GRPC_JAVA_VERSION",
+    "KOTLINX_COROUTINES_VERSION",
+    "PROTOBUF_VERSION",
+)
 
+def _grpc_java_override_artifact_dict():
+    """Returns a dict of coordinates to version for grpc-java overrides."""
+    artifacts_dict = {}
+
+    for coordinates, target in IO_GRPC_GRPC_JAVA_OVERRIDE_TARGETS.items():
+        if target.startswith("@io_grpc_grpc_java//"):
+            artifacts_dict[coordinates] = GRPC_JAVA_VERSION
+        elif target.startswith("@@com_google_protobuf//"):
+            artifacts_dict[coordinates] = PROTOBUF_VERSION
+
+    # TODO(grpc/grpc-java#9162): Drop once all the right artifacts are included
+    # in IO_GRPC_GRPC_JAVA_OVERRIDE_TARGETS.
+    artifacts_dict.update({
+        "io.grpc:grpc-googleapis": GRPC_JAVA_VERSION,
+        "io.grpc:grpc-services": GRPC_JAVA_VERSION,
+        "io.grpc:grpc-xds": GRPC_JAVA_VERSION,
+    })
+
+    return artifacts_dict
+
+# buildifier: disable=function-docstring-return
 def common_jvm_maven_artifacts():
-    """
-    Adds external repos necessary for common-jvm.
+    """Returns a list of Maven artifacts for this repo."""
+    return artifacts.dict_to_list(common_jvm_maven_artifacts_dict())
 
-    Returns:
-        An updated dictionary from a list of Java and Kotlin artifacts
-    """
+# buildifier: disable=function-docstring-return
+def common_jvm_maven_artifacts_dict():
+    """Returns a dict of Maven coordinates to version for this repo."""
     maven_artifacts = artifacts.list_to_dict(
         IO_GRPC_GRPC_JAVA_ARTIFACTS +
         IO_GRPC_GRPC_KOTLIN_ARTIFACTS,
     )
+
+    # Ensure correct version is specified for grpc-java override targets.
+    maven_artifacts.update(_grpc_java_override_artifact_dict())
+
     maven_artifacts.update(TINK_JAVA_KMS_MAVEN_ARTIFACTS)
     maven_artifacts.update(com_google_truth_artifact_dict(version = "1.0.1"))
-
-    # kotlinx.coroutines version should be compatible with Kotlin release used by
-    # rules_kotlin. See https://kotlinlang.org/docs/releases.html#release-details.
-    maven_artifacts.update(kotlinx_coroutines_artifact_dict(version = "1.4.3"))
+    maven_artifacts.update(
+        kotlinx_coroutines_artifact_dict(version = KOTLINX_COROUTINES_VERSION),
+    )
 
     # Add Maven artifacts or override versions (e.g. those pulled in by gRPC Kotlin
     # or default dependency versions).
@@ -82,10 +111,10 @@ def common_jvm_maven_artifacts():
 
         # For kt_jvm_proto_library.
         # The version must match that in //build/com_google_protobuf/repo.bzl.
-        "com.google.protobuf:protobuf-kotlin": COM_GOOGLE_PROTOBUF_VERSION,
+        "com.google.protobuf:protobuf-kotlin": PROTOBUF_VERSION,
     })
 
-    return artifacts.dict_to_list(maven_artifacts)
+    return maven_artifacts
 
 COMMON_JVM_MAVEN_OVERRIDE_TARGETS = dict(
     IO_BAZEL_RULES_KOTLIN_OVERRIDE_TARGETS.items() +
