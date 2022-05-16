@@ -1,0 +1,6 @@
+package(default_visibility = ["//visibility:public"])
+
+alias(
+    name = "protobuf",
+    actual = "@maven//:io_grpc_grpc_protobuf",
+)

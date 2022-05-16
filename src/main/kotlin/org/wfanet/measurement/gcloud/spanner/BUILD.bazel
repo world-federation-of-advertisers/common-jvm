@@ -16,7 +16,6 @@ kt_jvm_library(
         ["*.kt"],
         exclude = ["SpannerFlags.kt"],
     ),
-    resources = ["//src/main/resources/META-INF/services:grpclb"],
     exports = [":flags"],
     deps = [
         ":flags",

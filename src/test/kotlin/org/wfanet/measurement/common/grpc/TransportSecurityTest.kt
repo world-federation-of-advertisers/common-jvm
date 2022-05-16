@@ -19,7 +19,7 @@ import io.grpc.Server
 import io.grpc.health.v1.HealthCheckRequest
 import io.grpc.health.v1.HealthCheckResponse
 import io.grpc.health.v1.HealthGrpcKt.HealthCoroutineStub
-import io.grpc.services.HealthStatusManager
+import io.grpc.protobuf.services.HealthStatusManager
 import io.grpc.testing.GrpcCleanupRule
 import io.netty.handler.ssl.ClientAuth
 import java.io.File

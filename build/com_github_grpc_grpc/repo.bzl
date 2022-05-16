@@ -17,12 +17,13 @@ Repository rules/macros for Github GRPC.
 """
 
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+load("@bazel_tools//tools/build_defs/repo:utils.bzl", "maybe")
 
-def com_github_grpc_grpc_repo():
-    if "com_github_grpc_grpc" not in native.existing_rules():
-        http_archive(
-            name = "com_github_grpc_grpc",
-            sha256 = "67423a4cd706ce16a88d1549297023f0f9f0d695a96dd684adc21e67b021f9bc",
-            strip_prefix = "grpc-1.46.0",
-            urls = ["https://github.com/grpc/grpc/archive/v1.46.0.tar.gz"],
-        )
+def com_github_grpc_grpc():
+    maybe(
+        http_archive,
+        name = "com_github_grpc_grpc",
+        sha256 = "67423a4cd706ce16a88d1549297023f0f9f0d695a96dd684adc21e67b021f9bc",
+        strip_prefix = "grpc-1.46.0",
+        urls = ["https://github.com/grpc/grpc/archive/v1.46.0.tar.gz"],
+    )
