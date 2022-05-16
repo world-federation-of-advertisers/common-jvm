@@ -17,8 +17,11 @@ Adds external repos necessary for common-jvm.
 """
 
 load("//build/bazel_skylib:repo.bzl", "bazel_skylib_repo")
+load("//build/rules_pkg:repo.bzl", "rules_pkg")
+load("//build/protobuf:repo.bzl", "com_github_protocolbuffers_protobuf")
+load("//build/rules_proto:repo.bzl", "rules_proto")
 load("//build/platforms:repo.bzl", "platforms_repo")
-load("//build/com_google_protobuf:repo.bzl", "com_google_protobuf_repo")
+load("//build/grpc_java:repo.bzl", "io_grpc_grpc_java")
 load("//build/com_github_grpc_grpc_kotlin:repo.bzl", "com_github_grpc_grpc_kotlin_repo")
 load("//build/rules_jvm_external:repo.bzl", "rules_jvm_external_repo")
 load("//build/com_github_grpc_grpc:repo.bzl", "com_github_grpc_grpc_repo")
@@ -36,12 +39,15 @@ def common_jvm_repositories():
     """
     Adds all external repos necessary for common-jvm.
     """
-    bazel_skylib_repo()
     platforms_repo()
-    com_google_protobuf_repo()
-    rules_kotlin_repo()
-    com_github_grpc_grpc_kotlin_repo()
+    bazel_skylib_repo()
+    rules_pkg()
+    com_github_protocolbuffers_protobuf()
+    rules_proto()
     rules_jvm_external_repo()
+    rules_kotlin_repo()
+    io_grpc_grpc_java()
+    com_github_grpc_grpc_kotlin_repo()
     com_github_grpc_grpc_repo()
     cloud_spanner_emulator_binaries()
     grpc_health_probe_repo()

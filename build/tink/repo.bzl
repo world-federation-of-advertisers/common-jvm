@@ -21,7 +21,7 @@ _SHA256 = "0b8bbaffee4903faea66dbad76f8eb6d0eea3f94367807bebc49180f9f417031"
 _URL = "https://github.com/google/tink/archive/{commit}.tar.gz".format(commit = TINK_COMMIT)
 
 # Dict of Maven artifacts for Tink Java KMS integration.
-TINK_JAVA_KMS_MAVEN_ARTIFACTS = {
+TINK_JAVA_KMS_MAVEN_DEPS = {
     # Auto Service.
     "com.google.auto:auto-common": "0.10",
     "com.google.auto.service:auto-service": "1.0-rc7",

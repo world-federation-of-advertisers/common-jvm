@@ -15,7 +15,7 @@
 """Version information for common dependencies."""
 
 GRPC_JAVA_VERSION = "1.46.0"
-PROTOBUF_VERSION = "3.19.1"
+PROTOBUF_VERSION = "3.20.1"
 
 # Kotlin release version.
 #

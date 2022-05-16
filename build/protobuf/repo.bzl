@@ -13,16 +13,18 @@
 # limitations under the License.
 
 """
-Repository rules/macros for Github GPRC Kotlin.
+Repository rules/macros for Protobuf.
 """
 
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+load("//build:versions.bzl", "PROTOBUF_VERSION")
 
-def com_github_grpc_grpc_kotlin_repo():
-    if "com_github_grpc_grpc_kotlin" not in native.existing_rules():
-        http_archive(
-            name = "com_github_grpc_grpc_kotlin",
-            sha256 = "fe0b50b833ce2c6edfdf6e98f45e02c162b936f89de55768173936103b3b11ce",
-            strip_prefix = "grpc-kotlin-1.2.1",
-            url = "https://github.com/grpc/grpc-kotlin/archive/refs/tags/v1.2.1.tar.gz",
-        )
+_URL_TEMPLATE = "https://github.com/protocolbuffers/protobuf/archive/v{version}.tar.gz"
+
+def com_github_protocolbuffers_protobuf():
+    http_archive(
+        name = "com_github_protocolbuffers_protobuf",
+        sha256 = "8b28fdd45bab62d15db232ec404248901842e5340299a57765e48abe8a80d930",
+        strip_prefix = "protobuf-" + PROTOBUF_VERSION,
+        url = _URL_TEMPLATE.format(version = PROTOBUF_VERSION),
+    )

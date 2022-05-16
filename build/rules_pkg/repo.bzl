@@ -1,4 +1,4 @@
-# Copyright 2021 The Cross-Media Measurement Authors
+# Copyright 2022 The Cross-Media Measurement Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,17 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""
-Repository rules/macros for Github GPRC Kotlin.
-"""
+"""Repository rules/macros for rules_pkg."""
 
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
-def com_github_grpc_grpc_kotlin_repo():
-    if "com_github_grpc_grpc_kotlin" not in native.existing_rules():
-        http_archive(
-            name = "com_github_grpc_grpc_kotlin",
-            sha256 = "fe0b50b833ce2c6edfdf6e98f45e02c162b936f89de55768173936103b3b11ce",
-            strip_prefix = "grpc-kotlin-1.2.1",
-            url = "https://github.com/grpc/grpc-kotlin/archive/refs/tags/v1.2.1.tar.gz",
-        )
+def rules_pkg():
+    http_archive(
+        name = "rules_pkg",
+        urls = [
+            "https://mirror.bazel.build/github.com/bazelbuild/rules_pkg/releases/download/0.7.0/rules_pkg-0.7.0.tar.gz",
+            "https://github.com/bazelbuild/rules_pkg/releases/download/0.7.0/rules_pkg-0.7.0.tar.gz",
+        ],
+        sha256 = "8a298e832762eda1830597d64fe7db58178aa84cd5926d76d5b744d6558941c2",
+    )

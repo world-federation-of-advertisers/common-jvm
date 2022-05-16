@@ -10,8 +10,7 @@ kt_jvm_library(
     srcs = glob(["*.kt"]),
     deps = [
         "//imports/java/io/grpc:api",
-        "//imports/java/io/grpc/core:util",
-        "//imports/java/io/grpc/inprocess",
+        "//imports/java/io/grpc:core",
         "//imports/java/io/grpc/testing",
         "//imports/java/org/junit",
         "//imports/kotlin/io/grpc/kotlin:stub",

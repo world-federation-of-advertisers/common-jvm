@@ -5,7 +5,6 @@ package(default_visibility = ["//visibility:public"])
 kt_jvm_library(
     name = "update_schema",
     srcs = ["UpdateSchema.kt"],
-    resources = ["//src/main/resources/META-INF/services:grpclb"],
     runtime_deps = ["//imports/java/liquibase/ext/spanner"],
     deps = [
         "//src/main/kotlin/org/wfanet/measurement/common",
