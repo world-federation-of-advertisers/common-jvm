@@ -29,12 +29,15 @@ import kotlin.properties.Delegates
 import org.wfanet.measurement.common.crypto.SigningCerts
 import picocli.CommandLine
 
+private const val DEFAULT_MAX_INBOUND_MESSAGE_SIZE_BYTES = 4194304
+
 class CommonServer
 private constructor(
   private val nameForLogging: String,
   private val port: Int,
   services: Iterable<ServerServiceDefinition>,
-  sslContext: SslContext?
+  sslContext: SslContext?,
+  maxInboundMessageSizeBytes: Int = DEFAULT_MAX_INBOUND_MESSAGE_SIZE_BYTES
 ) {
   private val healthStatusManager = HealthStatusManager()
 
@@ -44,6 +47,7 @@ private constructor(
         sslContext?.let { sslContext(it) }
         addService(healthStatusManager.healthService)
         services.forEach { addService(it) }
+        maxInboundMessageSize(maxInboundMessageSizeBytes)
       }
       .build()
   }
@@ -107,6 +111,14 @@ private constructor(
     )
     var debugVerboseGrpcLogging by Delegates.notNull<Boolean>()
       private set
+
+    @set:CommandLine.Option(
+      names = ["--max-inbound-message-size-bytes"],
+      description = ["Maximum size of inbound messages, in bytes"],
+      defaultValue = "$DEFAULT_MAX_INBOUND_MESSAGE_SIZE_BYTES"
+    )
+    var maxInboundMessageSizeBytes by Delegates.notNull<Int>()
+      private set
   }
 
   companion object {
@@ -119,13 +131,15 @@ private constructor(
       certs: SigningCerts?,
       clientAuth: ClientAuth,
       nameForLogging: String,
-      services: Iterable<ServerServiceDefinition>
+      services: Iterable<ServerServiceDefinition>,
+      maxInboundMessageSize: Int = DEFAULT_MAX_INBOUND_MESSAGE_SIZE_BYTES
     ): CommonServer {
       return CommonServer(
         nameForLogging,
         port,
         services.run { if (verboseGrpcLogging) map { it.withVerboseLogging() } else this },
-        certs?.toServerTlsContext(clientAuth)
+        certs?.toServerTlsContext(clientAuth),
+        maxInboundMessageSize
       )
     }
 
@@ -148,7 +162,8 @@ private constructor(
         certs,
         if (flags.clientAuthRequired) ClientAuth.REQUIRE else ClientAuth.NONE,
         nameForLogging,
-        services
+        services,
+        flags.maxInboundMessageSizeBytes
       )
     }
 
