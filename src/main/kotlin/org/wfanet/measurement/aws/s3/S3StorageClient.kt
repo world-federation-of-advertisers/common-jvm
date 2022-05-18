@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEmpty
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.flow.withIndex
 import kotlinx.coroutines.withContext
@@ -85,6 +86,7 @@ class S3StorageClient(
     return content
       .asBufferedFlow(WRITE_BUFFER_SIZE)
       .withIndex()
+      .onEmpty { emit(IndexedValue(0, ByteString.EMPTY)) }
       .map { (i, bytes) ->
         bytes.asReadOnlyByteBufferList().forEach(digest::update)
         val md5 = String(Base64.getEncoder().encode(digest.digest()))

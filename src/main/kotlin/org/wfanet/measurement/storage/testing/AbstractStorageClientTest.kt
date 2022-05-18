@@ -20,6 +20,7 @@ import com.google.protobuf.kotlin.toByteString
 import com.google.protobuf.kotlin.toByteStringUtf8
 import kotlin.random.Random
 import kotlin.test.assertNotNull
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.runBlocking
 import org.junit.Test
 import org.wfanet.measurement.common.BYTES_PER_MIB
@@ -90,6 +91,15 @@ abstract class AbstractStorageClientTest<T : StorageClient> {
     blob.delete()
 
     assertThat(storageClient.getBlob(blobKey)).isNull()
+  }
+
+  @Test
+  fun `Write and read empty blob`() = runBlocking {
+    val blobKey = "empty-blob"
+    storageClient.writeBlob(blobKey, emptyFlow())
+    val blob = assertNotNull(storageClient.getBlob(blobKey))
+
+    assertThat(blob).contentEqualTo(ByteString.EMPTY)
   }
 
   companion object {
