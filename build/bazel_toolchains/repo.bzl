@@ -18,6 +18,7 @@ See https://github.com/bazelbuild/bazel-toolchains
 """
 
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+load("@bazel_tools//tools/build_defs/repo:utils.bzl", "maybe")
 
 _URL_TEMPLATES = [
     "https://github.com/bazelbuild/bazel-toolchains/releases/download/{version}/bazel-toolchains-{version}.tar.gz",
@@ -28,7 +29,8 @@ def bazel_toolchains(name, version, sha256):
     prefix = "bazel-toolchains-" + version
     urls = [template.format(version = version) for template in _URL_TEMPLATES]
 
-    http_archive(
+    maybe(
+        http_archive,
         name = name,
         sha256 = sha256,
         strip_prefix = prefix,

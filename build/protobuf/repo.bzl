@@ -12,20 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""World Federation of Advertisers (WFA) GitHub repo macros."""
+"""
+Repository rules/macros for Protobuf.
+"""
 
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
-load("@bazel_tools//tools/build_defs/repo:utils.bzl", "maybe")
+load("//build:versions.bzl", "PROTOBUF_VERSION")
 
-_URL_TEMPLATE = "https://github.com/world-federation-of-advertisers/{repo}/archive/{commit}.tar.gz"
-_PREFIX_TEMPLATE = "{repo}-{commit}"
+_URL_TEMPLATE = "https://github.com/protocolbuffers/protobuf/archive/v{version}.tar.gz"
 
-def wfa_repo_archive(name, repo, commit, sha256 = None):
-    """Adds a WFA repository archive target."""
-    maybe(
-        http_archive,
-        name = name,
-        urls = [_URL_TEMPLATE.format(repo = repo, commit = commit)],
-        strip_prefix = _PREFIX_TEMPLATE.format(repo = repo, commit = commit),
-        sha256 = sha256,
+def com_github_protocolbuffers_protobuf():
+    http_archive(
+        name = "com_github_protocolbuffers_protobuf",
+        sha256 = "8b28fdd45bab62d15db232ec404248901842e5340299a57765e48abe8a80d930",
+        strip_prefix = "protobuf-" + PROTOBUF_VERSION,
+        url = _URL_TEMPLATE.format(version = PROTOBUF_VERSION),
     )

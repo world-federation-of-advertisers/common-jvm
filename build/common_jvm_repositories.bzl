@@ -16,35 +16,38 @@
 Adds external repos necessary for common-jvm.
 """
 
-load("//build/bazel_skylib:repo.bzl", "bazel_skylib_repo")
+load("//build/bazel_skylib:repo.bzl", "bazel_skylib")
+load("//build/rules_pkg:repo.bzl", "rules_pkg")
+load("//build/protobuf:repo.bzl", "com_github_protocolbuffers_protobuf")
+load("//build/rules_proto:repo.bzl", "rules_proto")
 load("//build/platforms:repo.bzl", "platforms_repo")
-load("//build/com_google_protobuf:repo.bzl", "com_google_protobuf_repo")
-load("//build/com_github_grpc_grpc_kotlin:repo.bzl", "com_github_grpc_grpc_kotlin_repo")
+load("//build/grpc_java:repo.bzl", "io_grpc_grpc_java")
+load("//build/grpc_kotlin:repo.bzl", "com_github_grpc_grpc_kotlin")
 load("//build/rules_jvm_external:repo.bzl", "rules_jvm_external_repo")
-load("//build/com_github_grpc_grpc:repo.bzl", "com_github_grpc_grpc_repo")
+load("//build/com_github_grpc_grpc:repo.bzl", "com_github_grpc_grpc")
 load("//build/cloud_spanner_emulator:defs.bzl", "cloud_spanner_emulator_binaries")
-load("//build/grpc_health_probe:repo.bzl", "grpc_health_probe_repo")
-load("//build/io_bazel_rules_docker:repo.bzl", "rules_docker_repo")
-load("//build/com_google_googleapis:repo.bzl", "com_google_googleapis_repo")
-load(
-    "//build/io_bazel_rules_kotlin:repo.bzl",
-    "rules_kotlin_repo",
-)
+load("//build/grpc_health_probe:repo.bzl", "grpc_health_probe")
+load("//build/io_bazel_rules_docker:repo.bzl", "io_bazel_rules_docker")
+load("//build/com_google_googleapis:repo.bzl", "com_google_googleapis")
+load("//build/rules_kotlin:repo.bzl", "io_bazel_rules_kotlin")
 load("//build/tink:repo.bzl", "tink_java")
 
 def common_jvm_repositories():
     """
     Adds all external repos necessary for common-jvm.
     """
-    bazel_skylib_repo()
     platforms_repo()
-    com_google_protobuf_repo()
-    rules_kotlin_repo()
-    com_github_grpc_grpc_kotlin_repo()
+    bazel_skylib()
+    rules_pkg()
+    com_github_protocolbuffers_protobuf()
+    rules_proto()
     rules_jvm_external_repo()
-    com_github_grpc_grpc_repo()
+    io_bazel_rules_kotlin()
+    io_grpc_grpc_java()
+    com_github_grpc_grpc_kotlin()
+    com_github_grpc_grpc()
     cloud_spanner_emulator_binaries()
-    grpc_health_probe_repo()
-    rules_docker_repo()
-    com_google_googleapis_repo()
+    grpc_health_probe()
+    io_bazel_rules_docker()
+    com_google_googleapis()
     tink_java()
