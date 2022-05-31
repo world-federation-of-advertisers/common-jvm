@@ -24,6 +24,10 @@ KOTLIN_LANGUAGE_LEVEL = "1.5"
 # See https://kotlinlang.org/docs/releases.html#release-details.
 KOTLIN_RELEASE_VERSION = "1.6.21"
 
+# Version of org.jetbrains:annotations that comes bundled with
+# KOTLIN_RELEASE_VERSION.
+JETBRAINS_ANNOTATIONS_VERSION = "13.0"
+
 # kotlinx.coroutines version.
 KOTLINX_COROUTINES_VERSION = "1.6.2"
 
