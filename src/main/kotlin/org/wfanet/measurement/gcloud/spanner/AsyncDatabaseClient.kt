@@ -37,7 +37,7 @@ import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asExecutor
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.channels.sendBlocking
+import kotlinx.coroutines.channels.trySendBlocking
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.consumeAsFlow
 import kotlinx.coroutines.flow.singleOrNull
@@ -250,7 +250,7 @@ private fun AsyncResultSet.asFlow(): Flow<Struct> {
       @Suppress("WHEN_ENUM_CAN_BE_NULL_IN_JAVA")
       when (cursor.tryNext()) {
         AsyncResultSet.CursorState.OK -> {
-          channel.sendBlocking(cursor.currentRowAsStruct)
+          channel.trySendBlocking(cursor.currentRowAsStruct).getOrThrow()
           AsyncResultSet.CallbackResponse.CONTINUE
         }
         AsyncResultSet.CursorState.NOT_READY -> AsyncResultSet.CallbackResponse.CONTINUE
