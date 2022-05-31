@@ -19,13 +19,14 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.test.runBlockingTest
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.runTest
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 
 @RunWith(JUnit4::class)
-@OptIn(ExperimentalCoroutinesApi::class) // For `runBlockingTest`.
+@OptIn(ExperimentalCoroutinesApi::class) // For `runTest`.
 class CountDownLatchTest {
   @Test
   fun `latch count is equal to initial count`() {
@@ -54,38 +55,41 @@ class CountDownLatchTest {
   }
 
   @Test
-  fun `await suspends until count is zero`() = runBlockingTest {
-    val latch = CountDownLatch(10)
+  fun `await suspends until count is zero`() =
+    runTest(UnconfinedTestDispatcher()) {
+      val latch = CountDownLatch(10)
 
-    val job = launch { latch.await() }
-    assertFalse(job.isCompleted)
+      val job = launch { latch.await() }
+      assertFalse(job.isCompleted)
 
-    repeat(9) { latch.countDown() }
-    assertThat(latch.count).isEqualTo(1)
-    assertFalse(job.isCompleted)
+      repeat(9) { latch.countDown() }
+      assertThat(latch.count).isEqualTo(1)
+      assertFalse(job.isCompleted)
 
-    latch.countDown()
-    assertThat(latch.count).isEqualTo(0)
-    assertTrue(job.isCompleted)
-  }
-
-  @Test
-  fun `await resumes immediately when initial count is zero`() = runBlockingTest {
-    val latch = CountDownLatch(0)
-
-    val job = launch { latch.await() }
-    assertTrue(job.isCompleted)
-  }
+      latch.countDown()
+      assertThat(latch.count).isEqualTo(0)
+      assertTrue(job.isCompleted)
+    }
 
   @Test
-  fun `await resumes multiple coroutines when count reaches zero`() = runBlockingTest {
-    val latch = CountDownLatch(1)
+  fun `await resumes immediately when initial count is zero`() =
+    runTest(UnconfinedTestDispatcher()) {
+      val latch = CountDownLatch(0)
 
-    val job1 = launch { latch.await() }
-    val job2 = launch { latch.await() }
-    latch.countDown()
+      val job = launch { latch.await() }
+      assertTrue(job.isCompleted)
+    }
 
-    assertTrue(job1.isCompleted)
-    assertTrue(job2.isCompleted)
-  }
+  @Test
+  fun `await resumes multiple coroutines when count reaches zero`() =
+    runTest(UnconfinedTestDispatcher()) {
+      val latch = CountDownLatch(1)
+
+      val job1 = launch { latch.await() }
+      val job2 = launch { latch.await() }
+      latch.countDown()
+
+      assertTrue(job1.isCompleted)
+      assertTrue(job2.isCompleted)
+    }
 }

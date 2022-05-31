@@ -29,7 +29,7 @@ def com_github_grpc_grpc_kotlin():
     maybe(
         http_archive,
         name = "com_github_grpc_grpc_kotlin",
-        sha256 = "fe0b50b833ce2c6edfdf6e98f45e02c162b936f89de55768173936103b3b11ce",
+        sha256 = "466d33303aac7e825822b402efa3dcfddd68e6f566ed79443634180bb75eab6e",
         strip_prefix = "grpc-kotlin-{version}".format(version = GRPC_KOTLIN_VERSION),
         url = "https://github.com/grpc/grpc-kotlin/archive/refs/tags/v{version}.tar.gz".format(version = GRPC_KOTLIN_VERSION),
     )

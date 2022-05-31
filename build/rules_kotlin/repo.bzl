@@ -40,8 +40,8 @@ def _rules_kotlin_repo(version, sha256):
 
 def io_bazel_rules_kotlin():
     _rules_kotlin_repo(
-        version = "v1.5.0-beta-3",
-        sha256 = "58edd86f0f3c5b959c54e656b8e7eb0b0becabd412465c37a2078693c2571f7f",
+        version = "v1.6.0-RC-2",
+        sha256 = "88d19c92a1fb63fb64ddb278cd867349c3b0d648b6fe9ef9a200b9abcacd489d",
     )
 
 def rules_kotlin_maven_artifacts_dict():

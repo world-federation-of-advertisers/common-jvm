@@ -43,7 +43,7 @@ const val BYTES_PER_MIB = 1024 * 1024
 fun ByteArray.toByteString(): ByteString = toByteString()
 
 fun Iterable<ByteArray>.toByteString(): ByteString {
-  val totalSize = sumBy { it.size }
+  val totalSize = sumOf { it.size }
 
   return ByteString.newOutput(totalSize).use { output ->
     forEach { output.write(it) }
@@ -59,7 +59,7 @@ fun Iterable<ByteString>.flatten(): ByteString {
 /** Copies all bytes in a list of [ByteString]s into a [ByteArray]. */
 fun Iterable<ByteString>.toByteArray(): ByteArray {
   // Allocate a ByteBuffer large enough for all the bytes in all the byte strings.
-  val buffer = ByteBuffer.allocate(sumBy { it.size })
+  val buffer = ByteBuffer.allocate(sumOf { it.size })
   forEach { byteString -> byteString.copyTo(buffer) }
   return buffer.array()
 }

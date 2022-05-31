@@ -5,6 +5,7 @@ package(default_visibility = ["//visibility:public"])
 kt_jvm_library(
     name = "throttler",
     srcs = glob(["*.kt"]),
+    runtime_deps = ["//imports/kotlin/kotlin:stdlib_jdk7"],
     deps = [
         "//imports/java/picocli",
         "//imports/kotlin/kotlinx/coroutines:core",
