@@ -20,13 +20,14 @@ import io.grpc.inprocess.InProcessChannelBuilder
 import io.grpc.inprocess.InProcessServerBuilder
 import io.grpc.testing.GrpcCleanupRule
 import java.time.Duration
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.Rule
@@ -63,28 +64,26 @@ class ChannelShutdownHookTest {
     // Launch some endless streams but leave a couple of servers idle.
     // Idle channels shut down immediately.
     // Channels with on-going RPCs wait for the timeout before shutting down.
-    val streamJobs =
-      channels.take(3).flatMap {
-        val client = FakeServiceGrpcKt.FakeServiceCoroutineStub(it)
-        // Create multiple streams for each server for good measure.
-        val jobs =
-          (1..3).map { n ->
-            GlobalScope.launch {
-              val requests = flow {
-                while (true) {
-                  emit(FakeRequest.newBuilder().setNumber(n).build())
-                  delay(200)
-                }
-              }
-              client.fake(requests)
+    val clientScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    channels.take(3).forEach {
+      val client = FakeServiceGrpcKt.FakeServiceCoroutineStub(it)
+      // Create multiple streams for each server for good measure.
+      (1..3).forEach { n ->
+        clientScope.launch {
+          val requests = flow {
+            while (true) {
+              emit(FakeRequest.newBuilder().setNumber(n).build())
+              delay(200)
             }
           }
-        // Wait for the streams to connect before attempting to shut the channels down.
-        while (it.getState(false) != ConnectivityState.READY) {
-          delay(10)
+          client.fake(requests)
         }
-        jobs
       }
+      // Wait for the streams to connect before attempting to shut the channels down.
+      while (it.getState(false) != ConnectivityState.READY) {
+        delay(10)
+      }
+    }
 
     // Mock the Runtime in order to capture the shutdown hooks as they are added.
     val shutdownHookCaptor = ArgumentCaptor.forClass(Thread::class.java)
@@ -95,12 +94,13 @@ class ChannelShutdownHookTest {
     addChannelShutdownHooks(runtime, Duration.ofMillis(500), *channels.toTypedArray())
 
     // Run captured shutdown hooks in parallel to simulate JVM shutdown.
-    val hookJobs = shutdownHookCaptor.allValues.map { launch(Dispatchers.Default) { it.run() } }
+    val runtimeScope = CoroutineScope(Dispatchers.Default)
+    shutdownHookCaptor.allValues.forEach { launch(Dispatchers.Default) { it.run() } }
 
     // Wait for the hooks to complete.
-    hookJobs.forEach { it.join() }
+    runtimeScope.coroutineContext.job.children.forEach { it.join() }
     // Kill the infinite streams.
-    streamJobs.forEach { it.cancelAndJoin() }
+    clientScope.coroutineContext.job.cancelAndJoin()
 
     channels.forEach { assertThat(it.isTerminated).isTrue() }
   }
