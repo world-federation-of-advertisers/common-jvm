@@ -19,9 +19,9 @@ See https://github.com/bazelbuild/rules_kotlin
 
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 load("@bazel_tools//tools/build_defs/repo:utils.bzl", "maybe")
-load("//build:versions.bzl", "KOTLIN_RELEASE_VERSION")
+load("//build:versions.bzl", "JETBRAINS_ANNOTATIONS_VERSION", "KOTLIN_RELEASE_VERSION")
 
-RULES_KOTLIN_OVERRIDE_TARGETS = {
+_JETBRAINS_KOTLIN_OVERRIDE_TARGETS = {
     "org.jetbrains.kotlin:kotlin-stdlib": "@com_github_jetbrains_kotlin//:kotlin-stdlib",
     "org.jetbrains.kotlin:kotlin-stdlib-common": "@com_github_jetbrains_kotlin//:kotlin-stdlib",
     "org.jetbrains.kotlin:kotlin-stdlib-jdk7": "@com_github_jetbrains_kotlin//:kotlin-stdlib-jdk7",
@@ -29,6 +29,12 @@ RULES_KOTLIN_OVERRIDE_TARGETS = {
     "org.jetbrains.kotlin:kotlin-reflect": "@com_github_jetbrains_kotlin//:kotlin-reflect",
     "org.jetbrains.kotlin:kotlin-test": "@com_github_jetbrains_kotlin//:kotlin-test",
 }
+
+_JETBRAINS_OVERRIDE_TARGETS = {
+    "org.jetbrains:annotations": "@com_github_jetbrains_kotlin//:annotations",
+}
+
+RULES_KOTLIN_OVERRIDE_TARGETS = dict(_JETBRAINS_KOTLIN_OVERRIDE_TARGETS.items() + _JETBRAINS_OVERRIDE_TARGETS.items())
 
 def _rules_kotlin_repo(version, sha256):
     maybe(
@@ -40,12 +46,17 @@ def _rules_kotlin_repo(version, sha256):
 
 def io_bazel_rules_kotlin():
     _rules_kotlin_repo(
-        version = "v1.5.0-beta-3",
-        sha256 = "58edd86f0f3c5b959c54e656b8e7eb0b0becabd412465c37a2078693c2571f7f",
+        version = "v1.6.0-RC-2",
+        sha256 = "88d19c92a1fb63fb64ddb278cd867349c3b0d648b6fe9ef9a200b9abcacd489d",
     )
 
 def rules_kotlin_maven_artifacts_dict():
-    return {
+    artifacts_dict = {
         coordinates: KOTLIN_RELEASE_VERSION
-        for coordinates in RULES_KOTLIN_OVERRIDE_TARGETS.keys()
+        for coordinates in _JETBRAINS_KOTLIN_OVERRIDE_TARGETS.keys()
     }
+    artifacts_dict.update({
+        coordinates: JETBRAINS_ANNOTATIONS_VERSION
+        for coordinates in _JETBRAINS_OVERRIDE_TARGETS.keys()
+    })
+    return artifacts_dict

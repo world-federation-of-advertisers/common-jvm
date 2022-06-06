@@ -23,7 +23,6 @@ data class SigningCerts(
   val trustedCertificates: Collection<X509Certificate>
 ) {
   companion object {
-    @Deprecated("Load SigningKeyHandle from SigningKeyStore, or use SigningCertsTesting.")
     fun fromPemFiles(
       certificateFile: File,
       privateKeyFile: File,

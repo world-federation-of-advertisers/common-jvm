@@ -19,7 +19,7 @@ import io.grpc.Server
 import io.grpc.ServerServiceDefinition
 import io.grpc.health.v1.HealthCheckResponse.ServingStatus
 import io.grpc.netty.NettyServerBuilder
-import io.grpc.services.HealthStatusManager
+import io.grpc.protobuf.services.HealthStatusManager
 import io.netty.handler.ssl.ClientAuth
 import io.netty.handler.ssl.SslContext
 import java.io.IOException
