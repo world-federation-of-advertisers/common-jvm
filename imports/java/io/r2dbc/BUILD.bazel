@@ -1,0 +1,6 @@
+package(default_visibility = ["//visibility:public"])
+
+alias(
+    name = "r2dbc",
+    actual = "@maven//:io_r2dbc_r2dbc_spi",
+)
