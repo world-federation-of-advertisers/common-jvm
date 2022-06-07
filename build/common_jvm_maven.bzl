@@ -75,9 +75,6 @@ def common_jvm_maven_artifacts_dict():
         "software.amazon.awssdk:http-client-spi": "2.17.98",
         "software.amazon.awssdk:s3": "2.17.98",
         "software.amazon.awssdk:sdk-core": "2.17.98",
-
-        # Postgresql R2DBC
-        "io.projectreactor.kotlin:reactor-kotlin-extensions": "1.1.6",
         "org.postgresql:r2dbc-postgresql": "0.9.1.RELEASE",
 
         # Liquibase.

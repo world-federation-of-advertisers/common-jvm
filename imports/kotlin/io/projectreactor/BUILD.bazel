@@ -1,6 +1,0 @@
-package(default_visibility = ["//visibility:public"])
-
-alias(
-    name = "extensions",
-    actual = "@maven//:io_projectreactor_kotlin_reactor_kotlin_extensions",
-)
