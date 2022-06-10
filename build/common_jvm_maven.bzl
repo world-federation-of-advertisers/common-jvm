@@ -75,6 +75,7 @@ def common_jvm_maven_artifacts_dict():
         "software.amazon.awssdk:http-client-spi": "2.17.98",
         "software.amazon.awssdk:s3": "2.17.98",
         "software.amazon.awssdk:sdk-core": "2.17.98",
+        "org.postgresql:r2dbc-postgresql": "0.9.1.RELEASE",
 
         # Liquibase.
         "org.liquibase:liquibase-core": "4.9.1",

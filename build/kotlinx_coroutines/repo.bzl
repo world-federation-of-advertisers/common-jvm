@@ -19,6 +19,7 @@ load("//build:versions.bzl", "KOTLINX_COROUTINES_VERSION")
 _ARTIFACT_NAMES = [
     "org.jetbrains.kotlinx:kotlinx-coroutines-core",
     "org.jetbrains.kotlinx:kotlinx-coroutines-debug",
+    "org.jetbrains.kotlinx:kotlinx-coroutines-reactive",
     "org.jetbrains.kotlinx:kotlinx-coroutines-test",
 ]
 
