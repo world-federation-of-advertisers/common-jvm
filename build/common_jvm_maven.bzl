@@ -78,6 +78,7 @@ def common_jvm_maven_artifacts_dict():
 
         # Liquibase.
         "org.liquibase:liquibase-core": "4.9.1",
+        "org.yaml:snakeyaml": "1.30",
         "com.google.cloudspannerecosystem:liquibase-spanner": "4.6.1",
         "com.google.cloud:google-cloud-spanner-jdbc": "2.6.4",
 

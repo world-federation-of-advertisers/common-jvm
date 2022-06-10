@@ -1,0 +1,6 @@
+package(default_visibility = ["//visibility:public"])
+
+alias(
+    name = "snakeyaml",
+    actual = "@maven//:org_yaml_snakeyaml",
+)
