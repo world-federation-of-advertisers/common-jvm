@@ -23,6 +23,7 @@ import com.google.protobuf.kotlin.toByteString
 import io.r2dbc.spi.Readable
 import io.r2dbc.spi.Result
 import io.r2dbc.spi.Row
+import io.r2dbc.spi.RowMetadata
 import java.nio.ByteBuffer
 import java.util.function.Function
 import kotlin.reflect.KClass
@@ -35,12 +36,12 @@ import org.wfanet.measurement.common.identity.InternalId
 
 open class QueryResult internal constructor(private val result: Result) {
   /**
-   * Consumes the result [Row]s using the specified [transform].
+   * Consumes the result [ResultRow]s using the specified [transform].
    *
-   * Note that the [Row] objects are only valid inside the context of [transform].
+   * Note that the [ResultRow] objects are only valid inside the context of [transform].
    */
-  open fun <T : Any> consume(transform: Function<in Row, out T>): Flow<T> {
-    return result.map { row, _ -> transform.apply(row) }.asFlow()
+  open fun <T : Any> consume(transform: Function<in ResultRow, out T>): Flow<T> {
+    return result.map { row, _ -> transform.apply(ResultRow(row)) }.asFlow()
   }
 }
 
@@ -49,9 +50,26 @@ internal class SingleUseQueryResult(
   private val closeTransaction: suspend () -> Unit
 ) : QueryResult(result) {
 
-  override fun <T : Any> consume(transform: Function<in Row, out T>): Flow<T> {
+  override fun <T : Any> consume(transform: Function<in ResultRow, out T>): Flow<T> {
     return super.consume(transform).onCompletion { closeTransaction() }
   }
+}
+
+class ResultRow(private val delegate: Row) {
+  val metadata: RowMetadata
+    get() = delegate.metadata
+
+  fun asReadable(): Readable = delegate
+
+  inline operator fun <reified T : Any> get(name: String): T? = asReadable().get<T>(name)
+
+  inline fun <reified T : Any> getValue(name: String): T = asReadable().getValue(name)
+
+  fun <T : Message> getProtoMessage(name: String, parser: Parser<T>): T =
+    delegate.getProtoMessage(name, parser)
+
+  fun <T : Message> getProtoMessageOrNull(name: String, parser: Parser<T>): T? =
+    delegate.getProtoMessageOrNull(name, parser)
 }
 
 @Suppress("EXTENSION_SHADOWED_BY_MEMBER")
@@ -68,6 +86,9 @@ fun <T : Any> Readable.get(name: String, kClass: KClass<T>): T? {
     ByteString::class -> get(name, ByteBuffer::class)?.toByteString() as T?
     InternalId::class -> get(name, Long::class)?.let { InternalId(it) } as T?
     ExternalId::class -> get(name, Long::class)?.let { ExternalId(it) } as T?
+
+    // Note that this is not `kClass.java`. The underlying `get` may support Java builtin types but
+    // not their Kotlin counterparts, e.g. `java.lang.Integer` instead of `kotlin.Int`.
     else -> get(name, kClass.javaObjectType)
   }
 }

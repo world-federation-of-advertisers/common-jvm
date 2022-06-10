@@ -19,7 +19,6 @@ package org.wfanet.measurement.common.db.r2dbc.postgres
 import com.google.common.truth.Truth.assertThat
 import com.google.type.LatLng
 import com.google.type.latLng
-import io.r2dbc.spi.Readable
 import java.nio.file.Path
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.onCompletion
@@ -29,11 +28,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 import org.wfanet.measurement.common.db.r2dbc.ReadWriteContext
-import org.wfanet.measurement.common.db.r2dbc.StatementBuilder
-import org.wfanet.measurement.common.db.r2dbc.StatementBuilder.Companion.statementBuilder
-import org.wfanet.measurement.common.db.r2dbc.get
-import org.wfanet.measurement.common.db.r2dbc.getProtoMessageOrNull
-import org.wfanet.measurement.common.db.r2dbc.getValue
+import org.wfanet.measurement.common.db.r2dbc.ResultRow
+import org.wfanet.measurement.common.db.r2dbc.boundStatement
 import org.wfanet.measurement.common.db.r2dbc.postgres.testing.EmbeddedPostgresDatabaseProvider
 import org.wfanet.measurement.common.getJarResourcePath
 import org.wfanet.measurement.common.identity.InternalId
@@ -45,7 +41,7 @@ class PostgresDatabaseClientTest {
   @Test
   fun `executeStatement returns result with updated rows`() {
     val insertStatement =
-      StatementBuilder(
+      boundStatement(
         """
         INSERT INTO Cars (CarId, Year, Make, Model) VALUES
           (1, 1990, 'Nissan', 'Stanza'),
@@ -82,7 +78,7 @@ class PostgresDatabaseClientTest {
         }
       )
     val insertStatement =
-      statementBuilder("INSERT INTO Cars VALUES ($1, $2, $3, $4, $5, $6)") {
+      boundStatement("INSERT INTO Cars VALUES ($1, $2, $3, $4, $5, $6)") {
         bind("$1", car.carId)
         bind("$2", car.year)
         bind("$3", car.make)
@@ -95,7 +91,7 @@ class PostgresDatabaseClientTest {
       commit()
     }
 
-    val query = statementBuilder("SELECT * FROM Cars")
+    val query = boundStatement("SELECT * FROM Cars")
     val cars: Flow<Car> =
       dbClient.singleUse().executeQuery(query).consume { row -> Car.parseFrom(row) }
 
@@ -105,7 +101,7 @@ class PostgresDatabaseClientTest {
   @Test
   fun `bindNull binds parameter to null`(): Unit = runBlocking {
     val insertStatement =
-      statementBuilder(
+      boundStatement(
         """
         INSERT INTO Cars (CarId, Year, Make, Model, Owner) VALUES
           (1, 1990, 'Nissan', 'Stanza', $1),
@@ -124,7 +120,7 @@ class PostgresDatabaseClientTest {
       commit()
     }
 
-    val query = statementBuilder("SELECT * FROM Cars WHERE Owner IS NULL ORDER BY Year DESC")
+    val query = boundStatement("SELECT * FROM Cars WHERE Owner IS NULL ORDER BY Year DESC")
     val models: Flow<String> =
       dbClient.singleUse().executeQuery(query).consume { row -> row.getValue("Model") }
 
@@ -134,7 +130,7 @@ class PostgresDatabaseClientTest {
   @Test
   fun `executeQuery reads writes from same transaction`(): Unit = runBlocking {
     val insertStatement =
-      statementBuilder(
+      boundStatement(
         """
         INSERT INTO Cars (CarId, Year, Make, Model) VALUES
           (5, 2021, 'Tesla', 'Model Y'),
@@ -147,7 +143,7 @@ class PostgresDatabaseClientTest {
     val txn: ReadWriteContext = dbClient.readWriteTransaction()
     txn.executeStatement(insertStatement)
 
-    val query = statementBuilder("SELECT * FROM Cars ORDER BY Year ASC")
+    val query = boundStatement("SELECT * FROM Cars ORDER BY Year ASC")
     val models: Flow<String> =
       txn.executeQuery(query).consume { row -> row.getValue<String>("Model") }.onCompletion {
         txn.close()
@@ -161,7 +157,7 @@ class PostgresDatabaseClientTest {
   @Test
   fun `executeQuery does not see writes from pending write transaction`(): Unit = runBlocking {
     val insertStatement =
-      statementBuilder(
+      boundStatement(
         """
         INSERT INTO Cars (CarId, Year, Make, Model) VALUES
           (5, 2021, 'Tesla', 'Model Y'),
@@ -174,7 +170,7 @@ class PostgresDatabaseClientTest {
     val writeTxn: ReadWriteContext = dbClient.readWriteTransaction()
     writeTxn.executeStatement(insertStatement)
 
-    val query = statementBuilder("SELECT * FROM CARS")
+    val query = boundStatement("SELECT * FROM CARS")
     val models: Flow<String> =
       with(dbClient.readTransaction()) {
         executeQuery(query).consume { row -> row.getValue<String>("Model") }.onCompletion {
@@ -202,14 +198,14 @@ private data class Car(
   val currentLocation: LatLng? = null
 ) {
   companion object {
-    fun parseFrom(row: Readable): Car {
+    fun parseFrom(row: ResultRow): Car {
       return with(row) {
         Car(
           getValue("CarId"),
           getValue("Year"),
           getValue("Make"),
           getValue("Model"),
-          get<String>("Owner"),
+          get("Owner"),
           getProtoMessageOrNull("CurrentLocation", LatLng.parser())
         )
       }
