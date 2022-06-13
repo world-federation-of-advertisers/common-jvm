@@ -25,7 +25,7 @@ import kotlinx.coroutines.reactive.awaitFirstOrNull
 /** A transaction context for reading and writing. */
 interface ReadWriteContext : ReadContext {
   /** Executes a DML statement. */
-  suspend fun executeStatement(statement: StatementBuilder): StatementResult
+  suspend fun executeStatement(statement: BoundStatement): StatementResult
 
   /**
    * Commits the transaction.
@@ -38,8 +38,8 @@ interface ReadWriteContext : ReadContext {
 internal class ReadWriteContextImpl private constructor(connection: Connection) :
   ReadWriteContext, ReadContextImpl(connection) {
 
-  override suspend fun executeStatement(statement: StatementBuilder): StatementResult {
-    val result: Result = statement.build(connection).execute().awaitFirst()
+  override suspend fun executeStatement(statement: BoundStatement): StatementResult {
+    val result: Result = statement.toStatement(connection).execute().awaitFirst()
     return StatementResult(result.rowsUpdated.awaitFirst())
   }
 

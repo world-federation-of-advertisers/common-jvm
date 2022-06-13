@@ -31,7 +31,7 @@ interface ReadContext {
    * @param query a query which produces a single [Result]
    * @return the resulting [Row]s
    */
-  suspend fun executeQuery(query: StatementBuilder): QueryResult
+  suspend fun executeQuery(query: BoundStatement): QueryResult
 
   /** Closes the underlying [Connection]. */
   suspend fun close()
@@ -40,8 +40,8 @@ interface ReadContext {
 internal open class ReadContextImpl protected constructor(protected val connection: Connection) :
   ReadContext {
 
-  override suspend fun executeQuery(query: StatementBuilder): QueryResult {
-    val result: Result = query.build(connection).execute().awaitSingle()
+  override suspend fun executeQuery(query: BoundStatement): QueryResult {
+    val result: Result = query.toStatement(connection).execute().awaitSingle()
     return QueryResult(result)
   }
 
@@ -72,10 +72,10 @@ internal open class ReadContextImpl protected constructor(protected val connecti
 internal class SingleUseReadContext private constructor(connection: Connection) :
   ReadContextImpl(connection) {
 
-  override suspend fun executeQuery(query: StatementBuilder): QueryResult {
+  override suspend fun executeQuery(query: BoundStatement): QueryResult {
     val result: Result =
       try {
-        query.build(connection).execute().awaitSingle()
+        query.toStatement(connection).execute().awaitSingle()
       } catch (e: Exception) {
         close()
         throw e
