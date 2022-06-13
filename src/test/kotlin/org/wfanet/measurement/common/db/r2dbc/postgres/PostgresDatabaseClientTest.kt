@@ -145,9 +145,10 @@ class PostgresDatabaseClientTest {
 
     val query = boundStatement("SELECT * FROM Cars ORDER BY Year ASC")
     val models: Flow<String> =
-      txn.executeQuery(query).consume { row -> row.getValue<String>("Model") }.onCompletion {
-        txn.close()
-      }
+      txn
+        .executeQuery(query)
+        .consume { row -> row.getValue<String>("Model") }
+        .onCompletion { txn.close() }
 
     assertThat(models.toList())
       .containsExactly("Stanza", "CR-V", "S4", "Model 3", "Model Y")
@@ -173,9 +174,9 @@ class PostgresDatabaseClientTest {
     val query = boundStatement("SELECT * FROM CARS")
     val models: Flow<String> =
       with(dbClient.readTransaction()) {
-        executeQuery(query).consume { row -> row.getValue<String>("Model") }.onCompletion {
-          close()
-        }
+        executeQuery(query)
+          .consume { row -> row.getValue<String>("Model") }
+          .onCompletion { close() }
       }
     writeTxn.close()
 

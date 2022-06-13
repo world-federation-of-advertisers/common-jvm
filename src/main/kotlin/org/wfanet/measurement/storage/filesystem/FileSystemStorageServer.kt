@@ -31,7 +31,8 @@ private class Flags {
     description =
       [
         "Directory to store blobs on the file system.",
-        "If not specified, a new temporary directory will be created and used."]
+        "If not specified, a new temporary directory will be created and used."
+      ]
   )
   var directory: File? = null
     private set
