@@ -73,8 +73,7 @@ fun readCertificateCollection(pemFile: File): Collection<X509Certificate> {
   @Suppress("UNCHECKED_CAST") // Underlying mutable collection never exposed.
   return pemFile.inputStream().use { fileInputStream ->
     certFactory.generateCertificates(fileInputStream)
-  } as
-    Collection<X509Certificate>
+  } as Collection<X509Certificate>
 }
 
 /**

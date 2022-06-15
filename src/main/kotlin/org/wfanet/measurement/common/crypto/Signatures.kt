@@ -134,11 +134,12 @@ fun Flow<ByteString>.verifying(
   signature: ByteString
 ): Flow<ByteString> {
   val verifier = certificate.newVerifier()
-  return onEach { bytes -> verifier.update(bytes) }.onCompletion { e ->
-    if (e == null && !verifier.verify(signature.toByteArray())) {
-      throw InvalidSignatureException("Signature is invalid")
+  return onEach { bytes -> verifier.update(bytes) }
+    .onCompletion { e ->
+      if (e == null && !verifier.verify(signature.toByteArray())) {
+        throw InvalidSignatureException("Signature is invalid")
+      }
     }
-  }
 }
 
 /**

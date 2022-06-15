@@ -194,24 +194,29 @@ class FlowKtTest {
   @Test
   fun `consumeFirstOr returns alternate for empty flow`() = runBlocking {
     val alternate = "foo"
-    flowOf<String>().consumeFirstOr { alternate }.use { consumed ->
-      assertThat(consumed.item).isEqualTo(alternate)
-      assertFalse(consumed.hasRemaining)
-      assertThat(consumed.remaining.toList()).isEmpty()
-    }
+    flowOf<String>()
+      .consumeFirstOr { alternate }
+      .use { consumed ->
+        assertThat(consumed.item).isEqualTo(alternate)
+        assertFalse(consumed.hasRemaining)
+        assertThat(consumed.remaining.toList()).isEmpty()
+      }
   }
 
   @Test
   fun `consumeFirstOr returns same as consumeFirst for non-empty flow`() = runBlocking {
     val items = listOf("foo", "bar", "baz")
-    items.asFlow().consumeFirstOr { "alternate" }.use { consumed1 ->
-      assertNotNull(items.asFlow().consumeFirst()).use { consumed2 ->
-        assertThat(consumed1.item).isEqualTo(consumed2.item)
-        assertThat(consumed1.hasRemaining).isEqualTo(consumed2.hasRemaining)
-        assertThat(consumed1.remaining.toList())
-          .containsExactlyElementsIn(consumed2.remaining.toList())
-          .inOrder()
+    items
+      .asFlow()
+      .consumeFirstOr { "alternate" }
+      .use { consumed1 ->
+        assertNotNull(items.asFlow().consumeFirst()).use { consumed2 ->
+          assertThat(consumed1.item).isEqualTo(consumed2.item)
+          assertThat(consumed1.hasRemaining).isEqualTo(consumed2.hasRemaining)
+          assertThat(consumed1.remaining.toList())
+            .containsExactlyElementsIn(consumed2.remaining.toList())
+            .inOrder()
+        }
       }
-    }
   }
 }

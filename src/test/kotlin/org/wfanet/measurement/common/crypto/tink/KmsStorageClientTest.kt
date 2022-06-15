@@ -48,8 +48,8 @@ class KmsStorageClientTest : AbstractStorageClientTest<KmsStorageClient>() {
   @Before
   fun initStorageClient() {
     storageClient =
-      TinkKeyStorageProvider().makeKmsStorageClient(wrappedStorageClient, KEK_URI) as
-        KmsStorageClient
+      TinkKeyStorageProvider().makeKmsStorageClient(wrappedStorageClient, KEK_URI)
+        as KmsStorageClient
   }
 
   @Test

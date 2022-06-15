@@ -106,7 +106,8 @@ class AdaptiveThrottler(
       description =
         [
           "How much to overload the backend. If the factor is 1.1 it is expected ",
-          "that 10% of requests will fail due to throttling."],
+          "that 10% of requests will fail due to throttling."
+        ],
       defaultValue = "1.1"
     )
     var overloadFactor by Delegates.notNull<Double>()

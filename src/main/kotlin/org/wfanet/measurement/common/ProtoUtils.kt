@@ -110,8 +110,7 @@ fun <T : Message> parseTextProto(
   return messageInstance
     .newBuilderForType()
     .apply { mergeFromTextProto(textProto, typeRegistry) }
-    .build() as
-    T
+    .build() as T
 }
 
 fun <T : Message> parseTextProto(

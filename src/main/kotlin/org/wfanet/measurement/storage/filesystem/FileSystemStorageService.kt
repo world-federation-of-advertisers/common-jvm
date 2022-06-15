@@ -38,16 +38,18 @@ class FileSystemStorageService(directory: File) : ForwardedStorageCoroutineServi
 
   override suspend fun writeBlob(requests: Flow<WriteBlobRequest>): BlobMetadata {
     val blob =
-      requests.consumeFirstOr { WriteBlobRequest.getDefaultInstance() }.use { consumed ->
-        val headerRequest = consumed.item
-        val blobKey = headerRequest.header.blobKey
-        if (blobKey.isBlank()) {
-          throw Status.INVALID_ARGUMENT.withDescription("Missing blob key").asRuntimeException()
-        }
+      requests
+        .consumeFirstOr { WriteBlobRequest.getDefaultInstance() }
+        .use { consumed ->
+          val headerRequest = consumed.item
+          val blobKey = headerRequest.header.blobKey
+          if (blobKey.isBlank()) {
+            throw Status.INVALID_ARGUMENT.withDescription("Missing blob key").asRuntimeException()
+          }
 
-        val content = consumed.remaining.map { it.bodyChunk.content }
-        storageClient.writeBlob(blobKey, content)
-      }
+          val content = consumed.remaining.map { it.bodyChunk.content }
+          storageClient.writeBlob(blobKey, content)
+        }
 
     return BlobMetadata.newBuilder().setSize(blob.size).build()
   }
