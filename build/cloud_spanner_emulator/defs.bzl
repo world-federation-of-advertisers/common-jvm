@@ -14,6 +14,8 @@
 
 """Repository rules/macros for Google Cloud Spanner Emulator."""
 
+load("@bazel_tools//tools/build_defs/repo:utils.bzl", "maybe")
+
 def _cloud_spanner_emulator_impl(rctx):
     version = rctx.attr.version
     sha256 = rctx.attr.sha256
@@ -39,8 +41,9 @@ _cloud_spanner_emulator_binaries = repository_rule(
 )
 
 def cloud_spanner_emulator_binaries():
-    _cloud_spanner_emulator_binaries(
+    maybe(
+        _cloud_spanner_emulator_binaries,
         name = "cloud_spanner_emulator",
-        sha256 = "7a3cdd5db7f5a427230ab67a8dc09cfcb6752dd7f0b28d51e8d08150b2641506",
-        version = "1.1.1",
+        sha256 = "7048efb8708e0b2af98d84c9bd86ecb158b5663116c5dea789974d6a616f0e12",
+        version = "1.4.2",
     )

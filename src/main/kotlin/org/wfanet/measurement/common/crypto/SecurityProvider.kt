@@ -32,23 +32,6 @@ import kotlin.jvm.Throws
 import org.conscrypt.Conscrypt
 
 private const val CERTIFICATE_TYPE = "X.509"
-private const val SUBJECT_KEY_IDENTIFIER_OID = "2.5.29.14"
-private const val AUTHORITY_KEY_IDENTIFIER_OID = "2.5.29.35"
-
-/**
- * Known ASN.1 DER tags.
- *
- * See
- * [A Layman's Guide to a Subset of ASN.1, BER, and DER](https://luca.ntop.org/Teaching/Appunti/asn1.html)
- */
-private enum class Asn1Tag(val byte: Byte) {
-  /** Universal tag for OCTET_STRING type. */
-  OCTET_STRING(0x04.toByte()),
-  /** Constructed tag for SEQUENCE type. */
-  SEQUENCE(0x30.toByte()),
-  /** Context-specific tag for keyIdentifier within AuthorityKeyIdentifier extension. */
-  KEY_IDENTIFIER(0x80.toByte())
-}
 
 private val conscryptProvider: Provider =
   Conscrypt.newProvider().also { Security.insertProviderAt(it, 1) }
@@ -90,8 +73,7 @@ fun readCertificateCollection(pemFile: File): Collection<X509Certificate> {
   @Suppress("UNCHECKED_CAST") // Underlying mutable collection never exposed.
   return pemFile.inputStream().use { fileInputStream ->
     certFactory.generateCertificates(fileInputStream)
-  } as
-    Collection<X509Certificate>
+  } as Collection<X509Certificate>
 }
 
 /**
@@ -107,39 +89,6 @@ fun readPrivateKey(data: ByteString, algorithm: String): PrivateKey {
 fun KeySpec.toPrivateKey(algorithm: String): PrivateKey {
   return KeyFactory.getInstance(algorithm, jceProvider).generatePrivate(this)
 }
-
-/**
- * The keyIdentifier from the SubjectKeyIdentifier (AKI) X.509 extension, or `null` if it cannot be
- * found.
- */
-val X509Certificate.subjectKeyIdentifier: ByteString?
-  get() {
-    val extension: ByteArray = getExtensionValue(SUBJECT_KEY_IDENTIFIER_OID) ?: return null
-    if (extension.size < 4 || extension[2] != Asn1Tag.OCTET_STRING.byte) {
-      return null
-    }
-
-    val length = extension[3].toInt() // Assuming short form, where length <= 127 bytes.
-    return ByteString.copyFrom(extension, 4, length)
-  }
-
-/**
- * The keyIdentifier from the AuthorityKeyIdentifier (AKI) X.509 extension, or `null` if it cannot
- * be found.
- */
-val X509Certificate.authorityKeyIdentifier: ByteString?
-  get() {
-    val extension: ByteArray = getExtensionValue(AUTHORITY_KEY_IDENTIFIER_OID) ?: return null
-    if (extension.size < 6 ||
-        extension[2] != Asn1Tag.SEQUENCE.byte ||
-        extension[4] != Asn1Tag.KEY_IDENTIFIER.byte
-    ) {
-      return null
-    }
-
-    val length = extension[5].toInt() // Assuming short form, where length <= 127 bytes.
-    return ByteString.copyFrom(extension, 6, length)
-  }
 
 /** Generates a new [KeyPair]. */
 fun generateKeyPair(keyAlgorithm: String): KeyPair {

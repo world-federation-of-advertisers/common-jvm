@@ -28,3 +28,5 @@ data class HexString(val bytes: ByteString) {
 
   override fun toString(): String = value
 }
+
+fun ByteString.toHexString() = HexString(this)

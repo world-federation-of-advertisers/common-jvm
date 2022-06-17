@@ -14,11 +14,14 @@
 
 """Repository defs for kotlinx-coroutines."""
 
+load("//build:versions.bzl", "KOTLINX_COROUTINES_VERSION")
+
 _ARTIFACT_NAMES = [
     "org.jetbrains.kotlinx:kotlinx-coroutines-core",
     "org.jetbrains.kotlinx:kotlinx-coroutines-debug",
+    "org.jetbrains.kotlinx:kotlinx-coroutines-reactive",
     "org.jetbrains.kotlinx:kotlinx-coroutines-test",
 ]
 
-def kotlinx_coroutines_artifact_dict(version):
-    return {name: version for name in _ARTIFACT_NAMES}
+def kotlinx_coroutines_artifact_dict():
+    return {name: KOTLINX_COROUTINES_VERSION for name in _ARTIFACT_NAMES}

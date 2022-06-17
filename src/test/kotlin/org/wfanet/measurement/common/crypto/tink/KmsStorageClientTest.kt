@@ -20,7 +20,6 @@ import com.google.common.truth.Truth.assertThat
 import com.google.crypto.tink.Aead
 import com.google.crypto.tink.KeyTemplates
 import com.google.crypto.tink.KeysetHandle
-import com.google.crypto.tink.KmsClients
 import com.google.crypto.tink.aead.AeadConfig
 import com.google.protobuf.ByteString
 import com.google.protobuf.kotlin.toByteString
@@ -33,8 +32,6 @@ import org.junit.runners.JUnit4
 import org.wfanet.measurement.common.crypto.tink.testing.FakeKmsClient
 import org.wfanet.measurement.common.size
 import org.wfanet.measurement.common.toByteArray
-import org.wfanet.measurement.storage.createBlob
-import org.wfanet.measurement.storage.read
 import org.wfanet.measurement.storage.testing.AbstractStorageClientTest
 import org.wfanet.measurement.storage.testing.InMemoryStorageClient
 
@@ -51,15 +48,15 @@ class KmsStorageClientTest : AbstractStorageClientTest<KmsStorageClient>() {
   @Before
   fun initStorageClient() {
     storageClient =
-      TinkKeyStorageProvider().makeKmsStorageClient(wrappedStorageClient, KEK_URI) as
-        KmsStorageClient
+      TinkKeyStorageProvider().makeKmsStorageClient(wrappedStorageClient, KEK_URI)
+        as KmsStorageClient
   }
 
   @Test
   fun `wrapped blob is encrypted`() = runBlocking {
     val blobKey = "kms-blob"
 
-    storageClient.createBlob(blobKey, testBlobContent)
+    storageClient.writeBlob(blobKey, testBlobContent)
 
     val wrappedBlob = assertNotNull(wrappedStorageClient.getBlob(blobKey))
     val plainTextContent =
@@ -82,7 +79,7 @@ class KmsStorageClientTest : AbstractStorageClientTest<KmsStorageClient>() {
     private val aead = KEY_ENCRYPTION_KEY.getPrimitive(Aead::class.java)
 
     init {
-      KmsClients.add(FakeKmsClient().apply { addAead(KEK_URI, aead) })
+      FakeKmsClient.register(KEK_URI, aead)
     }
   }
 }

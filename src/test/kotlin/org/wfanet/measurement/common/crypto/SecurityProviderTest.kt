@@ -24,6 +24,7 @@ import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 import org.wfanet.measurement.common.byteStringOf
 import org.wfanet.measurement.common.crypto.testing.FIXED_CA_CERT_PEM_FILE
+import org.wfanet.measurement.common.crypto.testing.FIXED_CLIENT_CERT_PEM_FILE
 import org.wfanet.measurement.common.crypto.testing.FIXED_SERVER_CERT_PEM_FILE
 import org.wfanet.measurement.common.crypto.testing.FIXED_SERVER_KEY_FILE
 
@@ -50,6 +51,29 @@ private val SERVER_SKID =
     0x2C,
     0x63,
     0xA8
+  )
+private val CLIENT_AKID =
+  byteStringOf(
+    0x57,
+    0xE8,
+    0x9A,
+    0x06,
+    0x76,
+    0xBE,
+    0xBA,
+    0x1E,
+    0xA0,
+    0x71,
+    0x50,
+    0x5C,
+    0x40,
+    0x87,
+    0x9B,
+    0x98,
+    0xF1,
+    0xF5,
+    0x0C,
+    0x9E,
   )
 
 @RunWith(JUnit4::class)
@@ -96,5 +120,14 @@ class SecurityProviderTest {
     val certificate: X509Certificate = readCertificate(FIXED_SERVER_CERT_PEM_FILE)
 
     assertThat(certificate.authorityKeyIdentifier).isEqualTo(issuerCertificate.subjectKeyIdentifier)
+  }
+
+  @Test
+  fun `authorityKeyIdentifier returns AKID of certificate with long extension`() {
+    // Load a certificate whose AKI extension has all optional fields specified, resulting in an
+    // octet string that has a content length of >127 bytes.
+    val certificate: X509Certificate = readCertificate(FIXED_CLIENT_CERT_PEM_FILE)
+
+    assertThat(certificate.authorityKeyIdentifier).isEqualTo(CLIENT_AKID)
   }
 }

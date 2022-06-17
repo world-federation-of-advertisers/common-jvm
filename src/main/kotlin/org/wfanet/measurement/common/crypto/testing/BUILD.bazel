@@ -18,7 +18,6 @@ kt_jvm_library(
         "//src/main/kotlin/org/wfanet/measurement/common",
         "//src/main/kotlin/org/wfanet/measurement/common/crypto:security_provider",
         "//src/main/kotlin/org/wfanet/measurement/common/crypto:signatures",
-        "//src/main/kotlin/org/wfanet/measurement/common/crypto:signing_certs",
         "//src/main/kotlin/org/wfanet/measurement/common/crypto:signing_key_storage",
     ],
 )

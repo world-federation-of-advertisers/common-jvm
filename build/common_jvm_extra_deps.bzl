@@ -30,9 +30,9 @@ def common_jvm_extra_deps():
     """
     Adds all external repos necessary for common-jvm.
     """
+    grpc_extra_deps()
     compat_repositories()
     container_deps()
     java_image_repositories()
-    grpc_extra_deps()
     grpc_kt_repositories()
     grpc_java_repositories()

@@ -17,7 +17,7 @@ package org.wfanet.measurement.common.crypto
 import org.wfanet.measurement.storage.StorageClient
 import org.wfanet.measurement.storage.Store
 
-interface KeyStorageProvider<T : PrivateKeyHandle> {
+interface KeyStorageProvider<K : PrivateKeyStore.KeyId, V : PrivateKeyHandle> {
   /**
    * Instantiates a [StorageClient] that wraps [storageClient] for storage of KMS-encrypted blobs.
    */
@@ -30,5 +30,5 @@ interface KeyStorageProvider<T : PrivateKeyHandle> {
    * @param store [Store] where key blobs are stored
    * @param keyUri KMS master key URI for encrypting/decrypting key data
    */
-  fun makeKmsPrivateKeyStore(store: Store<String>, keyUri: String): PrivateKeyStore<T>
+  fun makeKmsPrivateKeyStore(store: KeyBlobStore, keyUri: String): PrivateKeyStore<K, V>
 }

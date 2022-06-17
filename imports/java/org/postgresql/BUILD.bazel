@@ -1,0 +1,6 @@
+package(default_visibility = ["//visibility:public"])
+
+alias(
+    name = "r2dbc",
+    actual = "@maven//:org_postgresql_r2dbc_postgresql",
+)

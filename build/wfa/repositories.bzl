@@ -15,13 +15,15 @@
 """World Federation of Advertisers (WFA) GitHub repo macros."""
 
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+load("@bazel_tools//tools/build_defs/repo:utils.bzl", "maybe")
 
 _URL_TEMPLATE = "https://github.com/world-federation-of-advertisers/{repo}/archive/{commit}.tar.gz"
 _PREFIX_TEMPLATE = "{repo}-{commit}"
 
 def wfa_repo_archive(name, repo, commit, sha256 = None):
     """Adds a WFA repository archive target."""
-    http_archive(
+    maybe(
+        http_archive,
         name = name,
         urls = [_URL_TEMPLATE.format(repo = repo, commit = commit)],
         strip_prefix = _PREFIX_TEMPLATE.format(repo = repo, commit = commit),

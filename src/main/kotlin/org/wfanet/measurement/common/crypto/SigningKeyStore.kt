@@ -17,20 +17,21 @@ package org.wfanet.measurement.common.crypto
 import com.google.protobuf.ByteString
 import java.security.PrivateKey
 import java.security.cert.X509Certificate
-import java.util.UUID
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import org.wfanet.measurement.common.HexString
 import org.wfanet.measurement.common.flatten
+import org.wfanet.measurement.common.toHexString
+import org.wfanet.measurement.storage.StorageClient
 import org.wfanet.measurement.storage.Store
-import org.wfanet.measurement.storage.read
 
 /** Store of private signing keys. */
-class SigningKeyStore(private val store: Store<Context>) {
-  data class Context(val subjectKeyIdentifier: ByteString) {
-    fun generateBlobKey(): String {
-      return "/${HexString(subjectKeyIdentifier).value}/${UUID.randomUUID()}"
-    }
+class SigningKeyStore(storageClient: StorageClient) {
+  private val store: Store<Context> = BlobStore(storageClient)
+
+  data class Context(val subjectKeyIdentifier: HexString) {
+    val blobKey: String
+      get() = subjectKeyIdentifier.value + ".pem"
+
+    constructor(subjectKeyIdentifier: ByteString) : this(subjectKeyIdentifier.toHexString())
 
     companion object {
       fun fromCertificate(certificate: X509Certificate): Context {
@@ -39,13 +40,20 @@ class SigningKeyStore(private val store: Store<Context>) {
     }
   }
 
+  private class BlobStore(storageClient: StorageClient) : Store<Context>(storageClient) {
+    override val blobKeyPrefix: String = "signing-keys"
+
+    override fun deriveBlobKey(context: Context): String = context.blobKey
+  }
+
   internal suspend fun write(certificate: X509Certificate, privateKey: PrivateKey): String {
     val pemBytes =
       ByteString.newOutput().use { output ->
-        val writer = PemWriter(output)
-        withContext(Dispatchers.IO) {
-          writer.write(certificate)
-          writer.write(privateKey)
+        PemWriter(output).apply {
+          @Suppress("BlockingMethodInNonBlockingContext") // Not blocking IO.
+          write(certificate)
+          @Suppress("BlockingMethodInNonBlockingContext") // Not blocking IO.
+          write(privateKey)
         }
         output.toByteString()
       }
@@ -53,12 +61,31 @@ class SigningKeyStore(private val store: Store<Context>) {
     return blob.blobKey
   }
 
-  suspend fun read(keyId: String): SigningKeyHandle? {
-    val blob = store.get(keyId) ?: return null
-    return PemReader(blob.read().flatten().newInput()).use { reader ->
-      val certificate = reader.readCertificate()
-      val privateKey = reader.readPrivateKeySpec().toPrivateKey(certificate.publicKey.algorithm)
-      SigningKeyHandle(certificate, privateKey)
+  /**
+   * Reads the [SigningKeyHandle] from [store] for the specified [blobContext].
+   *
+   * @return the [SigningKeyHandle], or `null` if not found
+   */
+  suspend fun read(blobContext: Context): SigningKeyHandle? {
+    return store.get(blobContext)?.readSigningKeyHandle()
+  }
+
+  /**
+   * Reads the [SigningKeyHandle] from [store] for the specified [blobKey].
+   *
+   * @return the [SigningKeyHandle], or `null` if not found
+   */
+  suspend fun read(blobKey: String): SigningKeyHandle? {
+    return store.get(blobKey)?.readSigningKeyHandle()
+  }
+
+  companion object {
+    private suspend fun Store.Blob.readSigningKeyHandle(): SigningKeyHandle {
+      return PemReader(read().flatten().newInput()).use { reader ->
+        val certificate = reader.readCertificate()
+        val privateKey = reader.readPrivateKeySpec().toPrivateKey(certificate.publicKey.algorithm)
+        SigningKeyHandle(certificate, privateKey)
+      }
     }
   }
 }

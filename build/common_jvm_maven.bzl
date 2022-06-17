@@ -17,52 +17,56 @@ Adds external repos necessary for common-jvm.
 """
 
 load(
-    "//build/io_bazel_rules_kotlin:repo.bzl",
-    "IO_BAZEL_RULES_KOTLIN_OVERRIDE_TARGETS",
-)
-load(
-    "@com_github_grpc_grpc_kotlin//:repositories.bzl",
-    "IO_GRPC_GRPC_KOTLIN_ARTIFACTS",
-    "IO_GRPC_GRPC_KOTLIN_OVERRIDE_TARGETS",
+    "//build/rules_kotlin:repo.bzl",
+    "RULES_KOTLIN_OVERRIDE_TARGETS",
+    "rules_kotlin_maven_artifacts_dict",
 )
 load(
     "@io_grpc_grpc_java//:repositories.bzl",
-    "IO_GRPC_GRPC_JAVA_ARTIFACTS",
-    "IO_GRPC_GRPC_JAVA_OVERRIDE_TARGETS",
+    GRPC_JAVA_MAVEN_DEPS = "IO_GRPC_GRPC_JAVA_ARTIFACTS",
 )
+load(
+    "@com_github_grpc_grpc_kotlin//:repositories.bzl",
+    GRPC_KOTLIN_MAVEN_DEPS = "IO_GRPC_GRPC_KOTLIN_ARTIFACTS",
+)
+load("//build/rules_proto:repo.bzl", "rules_proto_maven_artifacts_dict")
+load("//build/grpc_java:repo.bzl", "grpc_java_maven_artifacts_dict")
+load("//build/grpc_kotlin:repo.bzl", "grpc_kotlin_maven_artifacts_dict")
 load("//build/com_google_truth:repo.bzl", "com_google_truth_artifact_dict")
 load("//build/kotlinx_coroutines:repo.bzl", "kotlinx_coroutines_artifact_dict")
 load("//build/maven:artifacts.bzl", "artifacts")
-load("//build/com_google_protobuf:repo.bzl", "COM_GOOGLE_PROTOBUF_VERSION")
-load("//build/tink:repo.bzl", "TINK_JAVA_KMS_MAVEN_ARTIFACTS")
+load("//build/tink:repo.bzl", "TINK_JAVA_KMS_MAVEN_DEPS")
+load("//build:versions.bzl", "PROTOBUF_VERSION")
 
+# buildifier: disable=function-docstring-return
 def common_jvm_maven_artifacts():
-    """
-    Adds external repos necessary for common-jvm.
+    """Returns a list of Maven artifacts for this repo."""
+    return artifacts.dict_to_list(common_jvm_maven_artifacts_dict())
 
-    Returns:
-        An updated dictionary from a list of Java and Kotlin artifacts
-    """
+# buildifier: disable=function-docstring-return
+def common_jvm_maven_artifacts_dict():
+    """Returns a dict of Maven coordinates to version for this repo."""
     maven_artifacts = artifacts.list_to_dict(
-        IO_GRPC_GRPC_JAVA_ARTIFACTS +
-        IO_GRPC_GRPC_KOTLIN_ARTIFACTS,
+        GRPC_JAVA_MAVEN_DEPS +
+        GRPC_KOTLIN_MAVEN_DEPS,
     )
-    maven_artifacts.update(TINK_JAVA_KMS_MAVEN_ARTIFACTS)
-    maven_artifacts.update(com_google_truth_artifact_dict(version = "1.0.1"))
 
-    # kotlinx.coroutines version should be compatible with Kotlin release used by
-    # rules_kotlin. See https://kotlinlang.org/docs/releases.html#release-details.
-    maven_artifacts.update(kotlinx_coroutines_artifact_dict(version = "1.4.3"))
+    maven_artifacts.update(rules_proto_maven_artifacts_dict())
+    maven_artifacts.update(rules_kotlin_maven_artifacts_dict())
+    maven_artifacts.update(grpc_java_maven_artifacts_dict())
+    maven_artifacts.update(grpc_kotlin_maven_artifacts_dict())
+    maven_artifacts.update(TINK_JAVA_KMS_MAVEN_DEPS)
+    maven_artifacts.update(com_google_truth_artifact_dict(version = "1.0.1"))
+    maven_artifacts.update(kotlinx_coroutines_artifact_dict())
 
     # Add Maven artifacts or override versions (e.g. those pulled in by gRPC Kotlin
     # or default dependency versions).
     maven_artifacts.update({
         "com.adobe.testing:s3mock-junit4": "2.2.3",
-        "com.google.api:gax-grpc": "2.12.2",
-        "com.google.api.grpc:grpc-core-proto": "0.0.6",
-        "com.google.cloud:google-cloud-bigquery": "2.4.1",
-        "com.google.cloud:google-cloud-nio": "0.123.10",
-        "com.google.cloud:google-cloud-spanner": "3.0.3",
+        "com.google.cloud:google-cloud-bigquery": "2.10.10",
+        "com.google.cloud:google-cloud-nio": "0.123.28",
+        "com.google.cloud:google-cloud-spanner": "6.23.3",
+        "com.google.cloud:google-cloud-storage": "2.6.1",
         "com.google.guava:guava": "31.0.1-jre",
         "info.picocli:picocli": "4.4.0",
         "junit:junit": "4.13",
@@ -72,22 +76,28 @@ def common_jvm_maven_artifacts():
         "software.amazon.awssdk:s3": "2.17.98",
         "software.amazon.awssdk:sdk-core": "2.17.98",
 
-        # For grpc-kotlin. This should be a version that is compatible with the
-        # Kotlin release used by rules_kotlin.
+        # PostgreSQL.
+        "org.postgresql:r2dbc-postgresql": "0.9.1.RELEASE",
+        "com.opentable.components:otj-pg-embedded": "1.0.1",
+
+        # Liquibase.
+        "org.liquibase:liquibase-core": "4.9.1",
+        "org.yaml:snakeyaml": "1.30",
+        "com.google.cloudspannerecosystem:liquibase-spanner": "4.6.1",
+        "com.google.cloud:google-cloud-spanner-jdbc": "2.6.4",
+        "org.liquibase.ext:liquibase-postgresql": "4.11.0",
+
+        # For grpc-kotlin. This should be a version that is compatible with
+        # KOTLIN_RELEASE_VERSION.
         "com.squareup:kotlinpoet": "1.8.0",
 
         # For kt_jvm_proto_library.
-        # The version must match that in //build/com_google_protobuf/repo.bzl.
-        "com.google.protobuf:protobuf-kotlin": COM_GOOGLE_PROTOBUF_VERSION,
+        "com.google.protobuf:protobuf-kotlin": PROTOBUF_VERSION,
     })
 
-    return artifacts.dict_to_list(maven_artifacts)
+    return maven_artifacts
 
-COMMON_JVM_MAVEN_OVERRIDE_TARGETS = dict(
-    IO_BAZEL_RULES_KOTLIN_OVERRIDE_TARGETS.items() +
-    IO_GRPC_GRPC_JAVA_OVERRIDE_TARGETS.items() +
-    IO_GRPC_GRPC_KOTLIN_OVERRIDE_TARGETS.items(),
-)
+COMMON_JVM_MAVEN_OVERRIDE_TARGETS = RULES_KOTLIN_OVERRIDE_TARGETS
 
 # Until the log2shell has been more widely mitigated, prohibit log4j totally.
 COMMON_JVM_EXCLUDED_ARTIFACTS = [

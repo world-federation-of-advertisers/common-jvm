@@ -56,25 +56,16 @@ class SpannerFlags {
     description = ["Host name and port of the spanner emulator."],
     required = false
   )
-  var spannerEmulatorHost: String? = null
+  var emulatorHost: String? = null
     private set
 
-  /** Builds a [SpannerDatabaseConnector] from these flags. */
-  private fun toSpannerDatabaseConnector(): SpannerDatabaseConnector {
-    return SpannerDatabaseConnector(
-      instanceName,
-      projectName,
-      readyTimeout,
-      databaseName,
-      spannerEmulatorHost
-    )
-  }
-
-  /**
-   * Executes [block] with a [SpannerDatabaseConnector] resource once it's ready, ensuring that the
-   * resource is closed.
-   */
-  suspend fun <R> usingSpanner(block: suspend (spanner: SpannerDatabaseConnector) -> R): R {
-    return toSpannerDatabaseConnector().usingSpanner(block)
-  }
+  val jdbcConnectionString: String
+    get() {
+      val databasePath = "projects/$projectName/instances/$instanceName/databases/$databaseName"
+      return if (emulatorHost == null) {
+        "jdbc:cloudspanner:/$databasePath"
+      } else {
+        "jdbc:cloudspanner://$emulatorHost/$databasePath;usePlainText=true;autoConfigEmulator=true"
+      }
+    }
 }

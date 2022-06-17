@@ -19,7 +19,7 @@ import io.grpc.Server
 import io.grpc.health.v1.HealthCheckRequest
 import io.grpc.health.v1.HealthCheckResponse
 import io.grpc.health.v1.HealthGrpcKt.HealthCoroutineStub
-import io.grpc.services.HealthStatusManager
+import io.grpc.protobuf.services.HealthStatusManager
 import io.grpc.testing.GrpcCleanupRule
 import io.netty.handler.ssl.ClientAuth
 import java.io.File
@@ -33,7 +33,7 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
-import org.wfanet.measurement.common.crypto.testing.SigningCertsTesting
+import org.wfanet.measurement.common.crypto.SigningCerts
 
 private const val ALGORITHM = "ec"
 private const val CURVE = "prime256v1"
@@ -48,14 +48,14 @@ class TransportSecurityTest {
   private val healthStatusManager = HealthStatusManager()
 
   private val serverCerts =
-    SigningCertsTesting.fromPemFiles(
+    SigningCerts.fromPemFiles(
       certificateFile = tempDir.resolve("server.pem"),
       privateKeyFile = tempDir.resolve("server.key"),
       trustedCertCollectionFile = tempDir.resolve("client-root.pem")
     )
 
   private val clientCerts =
-    SigningCertsTesting.fromPemFiles(
+    SigningCerts.fromPemFiles(
       certificateFile = tempDir.resolve("client.pem"),
       privateKeyFile = tempDir.resolve("client.key"),
       trustedCertCollectionFile = tempDir.resolve("server-root.pem")

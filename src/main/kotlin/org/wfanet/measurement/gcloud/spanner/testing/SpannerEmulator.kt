@@ -18,10 +18,11 @@ import java.net.ServerSocket
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
-import java.time.Duration
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.yield
 import org.wfanet.measurement.common.getRuntimePath
 
 private const val EMULATOR_HOSTNAME = "localhost"
@@ -34,58 +35,76 @@ private const val INVALID_HOST_MESSAGE =
  * @param port TCP port that the emulator should listen on, or 0 to allocate a port automatically
  */
 class SpannerEmulator(private val port: Int = 0) : AutoCloseable {
-  private lateinit var emulator: Process
-  private lateinit var emulatorHost: String
+  private val startMutex = Mutex()
+  @Volatile private lateinit var emulator: Process
 
-  /** Starts the emulator process. */
-  fun start() {
-    check(!this::emulator.isInitialized)
+  val started: Boolean
+    get() = this::emulator.isInitialized
 
-    // Open a socket on `port`. This should reduce the likelihood that the port
-    // is in use. Additionally, this will allocate a port if `port` is 0.
-    val localPort = ServerSocket(port).use { it.localPort }
-
-    emulatorHost = "$EMULATOR_HOSTNAME:$localPort"
-    emulator =
-      ProcessBuilder(emulatorPath.toString(), "--host_port=$emulatorHost")
-        .redirectError(ProcessBuilder.Redirect.INHERIT)
-        .start()
-  }
+  @Volatile private var _emulatorHost: String? = null
+  val emulatorHost: String
+    get() {
+      check(started) { "Emulator not started" }
+      return _emulatorHost!!
+    }
 
   /**
-   * Suspends until the emulator is ready.
+   * Starts the emulator process if it has not already been started.
    *
-   * @param timeout Timeout for how long to wait before throwing a
-   * [kotlinx.coroutines.TimeoutCancellationException].
-   * @return the emulator host, which can be passed to
-   * [com.google.cloud.spanner.SpannerOptions.Builder.setEmulatorHost].
+   * This suspends until the emulator is ready.
+   *
+   * @returns the emulator host
    */
-  suspend fun waitUntilReady(timeout: Duration = Duration.ofSeconds(10)): String {
-    withTimeout(timeout.toMillis()) { emulatorReady() }
-    return emulatorHost
-  }
+  suspend fun start(): String {
+    if (started) {
+      return emulatorHost
+    }
 
-  /** Returns when emulator is ready. */
-  private suspend fun emulatorReady() {
-    /** Suffix of line of emulator output that will tell us that it's ready. */
-    val readyLineSuffix = "Server address: $emulatorHost"
+    return startMutex.withLock {
+      // Double-checked locking.
+      if (started) {
+        return@withLock emulatorHost
+      }
 
-    emulator.inputStream.use { input ->
-      input.bufferedReader().use { reader ->
-        withContext(Dispatchers.IO) {
-          do {
-            check(emulator.isAlive) { "Emulator stopped unexpectedly" }
-            val line = reader.readLine()
-          } while (!line.endsWith(readyLineSuffix))
+      return withContext(Dispatchers.IO) {
+        // Open a socket on `port`. This should reduce the likelihood that the port
+        // is in use. Additionally, this will allocate a port if `port` is 0.
+        val localPort = ServerSocket(port).use { it.localPort }
+
+        val emulatorHost = "$EMULATOR_HOSTNAME:$localPort"
+        _emulatorHost = emulatorHost
+        emulator =
+          ProcessBuilder(emulatorPath.toString(), "--host_port=$emulatorHost")
+            .redirectError(ProcessBuilder.Redirect.INHERIT)
+            .start()
+
+        /** Suffix of line of emulator output that will tell us that it's ready. */
+        val readyLineSuffix = "Server address: $emulatorHost"
+
+        emulator.inputStream.use { input ->
+          input.bufferedReader().use { reader ->
+            do {
+              yield()
+              check(emulator.isAlive) { "Emulator stopped unexpectedly" }
+              val line = reader.readLine()
+            } while (!line.endsWith(readyLineSuffix))
+          }
         }
+
+        emulatorHost
       }
     }
   }
 
   override fun close() {
-    if (this::emulator.isInitialized) {
+    if (started) {
       emulator.destroy()
     }
+  }
+
+  fun buildJdbcConnectionString(project: String, instance: String, database: String): String {
+    return "jdbc:cloudspanner://$emulatorHost/projects/$project/instances/$instance/databases/" +
+      "$database;usePlainText=true;autoConfigEmulator=true"
   }
 
   companion object {

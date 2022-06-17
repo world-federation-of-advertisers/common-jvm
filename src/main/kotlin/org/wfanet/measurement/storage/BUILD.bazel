@@ -24,15 +24,3 @@ kt_jvm_library(
         "//src/main/kotlin/org/wfanet/measurement/common",
     ],
 )
-
-kt_jvm_library(
-    name = "verified_storage_extensions",
-    srcs = ["VerifiedStorageExtensions.kt"],
-    deps = [
-        ":client",
-        "//imports/java/com/google/protobuf",
-        "//imports/kotlin/kotlinx/coroutines:core",
-        "//src/main/kotlin/org/wfanet/measurement/common/crypto:signatures",
-        "//src/main/kotlin/org/wfanet/measurement/common/crypto:signed_blob",
-    ],
-)

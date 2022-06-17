@@ -19,15 +19,14 @@ import com.google.crypto.tink.BinaryKeysetReader
 import com.google.crypto.tink.BinaryKeysetWriter
 import com.google.crypto.tink.KeysetHandle
 import com.google.protobuf.ByteString
+import org.wfanet.measurement.common.crypto.KeyBlobStore
 import org.wfanet.measurement.common.crypto.PrivateKeyStore as CryptoPrivateKeyStore
 import org.wfanet.measurement.common.flatten
-import org.wfanet.measurement.storage.Store
-import org.wfanet.measurement.storage.read
 
-internal class PrivateKeyStore(private val store: Store<String>, private val aead: Aead) :
-  CryptoPrivateKeyStore<TinkPrivateKeyHandle> {
+internal class PrivateKeyStore(private val store: KeyBlobStore, private val aead: Aead) :
+  CryptoPrivateKeyStore<TinkKeyId, TinkPrivateKeyHandle> {
 
-  override suspend fun read(keyId: String): TinkPrivateKeyHandle? {
+  override suspend fun read(keyId: TinkKeyId): TinkPrivateKeyHandle? {
     val privateKeyBlob = store.get(keyId) ?: return null
     return privateKeyBlob.read().flatten().newInput().use {
       TinkPrivateKeyHandle(KeysetHandle.read(BinaryKeysetReader.withInputStream(it), aead))
@@ -37,8 +36,7 @@ internal class PrivateKeyStore(private val store: Store<String>, private val aea
   override suspend fun write(privateKey: TinkPrivateKeyHandle): String {
     return ByteString.newOutput().use {
       privateKey.keysetHandle.write(BinaryKeysetWriter.withOutputStream(it), aead)
-      val privateKeyBlob =
-        store.write(privateKey.keysetHandle.keysetInfo.primaryKeyId.toString(), it.toByteString())
+      val privateKeyBlob = store.write(TinkKeyId(privateKey.publicKey), it.toByteString())
       privateKeyBlob.blobKey
     }
   }

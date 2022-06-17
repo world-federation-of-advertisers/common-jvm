@@ -15,19 +15,25 @@
 package org.wfanet.measurement.aws.s3
 
 import com.google.protobuf.ByteString
-import com.google.protobuf.kotlin.toByteString
 import java.security.MessageDigest
+import java.util.Base64
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEmpty
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.flow.withIndex
+import kotlinx.coroutines.withContext
 import org.wfanet.measurement.common.BYTES_PER_MIB
-import org.wfanet.measurement.common.HexString
 import org.wfanet.measurement.common.asBufferedFlow
 import org.wfanet.measurement.common.asFlow
 import org.wfanet.measurement.storage.StorageClient
 import software.amazon.awssdk.core.sync.RequestBody
 import software.amazon.awssdk.services.s3.S3Client
+import software.amazon.awssdk.services.s3.model.CompleteMultipartUploadResponse
 import software.amazon.awssdk.services.s3.model.CompletedPart
 import software.amazon.awssdk.services.s3.model.CreateMultipartUploadRequest
 import software.amazon.awssdk.services.s3.model.HeadObjectResponse
@@ -35,13 +41,20 @@ import software.amazon.awssdk.services.s3.model.NoSuchKeyException
 import software.amazon.awssdk.services.s3.model.UploadPartRequest
 
 /** S3 requires each part of a multipart upload (except the last) is at least 5 MB. */
-private const val BYTE_BUFFER_SIZE = BYTES_PER_MIB * 5
+private const val WRITE_BUFFER_SIZE = BYTES_PER_MIB * 5
+private const val READ_BUFFER_SIZE = WRITE_BUFFER_SIZE
 
 /** Amazon Web Services (AWS) S3 implementation of [StorageClient] for a single bucket. */
-class S3StorageClient(private val s3: S3Client, private val bucketName: String) : StorageClient {
-  override val defaultBufferSizeBytes: Int = BYTE_BUFFER_SIZE
-
-  override suspend fun createBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
+class S3StorageClient(
+  /**
+   * Amazon S3 client.
+   *
+   * TODO(@SanjayVas): Use [software.amazon.awssdk.services.s3.S3AsyncClient] instead
+   */
+  private val s3: S3Client,
+  private val bucketName: String
+) : StorageClient {
+  override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
     val uploadId = createMultipartUpload(blobKey)
 
     try {
@@ -55,10 +68,11 @@ class S3StorageClient(private val s3: S3Client, private val bucketName: String) 
     return checkNotNull(getBlob(blobKey)) { "Blob key $blobKey was uploaded but no longer exists" }
   }
 
-  private fun createMultipartUpload(blobKey: String): String {
+  private suspend fun createMultipartUpload(blobKey: String): String {
     val multipartUploadRequest =
       CreateMultipartUploadRequest.builder().bucket(bucketName).key(blobKey).build()
-    val multipartUploadResponse = s3.createMultipartUpload(multipartUploadRequest)
+    val multipartUploadResponse =
+      withContext(Dispatchers.IO) { s3.createMultipartUpload(multipartUploadRequest) }
     return multipartUploadResponse.uploadId()
   }
 
@@ -70,18 +84,15 @@ class S3StorageClient(private val s3: S3Client, private val bucketName: String) 
     val digest = MessageDigest.getInstance("MD5")
     val builder = UploadPartRequest.builder().uploadId(uploadId).key(blobKey).bucket(bucketName)
     return content
-      .asBufferedFlow(BYTE_BUFFER_SIZE)
+      .asBufferedFlow(WRITE_BUFFER_SIZE)
       .withIndex()
+      .onEmpty { emit(IndexedValue(0, ByteString.EMPTY)) }
       .map { (i, bytes) ->
         bytes.asReadOnlyByteBufferList().forEach(digest::update)
-        val md5 = HexString(digest.digest().toByteString())
+        val md5 = String(Base64.getEncoder().encode(digest.digest()))
 
         val uploadPartRequest =
-          builder
-            .partNumber(i + 1)
-            .contentLength(bytes.size().toLong())
-            .contentMD5(md5.value)
-            .build()
+          builder.partNumber(i + 1).contentLength(bytes.size().toLong()).contentMD5(md5).build()
 
         val uploadPartResponse =
           s3.uploadPart(uploadPartRequest, RequestBody.fromByteBuffer(bytes.asReadOnlyByteBuffer()))
@@ -91,38 +102,43 @@ class S3StorageClient(private val s3: S3Client, private val bucketName: String) 
       .toList()
   }
 
-  private fun completeUpload(
+  private suspend fun completeUpload(
     blobKey: String,
     uploadId: String,
-    completedParts: Iterable<CompletedPart>
-  ) {
-    s3.completeMultipartUpload { builder ->
-      builder.uploadId(uploadId)
-      builder.bucket(bucketName)
-      builder.key(blobKey)
+    completedParts: Collection<CompletedPart>
+  ): CompleteMultipartUploadResponse {
+    return withContext(Dispatchers.IO) {
+      s3.completeMultipartUpload { builder ->
+        builder.uploadId(uploadId)
+        builder.bucket(bucketName)
+        builder.key(blobKey)
 
-      builder.multipartUpload { it.parts(completedParts.toList()) }
+        builder.multipartUpload { it.parts(completedParts) }
+      }
     }
   }
 
-  private fun cancelUpload(blobKey: String, uploadId: String) {
-    s3.abortMultipartUpload {
-      it.uploadId(uploadId)
-      it.bucket(bucketName)
-      it.key(blobKey)
+  private suspend fun cancelUpload(blobKey: String, uploadId: String) =
+    withContext(Dispatchers.IO) {
+      s3.abortMultipartUpload {
+        it.uploadId(uploadId)
+        it.bucket(bucketName)
+        it.key(blobKey)
+      }
     }
-  }
 
-  override fun getBlob(blobKey: String): StorageClient.Blob? {
+  override suspend fun getBlob(blobKey: String): StorageClient.Blob? {
     val head = head(blobKey) ?: return null
     return Blob(blobKey, head)
   }
 
-  private fun head(blobKey: String): HeadObjectResponse? {
+  private suspend fun head(blobKey: String): HeadObjectResponse? {
     return try {
-      s3.headObject {
-        it.bucket(bucketName)
-        it.key(blobKey)
+      withContext(Dispatchers.IO) {
+        s3.headObject {
+          it.bucket(bucketName)
+          it.key(blobKey)
+        }
       }
     } catch (notFound: NoSuchKeyException) {
       null
@@ -136,21 +152,25 @@ class S3StorageClient(private val s3: S3Client, private val bucketName: String) 
 
     override val size: Long = head.contentLength()
 
-    override fun read(bufferSizeBytes: Int): Flow<ByteString> {
-      val input =
-        s3.getObject {
+    override fun read(): Flow<ByteString> {
+      val flow = flow {
+        val input =
+          s3.getObject {
+            it.bucket(bucketName)
+            it.key(blobKey)
+          }
+
+        emitAll(input.asFlow(READ_BUFFER_SIZE))
+      }
+      return flow.flowOn(Dispatchers.IO)
+    }
+
+    override suspend fun delete(): Unit =
+      withContext(Dispatchers.IO) {
+        s3.deleteObject {
           it.bucket(bucketName)
           it.key(blobKey)
         }
-
-      return input.asFlow(bufferSizeBytes)
-    }
-
-    override fun delete() {
-      s3.deleteObject {
-        it.bucket(bucketName)
-        it.key(blobKey)
       }
-    }
   }
 }

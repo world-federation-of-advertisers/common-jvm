@@ -18,13 +18,14 @@ package org.wfanet.measurement.common.crypto.tink.testing
 
 import com.google.crypto.tink.Aead
 import com.google.crypto.tink.KmsClient
+import com.google.crypto.tink.KmsClients
 import java.security.GeneralSecurityException
 
 class FakeKmsClient : KmsClient {
   private val keyAeads = mutableMapOf<String, Aead>()
 
   override fun doesSupport(keyUri: String?): Boolean {
-    return keyUri?.startsWith(KEY_URI_PREFIX) ?: false
+    return keyAeads.containsKey(keyUri)
   }
 
   override fun withCredentials(credentialPath: String?): KmsClient {
@@ -39,18 +40,36 @@ class FakeKmsClient : KmsClient {
   }
 
   override fun getAead(keyUri: String?): Aead {
-    if (!doesSupport(keyUri)) {
-      throw GeneralSecurityException("URI not supported")
-    }
-    return keyAeads[keyUri] ?: throw GeneralSecurityException("Invalid key URI")
+    return keyAeads[keyUri] ?: throw GeneralSecurityException("URI not supported")
   }
 
-  fun addAead(keyUri: String, aead: Aead) {
-    require(doesSupport(keyUri)) { "URI not supported" }
+  /**
+   * Sets the [Aead] for [keyUri].
+   *
+   * This results in [keyUri] being supported by this [KmsClient].
+   */
+  fun setAead(keyUri: String, aead: Aead) {
+    require(keyUri.startsWith(KEY_URI_PREFIX)) { "URI scheme not supported" }
     keyAeads[keyUri] = aead
   }
 
   companion object {
-    const val KEY_URI_PREFIX = "fake-kms://"
+    const val KEY_URI_SCHEME = "fake-kms"
+    const val KEY_URI_PREFIX = "$KEY_URI_SCHEME://"
+
+    /** Creates and registers a [FakeKmsClient] with the Tink runtime. */
+    fun register(vararg keyUriAeads: Pair<String, Aead>) {
+      val kmsClient = FakeKmsClient()
+      for ((keyUri, aead) in keyUriAeads) {
+        kmsClient.setAead(keyUri, aead)
+      }
+
+      KmsClients.add(kmsClient)
+    }
+
+    /** Creates and registers a [FakeKmsClient] with the Tink runtime. */
+    fun register(keyUri: String, aead: Aead) {
+      register(keyUri to aead)
+    }
   }
 }

@@ -1,11 +1,16 @@
 package(default_visibility = ["//visibility:public"])
 
 alias(
+    name = "core",
+    actual = "@maven//:io_grpc_grpc_core",
+)
+
+alias(
     name = "api",
-    actual = "@io_grpc_grpc_java//api",
+    actual = "@maven//:io_grpc_grpc_api",
 )
 
 alias(
     name = "context",
-    actual = "@io_grpc_grpc_java//context",
+    actual = "@maven//:io_grpc_grpc_context",
 )

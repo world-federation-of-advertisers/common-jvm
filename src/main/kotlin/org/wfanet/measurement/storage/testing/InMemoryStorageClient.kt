@@ -16,20 +16,10 @@ package org.wfanet.measurement.storage.testing
 
 import com.google.protobuf.ByteString
 import java.util.concurrent.ConcurrentHashMap
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withContext
-import org.wfanet.measurement.common.BYTES_PER_MIB
-import org.wfanet.measurement.common.asBufferedFlow
+import kotlinx.coroutines.flow.flowOf
 import org.wfanet.measurement.common.flatten
 import org.wfanet.measurement.storage.StorageClient
-
-/**
- * The default byte buffer size. Chosen as it is a commonly used default buffer size in an attempt
- * to keep the tests as close to actual usage as possible.
- */
-private const val BYTE_BUFFER_SIZE = BYTES_PER_MIB * 1
 
 /** In-memory [StorageClient]. */
 class InMemoryStorageClient : StorageClient {
@@ -43,23 +33,13 @@ class InMemoryStorageClient : StorageClient {
     storageMap.remove(path)
   }
 
-  override val defaultBufferSizeBytes: Int
-    get() = BYTE_BUFFER_SIZE
-
-  override suspend fun createBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
-    return withContext(Dispatchers.IO) {
-      var created = false
-      val blob =
-        storageMap.getOrPut(blobKey) {
-          created = true
-          Blob(blobKey, runBlocking { content.flatten() })
-        }
-      require(created) { "Blob with key $blobKey already exists" }
-      blob
-    }
+  override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
+    val blob = Blob(blobKey, content.flatten())
+    storageMap[blobKey] = blob
+    return blob
   }
 
-  override fun getBlob(blobKey: String): StorageClient.Blob? {
+  override suspend fun getBlob(blobKey: String): StorageClient.Blob? {
     return storageMap[blobKey]
   }
 
@@ -72,9 +52,8 @@ class InMemoryStorageClient : StorageClient {
     override val storageClient: InMemoryStorageClient
       get() = this@InMemoryStorageClient
 
-    override fun read(bufferSizeBytes: Int): Flow<ByteString> =
-      content.asBufferedFlow(bufferSizeBytes)
+    override fun read(): Flow<ByteString> = flowOf(content)
 
-    override fun delete() = storageClient.deleteKey(blobKey)
+    override suspend fun delete() = storageClient.deleteKey(blobKey)
   }
 }

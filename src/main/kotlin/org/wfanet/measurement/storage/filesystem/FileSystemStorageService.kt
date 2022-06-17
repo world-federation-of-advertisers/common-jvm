@@ -18,33 +18,38 @@ import io.grpc.Status
 import io.grpc.StatusException
 import java.io.File
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import org.wfanet.measurement.common.consumeFirstOr
 import org.wfanet.measurement.internal.testing.BlobMetadata
-import org.wfanet.measurement.internal.testing.CreateBlobRequest
 import org.wfanet.measurement.internal.testing.DeleteBlobRequest
 import org.wfanet.measurement.internal.testing.DeleteBlobResponse
 import org.wfanet.measurement.internal.testing.ForwardedStorageGrpcKt.ForwardedStorageCoroutineImplBase as ForwardedStorageCoroutineService
 import org.wfanet.measurement.internal.testing.GetBlobMetadataRequest
 import org.wfanet.measurement.internal.testing.ReadBlobRequest
 import org.wfanet.measurement.internal.testing.ReadBlobResponse
+import org.wfanet.measurement.internal.testing.WriteBlobRequest
+import org.wfanet.measurement.internal.testing.readBlobResponse
 
 /** [ForwardedStorageCoroutineService] implementation that uses [FileSystemStorageClient]. */
 class FileSystemStorageService(directory: File) : ForwardedStorageCoroutineService() {
   val storageClient: FileSystemStorageClient = FileSystemStorageClient(directory)
 
-  override suspend fun createBlob(requests: Flow<CreateBlobRequest>): BlobMetadata {
+  override suspend fun writeBlob(requests: Flow<WriteBlobRequest>): BlobMetadata {
     val blob =
-      requests.consumeFirstOr { CreateBlobRequest.getDefaultInstance() }.use { consumed ->
-        val headerRequest = consumed.item
-        val blobKey = headerRequest.header.blobKey
-        if (blobKey.isBlank()) {
-          throw Status.INVALID_ARGUMENT.withDescription("Missing blob key").asRuntimeException()
-        }
+      requests
+        .consumeFirstOr { WriteBlobRequest.getDefaultInstance() }
+        .use { consumed ->
+          val headerRequest = consumed.item
+          val blobKey = headerRequest.header.blobKey
+          if (blobKey.isBlank()) {
+            throw Status.INVALID_ARGUMENT.withDescription("Missing blob key").asRuntimeException()
+          }
 
-        val content = consumed.remaining.map { it.bodyChunk.content }
-        storageClient.createBlob(blobKey, content)
-      }
+          val content = consumed.remaining.map { it.bodyChunk.content }
+          storageClient.writeBlob(blobKey, content)
+        }
 
     return BlobMetadata.newBuilder().setSize(blob.size).build()
   }
@@ -52,17 +57,16 @@ class FileSystemStorageService(directory: File) : ForwardedStorageCoroutineServi
   override suspend fun getBlobMetadata(request: GetBlobMetadataRequest): BlobMetadata =
     BlobMetadata.newBuilder().setSize(getBlob(request.blobKey).size).build()
 
-  override fun readBlob(request: ReadBlobRequest): Flow<ReadBlobResponse> =
-    getBlob(request.blobKey).read(request.chunkSize).map {
-      ReadBlobResponse.newBuilder().setChunk(it).build()
-    }
+  override fun readBlob(request: ReadBlobRequest): Flow<ReadBlobResponse> = flow {
+    emitAll(getBlob(request.blobKey).read().map { readBlobResponse { chunk = it } })
+  }
 
   override suspend fun deleteBlob(request: DeleteBlobRequest): DeleteBlobResponse {
     getBlob(request.blobKey).delete()
     return DeleteBlobResponse.getDefaultInstance()
   }
 
-  private fun getBlob(blobKey: String) =
+  private suspend fun getBlob(blobKey: String) =
     storageClient.getBlob(blobKey)
       ?: throw StatusException(Status.NOT_FOUND.withDescription("Blob not found with key $blobKey"))
 }

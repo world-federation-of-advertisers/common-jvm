@@ -15,6 +15,7 @@
 """Repository rules/macros for rules_docker."""
 
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+load("@bazel_tools//tools/build_defs/repo:utils.bzl", "maybe")
 
 _RELEASE_URL = "https://github.com/bazelbuild/rules_docker/releases/download/v{version}/rules_docker-v{version}.tar.gz"
 _ARCHIVE_URL = "https://github.com/bazelbuild/rules_docker/archive/{commit}.tar.gz"
@@ -37,14 +38,15 @@ def _rules_docker_repo(sha256, version = None, commit = None, name = "io_bazel_r
         suffix = commit
         url = _ARCHIVE_URL.format(commit = commit)
 
-    http_archive(
+    maybe(
+        http_archive,
         name = name,
         sha256 = sha256,
         strip_prefix = "rules_docker-" + suffix,
         urls = [url],
     )
 
-def rules_docker_repo():
+def io_bazel_rules_docker():
     _rules_docker_repo(
         name = "io_bazel_rules_docker",
         commit = "f929d80c5a4363994968248d87a892b1c2ef61d4",

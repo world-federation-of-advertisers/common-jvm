@@ -14,11 +14,17 @@
 
 package org.wfanet.measurement.storage.filesystem
 
+import com.google.common.truth.Truth.assertThat
+import com.google.protobuf.kotlin.toByteStringUtf8
+import java.nio.file.Paths
+import kotlinx.coroutines.runBlocking
 import org.junit.Before
 import org.junit.Rule
+import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
+import org.wfanet.measurement.common.readByteString
 import org.wfanet.measurement.storage.testing.AbstractStorageClientTest
 
 @RunWith(JUnit4::class)
@@ -28,5 +34,18 @@ class FileSystemStorageClientTest : AbstractStorageClientTest<FileSystemStorageC
   @Before
   fun initClient() {
     storageClient = FileSystemStorageClient(tempDirectory.root)
+  }
+
+  @Test
+  fun `writeBlob writes blob to file in subdirectory`() {
+    val content = "Lorem ipsum dolor sit amet".toByteStringUtf8()
+    val blobKey = "a/b/c/file.txt"
+
+    runBlocking { storageClient.writeBlob(blobKey, content) }
+
+    val relativePath = Paths.get("a", "b", "c", "file.txt")
+    val file = tempDirectory.root.toPath().resolve(relativePath).toFile()
+    assertThat(file.exists()).isTrue()
+    assertThat(file.readByteString()).isEqualTo(content)
   }
 }

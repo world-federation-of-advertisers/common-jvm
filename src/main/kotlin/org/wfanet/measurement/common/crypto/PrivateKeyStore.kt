@@ -14,19 +14,27 @@
 
 package org.wfanet.measurement.common.crypto
 
+import org.wfanet.measurement.storage.Store
+
+typealias KeyBlobStore = Store<PrivateKeyStore.KeyId>
+
 /** Store of [PrivateKeyHandle]s. */
-interface PrivateKeyStore<T : PrivateKeyHandle> {
+interface PrivateKeyStore<K : PrivateKeyStore.KeyId, V : PrivateKeyHandle> {
+  interface KeyId {
+    val blobKey: String
+  }
+
   /**
    * Reads the [PrivateKeyHandle] with the specified [keyId] from storage.
    *
    * @return the [PrivateKeyHandle] or `null` if not found
    */
-  suspend fun read(keyId: String): T?
+  suspend fun read(keyId: K): V?
 
   /**
    * Writes [privateKey] to storage.
    *
    * @return the ID (blob key) of the written [PrivateKeyHandle]
    */
-  suspend fun write(privateKey: T): String
+  suspend fun write(privateKey: V): String
 }

@@ -23,16 +23,16 @@ import java.nio.ByteOrder
 import java.nio.channels.ReadableByteChannel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.fold
-import kotlinx.coroutines.flow.isActive
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.yield
 
 const val BYTES_PER_MIB = 1024 * 1024
 
@@ -43,7 +43,7 @@ const val BYTES_PER_MIB = 1024 * 1024
 fun ByteArray.toByteString(): ByteString = toByteString()
 
 fun Iterable<ByteArray>.toByteString(): ByteString {
-  val totalSize = sumBy { it.size }
+  val totalSize = sumOf { it.size }
 
   return ByteString.newOutput(totalSize).use { output ->
     forEach { output.write(it) }
@@ -59,7 +59,7 @@ fun Iterable<ByteString>.flatten(): ByteString {
 /** Copies all bytes in a list of [ByteString]s into a [ByteArray]. */
 fun Iterable<ByteString>.toByteArray(): ByteArray {
   // Allocate a ByteBuffer large enough for all the bytes in all the byte strings.
-  val buffer = ByteBuffer.allocate(sumBy { it.size })
+  val buffer = ByteBuffer.allocate(sumOf { it.size })
   forEach { byteString -> byteString.copyTo(buffer) }
   return buffer.array()
 }
@@ -141,13 +141,25 @@ fun ByteArray.asBufferedFlow(bufferSize: Int): Flow<ByteString> =
  *
  * The final produced value may have [size][ByteString.size] < [bufferSize].
  */
-fun ByteBuffer.asBufferedFlow(bufferSize: Int): Flow<ByteString> = flow {
-  ByteStringOutputBuffer(bufferSize).use { outputBuffer ->
-    outputBuffer.putEmittingFull(listOf(this@asBufferedFlow), this)
+fun ByteBuffer.asBufferedFlow(bufferSize: Int): Flow<ByteString> {
+  require(bufferSize > 0)
 
-    // Emit a final value with whatever is left.
-    if (outputBuffer.size > 0) {
-      emit(outputBuffer.toByteString())
+  if (!hasRemaining()) {
+    return flowOf()
+  }
+  if (remaining() <= bufferSize) {
+    // Optimization.
+    return flowOf(toByteString())
+  }
+
+  return flow {
+    ByteStringOutputBuffer(bufferSize).use { outputBuffer ->
+      outputBuffer.putEmittingFull(listOf(this@asBufferedFlow), this)
+
+      // Emit a final value with whatever is left.
+      if (outputBuffer.size > 0) {
+        emit(outputBuffer.toByteString())
+      }
     }
   }
 }
@@ -160,10 +172,21 @@ fun ByteBuffer.asBufferedFlow(bufferSize: Int): Flow<ByteString> = flow {
  *
  * This will produce an empty flow if the receiver is empty.
  */
-fun ByteString.asBufferedFlow(bufferSize: Int): Flow<ByteString> = flow {
+fun ByteString.asBufferedFlow(bufferSize: Int): Flow<ByteString> {
   require(bufferSize > 0)
-  for (begin in 0 until size() step bufferSize) {
-    emit(substring(begin, minOf(size(), begin + bufferSize)))
+
+  if (size == 0) {
+    return flowOf()
+  }
+  if (size <= bufferSize) {
+    // Optimization.
+    return flowOf(this)
+  }
+
+  return flow {
+    for (begin in 0 until size() step bufferSize) {
+      emit(substring(begin, minOf(size(), begin + bufferSize)))
+    }
   }
 }
 
@@ -174,6 +197,8 @@ fun ByteString.asBufferedFlow(bufferSize: Int): Flow<ByteString> = flow {
  * The final produced value may have [size][ByteString.size] < [bufferSize].
  */
 fun Flow<ByteString>.asBufferedFlow(bufferSize: Int): Flow<ByteString> = flow {
+  require(bufferSize > 0)
+
   ByteStringOutputBuffer(bufferSize).use { outputBuffer ->
     collect { outputBuffer.putEmittingFull(it.asReadOnlyByteBufferList(), this) }
 
@@ -208,25 +233,41 @@ private suspend fun ByteStringOutputBuffer.putEmittingFull(
  *
  * @param bufferSize size in bytes of the buffer to use to read from the channel
  */
-fun ReadableByteChannel.asFlow(bufferSize: Int): Flow<ByteString> =
-  flow {
-      val buffer = ByteBuffer.allocate(bufferSize)
+fun ReadableByteChannel.asFlow(bufferSize: Int): Flow<ByteString> {
+  require(bufferSize > 0)
 
-      while (read(buffer) >= 0) {
-        if (buffer.position() == 0) {
-          // Nothing was read, so we may have a non-blocking channel that nothing
-          // can be read from right now. Suspend this coroutine to avoid
-          // monopolizing the thread.
-          delay(1L)
-          continue
+  val flow = flow {
+    val buffer = ByteBuffer.allocate(bufferSize)
+
+    while (currentCoroutineContext().isActive) {
+      @Suppress("BlockingMethodInNonBlockingContext") // Will be on Dispatchers.IO.
+      val numRead = read(buffer)
+      when {
+        numRead < 0 -> {
+          emitFrom(buffer)
+          return@flow
         }
-        buffer.flip()
-        emit(ByteString.copyFrom(buffer))
-        buffer.clear()
+        numRead == 0 -> {
+          // Nothing was read, so we may have a non-blocking channel that nothing can be read
+          // from right now. Suspend this coroutine to avoid monopolizing the thread.
+          yield()
+        }
+        else -> {
+          if (!buffer.hasRemaining()) {
+            emitFrom(buffer)
+          }
+        }
       }
     }
-    .onCompletion { close() }
-    .flowOn(Dispatchers.IO)
+  }
+  return flow.onCompletion { close() }.flowOn(Dispatchers.IO)
+}
+
+private suspend fun FlowCollector<ByteString>.emitFrom(buffer: ByteBuffer) {
+  buffer.flip()
+  emit(buffer.toByteString())
+  buffer.clear()
+}
 
 /**
  * Converts an [InputStream] into a [Flow] of [ByteString]s.
@@ -235,22 +276,28 @@ fun ReadableByteChannel.asFlow(bufferSize: Int): Flow<ByteString> =
  *
  * @param bufferSize size of all except last output ByteString (which may be smaller)
  */
-fun InputStream.asFlow(bufferSize: Int): Flow<ByteString> =
-  flow {
-      val buffer = ByteArray(bufferSize)
-      while (currentCoroutineContext().isActive) {
-        @Suppress("BlockingMethodInNonBlockingContext") // Runs on Dispatchers.IO
-        val length = read(buffer)
-        if (length < 0) break
-        emit(ByteString.copyFrom(buffer, 0, length))
-      }
+fun InputStream.asFlow(bufferSize: Int): Flow<ByteString> {
+  require(bufferSize > 0)
+
+  val flow = flow {
+    val buffer = ByteArray(bufferSize)
+    while (currentCoroutineContext().isActive) {
+      @Suppress("BlockingMethodInNonBlockingContext") // Runs on Dispatchers.IO
+      val length = read(buffer)
+      if (length < 0) break
+      emit(ByteString.copyFrom(buffer, 0, length))
     }
-    .onCompletion { this@asFlow.close() }
-    .flowOn(Dispatchers.IO)
+  }
+  return flow.onCompletion { close() }.flowOn(Dispatchers.IO)
+}
 
 /** Reads all of the bytes from this [File] into a [ByteString]. */
 fun File.readByteString(): ByteString {
   return inputStream().use { input -> ByteString.readFrom(input) }
+}
+
+fun Byte.toStringHex(): String {
+  return "%2x".format(this)
 }
 
 /** Converts a hex string to its equivalent [ByteString]. */
