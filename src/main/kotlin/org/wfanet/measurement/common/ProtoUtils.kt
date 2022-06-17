@@ -16,6 +16,7 @@ package org.wfanet.measurement.common
 
 import com.google.protobuf.ByteString
 import com.google.protobuf.Descriptors.FieldDescriptor
+import com.google.protobuf.Duration as ProtoDuration
 import com.google.protobuf.Message
 import com.google.protobuf.MessageOrBuilder
 import com.google.protobuf.ProtocolMessageEnum
@@ -25,6 +26,7 @@ import com.google.protobuf.TypeRegistry
 import com.google.protobuf.util.JsonFormat
 import java.io.File
 import java.time.Clock
+import java.time.Duration
 import java.time.Instant
 
 /** Converts a protobuf [MessageOrBuilder] into its canonical JSON representation. */
@@ -92,6 +94,11 @@ fun Instant.toProtoTime(): Timestamp =
 
 fun Timestamp.toInstant(): Instant = Instant.ofEpochSecond(seconds, nanos.toLong())
 
+fun Duration.toProtoDuration(): ProtoDuration =
+  ProtoDuration.newBuilder().setSeconds(seconds).setNanos(nano).build()
+
+fun ProtoDuration.toDuration(): Duration = Duration.ofSeconds(seconds, nanos.toLong())
+
 fun Clock.protoTimestamp(): Timestamp = instant().toProtoTime()
 
 val ProtocolMessageEnum.numberAsLong: Long
@@ -110,8 +117,7 @@ fun <T : Message> parseTextProto(
   return messageInstance
     .newBuilderForType()
     .apply { mergeFromTextProto(textProto, typeRegistry) }
-    .build() as
-    T
+    .build() as T
 }
 
 fun <T : Message> parseTextProto(
