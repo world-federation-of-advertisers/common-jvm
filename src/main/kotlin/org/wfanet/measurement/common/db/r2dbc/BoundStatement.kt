@@ -19,6 +19,9 @@ package org.wfanet.measurement.common.db.r2dbc
 import com.google.protobuf.Message
 import io.r2dbc.spi.Connection
 import io.r2dbc.spi.Statement
+import kotlin.reflect.KClass
+import kotlin.reflect.KType
+import kotlin.reflect.typeOf
 import org.wfanet.measurement.common.identity.ExternalId
 import org.wfanet.measurement.common.identity.InternalId
 
@@ -35,31 +38,41 @@ private constructor(
   @DslBuilder
   abstract class Builder {
     /** Adds a binding for the parameter named [name] to [value]. */
-    abstract fun bind(name: String, value: Any)
+    fun bind(name: String, value: ExternalId?) = bind(name, value?.value)
     /** Adds a binding for the parameter named [name] to [value]. */
-    fun bind(name: String, value: ExternalId) = bind(name, value.value)
+    fun bind(name: String, value: InternalId?) = bind(name, value?.value)
     /** Adds a binding for the parameter named [name] to [value]. */
-    fun bind(name: String, value: InternalId) = bind(name, value.value)
-    /** Adds a binding for the parameter named [name] to [value]. */
-    fun bind(name: String, value: Message) = bind(name, value.toByteString().asReadOnlyByteBuffer())
+    fun bind(name: String, value: Message?) =
+      bind(name, value?.toByteString()?.asReadOnlyByteBuffer())
+
+    @JvmName("bindNullable")
+    @OptIn(ExperimentalStdlibApi::class) // For `typeOf`.
+    inline fun <reified T> bind(name: String, value: T) {
+      if (value == null) {
+        bindNull<T>(name, typeOf<T>())
+      } else {
+        bind(name, value)
+      }
+    }
+
+    /** Adds a binding for the parameter named [name] to non-`NULL` [value]. */
+    abstract fun <T : Any> bind(name: String, value: T)
 
     /** Adds a binding for the parameter named [name] with type [type] to `NULL`. */
-    abstract fun <T : Any> bindNull(name: String, type: Class<T>)
-
-    /** Adds a binding for the parameter named [name] with type [T] to `NULL`. */
-    inline fun <reified T : Any> bindNull(name: String) = bindNull(name, T::class.java)
+    @PublishedApi internal abstract fun <T> bindNull(name: String, type: KType)
   }
 
   private class BuilderImpl(private val baseSql: String) : Builder() {
     private val bindings = mutableMapOf<String, Any>()
-    private val nullBindings = mutableMapOf<String, Class<out Any>>()
+    private val nullBindings = mutableMapOf<String, Class<out Any?>>()
 
-    override fun bind(name: String, value: Any) {
+    override fun <T : Any> bind(name: String, value: T) {
       bindings[name] = value
     }
 
-    override fun <T : Any> bindNull(name: String, type: Class<T>) {
-      nullBindings[name] = type
+    override fun <T> bindNull(name: String, type: KType) {
+      val kClass = requireNotNull(type.classifier) as KClass<*>
+      nullBindings[name] = kClass.javaObjectType
     }
 
     /** Builds a [BoundStatement] from this builder. */
