@@ -24,8 +24,8 @@ fun ByteArray.toGcloudByteArray(): GcloudByteArray = GcloudByteArray.copyFrom(th
 fun ByteString.toGcloudByteArray(): GcloudByteArray =
   GcloudByteArray.copyFrom(asReadOnlyByteBuffer())
 
-fun Message.toGcloudByteArray(): GcloudByteArray = toByteArray().toGcloudByteArray()
+fun Message.toGcloudByteArray(): GcloudByteArray = toByteString().toGcloudByteArray()
 
 fun <T : Message> Parser<T>.parseFrom(gcloudByteArray: GcloudByteArray): T {
-  return parseFrom(gcloudByteArray.toByteArray())
+  return parseFrom(gcloudByteArray.asReadOnlyByteBuffer())
 }

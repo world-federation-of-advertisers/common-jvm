@@ -18,11 +18,12 @@ import com.google.cloud.ByteArray
 import com.google.cloud.Date
 import com.google.cloud.Timestamp
 import com.google.cloud.spanner.Struct
-import com.google.cloud.spanner.StructReader
+import com.google.cloud.spanner.ValueBinder
 import com.google.protobuf.Message
 import com.google.protobuf.ProtocolMessageEnum
-import org.wfanet.measurement.common.identity.ExternalId
-import org.wfanet.measurement.common.identity.InternalId
+import org.wfanet.measurement.common.numberAsLong
+import org.wfanet.measurement.common.toJson
+import org.wfanet.measurement.gcloud.common.toGcloudByteArray
 
 /** Sets the value that should be bound to the specified column. */
 @JvmName("setBoolean")
@@ -114,17 +115,18 @@ fun Struct.Builder.setJson(columnValuePair: Pair<String, Message?>): Struct.Buil
   return set(columnName).toProtoJson(value)
 }
 
-/**
- * Returns an [InternalId] with the value of a non-`NULL` column with type [Type.int64()]
- * [com.google.cloud.spanner.Type.int64].
- */
-fun StructReader.getInternalId(columnName: String) = InternalId(getLong(columnName))
+/** Bind a protobuf [Message] as a Spanner ByteArray. */
+fun <T> ValueBinder<T>.toProtoBytes(message: Message?): T = to(message?.toGcloudByteArray())
 
-/**
- * Returns an [ExternalId] with the value of a non-`NULL` column with type [Type.int64()]
- * [com.google.cloud.spanner.Type.int64].
- */
-fun StructReader.getExternalId(columnName: String) = ExternalId(getLong(columnName))
+/** Bind a protobuf [Message] as a JSON string representation. */
+fun <T> ValueBinder<T>.toProtoJson(message: Message?): T = to(message?.toJson())
+
+/** Bind a protobuf enum to an INT64 Spanner column. */
+fun <T> ValueBinder<T>.toProtoEnum(value: ProtocolMessageEnum): T = to(value.numberAsLong)
+
+/** Bind a list of protobuf enums to an INT64 Spanner column. */
+fun <T> ValueBinder<T>.toProtoEnumArray(value: List<ProtocolMessageEnum>): T =
+  toInt64Array(value.map { it.numberAsLong })
 
 /** Builds a [Struct]. */
 inline fun struct(bind: Struct.Builder.() -> Unit): Struct = Struct.newBuilder().apply(bind).build()
