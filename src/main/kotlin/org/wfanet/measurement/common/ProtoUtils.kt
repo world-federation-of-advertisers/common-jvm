@@ -23,6 +23,8 @@ import com.google.protobuf.ProtocolMessageEnum
 import com.google.protobuf.TextFormat
 import com.google.protobuf.Timestamp
 import com.google.protobuf.TypeRegistry
+import com.google.protobuf.duration
+import com.google.protobuf.timestamp
 import com.google.protobuf.util.JsonFormat
 import java.io.File
 import java.time.Clock
@@ -89,13 +91,17 @@ fun <T : Message> T.truncateByteFields(truncatedSize: Int): T {
   return toBuilder().truncateByteFields(truncatedSize).build() as T
 }
 
-fun Instant.toProtoTime(): Timestamp =
-  Timestamp.newBuilder().setSeconds(epochSecond).setNanos(nano).build()
+fun Instant.toProtoTime(): Timestamp = timestamp {
+  seconds = epochSecond
+  nanos = nano
+}
 
 fun Timestamp.toInstant(): Instant = Instant.ofEpochSecond(seconds, nanos.toLong())
 
-fun Duration.toProtoDuration(): ProtoDuration =
-  ProtoDuration.newBuilder().setSeconds(seconds).setNanos(nano).build()
+fun Duration.toProtoDuration(): ProtoDuration = duration {
+  seconds = seconds
+  nanos = nanos
+}
 
 fun ProtoDuration.toDuration(): Duration = Duration.ofSeconds(seconds, nanos.toLong())
 
