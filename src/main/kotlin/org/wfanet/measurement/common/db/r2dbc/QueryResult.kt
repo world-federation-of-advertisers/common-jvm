@@ -27,10 +27,11 @@ import io.r2dbc.spi.RowMetadata
 import java.nio.ByteBuffer
 import java.util.function.Function
 import kotlin.reflect.KClass
-import kotlin.reflect.full.isSubclassOf
+import kotlin.reflect.typeOf
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.reactive.asFlow
+import org.wfanet.measurement.common.Reflect
 import org.wfanet.measurement.common.identity.ExternalId
 import org.wfanet.measurement.common.identity.InternalId
 
@@ -61,40 +62,42 @@ class ResultRow(private val delegate: Row) {
 
   fun asReadable(): Readable = delegate
 
-  inline operator fun <reified T : Any> get(name: String): T? = asReadable().get<T>(name)
+  inline operator fun <reified T> get(name: String): T = asReadable().get<T>(name)
 
-  inline fun <reified T : Any> getValue(name: String): T = asReadable().getValue(name)
-
-  fun <T : Message> getProtoMessage(name: String, parser: Parser<T>): T =
-    delegate.getProtoMessage(name, parser)
-
-  fun <T : Message> getProtoMessageOrNull(name: String, parser: Parser<T>): T? =
-    delegate.getProtoMessageOrNull(name, parser)
+  inline fun <reified T : Message?> getProtoMessage(name: String, parser: Parser<T>): T =
+    asReadable().getProtoMessage(name, parser)
 }
 
 @Suppress("EXTENSION_SHADOWED_BY_MEMBER")
-inline operator fun <reified T : Any> Readable.get(name: String): T? = get(name, T::class)
-
-inline fun <reified T : Any> Readable.getValue(name: String): T = checkNotNull(get<T>(name))
-
-fun <T : Any> Readable.get(name: String, kClass: KClass<T>): T? {
-  require(!kClass.isSubclassOf(Message::class)) { "Use getProtoMessage" }
-
-  // Handle custom type conversions.
-  @Suppress("UNCHECKED_CAST")
-  return when (kClass) {
-    ByteString::class -> get(name, ByteBuffer::class)?.toByteString() as T?
-    InternalId::class -> get(name, Long::class)?.let { InternalId(it) } as T?
-    ExternalId::class -> get(name, Long::class)?.let { ExternalId(it) } as T?
-
-    // Note that this is not `kClass.java`. The underlying `get` may support Java builtin types but
-    // not their Kotlin counterparts, e.g. `java.lang.Integer` instead of `kotlin.Int`.
-    else -> get(name, kClass.javaObjectType)
+@OptIn(ExperimentalStdlibApi::class) // For `typeOf`.
+inline operator fun <reified T> Readable.get(name: String): T {
+  val value = get(name, T::class)
+  if (value == null) {
+    require(Reflect.isNullable<T>()) { "${typeOf<T>()} is not nullable" }
   }
+  return value as T
 }
 
-fun <T : Message> Readable.getProtoMessage(name: String, parser: Parser<T>): T =
-  parser.parseFrom(get<ByteBuffer>(name))
+@PublishedApi
+internal fun Readable.get(name: String, kClass: KClass<*>): Any? {
+  val value: Any? =
+    when (kClass) {
+      /** Conversions */
+      ByteString::class -> get<ByteBuffer?>(name)?.toByteString()
+      InternalId::class -> get<Long?>(name)?.let { InternalId(it) }
+      ExternalId::class -> get<Long?>(name)?.let { ExternalId(it) }
 
-fun <T : Message> Readable.getProtoMessageOrNull(name: String, parser: Parser<T>): T? =
-  get<ByteBuffer>(name)?.let { parser.parseFrom(it) }
+      // The underlying `get` may support Java builtin types but not their Kotlin counterparts,
+      // e.g. `java.lang.Integer` instead of `kotlin.Int`.
+      else -> get(name, kClass.javaObjectType)
+    }
+
+  return value
+}
+
+inline fun <reified T : Message?> Readable.getProtoMessage(name: String, parser: Parser<T>): T {
+  if (Reflect.isNullable<T>()) {
+    return get<ByteBuffer?>(name)?.let { parser.parseFrom(it) } as T
+  }
+  return parser.parseFrom(get<ByteBuffer>(name))
+}

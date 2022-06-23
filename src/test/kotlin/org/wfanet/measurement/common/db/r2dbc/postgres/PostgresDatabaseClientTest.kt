@@ -71,7 +71,7 @@ class PostgresDatabaseClientTest {
         2020,
         "Tesla",
         "Model 3",
-        "Bob",
+        null,
         latLng {
           latitude = 33.995325
           longitude = -118.477021
@@ -83,8 +83,8 @@ class PostgresDatabaseClientTest {
         bind("$2", car.year)
         bind("$3", car.make)
         bind("$4", car.model)
-        bind("$5", car.owner!!)
-        bind("$6", car.currentLocation!!)
+        bind("$5", car.owner)
+        bind("$6", car.currentLocation)
       }
     with(dbClient.readWriteTransaction()) {
       executeStatement(insertStatement)
@@ -96,35 +96,6 @@ class PostgresDatabaseClientTest {
       dbClient.singleUse().executeQuery(query).consume { row -> Car.parseFrom(row) }
 
     assertThat(cars.toList()).containsExactly(car)
-  }
-
-  @Test
-  fun `bindNull binds parameter to null`(): Unit = runBlocking {
-    val insertStatement =
-      boundStatement(
-        """
-        INSERT INTO Cars (CarId, Year, Make, Model, Owner) VALUES
-          (1, 1990, 'Nissan', 'Stanza', $1),
-          (2, 1997, 'Honda', 'CR-V', $2),
-          (3, 2012, 'Audi', 'S4', $3),
-          (4, 2020, 'Tesla', 'Model 3', $4)
-        """.trimIndent()
-      ) {
-        bind("$1", "Alice")
-        bindNull<String>("$2")
-        bind("$3", "Carol")
-        bindNull<String>("$4")
-      }
-    with(dbClient.readWriteTransaction()) {
-      executeStatement(insertStatement)
-      commit()
-    }
-
-    val query = boundStatement("SELECT * FROM Cars WHERE Owner IS NULL ORDER BY Year DESC")
-    val models: Flow<String> =
-      dbClient.singleUse().executeQuery(query).consume { row -> row.getValue("Model") }
-
-    assertThat(models.toList()).containsExactly("Model 3", "CR-V").inOrder()
   }
 
   @Test
@@ -145,10 +116,7 @@ class PostgresDatabaseClientTest {
 
     val query = boundStatement("SELECT * FROM Cars ORDER BY Year ASC")
     val models: Flow<String> =
-      txn
-        .executeQuery(query)
-        .consume { row -> row.getValue<String>("Model") }
-        .onCompletion { txn.close() }
+      txn.executeQuery(query).consume<String> { row -> row["Model"] }.onCompletion { txn.close() }
 
     assertThat(models.toList())
       .containsExactly("Stanza", "CR-V", "S4", "Model 3", "Model Y")
@@ -174,9 +142,7 @@ class PostgresDatabaseClientTest {
     val query = boundStatement("SELECT * FROM CARS")
     val models: Flow<String> =
       with(dbClient.readTransaction()) {
-        executeQuery(query)
-          .consume { row -> row.getValue<String>("Model") }
-          .onCompletion { close() }
+        executeQuery(query).consume<String> { row -> row["Model"] }.onCompletion { close() }
       }
     writeTxn.close()
 
@@ -202,12 +168,12 @@ private data class Car(
     fun parseFrom(row: ResultRow): Car {
       return with(row) {
         Car(
-          getValue("CarId"),
-          getValue("Year"),
-          getValue("Make"),
-          getValue("Model"),
+          get("CarId"),
+          get("Year"),
+          get("Make"),
+          get("Model"),
           get("Owner"),
-          getProtoMessageOrNull("CurrentLocation", LatLng.parser())
+          getProtoMessage("CurrentLocation", LatLng.parser())
         )
       }
     }
