@@ -24,5 +24,6 @@ kt_jvm_library(
         "@tink_java//src/main/java/com/google/crypto/tink/hybrid:hybrid_config",
         "@tink_java//src/main/java/com/google/crypto/tink/jwt:jwk_set_converter",
         "@tink_java//src/main/java/com/google/crypto/tink/jwt:jwt_signature_config",
+        "@tink_java//src/main/java/com/google/crypto/tink:cleartext_keyset_handle",
     ],
 )

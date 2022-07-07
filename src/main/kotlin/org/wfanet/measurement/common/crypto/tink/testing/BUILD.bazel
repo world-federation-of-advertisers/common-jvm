@@ -10,8 +10,6 @@ kt_jvm_library(
     srcs = glob(["*.kt"]),
     associates = ["//src/main/kotlin/org/wfanet/measurement/common/crypto/tink"],
     deps = [
-        "@tink_java//src/main/java/com/google/crypto/tink:binary_keyset_reader",
-        "@tink_java//src/main/java/com/google/crypto/tink:cleartext_keyset_handle",
         "@tink_java//src/main/java/com/google/crypto/tink:kms_client",
         "@tink_java//src/main/java/com/google/crypto/tink:kms_clients",
         "@tink_java//src/main/java/com/google/crypto/tink:registry_cluster",
