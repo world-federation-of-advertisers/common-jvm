@@ -16,6 +16,7 @@ kt_jvm_library(
         "@tink_java//src/main/java/com/google/crypto/tink:aead",
         "@tink_java//src/main/java/com/google/crypto/tink:binary_keyset_reader",
         "@tink_java//src/main/java/com/google/crypto/tink:binary_keyset_writer",
+        "@tink_java//src/main/java/com/google/crypto/tink:cleartext_keyset_handle",
         "@tink_java//src/main/java/com/google/crypto/tink:hybrid_decrypt",
         "@tink_java//src/main/java/com/google/crypto/tink:hybrid_encrypt",
         "@tink_java//src/main/java/com/google/crypto/tink:key_templates",
@@ -24,6 +25,5 @@ kt_jvm_library(
         "@tink_java//src/main/java/com/google/crypto/tink/hybrid:hybrid_config",
         "@tink_java//src/main/java/com/google/crypto/tink/jwt:jwk_set_converter",
         "@tink_java//src/main/java/com/google/crypto/tink/jwt:jwt_signature_config",
-        "@tink_java//src/main/java/com/google/crypto/tink:cleartext_keyset_handle",
     ],
 )
