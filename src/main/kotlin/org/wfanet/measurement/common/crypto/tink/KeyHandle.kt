@@ -16,6 +16,7 @@ package org.wfanet.measurement.common.crypto.tink
 
 import com.google.crypto.tink.BinaryKeysetReader
 import com.google.crypto.tink.BinaryKeysetWriter
+import com.google.crypto.tink.CleartextKeysetHandle
 import com.google.crypto.tink.HybridDecrypt
 import com.google.crypto.tink.HybridEncrypt
 import com.google.crypto.tink.KeyTemplates
@@ -23,6 +24,7 @@ import com.google.crypto.tink.KeysetHandle
 import com.google.crypto.tink.hybrid.HybridConfig
 import com.google.protobuf.ByteString
 import com.google.protobuf.kotlin.toByteString
+import java.io.File
 import org.wfanet.measurement.common.crypto.PrivateKeyHandle
 import org.wfanet.measurement.common.crypto.PublicKeyHandle
 
@@ -88,4 +90,14 @@ class TinkPrivateKeyHandle internal constructor(internal val keysetHandle: Keyse
       return TinkPrivateKeyHandle(KeysetHandle.generateNew(ECIES_KEY_TEMPLATE))
     }
   }
+}
+
+/** Loads a private key from a cleartext binary Tink Keyset. */
+fun loadPrivateKey(binaryKeyset: File): TinkPrivateKeyHandle {
+  return TinkPrivateKeyHandle(CleartextKeysetHandle.read(BinaryKeysetReader.withFile(binaryKeyset)))
+}
+
+/** Loads a public key from a cleartext binary Tink Keyset. */
+fun loadPublicKey(binaryKeyset: File): TinkPublicKeyHandle {
+  return TinkPublicKeyHandle(KeysetHandle.readNoSecret(BinaryKeysetReader.withFile(binaryKeyset)))
 }

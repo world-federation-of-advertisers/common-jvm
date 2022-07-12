@@ -23,8 +23,6 @@ import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 import org.wfanet.measurement.common.crypto.testing.FIXED_ENCRYPTION_PRIVATE_KEYSET
 import org.wfanet.measurement.common.crypto.testing.FIXED_ENCRYPTION_PUBLIC_KEYSET
-import org.wfanet.measurement.common.crypto.tink.testing.loadPrivateKey
-import org.wfanet.measurement.common.crypto.tink.testing.loadPublicKey
 
 @RunWith(JUnit4::class)
 class KeyHandleTest {
