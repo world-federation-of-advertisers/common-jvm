@@ -19,6 +19,7 @@ package org.wfanet.measurement.common.db.r2dbc
 import com.google.protobuf.ByteString
 import com.google.protobuf.Message
 import com.google.protobuf.Parser
+import com.google.protobuf.ProtocolMessageEnum
 import com.google.protobuf.kotlin.toByteString
 import io.r2dbc.spi.Readable
 import io.r2dbc.spi.Result
@@ -66,6 +67,11 @@ class ResultRow(private val delegate: Row) {
 
   inline fun <reified T : Message?> getProtoMessage(name: String, parser: Parser<T>): T =
     asReadable().getProtoMessage(name, parser)
+
+  inline fun <reified T : ProtocolMessageEnum?> getProtoEnum(
+    name: String,
+    forNumber: (Int) -> T?
+  ): T = asReadable().getProtoEnum(name, forNumber)
 }
 
 @Suppress("EXTENSION_SHADOWED_BY_MEMBER")
@@ -96,8 +102,24 @@ internal fun Readable.get(name: String, kClass: KClass<*>): Any? {
 }
 
 inline fun <reified T : Message?> Readable.getProtoMessage(name: String, parser: Parser<T>): T {
-  if (Reflect.isNullable<T>()) {
-    return get<ByteBuffer?>(name)?.let { parser.parseFrom(it) } as T
-  }
-  return parser.parseFrom(get<ByteBuffer>(name))
+  val bytes: ByteBuffer =
+    if (Reflect.isNullable<T>()) {
+      get<ByteBuffer?>(name) ?: return null as T
+    } else {
+      get<ByteBuffer>(name)
+    }
+  return parser.parseFrom(bytes)
+}
+
+inline fun <reified T : ProtocolMessageEnum?> Readable.getProtoEnum(
+  name: String,
+  forNumber: (Int) -> T?
+): T {
+  val number: Int =
+    if (Reflect.isNullable<T>()) {
+      get<Int?>(name) ?: return null as T
+    } else {
+      get<Int>(name)
+    }
+  return checkNotNull(forNumber(number))
 }
