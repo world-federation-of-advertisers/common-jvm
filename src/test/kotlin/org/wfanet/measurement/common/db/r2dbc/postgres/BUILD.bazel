@@ -16,6 +16,7 @@ kt_jvm_test(
         "//src/main/kotlin/org/wfanet/measurement/common",
         "//src/main/kotlin/org/wfanet/measurement/common/db/r2dbc/postgres",
         "//src/main/kotlin/org/wfanet/measurement/common/db/r2dbc/postgres/testing:embedded_postgres",
+        "//src/main/proto/google/type:dayofweek_kt_jvm_proto",
         "//src/main/proto/google/type:latlng_kt_jvm_proto",
     ],
 )

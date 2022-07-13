@@ -24,6 +24,8 @@ CREATE TABLE Cars (
 
   -- Serialized google.type.LatLng protobuf message.
   CurrentLocation bytea,
+  -- google.type.DayOfWeek protobuf enum number.
+  WeeklyWashDay integer NOT NULL DEFAULT 0,
 
   PRIMARY KEY (CarId)
 );

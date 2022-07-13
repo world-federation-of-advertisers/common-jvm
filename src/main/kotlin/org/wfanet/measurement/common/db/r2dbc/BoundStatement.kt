@@ -17,6 +17,7 @@
 package org.wfanet.measurement.common.db.r2dbc
 
 import com.google.protobuf.Message
+import com.google.protobuf.ProtocolMessageEnum
 import io.r2dbc.spi.Connection
 import io.r2dbc.spi.Statement
 import kotlin.reflect.KClass
@@ -42,6 +43,8 @@ private constructor(
     /** Adds a binding for the parameter named [name] to [value]. */
     fun bind(name: String, value: Message?) =
       bind(name, value?.toByteString()?.asReadOnlyByteBuffer())
+    /** Adds a binding for the parameter named [name] to [value]. */
+    fun bind(name: String, value: ProtocolMessageEnum?) = bind(name, value?.number)
 
     @JvmName("bindNullable")
     inline fun <reified T> bind(name: String, value: T) {

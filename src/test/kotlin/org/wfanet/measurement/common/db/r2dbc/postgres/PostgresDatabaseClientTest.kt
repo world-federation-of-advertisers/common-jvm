@@ -17,6 +17,7 @@
 package org.wfanet.measurement.common.db.r2dbc.postgres
 
 import com.google.common.truth.Truth.assertThat
+import com.google.type.DayOfWeek
 import com.google.type.LatLng
 import com.google.type.latLng
 import java.nio.file.Path
@@ -75,16 +76,18 @@ class PostgresDatabaseClientTest {
         latLng {
           latitude = 33.995325
           longitude = -118.477021
-        }
+        },
+        DayOfWeek.TUESDAY
       )
     val insertStatement =
-      boundStatement("INSERT INTO Cars VALUES ($1, $2, $3, $4, $5, $6)") {
+      boundStatement("INSERT INTO Cars VALUES ($1, $2, $3, $4, $5, $6, $7)") {
         bind("$1", car.carId)
         bind("$2", car.year)
         bind("$3", car.make)
         bind("$4", car.model)
         bind("$5", car.owner)
         bind("$6", car.currentLocation)
+        bind("$7", car.weeklyWashDay)
       }
     with(dbClient.readWriteTransaction()) {
       executeStatement(insertStatement)
@@ -162,7 +165,8 @@ private data class Car(
   val make: String,
   val model: String,
   val owner: String? = null,
-  val currentLocation: LatLng? = null
+  val currentLocation: LatLng? = null,
+  val weeklyWashDay: DayOfWeek = DayOfWeek.DAY_OF_WEEK_UNSPECIFIED,
 ) {
   companion object {
     fun parseFrom(row: ResultRow): Car {
@@ -173,7 +177,8 @@ private data class Car(
           get("Make"),
           get("Model"),
           get("Owner"),
-          getProtoMessage("CurrentLocation", LatLng.parser())
+          getProtoMessage("CurrentLocation", LatLng.parser()),
+          getProtoEnum("WeeklyWashDay", DayOfWeek::forNumber)
         )
       }
     }
