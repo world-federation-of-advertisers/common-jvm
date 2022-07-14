@@ -93,6 +93,9 @@ def common_jvm_maven_artifacts_dict():
 
         # For kt_jvm_proto_library.
         "com.google.protobuf:protobuf-kotlin": PROTOBUF_VERSION,
+
+        # Math library.
+        "org.apache.commons:commons-math3": "3.6.1",
     })
 
     return maven_artifacts
