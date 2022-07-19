@@ -1,0 +1,6 @@
+package(default_visibility = ["//visibility:public"])
+
+alias(
+    name = "opencsv",
+    actual = "@maven//:com_opencsv_opencsv",
+)
