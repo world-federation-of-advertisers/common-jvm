@@ -16,61 +16,30 @@
 
 package org.wfanet.measurement.gcloud.postgres.tools
 
-import java.sql.DriverManager
 import java.util.Properties
-import java.util.logging.Level
-import java.util.logging.Logger
-import liquibase.Contexts
-import liquibase.Scope
 import org.wfanet.measurement.common.commandLineMain
-import org.wfanet.measurement.common.db.liquibase.Liquibase
-import org.wfanet.measurement.common.db.liquibase.setLogLevel
-import org.wfanet.measurement.common.getJarResourcePath
+import org.wfanet.measurement.common.db.liquibase.tools.UpdateSchema as CommonUpdateSchema
 import org.wfanet.measurement.gcloud.postgres.PostgresFlags
 import picocli.CommandLine.Command
 import picocli.CommandLine.Mixin
-import picocli.CommandLine.Option
 
 @Command
-class UpdateSchema : Runnable {
+class UpdateSchema : Runnable, CommonUpdateSchema() {
   @Mixin private lateinit var flags: PostgresFlags
 
-  @Option(
-    names = ["--changelog"],
-    description = ["Liquibase changelog resource name"],
-    required = true,
-  )
-  private lateinit var changelog: String
-
   override fun run() {
-    val connectionString = flags.jdbcConnectionString
+    val connectionString = "jdbc:postgresql:///$flags.database"
     val props = Properties()
     props.setProperty("cloudSqlInstance", flags.cloudSqlInstance)
     props.setProperty("socketFactory", SOCKET_FACTORY_CLASS)
     props.setProperty("user", flags.user)
     props.setProperty("password", flags.password)
     props.setProperty("enableIamAuth", "true")
-
-    val changelogPath =
-      checkNotNull(Thread.currentThread().contextClassLoader.getJarResourcePath(changelog)) {
-        "JAR resource $changelog not found"
-      }
-
-    logger.info("Connecting to $connectionString")
-    DriverManager.getConnection(connectionString, props).use { connection ->
-      logger.info("Loading changelog from $changelogPath")
-      Liquibase.fromPath(connection, changelogPath).use { liquibase ->
-        logger.info("Updating...")
-        Scope.getCurrentScope().setLogLevel(Level.FINE)
-        liquibase.update(Contexts())
-      }
-    }
+    super.run(connectionString, props)
   }
 
   companion object {
     private const val SOCKET_FACTORY_CLASS = "com.google.cloud.sql.postgres.SocketFactory"
-    private val logger = Logger.getLogger(this::class.java.name)
-
     @JvmStatic fun main(args: Array<String>) = commandLineMain(UpdateSchema(), args)
   }
 }

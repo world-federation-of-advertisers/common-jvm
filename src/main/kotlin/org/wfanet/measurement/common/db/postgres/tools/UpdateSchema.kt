@@ -14,22 +14,26 @@
  * limitations under the License.
  */
 
-package org.wfanet.measurement.gcloud.spanner.tools
+package org.wfanet.measurement.common.db.postgres.tools
 
 import java.util.Properties
 import org.wfanet.measurement.common.commandLineMain
 import org.wfanet.measurement.common.db.liquibase.tools.UpdateSchema as CommonUpdateSchema
-import org.wfanet.measurement.gcloud.spanner.SpannerFlags
+import org.wfanet.measurement.common.db.postgres.PostgresFlags
 import picocli.CommandLine.Command
 import picocli.CommandLine.Mixin
 
 @Command
 class UpdateSchema : Runnable, CommonUpdateSchema() {
-  @Mixin private lateinit var flags: SpannerFlags
+  @Mixin private lateinit var flags: PostgresFlags
 
   override fun run() {
     val connectionString = flags.jdbcConnectionString
-    super.run(connectionString, Properties())
+    val props = Properties()
+    props.setProperty("user", flags.user)
+    props.setProperty("password", flags.password)
+
+    super.run(connectionString, props)
   }
 
   companion object {

@@ -12,6 +12,7 @@ kt_jvm_library(
     deps = [
         "//src/main/kotlin/org/wfanet/measurement/common",
         "//src/main/kotlin/org/wfanet/measurement/common/db/liquibase",
-        "//src/main/kotlin/org/wfanet/measurement/postgres:flags",
+        "//src/main/kotlin/org/wfanet/measurement/common/db/liquibase/tools:update_schema",
+        "//src/main/kotlin/org/wfanet/measurement/common/db/postgres:flags",
     ],
 )

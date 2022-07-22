@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.wfanet.measurement.postgres.tools
+package org.wfanet.measurement.common.db.liquibase.tools
 
 import java.sql.DriverManager
 import java.util.Properties
@@ -22,19 +22,14 @@ import java.util.logging.Level
 import java.util.logging.Logger
 import liquibase.Contexts
 import liquibase.Scope
-import org.wfanet.measurement.common.commandLineMain
 import org.wfanet.measurement.common.db.liquibase.Liquibase
 import org.wfanet.measurement.common.db.liquibase.setLogLevel
 import org.wfanet.measurement.common.getJarResourcePath
-import org.wfanet.measurement.postgres.PostgresFlags
 import picocli.CommandLine.Command
-import picocli.CommandLine.Mixin
 import picocli.CommandLine.Option
 
 @Command
-class UpdateSchema : Runnable {
-  @Mixin private lateinit var flags: PostgresFlags
-
+abstract class UpdateSchema {
   @Option(
     names = ["--changelog"],
     description = ["Liquibase changelog resource name"],
@@ -42,12 +37,7 @@ class UpdateSchema : Runnable {
   )
   private lateinit var changelog: String
 
-  override fun run() {
-    val connectionString = flags.jdbcConnectionString
-    val props = Properties()
-    props.setProperty("user", flags.user)
-    props.setProperty("password", flags.password)
-
+  fun run(connectionString: String, props: Properties) {
     val changelogPath =
       checkNotNull(Thread.currentThread().contextClassLoader.getJarResourcePath(changelog)) {
         "JAR resource $changelog not found"
@@ -66,7 +56,5 @@ class UpdateSchema : Runnable {
 
   companion object {
     private val logger = Logger.getLogger(this::class.java.name)
-
-    @JvmStatic fun main(args: Array<String>) = commandLineMain(UpdateSchema(), args)
   }
 }

@@ -16,16 +16,14 @@
 
 package org.wfanet.measurement.common.db.r2dbc.postgres
 
-import com.google.cloud.sql.core.GcpConnectionFactoryProvider.ENABLE_IAM_AUTH
 import io.r2dbc.postgresql.api.PostgresTransactionDefinition
 import io.r2dbc.spi.ConnectionFactories
 import io.r2dbc.spi.ConnectionFactoryOptions
 import io.r2dbc.spi.IsolationLevel
-import kotlinx.coroutines.reactive.awaitFirst
+import kotlinx.coroutines.reactive.awaitSingle
+import org.wfanet.measurement.common.db.postgres.PostgresFlags
 import org.wfanet.measurement.common.db.r2dbc.ConnectionProvider
 import org.wfanet.measurement.common.db.r2dbc.DatabaseClient
-import org.wfanet.measurement.gcloud.postgres.PostgresFlags as GcloudPostgresFlags
-import org.wfanet.measurement.postgres.PostgresFlags
 
 /** PostgreSQL implementation of [DatabaseClient]. */
 class PostgresDatabaseClient(getConnection: ConnectionProvider) : DatabaseClient(getConnection) {
@@ -54,24 +52,12 @@ class PostgresDatabaseClient(getConnection: ConnectionProvider) : DatabaseClient
             .build()
         )
 
-      return PostgresDatabaseClient { connectionFactory.create().awaitFirst() }
+      return PostgresDatabaseClient { connectionFactory.create().awaitSingle() }
     }
 
-    fun fromFlags(flags: GcloudPostgresFlags): PostgresDatabaseClient {
-      val connectionFactory =
-        ConnectionFactories.get(
-          ConnectionFactoryOptions.builder()
-            .option(ConnectionFactoryOptions.DRIVER, "gcp")
-            .option(ConnectionFactoryOptions.PROTOCOL, "postgresql")
-            .option(ConnectionFactoryOptions.USER, flags.user)
-            .option(ConnectionFactoryOptions.PASSWORD, flags.password)
-            .option(ConnectionFactoryOptions.DATABASE, flags.database)
-            .option(ConnectionFactoryOptions.HOST, flags.cloudSqlInstance)
-            .option(ENABLE_IAM_AUTH, true)
-            .build()
-        )
-
-      return PostgresDatabaseClient { connectionFactory.create().awaitFirst() }
+    fun fromConnectionFactoryOptions(options: ConnectionFactoryOptions): PostgresDatabaseClient {
+      val connectionFactory = ConnectionFactories.get(options)
+      return PostgresDatabaseClient { connectionFactory.create().awaitSingle() }
     }
   }
 }

@@ -49,9 +49,4 @@ class PostgresFlags {
   )
   lateinit var password: String
     private set
-
-  val jdbcConnectionString: String
-    get() {
-      return "jdbc:postgresql:///$database"
-    }
 }
