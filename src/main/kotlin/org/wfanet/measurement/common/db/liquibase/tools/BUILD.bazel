@@ -4,7 +4,7 @@ package(default_visibility = ["//visibility:public"])
 
 kt_jvm_library(
     name = "update_schema",
-    srcs = ["UpdateSchema.kt"],
+    srcs = ["BaseUpdateSchema.kt"],
     deps = [
         "//src/main/kotlin/org/wfanet/measurement/common",
         "//src/main/kotlin/org/wfanet/measurement/common/db/liquibase",
