@@ -6,7 +6,11 @@ kt_jvm_library(
     name = "postgres",
     srcs = glob(["*.kt"]),
     deps = [
+        "//imports/java/com/google/cloud/sql:r2dbc-core",
         "//imports/java/org/postgresql:r2dbc",
+        "//imports/java/org/reactivestreams",
         "//src/main/kotlin/org/wfanet/measurement/common/db/r2dbc",
+        "//src/main/kotlin/org/wfanet/measurement/gcloud/postgres:flags",
+        "//src/main/kotlin/org/wfanet/measurement/postgres:flags",
     ],
 )

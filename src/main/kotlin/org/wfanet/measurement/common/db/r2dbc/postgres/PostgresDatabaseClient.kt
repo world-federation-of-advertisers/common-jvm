@@ -16,10 +16,16 @@
 
 package org.wfanet.measurement.common.db.r2dbc.postgres
 
+import com.google.cloud.sql.core.GcpConnectionFactoryProvider.ENABLE_IAM_AUTH
 import io.r2dbc.postgresql.api.PostgresTransactionDefinition
+import io.r2dbc.spi.ConnectionFactories
+import io.r2dbc.spi.ConnectionFactoryOptions
 import io.r2dbc.spi.IsolationLevel
+import kotlinx.coroutines.reactive.awaitFirst
 import org.wfanet.measurement.common.db.r2dbc.ConnectionProvider
 import org.wfanet.measurement.common.db.r2dbc.DatabaseClient
+import org.wfanet.measurement.gcloud.postgres.PostgresFlags as GcloudPostgresFlags
+import org.wfanet.measurement.postgres.PostgresFlags
 
 /** PostgreSQL implementation of [DatabaseClient]. */
 class PostgresDatabaseClient(getConnection: ConnectionProvider) : DatabaseClient(getConnection) {
@@ -34,5 +40,38 @@ class PostgresDatabaseClient(getConnection: ConnectionProvider) : DatabaseClient
       PostgresTransactionDefinition.from(isolationLevel).readOnly()
     private val readWriteTransactionDefinition =
       PostgresTransactionDefinition.from(isolationLevel).readWrite()
+
+    fun fromFlags(flags: PostgresFlags): PostgresDatabaseClient {
+      val connectionFactory =
+        ConnectionFactories.get(
+          ConnectionFactoryOptions.builder()
+            .option(ConnectionFactoryOptions.DRIVER, "postgresql")
+            .option(ConnectionFactoryOptions.HOST, flags.host)
+            .option(ConnectionFactoryOptions.PORT, flags.port)
+            .option(ConnectionFactoryOptions.USER, flags.user)
+            .option(ConnectionFactoryOptions.PASSWORD, flags.password)
+            .option(ConnectionFactoryOptions.DATABASE, flags.database)
+            .build()
+        )
+
+      return PostgresDatabaseClient { connectionFactory.create().awaitFirst() }
+    }
+
+    fun fromFlags(flags: GcloudPostgresFlags): PostgresDatabaseClient {
+      val connectionFactory =
+        ConnectionFactories.get(
+          ConnectionFactoryOptions.builder()
+            .option(ConnectionFactoryOptions.DRIVER, "gcp")
+            .option(ConnectionFactoryOptions.PROTOCOL, "postgresql")
+            .option(ConnectionFactoryOptions.USER, flags.user)
+            .option(ConnectionFactoryOptions.PASSWORD, flags.password)
+            .option(ConnectionFactoryOptions.DATABASE, flags.database)
+            .option(ConnectionFactoryOptions.HOST, flags.cloudSqlInstance)
+            .option(ENABLE_IAM_AUTH, true)
+            .build()
+        )
+
+      return PostgresDatabaseClient { connectionFactory.create().awaitFirst() }
+    }
   }
 }

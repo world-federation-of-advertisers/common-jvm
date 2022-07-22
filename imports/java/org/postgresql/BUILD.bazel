@@ -4,3 +4,8 @@ alias(
     name = "r2dbc",
     actual = "@maven//:org_postgresql_r2dbc_postgresql",
 )
+
+alias(
+    name = "j2dbc",
+    actual = "@maven//:org_postgresql_postgresql",
+)
