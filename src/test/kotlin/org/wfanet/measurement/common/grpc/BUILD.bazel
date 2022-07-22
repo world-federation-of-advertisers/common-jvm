@@ -21,6 +21,7 @@ kt_jvm_test(
 kt_jvm_test(
     name = "TransportSecurityTest",
     srcs = ["TransportSecurityTest.kt"],
+    associates = ["//src/main/kotlin/org/wfanet/measurement/common/grpc"],
     test_class = "org.wfanet.measurement.common.grpc.TransportSecurityTest",
     deps = [
         "//imports/java/com/google/common/truth",
@@ -32,7 +33,6 @@ kt_jvm_test(
         "//imports/kotlin/kotlin/test",
         "//imports/kotlin/kotlinx/coroutines:core",
         "//src/main/kotlin/org/wfanet/measurement/common/crypto:signing_certs",
-        "//src/main/kotlin/org/wfanet/measurement/common/grpc",
     ],
 )
 
