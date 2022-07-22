@@ -28,24 +28,24 @@ import org.wfanet.measurement.common.identity.InternalId
 class BoundStatement
 private constructor(
   private val baseSql: String,
-  private val bindings: Map<String, Any>,
-  private val nullBindings: Map<String, Class<out Any>>
+  private val bindings: Collection<Binding>,
 ) {
   @DslMarker private annotation class DslBuilder
 
-  /** Builder for a SQL statement, which could be a query. */
+  /** Builder for a single statement binding. */
   @DslBuilder
-  abstract class Builder {
-    /** Adds a binding for the parameter named [name] to [value]. */
+  abstract class Binder {
+    /** Binds the parameter named [name] to [value]. */
     fun bind(name: String, value: ExternalId?) = bind(name, value?.value)
-    /** Adds a binding for the parameter named [name] to [value]. */
+    /** Binds the parameter named [name] to [value]. */
     fun bind(name: String, value: InternalId?) = bind(name, value?.value)
-    /** Adds a binding for the parameter named [name] to [value]. */
+    /** Binds the parameter named [name] to [value]. */
     fun bind(name: String, value: Message?) =
       bind(name, value?.toByteString()?.asReadOnlyByteBuffer())
-    /** Adds a binding for the parameter named [name] to [value]. */
+    /** Binds the parameter named [name] to [value]. */
     fun bind(name: String, value: ProtocolMessageEnum?) = bind(name, value?.number)
 
+    /** Binds the parameter named [name] to [value]. */
     @JvmName("bindNullable")
     inline fun <reified T> bind(name: String, value: T) {
       if (value == null) {
@@ -55,39 +55,104 @@ private constructor(
       }
     }
 
-    /** Adds a binding for the parameter named [name] to non-`NULL` [value]. */
+    /** Binds the parameter named [name] to [value]. */
     abstract fun <T : Any> bind(name: String, value: T)
 
-    /** Adds a binding for the parameter named [name] with type [kClass] to `NULL`. */
+    /** Binds the parameter named [name] with type [kClass] to `NULL`. */
     @PublishedApi internal abstract fun bindNull(name: String, kClass: KClass<*>)
   }
 
-  private class BuilderImpl(private val baseSql: String) : Builder() {
-    private val bindings = mutableMapOf<String, Any>()
-    private val nullBindings = mutableMapOf<String, Class<out Any?>>()
+  /** Builder for a SQL statement, which could be a query. */
+  abstract class Builder : Binder() {
+    /**
+     * Adds an additional binding.
+     *
+     * The following examples result in the same two bindings (Audi S4, Tesla Model 3):
+     *
+     * ```kotlin
+     * boundStatement("INSERT INTO Cars VALUES ($1, $2)") {
+     *   bind("$1", "Audi")
+     *   bind("$2", "S4")
+     *   addBinding {
+     *     bind("$1", "Tesla")
+     *     bind("$2", "Model 3")
+     *   }
+     * }
+     * ```
+     *
+     * ```kotlin
+     * boundStatement("INSERT INTO Cars VALUES ($1, $2)") {
+     *   addBinding {
+     *     bind("$1", "Audi")
+     *     bind("$2", "S4")
+     *   }
+     *   addBinding {
+     *     bind("$1", "Tesla")
+     *     bind("$2", "Model 3")
+     *   }
+     * }
+     * ```
+     */
+    abstract fun addBinding(bind: Binder.() -> Unit)
+  }
+
+  private class BinderImpl() : Binder() {
+    private val values = mutableMapOf<String, Any>()
+    private val nulls = mutableMapOf<String, Class<out Any?>>()
 
     override fun <T : Any> bind(name: String, value: T) {
-      bindings[name] = value
+      values[name] = value
     }
 
     override fun bindNull(name: String, kClass: KClass<*>) {
-      nullBindings[name] = kClass.javaObjectType
+      nulls[name] = kClass.javaObjectType
     }
+
+    fun build() = Binding(values, nulls)
+  }
+
+  private class BuilderImpl(private val baseSql: String) : Builder() {
+    private val binders: MutableList<BinderImpl> = mutableListOf()
+    private var bindable = true
+    private val initialBinder: BinderImpl
+      get() =
+        synchronized(binders) {
+          check(bindable) { "Cannot bind after adding a binding" }
+          if (binders.isEmpty()) {
+            binders += BinderImpl()
+          }
+          binders.first()
+        }
+
+    override fun addBinding(bind: Binder.() -> Unit) =
+      synchronized(binders) {
+        binders += BinderImpl().apply(bind)
+        bindable = false
+      }
+
+    override fun <T : Any> bind(name: String, value: T) = initialBinder.bind(name, value)
+
+    override fun bindNull(name: String, kClass: KClass<*>) = initialBinder.bindNull(name, kClass)
 
     /** Builds a [BoundStatement] from this builder. */
     fun build(): BoundStatement {
-      return BoundStatement(baseSql, bindings, nullBindings)
+      return BoundStatement(baseSql, binders.map { it.build() })
     }
   }
 
   internal fun toStatement(connection: Connection): Statement {
     val statement = connection.createStatement(baseSql)
-    for ((name, value) in bindings) {
-      statement.bind(name, value)
+    if (bindings.isEmpty()) {
+      return statement
     }
-    for ((name, type) in nullBindings) {
-      statement.bindNull(name, type)
-    }
+
+    val finalBinding =
+      bindings.reduce { current: Binding, next: Binding ->
+        statement.apply(current)
+        statement.add()
+        next
+      }
+    statement.apply(finalBinding)
     return statement
   }
 
@@ -95,8 +160,19 @@ private constructor(
     internal fun boundStatement(baseSql: String, bind: Builder.() -> Unit): BoundStatement {
       return BuilderImpl(baseSql).apply(bind).build()
     }
+
+    private fun Statement.apply(binding: Binding) {
+      for ((name, value) in binding.values) {
+        bind(name, value)
+      }
+      for ((name, type) in binding.nulls) {
+        bindNull(name, type)
+      }
+    }
   }
 }
+
+private data class Binding(val values: Map<String, Any>, val nulls: Map<String, Class<out Any?>>)
 
 /** Builds a [BoundStatement]. */
 fun boundStatement(baseSql: String, bind: BoundStatement.Builder.() -> Unit = {}): BoundStatement =
