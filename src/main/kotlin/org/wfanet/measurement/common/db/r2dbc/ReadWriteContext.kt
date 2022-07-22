@@ -17,9 +17,11 @@
 package org.wfanet.measurement.common.db.r2dbc
 
 import io.r2dbc.spi.Connection
-import io.r2dbc.spi.Result
 import io.r2dbc.spi.TransactionDefinition
-import kotlinx.coroutines.reactive.awaitFirst
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.flatMapConcat
+import kotlinx.coroutines.flow.fold
+import kotlinx.coroutines.reactive.asFlow
 import kotlinx.coroutines.reactive.awaitFirstOrNull
 
 /** A transaction context for reading and writing. */
@@ -38,9 +40,16 @@ interface ReadWriteContext : ReadContext {
 internal class ReadWriteContextImpl private constructor(connection: Connection) :
   ReadWriteContext, ReadContextImpl(connection) {
 
+  @OptIn(FlowPreview::class) // For `flatMapConcat`.
   override suspend fun executeStatement(statement: BoundStatement): StatementResult {
-    val result: Result = statement.toStatement(connection).execute().awaitFirst()
-    return StatementResult(result.rowsUpdated.awaitFirst())
+    val numRowsUpdated =
+      statement
+        .toStatement(connection)
+        .execute()
+        .asFlow()
+        .flatMapConcat { it.rowsUpdated.asFlow() }
+        .fold(0) { sum, rowsUpdated -> sum + rowsUpdated }
+    return StatementResult(numRowsUpdated)
   }
 
   override suspend fun commit() {

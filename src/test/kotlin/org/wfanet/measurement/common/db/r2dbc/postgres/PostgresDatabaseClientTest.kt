@@ -102,6 +102,36 @@ class PostgresDatabaseClientTest {
   }
 
   @Test
+  fun `addBinding adds bindings`() = runBlocking {
+    val cars =
+      listOf(
+        Car(carId = InternalId(1), year = 2012, make = "Audi", model = "S4"),
+        Car(carId = InternalId(2), year = 2020, make = "Tesla", model = "Model 3")
+      )
+    val insertStatement =
+      boundStatement("INSERT INTO Cars (CarId, Year, Make, Model) VALUES ($1, $2, $3, $4)") {
+        for (car in cars) {
+          addBinding {
+            bind("$1", car.carId)
+            bind("$2", car.year)
+            bind("$3", car.make)
+            bind("$4", car.model)
+          }
+        }
+      }
+
+    val statementResult =
+      with(dbClient.readWriteTransaction()) { executeStatement(insertStatement).also { commit() } }
+    assertThat(statementResult.numRowsUpdated).isEqualTo(2)
+
+    val query = boundStatement("SELECT * FROM Cars ORDER BY CarId")
+    val result: Flow<Car> =
+      dbClient.singleUse().executeQuery(query).consume { row -> Car.parseFrom(row) }
+
+    assertThat(result.toList()).containsExactlyElementsIn(cars).inOrder()
+  }
+
+  @Test
   fun `executeQuery reads writes from same transaction`(): Unit = runBlocking {
     val insertStatement =
       boundStatement(
