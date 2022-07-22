@@ -18,13 +18,13 @@ package org.wfanet.measurement.common.db.postgres.tools
 
 import java.util.Properties
 import org.wfanet.measurement.common.commandLineMain
-import org.wfanet.measurement.common.db.liquibase.tools.UpdateSchema as CommonUpdateSchema
+import org.wfanet.measurement.common.db.liquibase.tools.BaseUpdateSchema
 import org.wfanet.measurement.common.db.postgres.PostgresFlags
 import picocli.CommandLine.Command
 import picocli.CommandLine.Mixin
 
 @Command
-class UpdateSchema : Runnable, CommonUpdateSchema() {
+class UpdateSchema : Runnable, BaseUpdateSchema() {
   @Mixin private lateinit var flags: PostgresFlags
 
   override fun run() {

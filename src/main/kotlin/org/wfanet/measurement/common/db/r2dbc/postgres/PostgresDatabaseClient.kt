@@ -18,6 +18,7 @@ package org.wfanet.measurement.common.db.r2dbc.postgres
 
 import io.r2dbc.postgresql.api.PostgresTransactionDefinition
 import io.r2dbc.spi.ConnectionFactories
+import io.r2dbc.spi.ConnectionFactory
 import io.r2dbc.spi.ConnectionFactoryOptions
 import io.r2dbc.spi.IsolationLevel
 import kotlinx.coroutines.reactive.awaitSingle
@@ -55,8 +56,7 @@ class PostgresDatabaseClient(getConnection: ConnectionProvider) : DatabaseClient
       return PostgresDatabaseClient { connectionFactory.create().awaitSingle() }
     }
 
-    fun fromConnectionFactoryOptions(options: ConnectionFactoryOptions): PostgresDatabaseClient {
-      val connectionFactory = ConnectionFactories.get(options)
+    fun fromConnectionFactory(connectionFactory: ConnectionFactory): PostgresDatabaseClient {
       return PostgresDatabaseClient { connectionFactory.create().awaitSingle() }
     }
   }

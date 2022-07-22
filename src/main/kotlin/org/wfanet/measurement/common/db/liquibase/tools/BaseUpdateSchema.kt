@@ -29,7 +29,7 @@ import picocli.CommandLine.Command
 import picocli.CommandLine.Option
 
 @Command
-abstract class UpdateSchema {
+abstract class BaseUpdateSchema {
   @Option(
     names = ["--changelog"],
     description = ["Liquibase changelog resource name"],
