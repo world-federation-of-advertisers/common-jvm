@@ -11,8 +11,8 @@ kt_jvm_library(
 )
 
 kt_jvm_library(
-    name = "factory",
-    srcs = ["PostgresConnectionFactory.kt"],
+    name = "factories",
+    srcs = ["PostgresConnectionFactories.kt"],
     deps = [
         "//imports/java/com/google/cloud/sql:r2dbc-core",
         "//imports/java/org/postgresql:r2dbc",

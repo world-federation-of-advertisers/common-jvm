@@ -16,7 +16,7 @@
 
 package org.wfanet.measurement.gcloud.spanner.tools
 
-import java.util.Properties
+import java.sql.DriverManager
 import org.wfanet.measurement.common.commandLineMain
 import org.wfanet.measurement.common.db.liquibase.tools.BaseUpdateSchema
 import org.wfanet.measurement.gcloud.spanner.SpannerFlags
@@ -24,12 +24,12 @@ import picocli.CommandLine.Command
 import picocli.CommandLine.Mixin
 
 @Command
-class UpdateSchema : Runnable, BaseUpdateSchema() {
+class UpdateSchema : BaseUpdateSchema() {
   @Mixin private lateinit var flags: SpannerFlags
 
   override fun run() {
     val connectionString = flags.jdbcConnectionString
-    super.run(connectionString, Properties())
+    run(DriverManager.getConnection(connectionString))
   }
 
   companion object {

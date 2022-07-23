@@ -19,21 +19,19 @@ import io.r2dbc.spi.ConnectionFactories
 import io.r2dbc.spi.ConnectionFactory
 import io.r2dbc.spi.ConnectionFactoryOptions
 
-class PostgresConnectionFactory private constructor() {
-  companion object {
-    @JvmStatic
-    fun fromFlags(flags: PostgresFlags): ConnectionFactory {
-      return ConnectionFactories.get(
-        ConnectionFactoryOptions.builder()
-          .option(ConnectionFactoryOptions.DRIVER, "gcp")
-          .option(ConnectionFactoryOptions.PROTOCOL, "postgresql")
-          .option(ConnectionFactoryOptions.USER, flags.user)
-          .option(ConnectionFactoryOptions.PASSWORD, flags.password)
-          .option(ConnectionFactoryOptions.DATABASE, flags.database)
-          .option(ConnectionFactoryOptions.HOST, flags.cloudSqlInstance)
-          .option(GcpConnectionFactoryProvider.ENABLE_IAM_AUTH, true)
-          .build()
-      )
-    }
+object PostgresConnectionFactories {
+  @JvmStatic
+  fun fromFlags(flags: PostgresFlags): ConnectionFactory {
+    return ConnectionFactories.get(
+      ConnectionFactoryOptions.builder()
+        .option(ConnectionFactoryOptions.DRIVER, "gcp")
+        .option(ConnectionFactoryOptions.PROTOCOL, "postgresql")
+        .option(ConnectionFactoryOptions.USER, flags.user)
+        .option(ConnectionFactoryOptions.PASSWORD, flags.password)
+        .option(ConnectionFactoryOptions.DATABASE, flags.database)
+        .option(ConnectionFactoryOptions.HOST, flags.cloudSqlInstance)
+        .option(GcpConnectionFactoryProvider.ENABLE_IAM_AUTH, true)
+        .build()
+    )
   }
 }

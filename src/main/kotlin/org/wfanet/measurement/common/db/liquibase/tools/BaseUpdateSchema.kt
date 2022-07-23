@@ -16,8 +16,7 @@
 
 package org.wfanet.measurement.common.db.liquibase.tools
 
-import java.sql.DriverManager
-import java.util.Properties
+import java.sql.Connection
 import java.util.logging.Level
 import java.util.logging.Logger
 import liquibase.Contexts
@@ -29,7 +28,7 @@ import picocli.CommandLine.Command
 import picocli.CommandLine.Option
 
 @Command
-abstract class BaseUpdateSchema {
+abstract class BaseUpdateSchema : Runnable {
   @Option(
     names = ["--changelog"],
     description = ["Liquibase changelog resource name"],
@@ -37,16 +36,15 @@ abstract class BaseUpdateSchema {
   )
   private lateinit var changelog: String
 
-  fun run(connectionString: String, props: Properties) {
+  fun run(connection: Connection) {
     val changelogPath =
       checkNotNull(Thread.currentThread().contextClassLoader.getJarResourcePath(changelog)) {
         "JAR resource $changelog not found"
       }
 
-    logger.info("Connecting to $connectionString")
-    DriverManager.getConnection(connectionString, props).use { connection ->
+    connection.use {
       logger.info("Loading changelog from $changelogPath")
-      Liquibase.fromPath(connection, changelogPath).use { liquibase ->
+      Liquibase.fromPath(it, changelogPath).use { liquibase ->
         logger.info("Updating...")
         Scope.getCurrentScope().setLogLevel(Level.FINE)
         liquibase.update(Contexts())

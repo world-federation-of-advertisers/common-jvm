@@ -16,6 +16,7 @@
 
 package org.wfanet.measurement.common.db.postgres.tools
 
+import java.sql.DriverManager
 import java.util.Properties
 import org.wfanet.measurement.common.commandLineMain
 import org.wfanet.measurement.common.db.liquibase.tools.BaseUpdateSchema
@@ -24,7 +25,7 @@ import picocli.CommandLine.Command
 import picocli.CommandLine.Mixin
 
 @Command
-class UpdateSchema : Runnable, BaseUpdateSchema() {
+class UpdateSchema : BaseUpdateSchema() {
   @Mixin private lateinit var flags: PostgresFlags
 
   override fun run() {
@@ -33,7 +34,7 @@ class UpdateSchema : Runnable, BaseUpdateSchema() {
     props.setProperty("user", flags.user)
     props.setProperty("password", flags.password)
 
-    super.run(connectionString, props)
+    run(DriverManager.getConnection(connectionString, props))
   }
 
   companion object {
