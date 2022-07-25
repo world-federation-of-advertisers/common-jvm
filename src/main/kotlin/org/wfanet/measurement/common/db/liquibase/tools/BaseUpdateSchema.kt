@@ -42,13 +42,11 @@ abstract class BaseUpdateSchema : Runnable {
         "JAR resource $changelog not found"
       }
 
-    connection.use {
-      logger.info("Loading changelog from $changelogPath")
-      Liquibase.fromPath(it, changelogPath).use { liquibase ->
-        logger.info("Updating...")
-        Scope.getCurrentScope().setLogLevel(Level.FINE)
-        liquibase.update(Contexts())
-      }
+    logger.info("Loading changelog from $changelogPath")
+    Liquibase.fromPath(connection, changelogPath).use { liquibase ->
+      logger.info("Updating...")
+      Scope.getCurrentScope().setLogLevel(Level.FINE)
+      liquibase.update(Contexts())
     }
   }
 

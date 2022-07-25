@@ -21,7 +21,7 @@ import io.r2dbc.spi.ConnectionFactoryOptions
 
 object PostgresConnectionFactories {
   @JvmStatic
-  fun fromFlags(flags: PostgresFlags): ConnectionFactory {
+  fun buildConnectionFactory(flags: PostgresFlags): ConnectionFactory {
     return ConnectionFactories.get(
       ConnectionFactoryOptions.builder()
         .option(ConnectionFactoryOptions.DRIVER, "gcp")

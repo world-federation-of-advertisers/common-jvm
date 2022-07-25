@@ -29,7 +29,7 @@ class UpdateSchema : BaseUpdateSchema() {
 
   override fun run() {
     val connectionString = flags.jdbcConnectionString
-    run(DriverManager.getConnection(connectionString))
+    DriverManager.getConnection(connectionString).use { run(it) }
   }
 
   companion object {

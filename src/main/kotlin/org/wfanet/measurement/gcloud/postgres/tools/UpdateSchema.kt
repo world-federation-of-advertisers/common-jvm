@@ -36,7 +36,7 @@ class UpdateSchema : BaseUpdateSchema() {
     props.setProperty("user", flags.user)
     props.setProperty("password", flags.password)
     props.setProperty("enableIamAuth", "true")
-    run(DriverManager.getConnection(connectionString, props))
+    DriverManager.getConnection(connectionString, props).use { run(it) }
   }
 
   companion object {

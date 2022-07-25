@@ -33,8 +33,7 @@ class UpdateSchema : BaseUpdateSchema() {
     val props = Properties()
     props.setProperty("user", flags.user)
     props.setProperty("password", flags.password)
-
-    run(DriverManager.getConnection(connectionString, props))
+    DriverManager.getConnection(connectionString, props).use { run(it) }
   }
 
   companion object {
