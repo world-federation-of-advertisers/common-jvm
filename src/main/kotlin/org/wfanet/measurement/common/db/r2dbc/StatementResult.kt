@@ -16,4 +16,4 @@
 
 package org.wfanet.measurement.common.db.r2dbc
 
-data class StatementResult internal constructor(val numRowsUpdated: Int)
+data class StatementResult internal constructor(val numRowsUpdated: Long)

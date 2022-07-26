@@ -1,0 +1,21 @@
+# Database specifics for Postgres.
+
+load("@io_bazel_rules_kotlin//kotlin:jvm.bzl", "kt_jvm_library")
+
+package(default_visibility = ["//visibility:public"])
+
+kt_jvm_library(
+    name = "flags",
+    srcs = ["PostgresFlags.kt"],
+    deps = ["//imports/java/picocli"],
+)
+
+kt_jvm_library(
+    name = "factories",
+    srcs = ["PostgresConnectionFactories.kt"],
+    deps = [
+        "//imports/java/com/google/cloud/sql:r2dbc-core",
+        "//imports/java/org/postgresql:r2dbc",
+        "//src/main/kotlin/org/wfanet/measurement/gcloud/postgres:flags",
+    ],
+)

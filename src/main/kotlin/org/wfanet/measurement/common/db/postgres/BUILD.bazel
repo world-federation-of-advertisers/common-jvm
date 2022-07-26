@@ -1,0 +1,11 @@
+# Database specifics for Postgres.
+
+load("@io_bazel_rules_kotlin//kotlin:jvm.bzl", "kt_jvm_library")
+
+package(default_visibility = ["//visibility:public"])
+
+kt_jvm_library(
+    name = "flags",
+    srcs = ["PostgresFlags.kt"],
+    deps = ["//imports/java/picocli"],
+)

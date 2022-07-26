@@ -17,7 +17,12 @@
 package org.wfanet.measurement.common.db.r2dbc.postgres
 
 import io.r2dbc.postgresql.api.PostgresTransactionDefinition
+import io.r2dbc.spi.ConnectionFactories
+import io.r2dbc.spi.ConnectionFactory
+import io.r2dbc.spi.ConnectionFactoryOptions
 import io.r2dbc.spi.IsolationLevel
+import kotlinx.coroutines.reactive.awaitSingle
+import org.wfanet.measurement.common.db.postgres.PostgresFlags
 import org.wfanet.measurement.common.db.r2dbc.ConnectionProvider
 import org.wfanet.measurement.common.db.r2dbc.DatabaseClient
 
@@ -34,5 +39,25 @@ class PostgresDatabaseClient(getConnection: ConnectionProvider) : DatabaseClient
       PostgresTransactionDefinition.from(isolationLevel).readOnly()
     private val readWriteTransactionDefinition =
       PostgresTransactionDefinition.from(isolationLevel).readWrite()
+
+    fun fromFlags(flags: PostgresFlags): PostgresDatabaseClient {
+      val connectionFactory =
+        ConnectionFactories.get(
+          ConnectionFactoryOptions.builder()
+            .option(ConnectionFactoryOptions.DRIVER, "postgresql")
+            .option(ConnectionFactoryOptions.HOST, flags.host)
+            .option(ConnectionFactoryOptions.PORT, flags.port)
+            .option(ConnectionFactoryOptions.USER, flags.user)
+            .option(ConnectionFactoryOptions.PASSWORD, flags.password)
+            .option(ConnectionFactoryOptions.DATABASE, flags.database)
+            .build()
+        )
+
+      return PostgresDatabaseClient { connectionFactory.create().awaitSingle() }
+    }
+
+    fun fromConnectionFactory(connectionFactory: ConnectionFactory): PostgresDatabaseClient {
+      return PostgresDatabaseClient { connectionFactory.create().awaitSingle() }
+    }
   }
 }

@@ -5,11 +5,15 @@ package(default_visibility = ["//visibility:public"])
 kt_jvm_library(
     name = "update_schema",
     srcs = ["UpdateSchema.kt"],
-    runtime_deps = ["//imports/java/liquibase/ext/spanner"],
+    runtime_deps = [
+        "//imports/java/com/google/cloud/sql/postgres:j2dbc",
+        "//imports/java/org/postgresql:j2dbc",
+        "//imports/java/org/yaml:snakeyaml",
+    ],
     deps = [
         "//src/main/kotlin/org/wfanet/measurement/common",
         "//src/main/kotlin/org/wfanet/measurement/common/db/liquibase",
         "//src/main/kotlin/org/wfanet/measurement/common/db/liquibase/tools:update_schema",
-        "//src/main/kotlin/org/wfanet/measurement/gcloud/spanner:flags",
+        "//src/main/kotlin/org/wfanet/measurement/gcloud/postgres:flags",
     ],
 )

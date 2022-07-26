@@ -61,7 +61,7 @@ class PostgresDatabaseClientTest {
       }
     }
 
-    assertThat(result.numRowsUpdated).isEqualTo(4)
+    assertThat(result.numRowsUpdated).isEqualTo(4L)
   }
 
   @Test
@@ -122,7 +122,7 @@ class PostgresDatabaseClientTest {
 
     val statementResult =
       with(dbClient.readWriteTransaction()) { executeStatement(insertStatement).also { commit() } }
-    assertThat(statementResult.numRowsUpdated).isEqualTo(2)
+    assertThat(statementResult.numRowsUpdated).isEqualTo(2L)
 
     val query = boundStatement("SELECT * FROM Cars ORDER BY CarId")
     val result: Flow<Car> =

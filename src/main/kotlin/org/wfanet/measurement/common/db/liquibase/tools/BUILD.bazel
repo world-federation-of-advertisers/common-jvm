@@ -4,12 +4,9 @@ package(default_visibility = ["//visibility:public"])
 
 kt_jvm_library(
     name = "update_schema",
-    srcs = ["UpdateSchema.kt"],
-    runtime_deps = ["//imports/java/liquibase/ext/spanner"],
+    srcs = ["BaseUpdateSchema.kt"],
     deps = [
         "//src/main/kotlin/org/wfanet/measurement/common",
         "//src/main/kotlin/org/wfanet/measurement/common/db/liquibase",
-        "//src/main/kotlin/org/wfanet/measurement/common/db/liquibase/tools:update_schema",
-        "//src/main/kotlin/org/wfanet/measurement/gcloud/spanner:flags",
     ],
 )

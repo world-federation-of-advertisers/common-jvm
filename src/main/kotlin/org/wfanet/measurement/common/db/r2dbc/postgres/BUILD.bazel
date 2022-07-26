@@ -7,6 +7,8 @@ kt_jvm_library(
     srcs = glob(["*.kt"]),
     deps = [
         "//imports/java/org/postgresql:r2dbc",
+        "//imports/java/org/reactivestreams",
+        "//src/main/kotlin/org/wfanet/measurement/common/db/postgres:flags",
         "//src/main/kotlin/org/wfanet/measurement/common/db/r2dbc",
     ],
 )

@@ -48,7 +48,7 @@ internal class ReadWriteContextImpl private constructor(connection: Connection) 
         .execute()
         .asFlow()
         .flatMapConcat { it.rowsUpdated.asFlow() }
-        .fold(0) { sum, rowsUpdated -> sum + rowsUpdated }
+        .fold(0L) { sum: Long, rowsUpdated: Long -> sum + rowsUpdated }
     return StatementResult(numRowsUpdated)
   }
 

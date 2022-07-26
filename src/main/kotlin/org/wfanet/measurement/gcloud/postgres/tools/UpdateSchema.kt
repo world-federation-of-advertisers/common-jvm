@@ -14,25 +14,33 @@
  * limitations under the License.
  */
 
-package org.wfanet.measurement.gcloud.spanner.tools
+package org.wfanet.measurement.gcloud.postgres.tools
 
 import java.sql.DriverManager
+import java.util.Properties
 import org.wfanet.measurement.common.commandLineMain
 import org.wfanet.measurement.common.db.liquibase.tools.BaseUpdateSchema
-import org.wfanet.measurement.gcloud.spanner.SpannerFlags
+import org.wfanet.measurement.gcloud.postgres.PostgresFlags
 import picocli.CommandLine.Command
 import picocli.CommandLine.Mixin
 
 @Command
 class UpdateSchema : BaseUpdateSchema() {
-  @Mixin private lateinit var flags: SpannerFlags
+  @Mixin private lateinit var flags: PostgresFlags
 
   override fun run() {
-    val connectionString = flags.jdbcConnectionString
-    DriverManager.getConnection(connectionString).use { run(it) }
+    val connectionString = "jdbc:postgresql:///$flags.database"
+    val props = Properties()
+    props.setProperty("cloudSqlInstance", flags.cloudSqlInstance)
+    props.setProperty("socketFactory", SOCKET_FACTORY_CLASS)
+    props.setProperty("user", flags.user)
+    props.setProperty("password", flags.password)
+    props.setProperty("enableIamAuth", "true")
+    DriverManager.getConnection(connectionString, props).use { run(it) }
   }
 
   companion object {
+    private const val SOCKET_FACTORY_CLASS = "com.google.cloud.sql.postgres.SocketFactory"
     @JvmStatic fun main(args: Array<String>) = commandLineMain(UpdateSchema(), args)
   }
 }
