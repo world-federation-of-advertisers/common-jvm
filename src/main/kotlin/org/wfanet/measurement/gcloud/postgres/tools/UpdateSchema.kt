@@ -35,7 +35,7 @@ class UpdateSchema : BaseUpdateSchema() {
     props.setProperty("socketFactory", SOCKET_FACTORY_CLASS)
     props.setProperty("user", flags.user)
     // a non-empty password is required, but the value doesn't matter
-    props.setProperty("password", "password")
+    props.setProperty("password", "UNUSED")
     props.setProperty("enableIamAuth", "true")
     DriverManager.getConnection(connectionString, props).use { run(it) }
   }
