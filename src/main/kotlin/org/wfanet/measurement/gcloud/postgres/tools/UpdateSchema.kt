@@ -34,7 +34,8 @@ class UpdateSchema : BaseUpdateSchema() {
     props.setProperty("cloudSqlInstance", flags.cloudSqlInstance)
     props.setProperty("socketFactory", SOCKET_FACTORY_CLASS)
     props.setProperty("user", flags.user)
-    props.setProperty("password", flags.password)
+    // a non-empty password is required, but the value doesn't matter
+    props.setProperty("password", "UNUSED")
     props.setProperty("enableIamAuth", "true")
     DriverManager.getConnection(connectionString, props).use { run(it) }
   }

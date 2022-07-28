@@ -41,12 +41,4 @@ class PostgresFlags {
   )
   lateinit var user: String
     private set
-
-  @CommandLine.Option(
-    names = ["--postgres-password"],
-    description = ["Password of the Postgres database."],
-    required = true
-  )
-  lateinit var password: String
-    private set
 }

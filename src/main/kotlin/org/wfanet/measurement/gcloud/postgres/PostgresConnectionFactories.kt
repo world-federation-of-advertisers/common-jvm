@@ -27,7 +27,8 @@ object PostgresConnectionFactories {
         .option(ConnectionFactoryOptions.DRIVER, "gcp")
         .option(ConnectionFactoryOptions.PROTOCOL, "postgresql")
         .option(ConnectionFactoryOptions.USER, flags.user)
-        .option(ConnectionFactoryOptions.PASSWORD, flags.password)
+        // a non-empty password is required, but the value doesn't matter
+        .option(ConnectionFactoryOptions.PASSWORD, "UNUSED")
         .option(ConnectionFactoryOptions.DATABASE, flags.database)
         .option(ConnectionFactoryOptions.HOST, flags.cloudSqlInstance)
         .option(GcpConnectionFactoryProvider.ENABLE_IAM_AUTH, true)
