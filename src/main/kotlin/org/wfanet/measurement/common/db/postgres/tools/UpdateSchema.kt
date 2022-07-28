@@ -32,7 +32,7 @@ class UpdateSchema : BaseUpdateSchema() {
     val connectionString = flags.jdbcConnectionString
     val props = Properties()
     props.setProperty("user", flags.user)
-    props.setProperty("password", flags.password)
+    props.setProperty("password", flags.password.trim())
     DriverManager.getConnection(connectionString, props).use { run(it) }
   }
 

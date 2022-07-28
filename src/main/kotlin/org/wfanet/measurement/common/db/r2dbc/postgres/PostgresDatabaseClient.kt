@@ -48,7 +48,7 @@ class PostgresDatabaseClient(getConnection: ConnectionProvider) : DatabaseClient
             .option(ConnectionFactoryOptions.HOST, flags.host)
             .option(ConnectionFactoryOptions.PORT, flags.port)
             .option(ConnectionFactoryOptions.USER, flags.user)
-            .option(ConnectionFactoryOptions.PASSWORD, flags.password)
+            .option(ConnectionFactoryOptions.PASSWORD, flags.password.trim())
             .option(ConnectionFactoryOptions.DATABASE, flags.database)
             .build()
         )
