@@ -38,7 +38,12 @@ private constructor(
 ) {
   private val healthStatusManager = HealthStatusManager()
 
-  val server: Server by lazy {
+  /**
+   * Internal [Server].
+   *
+   * Visible only for testing.
+   */
+  internal val server: Server by lazy {
     NettyServerBuilder.forPort(port)
       .apply {
         sslContext?.let { sslContext(it) }
@@ -135,17 +140,10 @@ private constructor(
       nameForLogging: String,
       services: Iterable<ServerServiceDefinition>
     ): CommonServer {
-      val certs =
-        SigningCerts.fromPemFiles(
-          certificateFile = flags.tlsFlags.certFile,
-          privateKeyFile = flags.tlsFlags.privateKeyFile,
-          trustedCertCollectionFile = flags.tlsFlags.certCollectionFile
-        )
-
       return fromParameters(
         flags.port,
         flags.debugVerboseGrpcLogging,
-        certs,
+        flags.tlsFlags.signingCerts,
         if (flags.clientAuthRequired) ClientAuth.REQUIRE else ClientAuth.NONE,
         nameForLogging,
         services

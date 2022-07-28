@@ -15,6 +15,7 @@
 package org.wfanet.measurement.common.grpc
 
 import java.io.File
+import org.wfanet.measurement.common.crypto.SigningCerts
 import picocli.CommandLine
 
 class TlsFlags {
@@ -41,4 +42,8 @@ class TlsFlags {
   )
   var certCollectionFile: File? = null
     private set
+
+  val signingCerts: SigningCerts by lazy {
+    SigningCerts.fromPemFiles(privateKeyFile, certFile, certCollectionFile)
+  }
 }
