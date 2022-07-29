@@ -14,7 +14,10 @@ generate_root_certificate(
 generate_user_certificate(
     name = "test_user",
     common_name = "Some Server",
-    hostname = "server.someorg.example.com",
+    hostnames = [
+        "server.someorg.example.com",
+        "localhost",
+    ],
     org = "Some Organization",
     root_certificate = ":test_root.pem",
     root_key = ":test_root.key",

@@ -22,6 +22,7 @@ _SKI_EXT = "subjectKeyIdentifier=hash"
 _AKI_EXT = "authorityKeyIdentifier=keyid:always,issuer"
 _BASIC_CONSTRAINTS_EXT = "basicConstraints=CA:FALSE"
 _KEY_USAGE_EXT = "keyUsage=nonRepudiation,digitalSignature,keyEncipherment"
+_CA_KEY_USAGE_EXT = "keyUsage=digitalSignature,keyCertSign,cRLSign"
 
 def _location(label):
     return "$(location {label})".format(label = label)
@@ -32,8 +33,8 @@ def _subject(org, common_name):
         common_name = common_name,
     )
 
-def _subject_alt_name(hostname):
-    return "subjectAltName=DNS:{hostname}".format(hostname = hostname)
+def _subject_alt_name(hostnames):
+    return "subjectAltName=" + ",".join(["DNS:" + hostname for hostname in hostnames])
 
 def generate_root_certificate(
         name,
@@ -77,7 +78,9 @@ def generate_root_certificate(
         _subject(org = org, common_name = common_name),
         "-extensions v3_ca",
         "-addext",
-        _subject_alt_name(hostname = hostname),
+        _CA_KEY_USAGE_EXT,
+        "-addext",
+        _subject_alt_name([hostname]),
         "# cache_version:" + str(cache_version),
     ]
     native.genrule(
@@ -105,7 +108,7 @@ def generate_user_certificate(
         root_certificate,
         org,
         common_name,
-        hostname,
+        hostnames,
         valid_days = 365,
         cache_version = 0,
         visibility = None):
@@ -119,7 +122,7 @@ def generate_user_certificate(
         root_certificate: Certificate of root CA in PEM format.
         org: Subject organization name.
         common_name: Subject common name.
-        hostname: DNS hostname for Subject Alternative Name extension.
+        hostnames: DNS hostnames for Subject Alternative Name extension.
         valid_days: How many days the certificate is valid for.
         cache_version: The Bazel build cache version of this target. This can be
             used to invalidate any cached cert, e.g. if it has expired.
@@ -130,7 +133,7 @@ def generate_user_certificate(
     csr = name + ".csr"
     v3_config = name + ".cnf"
 
-    san_ext = _subject_alt_name(hostname = hostname)
+    san_ext = _subject_alt_name(hostnames)
 
     csr_cmd = [
         "openssl",
