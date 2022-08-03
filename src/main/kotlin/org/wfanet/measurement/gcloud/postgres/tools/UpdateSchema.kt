@@ -29,14 +29,18 @@ class UpdateSchema : BaseUpdateSchema() {
   @Mixin private lateinit var flags: PostgresFlags
 
   override fun run() {
-    val connectionString = "jdbc:postgresql:///$flags.database"
-    val props = Properties()
-    props.setProperty("cloudSqlInstance", flags.cloudSqlInstance)
-    props.setProperty("socketFactory", SOCKET_FACTORY_CLASS)
-    props.setProperty("user", flags.user)
-    // a non-empty password is required, but the value doesn't matter
-    props.setProperty("password", "UNUSED")
-    props.setProperty("enableIamAuth", "true")
+    val connectionString = "jdbc:postgresql:///${flags.database}"
+    val props =
+      Properties().apply {
+        setProperty("cloudSqlInstance", flags.cloudSqlInstance)
+        setProperty("socketFactory", SOCKET_FACTORY_CLASS)
+        setProperty("user", flags.user)
+        setProperty("password", "unused") // Non-empty value must be specified, but is unused.
+        setProperty("enableIamAuth", "true")
+        setProperty("sslmode", "disable")
+        setProperty("ipTypes", "PRIVATE,PUBLIC") // Prefer private IP.
+      }
+
     DriverManager.getConnection(connectionString, props).use { run(it) }
   }
 
