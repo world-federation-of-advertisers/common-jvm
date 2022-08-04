@@ -31,7 +31,11 @@ load(
 )
 load("//build/rules_proto:repo.bzl", "rules_proto_maven_artifacts_dict")
 load("//build/grpc_java:repo.bzl", "grpc_java_maven_artifacts_dict")
-load("//build/grpc_kotlin:repo.bzl", "grpc_kotlin_maven_artifacts_dict")
+load(
+    "//build/grpc_kotlin:repo.bzl",
+    "GRPC_KOTLIN_OVERRIDE_TARGETS",
+    "grpc_kotlin_maven_artifacts_dict",
+)
 load("//build/com_google_truth:repo.bzl", "com_google_truth_artifact_dict")
 load("//build/kotlinx_coroutines:repo.bzl", "kotlinx_coroutines_artifact_dict")
 load("//build/maven:artifacts.bzl", "artifacts")
@@ -103,7 +107,7 @@ def common_jvm_maven_artifacts_dict():
 
     return maven_artifacts
 
-COMMON_JVM_MAVEN_OVERRIDE_TARGETS = RULES_KOTLIN_OVERRIDE_TARGETS
+COMMON_JVM_MAVEN_OVERRIDE_TARGETS = dict(RULES_KOTLIN_OVERRIDE_TARGETS.items() + GRPC_KOTLIN_OVERRIDE_TARGETS.items())
 
 # Until the log2shell has been more widely mitigated, prohibit log4j totally.
 COMMON_JVM_EXCLUDED_ARTIFACTS = [
