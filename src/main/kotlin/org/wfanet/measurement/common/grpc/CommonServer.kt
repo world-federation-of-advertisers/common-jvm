@@ -34,7 +34,8 @@ private constructor(
   private val nameForLogging: String,
   private val port: Int,
   services: Iterable<ServerServiceDefinition>,
-  sslContext: SslContext?
+  sslContext: SslContext?,
+  private val healthProbePort: Int = 0,
 ) {
   private val healthStatusManager = HealthStatusManager()
 
@@ -42,9 +43,14 @@ private constructor(
     NettyServerBuilder.forPort(port)
       .apply {
         sslContext?.let { sslContext(it) }
-        addService(healthStatusManager.healthService)
         services.forEach { addService(it) }
       }
+      .build()
+  }
+
+  private val probeServer: Server by lazy {
+    NettyServerBuilder.forPort(healthProbePort)
+      .apply { addService(healthStatusManager.healthService) }
       .build()
   }
 
@@ -54,6 +60,7 @@ private constructor(
     server.services.forEach {
       healthStatusManager.setStatus(it.serviceDescriptor.name, ServingStatus.SERVING)
     }
+    probeServer.start()
 
     logger.log(Level.INFO, "$nameForLogging started, listening on $port")
     Runtime.getRuntime()
@@ -71,6 +78,7 @@ private constructor(
   }
 
   private fun stop() {
+    probeServer.shutdownNow()
     server.shutdown()
   }
 
@@ -101,6 +109,14 @@ private constructor(
       private set
 
     @set:CommandLine.Option(
+      names = ["--probe-port"],
+      description = ["TCP port for non-TLS health probe server."],
+      defaultValue = "8090"
+    )
+    var healthProbePort by Delegates.notNull<Int>()
+      private set
+
+    @set:CommandLine.Option(
       names = ["--debug-verbose-grpc-server-logging"],
       description = ["Debug mode: log ALL gRPC requests and responses"],
       defaultValue = "false"
@@ -119,13 +135,15 @@ private constructor(
       certs: SigningCerts?,
       clientAuth: ClientAuth,
       nameForLogging: String,
-      services: Iterable<ServerServiceDefinition>
+      services: Iterable<ServerServiceDefinition>,
+      healthProbePort: Int = 0
     ): CommonServer {
       return CommonServer(
         nameForLogging,
         port,
         services.run { if (verboseGrpcLogging) map { it.withVerboseLogging() } else this },
-        certs?.toServerTlsContext(clientAuth)
+        certs?.toServerTlsContext(clientAuth),
+        healthProbePort
       )
     }
 
@@ -148,7 +166,8 @@ private constructor(
         certs,
         if (flags.clientAuthRequired) ClientAuth.REQUIRE else ClientAuth.NONE,
         nameForLogging,
-        services
+        services,
+        flags.healthProbePort
       )
     }
 
