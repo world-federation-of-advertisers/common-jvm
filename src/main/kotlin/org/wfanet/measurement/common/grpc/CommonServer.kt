@@ -91,7 +91,7 @@ private constructor(
     @set:CommandLine.Option(
       names = ["--port", "-p"],
       description = ["TCP port for gRPC server."],
-      defaultValue = "8043"
+      defaultValue = "8443"
     )
     var port by Delegates.notNull<Int>()
       private set
