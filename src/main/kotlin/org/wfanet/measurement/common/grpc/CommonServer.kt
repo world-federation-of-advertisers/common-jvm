@@ -35,7 +35,7 @@ private constructor(
   private val port: Int,
   services: Iterable<ServerServiceDefinition>,
   sslContext: SslContext?,
-  private val healthProbePort: Int = 0,
+  private val healthPort: Int = 0,
 ) {
   private val healthStatusManager = HealthStatusManager()
 
@@ -48,8 +48,8 @@ private constructor(
       .build()
   }
 
-  private val probeServer: Server by lazy {
-    NettyServerBuilder.forPort(healthProbePort)
+  private val healthServer: Server by lazy {
+    NettyServerBuilder.forPort(healthPort)
       .apply { addService(healthStatusManager.healthService) }
       .build()
   }
@@ -60,7 +60,7 @@ private constructor(
     server.services.forEach {
       healthStatusManager.setStatus(it.serviceDescriptor.name, ServingStatus.SERVING)
     }
-    probeServer.start()
+    healthServer.start()
 
     logger.log(Level.INFO, "$nameForLogging started, listening on $port")
     Runtime.getRuntime()
@@ -78,7 +78,7 @@ private constructor(
   }
 
   private fun stop() {
-    probeServer.shutdownNow()
+    healthServer.shutdownNow()
     server.shutdown()
   }
 
@@ -109,11 +109,11 @@ private constructor(
       private set
 
     @set:CommandLine.Option(
-      names = ["--probe-port"],
-      description = ["TCP port for non-TLS health probe server."],
-      defaultValue = "8090"
+      names = ["--health-port"],
+      description = ["TCP port for the non-TLS health server."],
+      defaultValue = "8080"
     )
-    var healthProbePort by Delegates.notNull<Int>()
+    var healthPort by Delegates.notNull<Int>()
       private set
 
     @set:CommandLine.Option(
@@ -136,14 +136,14 @@ private constructor(
       clientAuth: ClientAuth,
       nameForLogging: String,
       services: Iterable<ServerServiceDefinition>,
-      healthProbePort: Int = 0
+      healthPort: Int = 0
     ): CommonServer {
       return CommonServer(
         nameForLogging,
         port,
         services.run { if (verboseGrpcLogging) map { it.withVerboseLogging() } else this },
         certs?.toServerTlsContext(clientAuth),
-        healthProbePort
+        healthPort
       )
     }
 
@@ -167,7 +167,7 @@ private constructor(
         if (flags.clientAuthRequired) ClientAuth.REQUIRE else ClientAuth.NONE,
         nameForLogging,
         services,
-        flags.healthProbePort
+        flags.healthPort
       )
     }
 
