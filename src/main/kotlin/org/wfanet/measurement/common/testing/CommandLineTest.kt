@@ -19,16 +19,13 @@ import java.io.ByteArrayOutputStream
 import java.io.PrintStream
 import java.security.Permission
 import kotlin.test.assertFailsWith
-import org.wfanet.measurement.common.commandLineMain
 
 /** Run a command line given args. Returns a String of system output. */
-class CommandLineTest(val command: Runnable, val args: Array<String>) {
-  fun main(args: Array<String>): Unit = commandLineMain(command, args)
-
-  fun run(status: Int = 0): String = capturingSystemOut { assertExitsWith(status) { main(args) } }
+fun runCommandLineTest(status: Int = 0, block: () -> Unit) = capturingSystemOut {
+  assertExitsWith(status) { block() }
 }
 
-fun capturingSystemOut(block: () -> Unit): String {
+private fun capturingSystemOut(block: () -> Unit): String {
   val originalOut = System.out
   val outputStream = ByteArrayOutputStream()
 
@@ -42,7 +39,7 @@ fun capturingSystemOut(block: () -> Unit): String {
   return outputStream.toString()
 }
 
-fun assertExitsWith(status: Int, block: () -> Unit) {
+private fun assertExitsWith(status: Int, block: () -> Unit) {
   val exception: ExitException = assertFailsWith {
     val originalSecurityManager: SecurityManager? = System.getSecurityManager()
     System.setSecurityManager(
@@ -67,4 +64,4 @@ fun assertExitsWith(status: Int, block: () -> Unit) {
   Truth.assertThat(exception.status).isEqualTo(status)
 }
 
-class ExitException(val status: Int) : RuntimeException()
+private class ExitException(val status: Int) : RuntimeException()
