@@ -34,7 +34,8 @@ private constructor(
   private val nameForLogging: String,
   private val port: Int,
   services: Iterable<ServerServiceDefinition>,
-  sslContext: SslContext?
+  sslContext: SslContext?,
+  private val healthPort: Int = 0,
 ) {
   private val healthStatusManager = HealthStatusManager()
 
@@ -42,9 +43,14 @@ private constructor(
     NettyServerBuilder.forPort(port)
       .apply {
         sslContext?.let { sslContext(it) }
-        addService(healthStatusManager.healthService)
         services.forEach { addService(it) }
       }
+      .build()
+  }
+
+  private val healthServer: Server by lazy {
+    NettyServerBuilder.forPort(healthPort)
+      .apply { addService(healthStatusManager.healthService) }
       .build()
   }
 
@@ -54,6 +60,7 @@ private constructor(
     server.services.forEach {
       healthStatusManager.setStatus(it.serviceDescriptor.name, ServingStatus.SERVING)
     }
+    healthServer.start()
 
     logger.log(Level.INFO, "$nameForLogging started, listening on $port")
     Runtime.getRuntime()
@@ -71,6 +78,7 @@ private constructor(
   }
 
   private fun stop() {
+    healthServer.shutdownNow()
     server.shutdown()
   }
 
@@ -83,7 +91,7 @@ private constructor(
     @set:CommandLine.Option(
       names = ["--port", "-p"],
       description = ["TCP port for gRPC server."],
-      defaultValue = "8080"
+      defaultValue = "8443"
     )
     var port by Delegates.notNull<Int>()
       private set
@@ -98,6 +106,14 @@ private constructor(
       defaultValue = "true"
     )
     var clientAuthRequired by Delegates.notNull<Boolean>()
+      private set
+
+    @set:CommandLine.Option(
+      names = ["--health-port"],
+      description = ["TCP port for the non-TLS health server."],
+      defaultValue = "8080"
+    )
+    var healthPort by Delegates.notNull<Int>()
       private set
 
     @set:CommandLine.Option(
@@ -119,13 +135,15 @@ private constructor(
       certs: SigningCerts?,
       clientAuth: ClientAuth,
       nameForLogging: String,
-      services: Iterable<ServerServiceDefinition>
+      services: Iterable<ServerServiceDefinition>,
+      healthPort: Int = 0
     ): CommonServer {
       return CommonServer(
         nameForLogging,
         port,
         services.run { if (verboseGrpcLogging) map { it.withVerboseLogging() } else this },
-        certs?.toServerTlsContext(clientAuth)
+        certs?.toServerTlsContext(clientAuth),
+        healthPort
       )
     }
 
@@ -148,7 +166,8 @@ private constructor(
         certs,
         if (flags.clientAuthRequired) ClientAuth.REQUIRE else ClientAuth.NONE,
         nameForLogging,
-        services
+        services,
+        flags.healthPort
       )
     }
 
