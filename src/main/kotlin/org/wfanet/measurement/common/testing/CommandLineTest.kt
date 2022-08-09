@@ -20,7 +20,17 @@ import java.io.PrintStream
 import java.security.Permission
 import kotlin.test.assertFailsWith
 
-/** Run a command line given args. Returns a String of system output. */
+/**
+ * Test a command line.
+ *
+ * The kt_jvm_test target should add the jvm_flag
+ * "-Dcom.google.testing.junit.runner.shouldInstallTestSecurityManager=false"
+ *
+ * @param status the expected status.
+ * @param block a block runs the main of a CommandLine class with args.
+ *
+ * @return the system output as a String
+ */
 fun runCommandLineTest(status: Int = 0, block: () -> Unit) = capturingSystemOut {
   assertExitsWith(status) { block() }
 }
