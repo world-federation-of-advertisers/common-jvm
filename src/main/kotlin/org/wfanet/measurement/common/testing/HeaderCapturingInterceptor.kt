@@ -14,56 +14,10 @@
 
 package org.wfanet.measurement.common.testing
 
-import com.google.common.truth.Truth
 import io.grpc.Metadata
 import io.grpc.ServerCall
 import io.grpc.ServerCallHandler
 import io.grpc.ServerInterceptor
-import java.io.ByteArrayOutputStream
-import java.io.PrintStream
-import java.security.Permission
-import kotlin.test.assertFailsWith
-
-fun capturingSystemOut(block: () -> Unit): String {
-  val originalOut = System.out
-  val outputStream = ByteArrayOutputStream()
-
-  System.setOut(PrintStream(outputStream, true))
-  try {
-    block()
-  } finally {
-    System.setOut(originalOut)
-  }
-
-  return outputStream.toString()
-}
-
-fun assertExitsWith(status: Int, block: () -> Unit) {
-  val exception: ExitException = assertFailsWith {
-    val originalSecurityManager: SecurityManager? = System.getSecurityManager()
-    System.setSecurityManager(
-      object : SecurityManager() {
-        override fun checkPermission(perm: Permission?) {
-          // Allow everything.
-        }
-
-        override fun checkExit(status: Int) {
-          super.checkExit(status)
-          throw ExitException(status)
-        }
-      }
-    )
-
-    try {
-      block()
-    } finally {
-      System.setSecurityManager(originalSecurityManager)
-    }
-  }
-  Truth.assertThat(exception.status).isEqualTo(status)
-}
-
-class ExitException(val status: Int) : RuntimeException()
 
 class HeaderCapturingInterceptor : ServerInterceptor {
   override fun <ReqT, RespT> interceptCall(

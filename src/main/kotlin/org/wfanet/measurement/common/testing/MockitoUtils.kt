@@ -19,7 +19,6 @@ import com.google.common.truth.extensions.proto.ProtoTruth
 import com.google.protobuf.Message
 import org.mockito.kotlin.KArgumentCaptor
 import org.mockito.kotlin.argumentCaptor
-import org.mockito.kotlin.times
 import org.mockito.kotlin.verifyBlocking
 import org.mockito.verification.VerificationMode
 
@@ -29,20 +28,20 @@ inline fun <reified T : Any, M> verifyAndCapture(
   crossinline method: suspend M.(T) -> Any
 ): T = captureFirst { verifyBlocking(mock) { this.method(capture()) } }
 
-/** Creates a captor, runs [block] in its scope, and returns the first captured value. */
-inline fun <reified T : Any> captureFirst(block: KArgumentCaptor<T>.() -> Unit): T =
-  argumentCaptor(block).firstValue
-
-/** Captures all values with a parameter [mode] */
-inline fun <reified T, reified M> captureInMode(
+/** Captures all parameters to [method] with [mode] on a Mockito [mock] */
+inline fun <reified T : Any, reified M> verifyAndCapture(
   mock: M,
-  noinline method: suspend M.(T) -> Any,
+  crossinline method: suspend M.(T) -> Any,
   mode: VerificationMode
 ): List<T> {
   val captor: KArgumentCaptor<T> = argumentCaptor()
   verifyBlocking(mock, mode) { method(captor.capture()) }
   return captor.allValues
 }
+
+/** Creates a captor, runs [block] in its scope, and returns the first captured value. */
+inline fun <reified T : Any> captureFirst(block: KArgumentCaptor<T>.() -> Unit): T =
+  argumentCaptor(block).firstValue
 
 /**
  * Captures the first argument to [method], a proto message, and runs [ProtoTruth.assertThat] on it
