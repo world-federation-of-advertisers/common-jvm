@@ -4,3 +4,8 @@ alias(
     name = "core",
     actual = "@maven//:org_jetbrains_kotlinx_kotlinx_coroutines_core",
 )
+
+alias(
+    name = "jdk8",
+    actual = "@maven//:org_jetbrains_kotlinx_kotlinx_coroutines_jdk8",
+)
