@@ -16,6 +16,7 @@ package org.wfanet.measurement.storage.filesystem
 
 import com.google.protobuf.ByteString
 import java.io.File
+import java.nio.channels.Channels
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collect
@@ -34,17 +35,18 @@ class FileSystemStorageClient(private val directory: File) : StorageClient {
 
   override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
     val file: File = resolvePath(blobKey)
-    withContext(Dispatchers.IO) {
-      file.parentFile.mkdirs()
-      file.outputStream().channel.use { byteChannel ->
+    file.parentFile.mkdirs()
+    file
+      .outputStream()
+      .buffered()
+      .let { Channels.newChannel(it) }
+      .use { byteChannel ->
         content.collect { bytes ->
           for (buffer in bytes.asReadOnlyByteBufferList()) {
-            @Suppress("BlockingMethodInNonBlockingContext") // Flow context preservation.
             byteChannel.write(buffer)
           }
         }
       }
-    }
 
     return Blob(file)
   }
