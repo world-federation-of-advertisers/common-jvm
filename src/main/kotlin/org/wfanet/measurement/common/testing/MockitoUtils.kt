@@ -20,12 +20,24 @@ import com.google.protobuf.Message
 import org.mockito.kotlin.KArgumentCaptor
 import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.verifyBlocking
+import org.mockito.verification.VerificationMode
 
 /** Captures the sole parameter to [method] on a Mockito [mock]. */
 inline fun <reified T : Any, M> verifyAndCapture(
   mock: M,
   crossinline method: suspend M.(T) -> Any
 ): T = captureFirst { verifyBlocking(mock) { this.method(capture()) } }
+
+/** Captures all parameters to [method] with [mode] on a Mockito [mock] */
+inline fun <reified T : Any, reified M> verifyAndCapture(
+  mock: M,
+  crossinline method: suspend M.(T) -> Any,
+  mode: VerificationMode
+): List<T> {
+  val captor: KArgumentCaptor<T> = argumentCaptor()
+  verifyBlocking(mock, mode) { method(captor.capture()) }
+  return captor.allValues
+}
 
 /** Creates a captor, runs [block] in its scope, and returns the first captured value. */
 inline fun <reified T : Any> captureFirst(block: KArgumentCaptor<T>.() -> Unit): T =
