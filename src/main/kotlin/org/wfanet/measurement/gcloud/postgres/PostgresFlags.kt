@@ -27,7 +27,7 @@ class PostgresFlags {
     private set
 
   @CommandLine.Option(
-    names = ["--postgres-cloud-sql-instance"],
+    names = ["--postgres-cloud-sql-connection-name"],
     description = ["Instance connection name of the Postgres database."],
     required = true
   )
