@@ -15,6 +15,7 @@
 package org.wfanet.measurement.common.testing
 
 import io.grpc.Metadata
+import io.grpc.MethodDescriptor
 import io.grpc.ServerCall
 import io.grpc.ServerCallHandler
 import io.grpc.ServerInterceptor
@@ -25,11 +26,13 @@ class HeaderCapturingInterceptor : ServerInterceptor {
     headers: Metadata,
     next: ServerCallHandler<ReqT, RespT>,
   ): ServerCall.Listener<ReqT> {
-    _capturedHeaders.add(headers)
+    capturedHeaders.getOrPut(call.methodDescriptor.fullMethodName) { mutableListOf() }.add(headers)
     return next.startCall(call, headers)
   }
 
-  private val _capturedHeaders = mutableListOf<Metadata>()
-  val capturedHeaders: List<Metadata>
-    get() = _capturedHeaders
+  private val capturedHeaders = mutableMapOf<String, MutableList<Metadata>>()
+
+  fun captured(descriptor: MethodDescriptor<*, *>): List<Metadata> {
+    return capturedHeaders[descriptor.fullMethodName] ?: listOf()
+  }
 }
