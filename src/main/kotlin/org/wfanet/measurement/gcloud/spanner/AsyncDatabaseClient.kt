@@ -14,8 +14,6 @@
 
 package org.wfanet.measurement.gcloud.spanner
 
-import com.google.api.core.ApiFuture
-import com.google.api.core.ApiFutures
 import com.google.cloud.Timestamp
 import com.google.cloud.spanner.AsyncResultSet
 import com.google.cloud.spanner.AsyncRunner
@@ -33,21 +31,19 @@ import com.google.cloud.spanner.TimestampBound
 import com.google.cloud.spanner.TransactionContext
 import java.time.Duration
 import java.util.concurrent.Executor
-import kotlinx.coroutines.Deferred
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.asExecutor
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.channels.trySendBlocking
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.consumeAsFlow
+import kotlinx.coroutines.flow.buffer
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.singleOrNull
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
-import org.wfanet.measurement.gcloud.common.asDeferred
-
-private val executor: Executor = Dispatchers.IO.asExecutor()
-
-private typealias AsyncWork<T> = suspend (TransactionContext) -> ApiFuture<T>
+import org.wfanet.measurement.gcloud.common.DirectExecutor
+import org.wfanet.measurement.gcloud.common.apiFuture
+import org.wfanet.measurement.gcloud.common.await
 
 typealias TransactionWork<R> = suspend (txn: AsyncDatabaseClient.TransactionContext) -> R
 
@@ -55,8 +51,14 @@ typealias TransactionWork<R> = suspend (txn: AsyncDatabaseClient.TransactionCont
  * Non-blocking wrapper around [dbClient] using asynchronous Spanner Java API.
  *
  * This class only exposes the methods used by this project and not the complete API.
+ *
+ * @param dbClient [DatabaseClient] to wrap
+ * @param executor [Executor] for asynchronous work
  */
-class AsyncDatabaseClient(private val dbClient: DatabaseClient) {
+class AsyncDatabaseClient(
+  private val dbClient: DatabaseClient,
+  private val executor: Executor,
+) {
   /** @see [DatabaseClient.singleUse] */
   fun singleUse(bound: TimestampBound = TimestampBound.strong()): ReadContext {
     return ReadContextImpl(dbClient.singleUse(bound))
@@ -64,7 +66,7 @@ class AsyncDatabaseClient(private val dbClient: DatabaseClient) {
 
   /** @see [DatabaseClient.readWriteTransaction] */
   fun readWriteTransaction(): TransactionRunner {
-    return TransactionRunnerImpl(dbClient.runAsync())
+    return TransactionRunnerImpl(dbClient.runAsync(), executor)
   }
 
   /** @see [DatabaseClient.write] */
@@ -128,7 +130,7 @@ class AsyncDatabaseClient(private val dbClient: DatabaseClient) {
   /** Non-blocking version of [com.google.cloud.spanner.TransactionRunner]. */
   interface TransactionRunner {
     /** @see [com.google.cloud.spanner.TransactionRunner.run] */
-    suspend fun <R> execute(work: TransactionWork<R>): R
+    suspend fun <R> execute(doWork: TransactionWork<R>): R
 
     suspend fun getCommitTimestamp(): Timestamp
   }
@@ -159,11 +161,7 @@ private class ReadContextImpl(private val readContext: ReadContext) :
   }
 
   override suspend fun readRow(table: String, key: Key, columns: Iterable<String>): Struct? {
-    return readRowAsync(table, key, columns).await()
-  }
-
-  private fun readRowAsync(table: String, key: Key, columns: Iterable<String>): Deferred<Struct?> {
-    return readContext.readRowAsync(table, key, columns).asDeferred()
+    return readContext.readRowAsync(table, key, columns).await()
   }
 
   override suspend fun readRowUsingIndex(
@@ -172,7 +170,7 @@ private class ReadContextImpl(private val readContext: ReadContext) :
     key: Key,
     columns: Iterable<String>
   ): Struct? {
-    return readRowUsingIndexAsync(table, index, key, columns).await()
+    return readContext.readRowUsingIndexAsync(table, index, key, columns).await()
   }
 
   override suspend fun readRowUsingIndex(
@@ -184,43 +182,27 @@ private class ReadContextImpl(private val readContext: ReadContext) :
     return readRowUsingIndex(table, index, key, columns.asIterable())
   }
 
-  private fun readRowUsingIndexAsync(
-    table: String,
-    index: String,
-    key: Key,
-    columns: Iterable<String>
-  ): Deferred<Struct?> {
-    return readContext.readRowUsingIndexAsync(table, index, key, columns).asDeferred()
-  }
-
   override fun executeQuery(statement: Statement, vararg options: QueryOption): Flow<Struct> {
-    return readContext.executeQueryAsync(statement, *options).use { it.asFlow() }
+    val results: AsyncResultSet = readContext.executeQueryAsync(statement, *options)
+    return results.asFlow().onCompletion { results.close() }
   }
 }
 
-private class TransactionRunnerImpl(private val runner: AsyncRunner) :
-  AsyncDatabaseClient.TransactionRunner {
+private class TransactionRunnerImpl(
+  private val runner: AsyncRunner,
+  private val executor: Executor
+) : AsyncDatabaseClient.TransactionRunner {
 
-  override suspend fun <R> execute(work: TransactionWork<R>): R {
+  override suspend fun <R> execute(doWork: TransactionWork<R>): R {
     return try {
-      executeAsync(work).await()
+      runner.run(executor) { txn -> doWork(TransactionContextImpl(txn)) }
     } catch (e: SpannerException) {
       throw e.wrappedException ?: e
     }
   }
 
-  private fun <R> executeAsync(work: TransactionWork<R>): Deferred<R> {
-    return runner
-      .runAsync { txn -> ApiFutures.immediateFuture(work(TransactionContextImpl(txn))) }
-      .asDeferred()
-  }
-
   override suspend fun getCommitTimestamp(): Timestamp {
-    return getCommitTimestampAsync().await()
-  }
-
-  private fun getCommitTimestampAsync(): Deferred<Timestamp> {
-    return runner.commitTimestamp.asDeferred()
+    return runner.commitTimestamp.await()
   }
 }
 
@@ -232,46 +214,52 @@ private class TransactionContextImpl(private val txn: TransactionContext) :
   override fun buffer(mutations: Iterable<Mutation>) = txn.buffer(mutations)
 
   override suspend fun executeUpdate(statement: Statement): Long {
-    return executeUpdateAsync(statement).await()
-  }
-
-  private fun executeUpdateAsync(statement: Statement): Deferred<Long> {
-    return txn.executeUpdateAsync(statement).asDeferred()
+    return txn.executeUpdateAsync(statement).await()
   }
 }
 
-fun DatabaseClient.asAsync() = AsyncDatabaseClient(this)
+fun DatabaseClient.asAsync(executor: Executor) = AsyncDatabaseClient(this, executor)
 
 /** Produces a [Flow] from the results in this [AsyncResultSet]. */
 private fun AsyncResultSet.asFlow(): Flow<Struct> {
-  val channel = Channel<Struct>()
-  setCallback(executor::execute) { cursor ->
-    try {
-      @Suppress("WHEN_ENUM_CAN_BE_NULL_IN_JAVA")
-      when (cursor.tryNext()) {
-        AsyncResultSet.CursorState.OK -> {
-          channel.trySendBlocking(cursor.currentRowAsStruct).getOrThrow()
-          AsyncResultSet.CallbackResponse.CONTINUE
-        }
-        AsyncResultSet.CursorState.NOT_READY -> AsyncResultSet.CallbackResponse.CONTINUE
-        AsyncResultSet.CursorState.DONE -> {
-          channel.close()
-          AsyncResultSet.CallbackResponse.DONE
+  return callbackFlow {
+      fun resumeWhenReady(row: Struct) {
+        launch {
+          send(row)
+          resume()
         }
       }
-    } catch (e: Throwable) {
-      channel.close(e)
-      AsyncResultSet.CallbackResponse.DONE
+
+      setCallback(DirectExecutor) { cursor ->
+          @Suppress("WHEN_ENUM_CAN_BE_NULL_IN_JAVA")
+          when (cursor.tryNext()) {
+            AsyncResultSet.CursorState.OK -> {
+              val sendResult = trySend(cursor.currentRowAsStruct)
+              if (sendResult.isSuccess) {
+                AsyncResultSet.CallbackResponse.CONTINUE
+              } else if (sendResult.isFailure) {
+                resumeWhenReady(cursor.currentRowAsStruct)
+                AsyncResultSet.CallbackResponse.PAUSE
+              } else {
+                close(sendResult.exceptionOrNull())
+                AsyncResultSet.CallbackResponse.DONE
+              }
+            }
+            AsyncResultSet.CursorState.NOT_READY -> AsyncResultSet.CallbackResponse.CONTINUE
+            AsyncResultSet.CursorState.DONE -> {
+              close()
+              AsyncResultSet.CallbackResponse.DONE
+            }
+          }
+        }
+        .await()
+
+      awaitClose()
     }
-  }
-
-  return channel.consumeAsFlow()
+    .buffer(Channel.RENDEZVOUS)
 }
 
-private fun <T> AsyncRunner.runAsync(asyncWork: AsyncWork<T>): ApiFuture<T> {
-  return runAsync({ txn -> runBlocking { asyncWork(txn) } }, executor::execute)
-}
-
-private fun <T> ApiFuture<T>.asDeferred(): Deferred<T> {
-  return asDeferred(executor)
-}
+private suspend fun <T> AsyncRunner.run(
+  executor: Executor,
+  doWork: suspend (TransactionContext) -> T
+): T = coroutineScope { runAsync({ txn -> apiFuture { doWork(txn) } }, executor).await() }

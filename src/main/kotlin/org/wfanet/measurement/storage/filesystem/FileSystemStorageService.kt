@@ -17,6 +17,7 @@ package org.wfanet.measurement.storage.filesystem
 import io.grpc.Status
 import io.grpc.StatusException
 import java.io.File
+import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
@@ -33,8 +34,9 @@ import org.wfanet.measurement.internal.testing.WriteBlobRequest
 import org.wfanet.measurement.internal.testing.readBlobResponse
 
 /** [ForwardedStorageCoroutineService] implementation that uses [FileSystemStorageClient]. */
-class FileSystemStorageService(directory: File) : ForwardedStorageCoroutineService() {
-  val storageClient: FileSystemStorageClient = FileSystemStorageClient(directory)
+class FileSystemStorageService(directory: File, ioContext: CoroutineContext) :
+  ForwardedStorageCoroutineService() {
+  val storageClient: FileSystemStorageClient = FileSystemStorageClient(directory, ioContext)
 
   override suspend fun writeBlob(requests: Flow<WriteBlobRequest>): BlobMetadata {
     val blob =

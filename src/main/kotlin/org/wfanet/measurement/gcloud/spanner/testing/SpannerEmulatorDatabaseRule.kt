@@ -20,8 +20,10 @@ import com.google.cloud.spanner.Spanner
 import com.google.cloud.spanner.SpannerOptions
 import java.nio.file.Path
 import java.sql.DriverManager
+import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.logging.Level
+import java.util.logging.Logger
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -43,8 +45,16 @@ import org.wfanet.measurement.gcloud.spanner.asAsync
  */
 class SpannerEmulatorDatabaseRule(changelogPath: Path) :
   DatabaseRule by DatabaseRuleImpl(changelogPath) {
+
+  /**
+   * Executor for async work.
+   *
+   * The emulator only supports a single transaction at a time, so we only use a single thread.
+   */
+  private val executor = Executors.newSingleThreadExecutor()
+
   val databaseClient: AsyncDatabaseClient
-    get() = runBlocking { getDatabaseClient().asAsync() }
+    get() = runBlocking { getDatabaseClient().asAsync(executor) }
 }
 
 private interface DatabaseRule : TestRule {
@@ -79,6 +89,7 @@ private class TemporaryDatabase(private val changelogPath: Path) : AutoCloseable
         return@withLock database
       }
 
+      logger.info("Creating database $databaseName")
       val spanner = getSpanner()
       val connectionString = emulator.buildJdbcConnectionString(PROJECT, INSTANCE, databaseName)
       DriverManager.getConnection(connectionString).use { connection ->
@@ -95,6 +106,7 @@ private class TemporaryDatabase(private val changelogPath: Path) : AutoCloseable
 
   override fun close() {
     if (this::database.isInitialized) {
+      logger.info("Dropping database $databaseName")
       database.drop()
     }
   }
@@ -102,6 +114,8 @@ private class TemporaryDatabase(private val changelogPath: Path) : AutoCloseable
   companion object {
     private const val PROJECT = "test-project"
     private const val INSTANCE = "test-instance"
+
+    private val logger = Logger.getLogger(this::class.java.name)
 
     /** Atomic counter to ensure each instance has a unique name. */
     private val instanceCounter = AtomicInteger(0)

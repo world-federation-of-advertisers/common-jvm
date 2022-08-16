@@ -18,8 +18,12 @@ import com.google.cloud.spanner.DatabaseClient
 import com.google.cloud.spanner.DatabaseId
 import com.google.cloud.spanner.Spanner
 import java.time.Duration
+import java.util.concurrent.Executor
+import java.util.concurrent.Executors
 import java.util.logging.Logger
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.asExecutor
 
 /**
  * Wraps a connection to a Spanner database for convenient access to an [AsyncDatabaseClient], the
@@ -30,8 +34,17 @@ class SpannerDatabaseConnector(
   instanceName: String,
   databaseName: String,
   private val readyTimeout: Duration,
-  emulatorHost: String?
+  emulatorHost: String?,
+  executor: Executor? = null,
 ) : AutoCloseable {
+  private val executor: Executor =
+    executor
+      ?: if (emulatorHost != null) {
+        // The emulator only supports a single transaction at a time, so we use a single thread.
+        Executors.newSingleThreadExecutor()
+      } else {
+        Dispatchers.Default.asExecutor()
+      }
 
   private val spanner: Spanner = buildSpanner(projectName, emulatorHost)
 
@@ -42,7 +55,7 @@ class SpannerDatabaseConnector(
   }
 
   val databaseClient: AsyncDatabaseClient
-    get() = internalDatabaseClient.asAsync()
+    get() = internalDatabaseClient.asAsync(executor)
 
   /**
    * Suspends until [databaseClient] is ready, throwing a
