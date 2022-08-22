@@ -17,45 +17,25 @@ package org.wfanet.measurement.gcloud.common
 import com.google.api.core.ApiFuture
 import com.google.api.core.ApiFutureCallback
 import com.google.api.core.ApiFutures
-import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executor
-import java.util.concurrent.Future
-import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
-import kotlin.coroutines.suspendCoroutine
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.future.future
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Deferred
 
-object DirectExecutor : Executor {
-  override fun execute(command: Runnable) = command.run()
-}
-
-/** Suspends until the [ApiFuture] completes. */
-suspend fun <T> ApiFuture<T>.await(): T {
-  return suspendCoroutine { cont ->
-    val callback =
-      object : ApiFutureCallback<T> {
-        override fun onFailure(t: Throwable) {
-          cont.resumeWithException(t)
-        }
-
-        override fun onSuccess(result: T) {
-          cont.resume(result)
-        }
+/** Wraps the [ApiFuture] in a [Deferred] using the specified [executor]. */
+fun <T> ApiFuture<T>.asDeferred(executor: Executor): Deferred<T> {
+  val deferred = CompletableDeferred<T>()
+  ApiFutures.addCallback(
+    this,
+    object : ApiFutureCallback<T> {
+      override fun onFailure(e: Throwable) {
+        deferred.completeExceptionally(e)
       }
-    ApiFutures.addCallback(this, callback, DirectExecutor)
-  }
-}
 
-/** Starts a new coroutine as an [ApiFuture]. */
-fun <T> CoroutineScope.apiFuture(block: suspend CoroutineScope.() -> T): ApiFuture<T> {
-  return ForwardingApiFuture(future { block() })
-}
-
-private class ForwardingApiFuture<T>(private val delegate: CompletableFuture<T>) :
-  ApiFuture<T>, Future<T> by delegate {
-
-  override fun addListener(listener: Runnable, executor: Executor) {
-    delegate.whenCompleteAsync({ _, _ -> listener.run() }, executor)
-  }
+      override fun onSuccess(result: T) {
+        deferred.complete(result)
+      }
+    },
+    executor
+  )
+  return deferred
 }

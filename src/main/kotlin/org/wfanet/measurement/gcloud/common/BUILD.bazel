@@ -13,6 +13,5 @@ kt_jvm_library(
         "//imports/java/com/google/protobuf",
         "//imports/java/com/google/type:type_java_proto",
         "//imports/kotlin/kotlinx/coroutines:core",
-        "//imports/kotlin/kotlinx/coroutines:jdk8",
     ],
 )

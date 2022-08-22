@@ -103,6 +103,9 @@ def common_jvm_maven_artifacts_dict():
 
         # Math library.
         "org.apache.commons:commons-math3": "3.6.1",
+
+        # CSV library.
+        "com.opencsv:opencsv": "5.6",
     })
 
     return maven_artifacts
