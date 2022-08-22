@@ -36,7 +36,7 @@ class PostgresDatabaseClient(getConnection: ConnectionProvider) : DatabaseClient
   companion object {
     private val isolationLevel = IsolationLevel.SERIALIZABLE
     private val readTransactionDefinition =
-      PostgresTransactionDefinition.from(isolationLevel).readOnly()
+      PostgresTransactionDefinition.from(isolationLevel).readOnly().deferrable()
     private val readWriteTransactionDefinition =
       PostgresTransactionDefinition.from(isolationLevel).readWrite()
 
