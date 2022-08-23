@@ -14,7 +14,6 @@
 
 package org.wfanet.measurement.gcloud.spanner
 
-import com.google.cloud.spanner.DatabaseClient
 import com.google.cloud.spanner.DatabaseId
 import com.google.cloud.spanner.Spanner
 import java.time.Duration
@@ -30,19 +29,18 @@ class SpannerDatabaseConnector(
   instanceName: String,
   databaseName: String,
   private val readyTimeout: Duration,
-  emulatorHost: String?
+  emulatorHost: String?,
 ) : AutoCloseable {
-
   private val spanner: Spanner = buildSpanner(projectName, emulatorHost)
 
   val databaseId: DatabaseId = DatabaseId.of(projectName, instanceName, databaseName)
 
-  private val internalDatabaseClient: DatabaseClient by lazy {
-    spanner.getDatabaseClient(databaseId)
-  }
+  val databaseClient: AsyncDatabaseClient by lazy {
+    // Cloud Spanner Emulator currently only supports one read-write transaction at a time.
+    val maxTransactions = if (emulatorHost == null) 0 else 1
 
-  val databaseClient: AsyncDatabaseClient
-    get() = internalDatabaseClient.asAsync()
+    spanner.getAsyncDatabaseClient(databaseId, maxTransactions)
+  }
 
   /**
    * Suspends until [databaseClient] is ready, throwing a
