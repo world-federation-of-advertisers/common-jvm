@@ -102,10 +102,8 @@ class SpannerEmulator(private val port: Int = 0) : AutoCloseable {
     }
   }
 
-  fun buildJdbcConnectionString(project: String, instance: String, database: String): String {
-    return "jdbc:cloudspanner://$emulatorHost/projects/$project/instances/$instance/databases/" +
-      "$database;usePlainText=true;autoConfigEmulator=true"
-  }
+  fun buildJdbcConnectionString(project: String, instance: String, database: String): String =
+    buildJdbcConnectionString(emulatorHost, project, instance, database)
 
   companion object {
     private val emulatorPath: Path
@@ -128,6 +126,16 @@ class SpannerEmulator(private val port: Int = 0) : AutoCloseable {
       val port = requireNotNull(parts[1].toIntOrNull(), lazyMessage)
 
       return SpannerEmulator(port)
+    }
+
+    fun buildJdbcConnectionString(
+      emulatorHost: String,
+      project: String,
+      instance: String,
+      database: String
+    ): String {
+      return "jdbc:cloudspanner://$emulatorHost/projects/$project/instances/$instance/databases/" +
+        "$database;usePlainText=true;autoConfigEmulator=true"
     }
   }
 }
