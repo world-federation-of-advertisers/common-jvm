@@ -76,9 +76,7 @@ def common_jvm_maven_artifacts_dict():
         "junit:junit": "4.13",
         "org.conscrypt:conscrypt-openjdk-uber": "2.5.2",
         "org.mockito.kotlin:mockito-kotlin": "3.2.0",
-        "software.amazon.awssdk:http-client-spi": "2.17.98",
-        "software.amazon.awssdk:s3": "2.17.98",
-        "software.amazon.awssdk:sdk-core": "2.17.98",
+        "software.amazon.awssdk:s3": "2.17.258",
 
         # PostgreSQL.
         "com.google.cloud.sql:postgres-socket-factory": "1.6.2",

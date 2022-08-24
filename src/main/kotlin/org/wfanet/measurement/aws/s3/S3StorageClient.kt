@@ -15,50 +15,49 @@
 package org.wfanet.measurement.aws.s3
 
 import com.google.protobuf.ByteString
+import com.google.protobuf.kotlin.toByteString
 import java.security.MessageDigest
 import java.util.Base64
-import kotlinx.coroutines.Dispatchers
+import java.util.concurrent.CompletableFuture
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEmpty
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.flow.withIndex
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.future.await
+import kotlinx.coroutines.reactive.asFlow
 import org.wfanet.measurement.common.BYTES_PER_MIB
 import org.wfanet.measurement.common.asBufferedFlow
-import org.wfanet.measurement.common.asFlow
+import org.wfanet.measurement.common.crypto.update
 import org.wfanet.measurement.storage.StorageClient
-import software.amazon.awssdk.core.sync.RequestBody
-import software.amazon.awssdk.services.s3.S3Client
+import software.amazon.awssdk.core.async.AsyncRequestBody
+import software.amazon.awssdk.core.async.AsyncResponseTransformer
+import software.amazon.awssdk.core.async.ResponsePublisher
+import software.amazon.awssdk.services.s3.S3AsyncClient
+import software.amazon.awssdk.services.s3.model.AbortMultipartUploadResponse
 import software.amazon.awssdk.services.s3.model.CompleteMultipartUploadResponse
 import software.amazon.awssdk.services.s3.model.CompletedPart
 import software.amazon.awssdk.services.s3.model.CreateMultipartUploadRequest
+import software.amazon.awssdk.services.s3.model.CreateMultipartUploadResponse
+import software.amazon.awssdk.services.s3.model.GetObjectResponse
 import software.amazon.awssdk.services.s3.model.HeadObjectResponse
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException
 import software.amazon.awssdk.services.s3.model.UploadPartRequest
+import software.amazon.awssdk.services.s3.model.UploadPartResponse
 
 /** S3 requires each part of a multipart upload (except the last) is at least 5 MB. */
 private const val WRITE_BUFFER_SIZE = BYTES_PER_MIB * 5
-private const val READ_BUFFER_SIZE = WRITE_BUFFER_SIZE
 
 /** Amazon Web Services (AWS) S3 implementation of [StorageClient] for a single bucket. */
-class S3StorageClient(
-  /**
-   * Amazon S3 client.
-   *
-   * TODO(@SanjayVas): Use [software.amazon.awssdk.services.s3.S3AsyncClient] instead
-   */
-  private val s3: S3Client,
-  private val bucketName: String
-) : StorageClient {
+class S3StorageClient(private val s3: S3AsyncClient, private val bucketName: String) :
+  StorageClient {
   override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
-    val uploadId = createMultipartUpload(blobKey)
+    val uploadId: String = createMultipartUpload(blobKey).uploadId()
 
     try {
-      val completedParts = uploadParts(blobKey, content, uploadId)
+      val completedParts: Flow<CompletedPart> = uploadParts(blobKey, content, uploadId)
       completeUpload(blobKey, uploadId, completedParts)
     } catch (e: Exception) {
       cancelUpload(blobKey, uploadId)
@@ -68,64 +67,72 @@ class S3StorageClient(
     return checkNotNull(getBlob(blobKey)) { "Blob key $blobKey was uploaded but no longer exists" }
   }
 
-  private suspend fun createMultipartUpload(blobKey: String): String {
-    val multipartUploadRequest =
-      CreateMultipartUploadRequest.builder().bucket(bucketName).key(blobKey).build()
-    val multipartUploadResponse =
-      withContext(Dispatchers.IO) { s3.createMultipartUpload(multipartUploadRequest) }
-    return multipartUploadResponse.uploadId()
+  private suspend fun createMultipartUpload(blobKey: String): CreateMultipartUploadResponse {
+    val request = CreateMultipartUploadRequest.builder().bucket(bucketName).key(blobKey).build()
+    return s3.createMultipartUpload(request).await()
   }
 
-  private suspend fun uploadParts(
+  private fun uploadParts(
     blobKey: String,
     content: Flow<ByteString>,
     uploadId: String
-  ): List<CompletedPart> {
+  ): Flow<CompletedPart> {
     val digest = MessageDigest.getInstance("MD5")
-    val builder = UploadPartRequest.builder().uploadId(uploadId).key(blobKey).bucket(bucketName)
+    val requestBuilder =
+      UploadPartRequest.builder().uploadId(uploadId).key(blobKey).bucket(bucketName)
     return content
       .asBufferedFlow(WRITE_BUFFER_SIZE)
       .withIndex()
       .onEmpty { emit(IndexedValue(0, ByteString.EMPTY)) }
       .map { (i, bytes) ->
-        bytes.asReadOnlyByteBufferList().forEach(digest::update)
+        val partNumber = i + 1
+        digest.update(bytes)
         val md5 = String(Base64.getEncoder().encode(digest.digest()))
 
-        val uploadPartRequest =
-          builder.partNumber(i + 1).contentLength(bytes.size().toLong()).contentMD5(md5).build()
+        val request: UploadPartRequest =
+          requestBuilder
+            .partNumber(partNumber)
+            .contentLength(bytes.size().toLong())
+            .contentMD5(md5)
+            .build()
 
-        val uploadPartResponse =
-          s3.uploadPart(uploadPartRequest, RequestBody.fromByteBuffer(bytes.asReadOnlyByteBuffer()))
+        val response: UploadPartResponse =
+          s3
+            .uploadPart(request, AsyncRequestBody.fromByteBuffer(bytes.asReadOnlyByteBuffer()))
+            .await()
 
-        CompletedPart.builder().partNumber(i + 1).eTag(uploadPartResponse.eTag()).build()
+        CompletedPart.builder().partNumber(partNumber).eTag(response.eTag()).build()
       }
-      .toList()
   }
 
   private suspend fun completeUpload(
     blobKey: String,
     uploadId: String,
-    completedParts: Collection<CompletedPart>
+    completedParts: Flow<CompletedPart>
   ): CompleteMultipartUploadResponse {
-    return withContext(Dispatchers.IO) {
-      s3.completeMultipartUpload { builder ->
+    val completedPartsList = completedParts.toList()
+    return s3
+      .completeMultipartUpload { builder ->
         builder.uploadId(uploadId)
         builder.bucket(bucketName)
         builder.key(blobKey)
-
-        builder.multipartUpload { it.parts(completedParts) }
+        builder.multipartUpload { it.parts(completedPartsList) }
       }
-    }
+      .await()
   }
 
-  private suspend fun cancelUpload(blobKey: String, uploadId: String) =
-    withContext(Dispatchers.IO) {
-      s3.abortMultipartUpload {
+  private suspend fun cancelUpload(
+    blobKey: String,
+    uploadId: String
+  ): AbortMultipartUploadResponse {
+    return s3
+      .abortMultipartUpload {
         it.uploadId(uploadId)
         it.bucket(bucketName)
         it.key(blobKey)
       }
-    }
+      .await()
+  }
 
   override suspend fun getBlob(blobKey: String): StorageClient.Blob? {
     val head = head(blobKey) ?: return null
@@ -134,12 +141,12 @@ class S3StorageClient(
 
   private suspend fun head(blobKey: String): HeadObjectResponse? {
     return try {
-      withContext(Dispatchers.IO) {
-        s3.headObject {
+      s3
+        .headObject {
           it.bucket(bucketName)
           it.key(blobKey)
         }
-      }
+        .await()
     } catch (notFound: NoSuchKeyException) {
       null
     }
@@ -153,24 +160,25 @@ class S3StorageClient(
     override val size: Long = head.contentLength()
 
     override fun read(): Flow<ByteString> {
-      val flow = flow {
-        val input =
-          s3.getObject {
+      val responseFuture: CompletableFuture<ResponsePublisher<GetObjectResponse>> =
+        s3.getObject(
+          {
             it.bucket(bucketName)
             it.key(blobKey)
-          }
+          },
+          AsyncResponseTransformer.toPublisher()
+        )
 
-        emitAll(input.asFlow(READ_BUFFER_SIZE))
-      }
-      return flow.flowOn(Dispatchers.IO)
+      return flow { emitAll(responseFuture.await().asFlow().map { it.toByteString() }) }
     }
 
-    override suspend fun delete(): Unit =
-      withContext(Dispatchers.IO) {
-        s3.deleteObject {
+    override suspend fun delete() {
+      s3
+        .deleteObject {
           it.bucket(bucketName)
           it.key(blobKey)
         }
-      }
+        .await()
+    }
   }
 }
