@@ -7,11 +7,12 @@ kt_jvm_library(
     srcs = glob(["*.kt"]),
     deps = [
         "//imports/java/picocli",
-        "//imports/java/software/amazon/awssdk/core",
-        "//imports/java/software/amazon/awssdk/http",
         "//imports/java/software/amazon/awssdk/services/s3",
         "//imports/kotlin/com/google/protobuf/kotlin",
         "//imports/kotlin/kotlinx/coroutines:core",
+        "//imports/kotlin/kotlinx/coroutines:jdk8",
+        "//imports/kotlin/kotlinx/coroutines/reactive",
+        "//src/main/kotlin/org/wfanet/measurement/common/crypto:hashing",
         "//src/main/kotlin/org/wfanet/measurement/storage:client",
     ],
 )
