@@ -17,10 +17,11 @@ package org.wfanet.measurement.common.crypto.tink
 import com.google.crypto.tink.Aead
 import com.google.protobuf.ByteString
 import com.google.protobuf.kotlin.toByteString
-import kotlinx.coroutines.Dispatchers
+import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.withContext
+import org.jetbrains.annotations.BlockingExecutor
 import org.wfanet.measurement.common.toByteArray
 import org.wfanet.measurement.storage.StorageClient
 
@@ -30,10 +31,15 @@ import org.wfanet.measurement.storage.StorageClient
  *
  * @param storageClient underlying client for accessing blob/object storage
  * @param aead Tink AEAD integration specific encrypt/decrypt
+ * @param aeadContext context for [aead] operations, containing a
+ * [kotlinx.coroutines.CoroutineDispatcher] that supports blocking calls
  */
 class KmsStorageClient
-internal constructor(private val storageClient: StorageClient, private val aead: Aead) :
-  StorageClient {
+internal constructor(
+  private val storageClient: StorageClient,
+  private val aead: Aead,
+  private val aeadContext: @BlockingExecutor CoroutineContext
+) : StorageClient {
 
   /**
    * Creates a blob with the specified [blobKey] and [content] encrypted by [aead].
@@ -43,11 +49,10 @@ internal constructor(private val storageClient: StorageClient, private val aead:
    * @return [StorageClient.Blob] with [content] encrypted by [aead]
    */
   override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
-    val ciphertext =
-      withContext(Dispatchers.IO) {
-        aead.encrypt(content.toByteArray(), blobKey.encodeToByteArray())
-      }
-    val wrappedBlob = storageClient.writeBlob(blobKey, ciphertext.toByteString())
+    val ciphertext: ByteArray =
+      withContext(aeadContext) { aead.encrypt(content.toByteArray(), blobKey.encodeToByteArray()) }
+    val wrappedBlob: StorageClient.Blob =
+      storageClient.writeBlob(blobKey, ciphertext.toByteString())
     return AeadBlob(wrappedBlob, blobKey)
   }
 
@@ -70,11 +75,11 @@ internal constructor(private val storageClient: StorageClient, private val aead:
       get() = blob.size
 
     override fun read() = flow {
-      emit(
-        this@KmsStorageClient.aead
-          .decrypt(blob.read().toByteArray(), blobKey.encodeToByteArray())
-          .toByteString()
-      )
+      val plaintext =
+        withContext(aeadContext) {
+          aead.decrypt(blob.read().toByteArray(), blobKey.encodeToByteArray())
+        }
+      emit(plaintext.toByteString())
     }
 
     override suspend fun delete() = blob.delete()

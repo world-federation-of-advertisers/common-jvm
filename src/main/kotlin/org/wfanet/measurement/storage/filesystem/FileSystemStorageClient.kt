@@ -17,43 +17,51 @@ package org.wfanet.measurement.storage.filesystem
 import com.google.protobuf.ByteString
 import java.io.File
 import java.nio.channels.Channels
+import kotlin.coroutines.CoroutineContext
+import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.withContext
+import org.jetbrains.annotations.BlockingExecutor
 import org.wfanet.measurement.common.asFlow
-import org.wfanet.measurement.common.base64UrlEncode
 import org.wfanet.measurement.storage.StorageClient
 
 private const val READ_BUFFER_SIZE = 1024 * 4 // 4 KiB
 
 /** [StorageClient] implementation that stores blobs as files under [directory]. */
-class FileSystemStorageClient(private val directory: File) : StorageClient {
+class FileSystemStorageClient(
+  private val directory: File,
+  private val coroutineContext: @BlockingExecutor CoroutineContext = Dispatchers.IO
+) : StorageClient {
   init {
     require(directory.isDirectory) { "$directory is not a directory" }
   }
 
   override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
     val file: File = resolvePath(blobKey)
-    file.parentFile.mkdirs()
-    file
-      .outputStream()
-      .buffered()
-      .let { Channels.newChannel(it) }
-      .use { byteChannel ->
-        content.collect { bytes ->
-          for (buffer in bytes.asReadOnlyByteBufferList()) {
-            byteChannel.write(buffer)
+    withContext(coroutineContext + CoroutineName("writeBlob")) {
+      file.parentFile.mkdirs()
+      file
+        .outputStream()
+        .buffered()
+        .let { Channels.newChannel(it) }
+        .use { byteChannel ->
+          content.collect { bytes ->
+            for (buffer in bytes.asReadOnlyByteBufferList()) {
+              byteChannel.write(buffer)
+            }
           }
         }
-      }
+    }
 
     return Blob(file)
   }
 
   override suspend fun getBlob(blobKey: String): StorageClient.Blob? {
     val file: File = resolvePath(blobKey)
-    return withContext(Dispatchers.IO) { if (file.exists()) Blob(file) else null }
+    return withContext(coroutineContext + CoroutineName(::getBlob.name)) {
+      if (file.exists()) Blob(file) else null
+    }
   }
 
   private fun resolvePath(blobKey: String): File {
@@ -73,14 +81,14 @@ class FileSystemStorageClient(private val directory: File) : StorageClient {
     override val size: Long
       get() = file.length()
 
-    override fun read(): Flow<ByteString> = file.inputStream().asFlow(READ_BUFFER_SIZE)
+    override fun read(): Flow<ByteString> {
+      return file
+        .inputStream()
+        .asFlow(READ_BUFFER_SIZE, coroutineContext + CoroutineName(::read.name))
+    }
 
     override suspend fun delete() {
       file.delete()
     }
   }
-}
-
-private fun String.base64UrlEncode(): String {
-  return toByteArray().base64UrlEncode()
 }
