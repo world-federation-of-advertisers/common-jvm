@@ -64,8 +64,7 @@ internal fun MessageDigest.digest(data: ByteString): ByteString {
   return digest().toByteString()
 }
 
-@PublishedApi
-internal fun MessageDigest.update(data: ByteString) {
+fun MessageDigest.update(data: ByteString) {
   for (buffer in data.asReadOnlyByteBufferList()) {
     update(buffer)
   }

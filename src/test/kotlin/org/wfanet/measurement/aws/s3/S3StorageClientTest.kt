@@ -15,9 +15,19 @@
 package org.wfanet.measurement.aws.s3
 
 import com.adobe.testing.s3mock.junit4.S3MockRule
+import java.net.URI
+import kotlinx.coroutines.future.await
+import kotlinx.coroutines.runBlocking
 import org.junit.Before
 import org.junit.Rule
 import org.wfanet.measurement.storage.testing.AbstractStorageClientTest
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider
+import software.amazon.awssdk.core.internal.http.loader.DefaultSdkAsyncHttpClientBuilder
+import software.amazon.awssdk.http.SdkHttpConfigurationOption
+import software.amazon.awssdk.regions.Region
+import software.amazon.awssdk.services.s3.S3AsyncClient
+import software.amazon.awssdk.utils.AttributeMap
 
 private const val BUCKET = "test-bucket"
 
@@ -26,10 +36,30 @@ class S3StorageClientTest : AbstractStorageClientTest<S3StorageClient>() {
 
   @Before
   fun initClient() {
-    val s3Client = s3MockRule.createS3ClientV2()
-
-    s3Client.createBucket { it.bucket(BUCKET) }
+    val s3Client = s3MockRule.createAsyncClient()
+    runBlocking { s3Client.createBucket { it.bucket(BUCKET) }.await() }
 
     storageClient = S3StorageClient(s3Client, BUCKET)
   }
+}
+
+/**
+ * Creates an [S3AsyncClient].
+ *
+ * @see S3MockRule.createS3ClientV2
+ */
+private fun S3MockRule.createAsyncClient(): S3AsyncClient {
+  return S3AsyncClient.builder()
+    .region(Region.of("us-east-1"))
+    .credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create("foo", "bar")))
+    .httpClient(
+      DefaultSdkAsyncHttpClientBuilder()
+        .buildWithDefaults(
+          AttributeMap.builder()
+            .put(SdkHttpConfigurationOption.TRUST_ALL_CERTIFICATES, java.lang.Boolean.TRUE)
+            .build()
+        )
+    )
+    .endpointOverride(URI.create(serviceEndpoint))
+    .build()
 }
