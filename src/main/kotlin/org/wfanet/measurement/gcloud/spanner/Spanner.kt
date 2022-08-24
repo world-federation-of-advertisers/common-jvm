@@ -15,10 +15,6 @@
 package org.wfanet.measurement.gcloud.spanner
 
 import com.google.cloud.spanner.ErrorCode
-import com.google.cloud.spanner.Instance
-import com.google.cloud.spanner.InstanceConfigId
-import com.google.cloud.spanner.InstanceId
-import com.google.cloud.spanner.InstanceInfo
 import com.google.cloud.spanner.Mutation
 import com.google.cloud.spanner.Spanner
 import com.google.cloud.spanner.SpannerException
@@ -47,24 +43,6 @@ fun buildSpanner(projectName: String, spannerEmulatorHost: String? = null): Span
     }
     .build()
     .service
-}
-
-/** Creates a Spanner [Instance]. */
-fun Spanner.createInstance(
-  projectName: String,
-  instanceName: String,
-  displayName: String,
-  instanceConfigId: String,
-  instanceNodeCount: Int
-): Instance {
-  val instanceId = InstanceId.of(projectName, instanceName)
-  val instanceInfo =
-    InstanceInfo.newBuilder(instanceId)
-      .setDisplayName(displayName)
-      .setInstanceConfigId(InstanceConfigId.of(projectName, instanceConfigId))
-      .setNodeCount(instanceNodeCount)
-      .build()
-  return instanceAdminClient.createInstance(instanceInfo).get()
 }
 
 /**

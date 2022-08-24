@@ -15,27 +15,67 @@
 package org.wfanet.measurement.gcloud.common
 
 import com.google.api.core.ApiFuture
-import com.google.api.core.ApiFutureCallback
-import com.google.api.core.ApiFutures
+import com.google.common.util.concurrent.ForwardingListenableFuture.SimpleForwardingListenableFuture
+import com.google.common.util.concurrent.ListenableFuture
+import com.google.common.util.concurrent.MoreExecutors
+import com.google.common.util.concurrent.Uninterruptibles
+import java.util.concurrent.ExecutionException
 import java.util.concurrent.Executor
-import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.Deferred
+import kotlin.coroutines.CoroutineContext
+import kotlin.coroutines.EmptyCoroutineContext
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.guava.future
+import kotlinx.coroutines.suspendCancellableCoroutine
 
-/** Wraps the [ApiFuture] in a [Deferred] using the specified [executor]. */
-fun <T> ApiFuture<T>.asDeferred(executor: Executor): Deferred<T> {
-  val deferred = CompletableDeferred<T>()
-  ApiFutures.addCallback(
-    this,
-    object : ApiFutureCallback<T> {
-      override fun onFailure(e: Throwable) {
-        deferred.completeExceptionally(e)
-      }
+object DirectExecutor : Executor by MoreExecutors.directExecutor()
 
-      override fun onSuccess(result: T) {
-        deferred.complete(result)
-      }
-    },
-    executor
-  )
-  return deferred
+/**
+ * Suspends until the [ApiFuture] completes.
+ *
+ * @see kotlinx.coroutines.guava.await
+ */
+suspend fun <T> ApiFuture<T>.await(): T {
+  try {
+    if (isDone) return Uninterruptibles.getUninterruptibly(this)
+  } catch (e: ExecutionException) {
+    throw e.cause!!
+  }
+
+  return suspendCancellableCoroutine { cont ->
+    addListener(
+      {
+        if (isCancelled) {
+          cont.cancel()
+        } else {
+          try {
+            cont.resume(Uninterruptibles.getUninterruptibly(this))
+          } catch (e: ExecutionException) {
+            cont.resumeWithException(e.cause!!)
+          }
+        }
+      },
+      MoreExecutors.directExecutor()
+    )
+  }
 }
+
+/**
+ * Starts a new coroutine as an [ApiFuture].
+ *
+ * @see [future]
+ */
+fun <T> CoroutineScope.apiFuture(
+  context: CoroutineContext = EmptyCoroutineContext,
+  start: CoroutineStart = CoroutineStart.DEFAULT,
+  block: suspend CoroutineScope.() -> T
+): ApiFuture<T> {
+  return future(context, start) { block() }.toApiFuture()
+}
+
+private class ListenableFutureAdapter<T>(delegate: ListenableFuture<T>) :
+  SimpleForwardingListenableFuture<T>(delegate), ApiFuture<T>
+
+private fun <T> ListenableFuture<T>.toApiFuture(): ApiFuture<T> = ListenableFutureAdapter(this)
