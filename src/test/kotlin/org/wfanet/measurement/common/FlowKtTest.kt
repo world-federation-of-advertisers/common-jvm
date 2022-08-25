@@ -109,6 +109,31 @@ class FlowKtTest {
   }
 
   @Test
+  fun `withRetriesOnEach executes reachMaxAttemptsBlock when reach the max attemtps`() =
+    runBlocking {
+      val successfullyProcessedItems = mutableListOf<Int>()
+      val triesCounter = mutableMapOf<Int, Int>()
+
+      (1..5)
+        .asFlow()
+        .withRetriesOnEach(
+          3,
+          retryPredicate = { true },
+          reachMaxAttemptsBlock = { it, ex -> triesCounter[it] = -1 }
+        ) {
+          triesCounter.putIfAbsent(it, 0)
+          triesCounter[it] = 1 + (triesCounter[it] ?: 0)
+          require(it < 4) { "Simulated error in test..." }
+        }
+        // The require() will throw an IllegalArgumentException that is not caught in the flow.
+        // It will be thrown on the collection of this flow.
+        .toList(successfullyProcessedItems)
+
+      assertThat(successfullyProcessedItems).isEqualTo((1..5).toList())
+      assertThat(triesCounter).isEqualTo(mapOf(1 to 1, 2 to 1, 3 to 1, 4 to -1, 5 to -1))
+    }
+
+  @Test
   fun `concurrentMap runs concurrently`() = runBlocking {
     val latch = CountDownLatch(100)
     val events = mutableListOf<Int>()
