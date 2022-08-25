@@ -119,7 +119,7 @@ class FlowKtTest {
         .withRetriesOnEach(
           3,
           retryPredicate = { true },
-          reachMaxAttemptsBlock = { it, ex -> triesCounter[it] = -1 }
+          attemptsExhaustedBlock = { it, ex -> triesCounter[it] = -1 }
         ) {
           triesCounter.putIfAbsent(it, 0)
           triesCounter[it] = 1 + (triesCounter[it] ?: 0)
