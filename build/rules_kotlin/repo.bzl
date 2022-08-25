@@ -19,7 +19,7 @@ See https://github.com/bazelbuild/rules_kotlin
 
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 load("@bazel_tools//tools/build_defs/repo:utils.bzl", "maybe")
-load("//build:versions.bzl", "JETBRAINS_ANNOTATIONS_VERSION", "KOTLIN_RELEASE_VERSION")
+load("//build:versions.bzl", "KOTLIN_RELEASE_VERSION")
 
 _JETBRAINS_KOTLIN_OVERRIDE_TARGETS = {
     "org.jetbrains.kotlin:kotlin-stdlib": "@com_github_jetbrains_kotlin//:kotlin-stdlib",
@@ -32,9 +32,14 @@ _JETBRAINS_KOTLIN_OVERRIDE_TARGETS = {
 
 _JETBRAINS_OVERRIDE_TARGETS = {
     "org.jetbrains:annotations": "@com_github_jetbrains_kotlin//:annotations",
-}
+}  # @unused
 
-RULES_KOTLIN_OVERRIDE_TARGETS = dict(_JETBRAINS_KOTLIN_OVERRIDE_TARGETS.items() + _JETBRAINS_OVERRIDE_TARGETS.items())
+# Override targets for rules_kotlin.
+#
+# Despite the fact that the Kotlin compiler release bundles JetBrains,
+# annotations, we intentionally do not include it as an override target since
+# as of the 1.6 compiler release it is quite an old version (13).
+RULES_KOTLIN_OVERRIDE_TARGETS = _JETBRAINS_KOTLIN_OVERRIDE_TARGETS
 
 def _rules_kotlin_repo(version, sha256):
     maybe(
@@ -55,8 +60,4 @@ def rules_kotlin_maven_artifacts_dict():
         coordinates: KOTLIN_RELEASE_VERSION
         for coordinates in _JETBRAINS_KOTLIN_OVERRIDE_TARGETS.keys()
     }
-    artifacts_dict.update({
-        coordinates: JETBRAINS_ANNOTATIONS_VERSION
-        for coordinates in _JETBRAINS_OVERRIDE_TARGETS.keys()
-    })
     return artifacts_dict

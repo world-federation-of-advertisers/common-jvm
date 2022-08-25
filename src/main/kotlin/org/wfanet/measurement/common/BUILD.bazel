@@ -14,6 +14,7 @@ kt_jvm_library(
         "//imports/java/com/google/devtools/build/runfiles",
         "//imports/java/com/google/protobuf",
         "//imports/java/com/google/protobuf/util",
+        "//imports/java/org/jetbrains/annotations",
         "//imports/java/picocli",
         "//imports/kotlin/com/google/protobuf/kotlin",
         "//imports/kotlin/kotlinx/coroutines:core",

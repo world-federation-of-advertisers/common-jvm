@@ -75,6 +75,7 @@ def common_jvm_maven_artifacts_dict():
         "info.picocli:picocli": "4.4.0",
         "junit:junit": "4.13",
         "org.conscrypt:conscrypt-openjdk-uber": "2.5.2",
+        "org.jetbrains:annotations": "23.0.0",
         "org.mockito.kotlin:mockito-kotlin": "3.2.0",
         "software.amazon.awssdk:s3": "2.17.258",
 

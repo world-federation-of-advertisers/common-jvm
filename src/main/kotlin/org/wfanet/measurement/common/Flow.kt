@@ -14,11 +14,14 @@
 
 package org.wfanet.measurement.common
 
-import kotlin.coroutines.coroutineContext
+import kotlin.coroutines.CoroutineContext
+import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.async
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ClosedReceiveChannelException
 import kotlinx.coroutines.channels.ReceiveChannel
@@ -141,6 +144,7 @@ private class SingleConsumedFlowItem<T>(singleItem: T) : ConsumedFlowItem<T>() {
  * Note that this starts a new coroutine in a separate [CoroutineScope] to produce the returned
  * [Flow] items using a [Channel]. As a result, the returned [Flow] is hot.
  *
+ * @param producerContext [CoroutineContext] for producing the returned items
  * @return a [ConsumedFlowItem] containing the first item and the [Flow] of remaining items, or
  * `null` if there is no first item. The caller must ensure that the returned object is [closed]
  * [ConsumedFlowItem.close].
@@ -149,8 +153,10 @@ private class SingleConsumedFlowItem<T>(singleItem: T) : ConsumedFlowItem<T>() {
   FlowPreview::class, // For `produceIn`
   ExperimentalCoroutinesApi::class // For `Channel.isClosedForReceive`.
 )
-suspend fun <T> Flow<T>.consumeFirst(): ConsumedFlowItem<T>? {
-  val producerScope = CoroutineScope(coroutineContext)
+suspend fun <T> Flow<T>.consumeFirst(
+  producerContext: CoroutineContext = Dispatchers.Unconfined
+): ConsumedFlowItem<T>? {
+  val producerScope = CoroutineScope(producerContext + CoroutineName(::consumeFirst.name))
   val channel: ReceiveChannel<T> = buffer(Channel.RENDEZVOUS).produceIn(producerScope)
 
   // We can't know whether the flow is empty until we start collecting. Since
@@ -160,6 +166,7 @@ suspend fun <T> Flow<T>.consumeFirst(): ConsumedFlowItem<T>? {
     try {
       channel.receive()
     } catch (e: ClosedReceiveChannelException) {
+      producerScope.cancel()
       return null
     }
 
@@ -171,6 +178,7 @@ suspend fun <T> Flow<T>.consumeFirst(): ConsumedFlowItem<T>? {
 
     override fun close() {
       channel.cancel()
+      producerScope.cancel()
     }
   }
 }

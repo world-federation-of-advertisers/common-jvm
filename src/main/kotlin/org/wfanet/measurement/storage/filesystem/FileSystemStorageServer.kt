@@ -17,6 +17,7 @@ package org.wfanet.measurement.storage.filesystem
 import java.io.File
 import java.nio.file.Files
 import java.util.logging.Logger
+import kotlinx.coroutines.Dispatchers
 import org.wfanet.measurement.common.commandLineMain
 import org.wfanet.measurement.common.grpc.CommonServer
 import picocli.CommandLine
@@ -46,7 +47,11 @@ private fun run(
   val directory = flags.directory ?: Files.createTempDirectory(null).toFile()
   logger.info("Storing blobs in $directory")
 
-  CommonServer.fromFlags(serverFlags, SERVER_NAME, FileSystemStorageService(directory))
+  CommonServer.fromFlags(
+      serverFlags,
+      SERVER_NAME,
+      FileSystemStorageService(directory, Dispatchers.IO)
+    )
     .start()
     .blockUntilShutdown()
 }
