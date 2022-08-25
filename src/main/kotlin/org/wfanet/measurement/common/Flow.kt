@@ -68,18 +68,20 @@ fun <T, R> Flow<T>.pairAll(block: suspend (T) -> Flow<R>): Flow<Pair<T, R>> = tr
  * @param retryPredicate retry a failed attempt of [onEachBlock] if the throwable matches this
  * predicate
  * @param onEachBlock block of code to execute for each item in the flow.
+ * @param reachMaxAttemptsBlock block of code to execute for each item when reach the max attempts.
  */
 fun <T> Flow<T>.withRetriesOnEach(
   maxAttempts: Int,
   retryPredicate: (Throwable) -> Boolean = { true },
-  onEachBlock: suspend (T) -> Unit
+  reachMaxAttemptsBlock: suspend (T, Throwable) -> Unit = { _, e -> throw e },
+  onEachBlock: suspend (T) -> Unit,
 ): Flow<T> = onEach {
   repeat(maxAttempts) { idx ->
     val attempt = idx + 1
     try {
       return@onEach onEachBlock(it)
     } catch (e: Throwable) {
-      if (attempt == maxAttempts || !retryPredicate(e)) throw e
+      if (attempt == maxAttempts) reachMaxAttemptsBlock(it, e) else if (!retryPredicate(e)) throw e
     }
   }
 }
