@@ -9,6 +9,7 @@ kt_jvm_library(
     srcs = ["FileSystemStorageClient.kt"],
     deps = [
         "//imports/java/com/google/protobuf",
+        "//imports/java/org/jetbrains/annotations",
         "//imports/kotlin/kotlinx/coroutines:core",
         "//src/main/kotlin/org/wfanet/measurement/common",
         "//src/main/kotlin/org/wfanet/measurement/storage:client",
@@ -21,6 +22,7 @@ kt_jvm_library(
     deps = [
         ":client",
         "//imports/java/io/grpc:api",
+        "//imports/java/org/jetbrains/annotations",
         "//imports/kotlin/kotlin:stdlib_jdk7",
         "//imports/kotlin/kotlinx/coroutines:core",
         "//src/main/kotlin/org/wfanet/measurement/common",

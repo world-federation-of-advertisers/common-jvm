@@ -21,11 +21,11 @@ import java.io.InputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.channels.ReadableByteChannel
+import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.FlowCollector
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
@@ -33,6 +33,7 @@ import kotlinx.coroutines.flow.fold
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.yield
+import org.jetbrains.annotations.BlockingExecutor
 
 const val BYTES_PER_MIB = 1024 * 1024
 
@@ -233,34 +234,37 @@ private suspend fun ByteStringOutputBuffer.putEmittingFull(
  *
  * @param bufferSize size in bytes of the buffer to use to read from the channel
  */
-fun ReadableByteChannel.asFlow(bufferSize: Int): Flow<ByteString> {
+fun ReadableByteChannel.asFlow(
+  bufferSize: Int,
+  coroutineContext: @BlockingExecutor CoroutineContext = Dispatchers.IO
+): Flow<ByteString> {
   require(bufferSize > 0)
 
-  val flow = flow {
-    val buffer = ByteBuffer.allocate(bufferSize)
+  return flow {
+      val buffer = ByteBuffer.allocate(bufferSize)
 
-    while (currentCoroutineContext().isActive) {
-      @Suppress("BlockingMethodInNonBlockingContext") // Will be on Dispatchers.IO.
-      val numRead = read(buffer)
-      when {
-        numRead < 0 -> {
-          emitFrom(buffer)
-          return@flow
-        }
-        numRead == 0 -> {
-          // Nothing was read, so we may have a non-blocking channel that nothing can be read
-          // from right now. Suspend this coroutine to avoid monopolizing the thread.
-          yield()
-        }
-        else -> {
-          if (!buffer.hasRemaining()) {
+      while (currentCoroutineContext().isActive) {
+        val numRead = read(buffer)
+        when {
+          numRead < 0 -> {
             emitFrom(buffer)
+            return@flow
+          }
+          numRead == 0 -> {
+            // Nothing was read, so we may have a non-blocking channel that nothing can be read
+            // from right now. Suspend this coroutine to avoid monopolizing the thread.
+            yield()
+          }
+          else -> {
+            if (!buffer.hasRemaining()) {
+              emitFrom(buffer)
+            }
           }
         }
       }
     }
-  }
-  return flow.onCompletion { close() }.flowOn(Dispatchers.IO)
+    .onCompletion { close() }
+    .flowOn(coroutineContext)
 }
 
 private suspend fun FlowCollector<ByteString>.emitFrom(buffer: ByteBuffer) {
@@ -276,19 +280,22 @@ private suspend fun FlowCollector<ByteString>.emitFrom(buffer: ByteBuffer) {
  *
  * @param bufferSize size of all except last output ByteString (which may be smaller)
  */
-fun InputStream.asFlow(bufferSize: Int): Flow<ByteString> {
+fun InputStream.asFlow(
+  bufferSize: Int,
+  coroutineContext: @BlockingExecutor CoroutineContext = Dispatchers.IO
+): Flow<ByteString> {
   require(bufferSize > 0)
 
-  val flow = flow {
-    val buffer = ByteArray(bufferSize)
-    while (currentCoroutineContext().isActive) {
-      @Suppress("BlockingMethodInNonBlockingContext") // Runs on Dispatchers.IO
-      val length = read(buffer)
-      if (length < 0) break
-      emit(ByteString.copyFrom(buffer, 0, length))
+  return flow {
+      val buffer = ByteArray(bufferSize)
+      while (currentCoroutineContext().isActive) {
+        val length = read(buffer)
+        if (length < 0) break
+        emit(ByteString.copyFrom(buffer, 0, length))
+      }
     }
-  }
-  return flow.onCompletion { close() }.flowOn(Dispatchers.IO)
+    .onCompletion { close() }
+    .flowOn(coroutineContext)
 }
 
 /** Reads all of the bytes from this [File] into a [ByteString]. */

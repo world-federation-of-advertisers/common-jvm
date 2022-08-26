@@ -17,6 +17,7 @@ package org.wfanet.measurement.storage.filesystem
 import com.google.common.truth.Truth.assertThat
 import io.grpc.Status
 import io.grpc.StatusException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertThrows
@@ -39,7 +40,7 @@ import org.wfanet.measurement.storage.testing.AbstractStorageClientTest
 class FileSystemStorageServiceTest : AbstractStorageClientTest<ForwardedStorageClient>() {
   private val tempDirectory = TemporaryFolder()
   private val grpcTestServerRule = GrpcTestServerRule {
-    addService(FileSystemStorageService(tempDirectory.root))
+    addService(FileSystemStorageService(tempDirectory.root, Dispatchers.IO))
   }
 
   @get:Rule val ruleChain = chainRulesSequentially(tempDirectory, grpcTestServerRule)
