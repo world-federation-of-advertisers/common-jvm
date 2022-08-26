@@ -97,7 +97,9 @@ fun <T> Flow<T>.withRetriesOnEach(
  */
 fun <T> Flow<T>.withRetriesOnEachWithErrorHandler(
   maxAttempts: Int,
-  errorHandlingBlock: (T, Throwable, Boolean) -> Boolean = { _, _, exhausted -> !exhausted },
+  errorHandlingBlock: suspend (T, Throwable, Boolean) -> Boolean = { _, _, exhausted ->
+    !exhausted
+  },
   onEachBlock: suspend (T) -> Unit,
 ): Flow<T> = onEach {
   repeat(maxAttempts) { idx ->
