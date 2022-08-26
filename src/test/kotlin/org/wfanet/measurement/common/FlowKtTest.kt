@@ -46,13 +46,12 @@ class FlowKtTest {
   @Test
   fun `withRetriesOnEach non-retriable error`() = runBlocking {
     val successfullyProcessedItems = mutableListOf<Int>()
-    val triesCounter = mutableMapOf<Int, Int>()
+    val triesCounter = mutableMapOf<Int, Int>().withDefault { 0 }
     assertFailsWith<IllegalArgumentException> {
       (1..100)
         .asFlow()
         .withRetriesOnEach(3, retryPredicate = { it is NullPointerException }) {
-          triesCounter.putIfAbsent(it, 0)
-          triesCounter[it] = 1 + (triesCounter[it] ?: 0)
+          triesCounter[it] = 1 + triesCounter.getValue(it)
           require(it < 5) { "Simulated error in test..." }
         }
         // The require() will throw an IllegalArgumentException that is not caught in the flow.
@@ -66,13 +65,12 @@ class FlowKtTest {
   @Test
   fun `withRetriesOnEach retry errors`() = runBlocking {
     val successfullyProcessedItems = mutableListOf<Int>()
-    val triesCounter = mutableMapOf<Int, Int>()
+    val triesCounter = mutableMapOf<Int, Int>().withDefault { 0 }
     assertFailsWith<IllegalArgumentException> {
       (1..100)
         .asFlow()
         .withRetriesOnEach(3) {
-          triesCounter.putIfAbsent(it, 0)
-          triesCounter[it] = 1 + (triesCounter[it] ?: 0)
+          triesCounter[it] = 1 + triesCounter.getValue(it)
           require(it < 8) { "Simulated error in test..." }
         }
         // The require() will throw an IllegalArgumentException that is caught in the flow, and
@@ -92,12 +90,12 @@ class FlowKtTest {
   @Test
   fun `withRetriesOnEach retries and succeeds`() = runBlocking {
     val successfullyProcessedItems = mutableListOf<Int>()
-    val triesCounter = mutableMapOf<Int, Int>()
+    val triesCounter = mutableMapOf<Int, Int>().withDefault { 0 }
     (1..6)
       .asFlow()
       .withRetriesOnEach(3) {
-        val initValue = triesCounter.putIfAbsent(it, 0)
-        triesCounter[it] = 1 + (triesCounter[it] ?: 0)
+        val initValue = triesCounter[it]
+        triesCounter[it] = 1 + triesCounter.getValue(it)
         require(it % 2 == 0 || initValue != null) { "Simulated error in test..." }
       }
       // The require() will throw an IllegalArgumentException that is caught in the flow, and
@@ -112,17 +110,16 @@ class FlowKtTest {
   fun `withRetriesOnEach executes reachMaxAttemptsBlock when reach the max attemtps`() =
     runBlocking {
       val successfullyProcessedItems = mutableListOf<Int>()
-      val triesCounter = mutableMapOf<Int, Int>()
+      val triesCounter = mutableMapOf<Int, Int>().withDefault { 0 }
 
       (1..5)
         .asFlow()
         .withRetriesOnEach(
           3,
           retryPredicate = { true },
-          attemptsExhaustedBlock = { it, ex -> triesCounter[it] = -1 }
+          attemptsExhaustedBlock = { it, _ -> triesCounter[it] = -1 }
         ) {
-          triesCounter.putIfAbsent(it, 0)
-          triesCounter[it] = 1 + (triesCounter[it] ?: 0)
+          triesCounter[it] = 1 + triesCounter.getValue(it)
           require(it < 4) { "Simulated error in test..." }
         }
         // The require() will throw an IllegalArgumentException that is not caught in the flow.
