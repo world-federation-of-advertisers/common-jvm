@@ -107,7 +107,8 @@ fun <T> Flow<T>.withRetriesOnEachWithErrorHandler(
     try {
       return@onEach onEachBlock(it)
     } catch (e: Throwable) {
-      errorHandlingBlock(it, e, attempt == maxAttempts)
+      val retry = errorHandlingBlock(it, e, attempt == maxAttempts)
+      if (!retry) return@onEach
     }
   }
 }
