@@ -18,11 +18,13 @@ import java.net.ServerSocket
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
+import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.yield
+import org.jetbrains.annotations.BlockingExecutor
 import org.wfanet.measurement.common.getRuntimePath
 
 private const val EMULATOR_HOSTNAME = "localhost"
@@ -33,8 +35,12 @@ private const val INVALID_HOST_MESSAGE =
  * Wrapper for Cloud Spanner Emulator binary.
  *
  * @param port TCP port that the emulator should listen on, or 0 to allocate a port automatically
+ * @param coroutineContext Context for operations that may block
  */
-class SpannerEmulator(private val port: Int = 0) : AutoCloseable {
+class SpannerEmulator(
+  private val port: Int = 0,
+  private val coroutineContext: @BlockingExecutor CoroutineContext = Dispatchers.IO
+) : AutoCloseable {
   private val startMutex = Mutex()
   @Volatile private lateinit var emulator: Process
 
@@ -66,7 +72,7 @@ class SpannerEmulator(private val port: Int = 0) : AutoCloseable {
         return@withLock emulatorHost
       }
 
-      return withContext(Dispatchers.IO) {
+      return withContext(coroutineContext) {
         // Open a socket on `port`. This should reduce the likelihood that the port
         // is in use. Additionally, this will allocate a port if `port` is 0.
         val localPort = ServerSocket(port).use { it.localPort }

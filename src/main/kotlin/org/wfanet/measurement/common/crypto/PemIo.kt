@@ -98,16 +98,19 @@ class PemReader private constructor(private val reader: BufferedReader) : AutoCl
     require(inputReader.encoding == CHARSET.name())
   }
 
+  @Throws(IOException::class)
   fun readCertificate(): X509Certificate {
     val der = checkNotNull(read(PemType.CERTIFICATE))
     return ByteArrayInputStream(der).use { readCertificate(it) }
   }
 
+  @Throws(IOException::class)
   fun readPrivateKeySpec(): PKCS8EncodedKeySpec {
     val der = checkNotNull(read(PemType.PRIVATE_KEY))
     return PKCS8EncodedKeySpec(der)
   }
 
+  @Throws(IOException::class)
   private fun read(type: PemType): ByteArray? {
     val header = readHeader() ?: return null
     check(header == type.begin) { "Expected \"${type.begin}\", got \"$header\"" }
@@ -122,6 +125,7 @@ class PemReader private constructor(private val reader: BufferedReader) : AutoCl
     }
   }
 
+  @Throws(IOException::class)
   private fun readHeader(): String? {
     var line: String
     do {
@@ -130,6 +134,7 @@ class PemReader private constructor(private val reader: BufferedReader) : AutoCl
     return line
   }
 
+  @Throws(IOException::class)
   override fun close() {
     reader.close()
   }
