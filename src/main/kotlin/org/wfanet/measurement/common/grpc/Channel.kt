@@ -15,23 +15,10 @@
 package org.wfanet.measurement.common.grpc
 
 import io.grpc.ManagedChannel
-import io.grpc.ManagedChannelBuilder
 import io.grpc.netty.NettyChannelBuilder
 import java.security.cert.X509Certificate
 import java.time.Duration
 import org.wfanet.measurement.common.crypto.SigningCerts
-
-/**
- * Builds a [ManagedChannel] for the specified target.
- *
- * @param target the URI or authority string for the target server
- */
-fun buildPlaintextChannel(target: String): ManagedChannel {
-  return ManagedChannelBuilder.forTarget(target)
-    // TODO: Add assertion to ensure it's never called in a prod env
-    .usePlaintext()
-    .build()
-}
 
 /**
  * Builds a [ManagedChannel] for the specified target with mTLS connection.
@@ -48,7 +35,9 @@ fun buildMutualTlsChannel(
   hostName: String? = null
 ): ManagedChannel {
   val channelBuilder =
-    NettyChannelBuilder.forTarget(target).sslContext(clientCerts.toClientTlsContext())
+    NettyChannelBuilder.forTarget(target)
+      .directExecutor() // See https://github.com/grpc/grpc-kotlin/issues/263
+      .sslContext(clientCerts.toClientTlsContext())
   return if (hostName == null) {
     channelBuilder.build()
   } else {
@@ -70,7 +59,9 @@ fun buildTlsChannel(
   hostName: String? = null
 ): ManagedChannel {
   val channelBuilder =
-    NettyChannelBuilder.forTarget(target).sslContext(trustedServerCerts.toClientTlsContext())
+    NettyChannelBuilder.forTarget(target)
+      .directExecutor() // See https://github.com/grpc/grpc-kotlin/issues/263
+      .sslContext(trustedServerCerts.toClientTlsContext())
   return if (hostName == null) {
     channelBuilder.build()
   } else {

@@ -19,11 +19,11 @@ load(
     "kotlin_repositories",
     "kotlinc_version",
 )
-load(
-    "//build:versions.bzl",
-    "JETBRAINS_ANNOTATIONS_VERSION",
-    "KOTLIN_RELEASE_VERSION",
-)
+load("//build:versions.bzl", "KOTLIN_RELEASE_VERSION")
+
+# Version of org.jetbrains:annotations that comes bundled with
+# KOTLIN_RELEASE_VERSION.
+JETBRAINS_ANNOTATIONS_VERSION = "13.0"
 
 def rules_kotlin_deps():
     compiler_release = kotlinc_version(

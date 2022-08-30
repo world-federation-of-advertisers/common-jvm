@@ -18,13 +18,15 @@ import com.google.cloud.storage.Blob
 import com.google.cloud.storage.BlobInfo
 import com.google.cloud.storage.Storage
 import com.google.protobuf.ByteString
+import kotlin.coroutines.CoroutineContext
+import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.yield
+import org.jetbrains.annotations.BlockingExecutor
 import org.wfanet.measurement.common.BYTES_PER_MIB
 import org.wfanet.measurement.common.asFlow
 import org.wfanet.measurement.storage.StorageClient
@@ -36,12 +38,21 @@ import org.wfanet.measurement.storage.StorageClient
  */
 private const val READ_BUFFER_SIZE = BYTES_PER_MIB * 2
 
-/** Google Cloud Storage (GCS) implementation of [StorageClient] for a single bucket. */
-class GcsStorageClient(private val storage: Storage, private val bucketName: String) :
-  StorageClient {
+/**
+ * Google Cloud Storage (GCS) implementation of [StorageClient] for a single bucket.
+ *
+ * @param storage GCS API client
+ * @param bucketName name of the GCS bucket
+ * @param blockingContext [CoroutineContext] for blocking operations
+ */
+class GcsStorageClient(
+  private val storage: Storage,
+  private val bucketName: String,
+  private val blockingContext: @BlockingExecutor CoroutineContext = Dispatchers.IO
+) : StorageClient {
 
   override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob =
-    withContext(Dispatchers.IO) {
+    withContext(blockingContext + CoroutineName("writeBlob")) {
       val blob = storage.create(BlobInfo.newBuilder(bucketName, blobKey).build())
 
       blob.writer().use { byteChannel ->
@@ -50,7 +61,6 @@ class GcsStorageClient(private val storage: Storage, private val bucketName: Str
             while (buffer.hasRemaining() && currentCoroutineContext().isActive) {
               // Writer has its own internal buffering, so we can just use whatever buffers we
               // already have.
-              @Suppress("BlockingMethodInNonBlockingContext") // In Dispatchers.IO.
               if (byteChannel.write(buffer) == 0) {
                 // Nothing was written, so we may have a non-blocking channel that nothing can be
                 // written to right now. Suspend this coroutine to avoid monopolizing the thread.
@@ -64,7 +74,8 @@ class GcsStorageClient(private val storage: Storage, private val bucketName: Str
     }
 
   override suspend fun getBlob(blobKey: String): StorageClient.Blob? {
-    val blob: Blob? = withContext(Dispatchers.IO) { storage.get(bucketName, blobKey) }
+    val blob: Blob? =
+      withContext(blockingContext + CoroutineName("getBlob")) { storage.get(bucketName, blobKey) }
     return blob?.let { ClientBlob(blob) }
   }
 
@@ -77,11 +88,11 @@ class GcsStorageClient(private val storage: Storage, private val bucketName: Str
       get() = blob.size
 
     override fun read(): Flow<ByteString> {
-      return blob.reader().asFlow(READ_BUFFER_SIZE)
+      return blob.reader().asFlow(READ_BUFFER_SIZE, blockingContext + CoroutineName("readBlob"))
     }
 
     override suspend fun delete() {
-      check(withContext(Dispatchers.IO) { blob.delete() }) {
+      check(withContext(blockingContext + CoroutineName("deleteBlob")) { blob.delete() }) {
         "Failed to delete blob ${blob.blobId}"
       }
     }
