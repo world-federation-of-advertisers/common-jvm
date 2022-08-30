@@ -53,10 +53,7 @@ class SpannerEmulatorDatabaseRule(
           val emulatorHost = runBlocking { emulator.start() }
           createDatabase(emulatorHost).use { spanner ->
             databaseClient =
-              spanner.getAsyncDatabaseClient(
-                DatabaseId.of(PROJECT, INSTANCE, databaseName),
-                MAX_READ_WRITE_TRANSACTIONS
-              )
+              spanner.getAsyncDatabaseClient(DatabaseId.of(PROJECT, INSTANCE, databaseName))
             base.evaluate()
           }
 
@@ -84,12 +81,5 @@ class SpannerEmulatorDatabaseRule(
   companion object {
     private const val PROJECT = "test-project"
     private const val INSTANCE = "test-instance"
-
-    /**
-     * Maximum number of simultanous read-write transactions to allow.
-     *
-     * The Cloud Spanner Emulator only supports one such transaction at a time.
-     */
-    private const val MAX_READ_WRITE_TRANSACTIONS: Int = 1
   }
 }

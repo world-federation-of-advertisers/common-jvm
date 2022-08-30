@@ -16,7 +16,7 @@
 
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 load("@bazel_tools//tools/build_defs/repo:utils.bzl", "maybe")
-load("//build:versions.bzl", "PROTOBUF_VERSION")
+load("//build:versions.bzl", "PROTOBUF_JAVA_VERSION")
 
 _MAVEN_COORDINATES = [
     "com.google.protobuf:protobuf-java",
@@ -36,4 +36,4 @@ def rules_proto():
     )
 
 def rules_proto_maven_artifacts_dict():
-    return {coordinates: PROTOBUF_VERSION for coordinates in _MAVEN_COORDINATES}
+    return {coordinates: PROTOBUF_JAVA_VERSION for coordinates in _MAVEN_COORDINATES}

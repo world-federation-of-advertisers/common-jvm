@@ -34,6 +34,8 @@ import com.google.cloud.spanner.TimestampBound
 import com.google.cloud.spanner.TransactionContext
 import java.time.Duration
 import java.util.concurrent.Executor
+import java.util.logging.Logger
+import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.Channel
@@ -45,8 +47,6 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.singleOrNull
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import org.wfanet.measurement.gcloud.common.DirectExecutor
@@ -62,33 +62,24 @@ typealias TransactionWork<R> = suspend (txn: AsyncDatabaseClient.TransactionCont
  *
  * @param dbClient [DatabaseClient] to wrap
  * @param executor [Executor] for asynchronous work
- * @param maxReadWriteTransactions maximum number of simultaneous read-write transactions, where 0
- * means unlimited
  */
-class AsyncDatabaseClient(
-  private val dbClient: DatabaseClient,
-  private val executor: Executor,
-  maxReadWriteTransactions: Int,
-) {
-  private val rwTransactionSemaphore: Semaphore =
-    if (maxReadWriteTransactions > 0) Semaphore(maxReadWriteTransactions) else UnlimitedSemaphore
-
-  /** @see [DatabaseClient.singleUse] */
+class AsyncDatabaseClient(private val dbClient: DatabaseClient, private val executor: Executor) {
+  /** @see DatabaseClient.singleUse */
   fun singleUse(bound: TimestampBound = TimestampBound.strong()): ReadContext {
     return ReadContextImpl(dbClient.singleUse(bound))
   }
 
-  /** @see [DatabaseClient.readWriteTransaction] */
+  /** @see DatabaseClient.readWriteTransaction */
   fun readWriteTransaction(): TransactionRunner {
-    return TransactionRunnerImpl(dbClient.runAsync(), executor, rwTransactionSemaphore)
+    return TransactionRunnerImpl(dbClient.runAsync(), executor)
   }
 
-  /** @see [DatabaseClient.write] */
+  /** @see DatabaseClient.write */
   suspend fun write(mutations: Iterable<Mutation>) {
     readWriteTransaction().execute { txn -> txn.buffer(mutations) }
   }
 
-  /** @see [DatabaseClient.write] */
+  /** @see DatabaseClient.write */
   suspend fun write(vararg mutations: Mutation) {
     write(mutations.asIterable())
   }
@@ -108,7 +99,7 @@ class AsyncDatabaseClient(
     }
   }
 
-  /** Non-blocking version of [com.google.cloud.spanner.ReadContext] */
+  /** Async coroutine version of [com.google.cloud.spanner.ReadContext] */
   interface ReadContext : AutoCloseable {
     /** @see [com.google.cloud.spanner.ReadContext.read] */
     fun read(
@@ -118,10 +109,10 @@ class AsyncDatabaseClient(
       vararg options: ReadOption
     ): Flow<Struct>
 
-    /** @see [com.google.cloud.spanner.ReadContext.readRow] */
+    /** @see com.google.cloud.spanner.ReadContext.readRow */
     suspend fun readRow(table: String, key: Key, columns: Iterable<String>): Struct?
 
-    /** @see [com.google.cloud.spanner.ReadContext.readRowUsingIndex] */
+    /** @see com.google.cloud.spanner.ReadContext.readRowUsingIndex */
     suspend fun readRowUsingIndex(
       table: String,
       index: String,
@@ -129,7 +120,7 @@ class AsyncDatabaseClient(
       columns: Iterable<String>
     ): Struct?
 
-    /** @see [com.google.cloud.spanner.ReadContext.readRowUsingIndex] */
+    /** @see com.google.cloud.spanner.ReadContext.readRowUsingIndex */
     suspend fun readRowUsingIndex(
       table: String,
       index: String,
@@ -137,28 +128,40 @@ class AsyncDatabaseClient(
       vararg columns: String
     ): Struct?
 
-    /** @see [com.google.cloud.spanner.ReadContext.executeQuery] */
+    /** @see com.google.cloud.spanner.ReadContext.executeQuery */
     fun executeQuery(statement: Statement, vararg options: QueryOption): Flow<Struct>
   }
 
-  /** Non-blocking version of [com.google.cloud.spanner.TransactionRunner]. */
+  /** Coroutine version of [AsyncRunner]. */
   interface TransactionRunner {
-    /** @see [com.google.cloud.spanner.TransactionRunner.run] */
+    /** @see com.google.cloud.spanner.TransactionRunner.run */
     suspend fun <R> execute(doWork: TransactionWork<R>): R
 
     suspend fun getCommitTimestamp(): Timestamp
   }
 
-  /** Non-blocking version of [com.google.cloud.spanner.TransactionContext]. */
+  /** Async coroutine version of [com.google.cloud.spanner.TransactionContext]. */
   interface TransactionContext : ReadContext {
-    /** @see [com.google.cloud.spanner.TransactionContext.buffer] */
+    /** @see com.google.cloud.spanner.TransactionContext.buffer */
     fun buffer(mutation: Mutation)
 
-    /** @see [com.google.cloud.spanner.TransactionContext.buffer] */
+    /** @see com.google.cloud.spanner.TransactionContext.buffer */
     fun buffer(mutations: Iterable<Mutation>)
 
-    /** @see [com.google.cloud.spanner.TransactionContext.executeUpdate] */
+    /** @see com.google.cloud.spanner.TransactionContext.executeUpdate */
     suspend fun executeUpdate(statement: Statement): Long
+  }
+
+  companion object {
+    internal val logger = Logger.getLogger(this::class.java.name)
+
+    /**
+     * [CoroutineContext] for code blocks that can throw [SpannerException]s.
+     *
+     * This is used to ensure that these exceptions bubble up to where they can be handled by the
+     * Spanner client library.
+     */
+    internal val throwingSpannerException: CoroutineContext = NonCancellable
   }
 }
 
@@ -203,17 +206,14 @@ private class ReadContextImpl(private val readContext: ReadContext) :
 
 private class TransactionRunnerImpl(
   private val runner: AsyncRunner,
-  private val executor: Executor,
-  private val rwTransactionSemaphore: Semaphore
+  private val executor: Executor
 ) : AsyncDatabaseClient.TransactionRunner {
 
   override suspend fun <R> execute(doWork: TransactionWork<R>): R {
-    rwTransactionSemaphore.withPermit {
-      return try {
-        runner.run(executor) { txn -> doWork(TransactionContextImpl(txn)) }
-      } catch (e: SpannerException) {
-        throw e.wrappedException ?: e
-      }
+    try {
+      return runner.run(executor) { txn -> doWork(TransactionContextImpl(txn)) }
+    } catch (e: SpannerException) {
+      throw e.wrappedException ?: e
     }
   }
 
@@ -244,7 +244,8 @@ private fun AsyncResultSet.asFlow(): Flow<Struct> {
         }
       }
 
-      setCallback(DirectExecutor) { cursor ->
+      val completionFuture: ApiFuture<Void> =
+        setCallback(DirectExecutor) { cursor ->
           @Suppress("WHEN_ENUM_CAN_BE_NULL_IN_JAVA")
           when (cursor.tryNext()) {
             AsyncResultSet.CursorState.OK -> {
@@ -266,8 +267,12 @@ private fun AsyncResultSet.asFlow(): Flow<Struct> {
             }
           }
         }
-        .await()
 
+      try {
+        withContext(AsyncDatabaseClient.throwingSpannerException) { completionFuture.await() }
+      } finally {
+        close()
+      }
       awaitClose()
     }
     .onCompletion { cause ->
@@ -283,29 +288,13 @@ private suspend fun <T> AsyncRunner.run(
   executor: Executor,
   doWork: suspend (TransactionContext) -> T
 ): T = coroutineScope {
-  val txnFuture: ApiFuture<T> = runAsync({ txn -> apiFuture { doWork(txn) } }, executor)
-  // Cancellation here can result in the transaction not being closed, so we use NonCancellable.
-  withContext(NonCancellable) { txnFuture.await() }
+  val txnFuture: ApiFuture<T> =
+    runAsync(
+      { txn -> apiFuture(AsyncDatabaseClient.throwingSpannerException) { doWork(txn) } },
+      executor
+    )
+  txnFuture.await()
 }
 
-fun Spanner.getAsyncDatabaseClient(databaseId: DatabaseId, maxReadWriteTransactions: Int = 0) =
-  AsyncDatabaseClient(
-    getDatabaseClient(databaseId),
-    asyncExecutorProvider.executor,
-    maxReadWriteTransactions
-  )
-
-private object UnlimitedSemaphore : Semaphore {
-  override val availablePermits: Int
-    get() = Int.MAX_VALUE
-
-  override suspend fun acquire() {
-    // No-op.
-  }
-
-  override fun release() {
-    // No-op.
-  }
-
-  override fun tryAcquire(): Boolean = true
-}
+fun Spanner.getAsyncDatabaseClient(databaseId: DatabaseId) =
+  AsyncDatabaseClient(getDatabaseClient(databaseId), asyncExecutorProvider.executor)
