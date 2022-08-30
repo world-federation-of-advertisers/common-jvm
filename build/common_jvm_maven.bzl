@@ -40,7 +40,7 @@ load("//build/com_google_truth:repo.bzl", "com_google_truth_artifact_dict")
 load("//build/kotlinx_coroutines:repo.bzl", "kotlinx_coroutines_artifact_dict")
 load("//build/maven:artifacts.bzl", "artifacts")
 load("//build/tink:repo.bzl", "TINK_JAVA_KMS_MAVEN_DEPS")
-load("//build:versions.bzl", "PROTOBUF_VERSION")
+load("//build:versions.bzl", "PROTOBUF_KOTLIN_VERSION")
 
 # buildifier: disable=function-docstring-return
 def common_jvm_maven_artifacts():
@@ -69,7 +69,7 @@ def common_jvm_maven_artifacts_dict():
         "com.adobe.testing:s3mock-junit4": "2.2.3",
         "com.google.cloud:google-cloud-bigquery": "2.10.10",
         "com.google.cloud:google-cloud-nio": "0.123.28",
-        "com.google.cloud:google-cloud-spanner": "6.23.3",
+        "com.google.cloud:google-cloud-spanner": "6.27.0",
         "com.google.cloud:google-cloud-storage": "2.6.1",
         "com.google.guava:guava": "31.0.1-jre",
         "info.picocli:picocli": "4.4.0",
@@ -86,10 +86,10 @@ def common_jvm_maven_artifacts_dict():
         "com.opentable.components:otj-pg-embedded": "1.0.1",
 
         # Liquibase.
-        "org.liquibase:liquibase-core": "4.9.1",
+        "org.liquibase:liquibase-core": "4.15.0",
         "org.yaml:snakeyaml": "1.30",
-        "com.google.cloudspannerecosystem:liquibase-spanner": "4.6.1",
-        "com.google.cloud:google-cloud-spanner-jdbc": "2.6.4",
+        "com.google.cloudspannerecosystem:liquibase-spanner": "4.10.0",
+        "com.google.cloud:google-cloud-spanner-jdbc": "2.7.5",
         "org.liquibase.ext:liquibase-postgresql": "4.11.0",
 
         # For grpc-kotlin. This should be a version that is compatible with
@@ -97,7 +97,7 @@ def common_jvm_maven_artifacts_dict():
         "com.squareup:kotlinpoet": "1.8.0",
 
         # For kt_jvm_proto_library.
-        "com.google.protobuf:protobuf-kotlin": PROTOBUF_VERSION,
+        "com.google.protobuf:protobuf-kotlin": PROTOBUF_KOTLIN_VERSION,
 
         # Math library.
         "org.apache.commons:commons-math3": "3.6.1",

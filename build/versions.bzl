@@ -14,9 +14,13 @@
 
 """Version information for common dependencies."""
 
-GRPC_JAVA_VERSION = "1.46.0"
+GRPC_JAVA_VERSION = "1.48.1"
 GRPC_KOTLIN_VERSION = "1.3.0"
+
+# TODO(bazelbuild/rules_proto#136): Update to a newer version once fixed.
 PROTOBUF_VERSION = "3.20.1"
+PROTOBUF_JAVA_VERSION = PROTOBUF_VERSION
+PROTOBUF_KOTLIN_VERSION = PROTOBUF_JAVA_VERSION
 KOTLIN_LANGUAGE_LEVEL = "1.5"
 
 # Kotlin release version.
