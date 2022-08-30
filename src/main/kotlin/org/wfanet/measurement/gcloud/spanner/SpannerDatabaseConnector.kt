@@ -35,12 +35,7 @@ class SpannerDatabaseConnector(
 
   val databaseId: DatabaseId = DatabaseId.of(projectName, instanceName, databaseName)
 
-  val databaseClient: AsyncDatabaseClient by lazy {
-    // Cloud Spanner Emulator currently only supports one read-write transaction at a time.
-    val maxTransactions = if (emulatorHost == null) 0 else 1
-
-    spanner.getAsyncDatabaseClient(databaseId, maxTransactions)
-  }
+  val databaseClient: AsyncDatabaseClient by lazy { spanner.getAsyncDatabaseClient(databaseId) }
 
   /**
    * Suspends until [databaseClient] is ready, throwing a
