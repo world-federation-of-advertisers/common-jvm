@@ -24,6 +24,7 @@ import io.grpc.testing.GrpcCleanupRule
 import io.netty.handler.ssl.ClientAuth
 import java.io.File
 import java.util.logging.Logger
+import kotlin.properties.Delegates
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.runInterruptible
 import org.junit.BeforeClass
@@ -39,7 +40,6 @@ private const val ALGORITHM = "ec"
 private const val CURVE = "prime256v1"
 private const val SERVICE = "DummyService"
 private const val HOSTNAME = "localhost"
-private const val PORT = 8080
 private const val SUBJECT_ALT_NAME_EXT = "subjectAltName=DNS:$HOSTNAME,IP:127.0.0.1"
 
 @RunWith(JUnit4::class)
@@ -63,21 +63,24 @@ class TransportSecurityTest {
 
   @get:Rule val grpcCleanup = GrpcCleanupRule()
 
-  private fun startCommonServer(clientAuth: ClientAuth): Server {
+  private var port by Delegates.notNull<Int>()
 
+  private fun startCommonServer(clientAuth: ClientAuth): Server {
     val server =
       CommonServer.fromParameters(
-          PORT,
-          true,
-          serverCerts,
-          clientAuth,
-          "test",
-          listOf(healthStatusManager.healthService.withVerboseLogging())
+          port = 0, // Bind to an unused port.
+          healthPort = 0, // Bind to an unused port.
+          verboseGrpcLogging = true,
+          certs = serverCerts,
+          clientAuth = clientAuth,
+          nameForLogging = "test",
+          services = listOf(healthStatusManager.healthService.withVerboseLogging()),
         )
         .start()
     healthStatusManager.setStatus(SERVICE, HealthCheckResponse.ServingStatus.SERVING)
 
     grpcCleanup.register(server.server)
+    port = server.port
 
     return server.server
   }
@@ -92,7 +95,7 @@ class TransportSecurityTest {
         "openssl",
         "s_client",
         "-connect",
-        "$HOSTNAME:$PORT",
+        "$HOSTNAME:$port",
         "-verify_return_error",
         "-CAfile",
         "server-root.pem",
@@ -113,7 +116,7 @@ class TransportSecurityTest {
         "openssl",
         "s_client",
         "-connect",
-        "$HOSTNAME:$PORT",
+        "$HOSTNAME:$port",
         "-verify_return_error",
         "-cert",
         "client.pem",
@@ -134,7 +137,7 @@ class TransportSecurityTest {
     startCommonServer(ClientAuth.NONE)
 
     val channel =
-      grpcCleanup.register(buildTlsChannel("$HOSTNAME:$PORT", clientCerts.trustedCertificates))
+      grpcCleanup.register(buildTlsChannel("$HOSTNAME:$port", clientCerts.trustedCertificates))
     val client = HealthCoroutineStub(channel)
 
     val response = runBlocking {
@@ -147,7 +150,7 @@ class TransportSecurityTest {
   @Test
   fun `mTLS RPC succeeds`() {
     startCommonServer(ClientAuth.REQUIRE)
-    val channel = grpcCleanup.register(buildMutualTlsChannel("$HOSTNAME:$PORT", clientCerts))
+    val channel = grpcCleanup.register(buildMutualTlsChannel("$HOSTNAME:$port", clientCerts))
     val client = HealthCoroutineStub(channel)
 
     val response = runBlocking {
@@ -158,7 +161,7 @@ class TransportSecurityTest {
   }
 
   companion object {
-    val logger: Logger = Logger.getLogger(this::class.java.canonicalName)
+    private val logger: Logger = Logger.getLogger(this::class.java.canonicalName)
 
     @JvmField @ClassRule val temporaryFolder: TemporaryFolder = TemporaryFolder()
 

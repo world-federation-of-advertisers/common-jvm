@@ -1,0 +1,6 @@
+package(default_visibility = ["//visibility:public"])
+
+alias(
+    name = "annotations",
+    actual = "@maven//:org_jetbrains_annotations",
+)
