@@ -59,6 +59,26 @@ class SpannerFlags {
   var emulatorHost: String? = null
     private set
 
+  @CommandLine.Option(
+    names = ["--spanner-transaction-timeout"],
+    description = ["Timeout duration for read-write transactions"],
+    defaultValue = "1m"
+  )
+  lateinit var transactionTimeout: Duration
+    private set
+
+  @CommandLine.Option(
+    names = ["--spanner-transaction-max-threads"],
+    description =
+      [
+        "Maximum number of threads to use for read-write transactions.",
+        "Defaults to number of processors * 2.",
+        "Ignored when --spanner-emulator-host is specified."
+      ],
+  )
+  var maxTransactionThreads: Int = DEFAULT_THREAD_POOL_SIZE
+    private set
+
   val jdbcConnectionString: String
     get() {
       val databasePath = "projects/$projectName/instances/$instanceName/databases/$databaseName"
@@ -68,4 +88,8 @@ class SpannerFlags {
         "jdbc:cloudspanner://$emulatorHost/$databasePath;usePlainText=true;autoConfigEmulator=true"
       }
     }
+
+  companion object {
+    private val DEFAULT_THREAD_POOL_SIZE = Runtime.getRuntime().availableProcessors() * 2
+  }
 }

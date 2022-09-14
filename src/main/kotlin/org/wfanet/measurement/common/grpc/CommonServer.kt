@@ -23,8 +23,11 @@ import io.grpc.protobuf.services.HealthStatusManager
 import io.netty.handler.ssl.ClientAuth
 import io.netty.handler.ssl.SslContext
 import java.io.IOException
-import java.util.concurrent.Executor
-import java.util.concurrent.Executors
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.ThreadPoolExecutor
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.logging.Level
 import java.util.logging.Logger
 import kotlin.properties.Delegates
@@ -41,8 +44,13 @@ private constructor(
   services: Iterable<ServerServiceDefinition>,
   sslContext: SslContext?,
 ) {
-  private val executor: Executor = Executors.newFixedThreadPool(threadPoolSize)
+  init {
+    require(threadPoolSize > 1)
+  }
+  private val executor: ExecutorService =
+    ThreadPoolExecutor(1, threadPoolSize, 60L, TimeUnit.SECONDS, LinkedBlockingQueue())
   private val healthStatusManager = HealthStatusManager()
+  private val started = AtomicBoolean(false)
 
   val port: Int
     get() = server.port
@@ -57,6 +65,8 @@ private constructor(
    */
   @get:VisibleForTesting
   val server: Server by lazy {
+    logger.info { "$nameForLogging thread pool size: $threadPoolSize" }
+
     NettyServerBuilder.forPort(port)
       .apply {
         executor(executor)
@@ -76,7 +86,9 @@ private constructor(
   }
 
   @Throws(IOException::class)
+  @Synchronized
   fun start(): CommonServer {
+    check(!started.get()) { "$nameForLogging already started" }
     server.start()
     server.services.forEach {
       healthStatusManager.setStatus(it.serviceDescriptor.name, ServingStatus.SERVING)
@@ -90,22 +102,35 @@ private constructor(
           override fun run() {
             // Use stderr here since the logger may have been reset by its JVM shutdown hook.
             System.err.println("*** $nameForLogging shutting down...")
-            this@CommonServer.stop()
+            this@CommonServer.shutdown()
+            blockUntilShutdown()
             System.err.println("*** $nameForLogging shut down")
           }
         }
       )
+    started.set(true)
     return this
   }
 
-  private fun stop() {
-    healthServer.shutdownNow()
+  private fun shutdown() {
+    if (!started.get()) {
+      return
+    }
+
+    healthServer.shutdown()
     server.shutdown()
+    executor.shutdown()
   }
 
   @Throws(InterruptedException::class)
   fun blockUntilShutdown() {
+    if (!started.get()) {
+      return
+    }
+
     server.awaitTermination()
+    healthServer.awaitTermination()
+    executor.awaitTermination(Long.MAX_VALUE, TimeUnit.MILLISECONDS)
   }
 
   class Flags {
