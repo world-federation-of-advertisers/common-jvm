@@ -16,19 +16,23 @@ package org.wfanet.measurement.common.grpc.testing
 
 import io.grpc.BindableService
 import io.grpc.Channel
+import io.grpc.Server
 import io.grpc.ServerServiceDefinition
 import io.grpc.inprocess.InProcessChannelBuilder
 import io.grpc.inprocess.InProcessServerBuilder
 import io.grpc.testing.GrpcCleanupRule
+import java.util.concurrent.Executor
 import org.junit.rules.TestRule
 import org.junit.runner.Description
 import org.junit.runners.model.Statement
+import org.wfanet.measurement.common.grpc.ErrorLoggingServerInterceptor
 import org.wfanet.measurement.common.grpc.LoggingServerInterceptor
 
 class GrpcTestServerRule(
   customServerName: String? = null,
   private val logAllRequests: Boolean = false,
-  private val addServices: Builder.() -> Unit
+  private val executor: Executor? = null,
+  private val addServices: Builder.() -> Unit,
 ) : TestRule {
   class Builder(val channel: Channel, private val serverBuilder: InProcessServerBuilder) {
     fun addService(service: BindableService) {
@@ -49,14 +53,26 @@ class GrpcTestServerRule(
     val newStatement =
       object : Statement() {
         override fun evaluate() {
-          val serverBuilder = InProcessServerBuilder.forName(serverName).directExecutor()
+          val server: Server =
+            InProcessServerBuilder.forName(serverName)
+              .apply {
+                if (executor == null) {
+                  directExecutor()
+                } else {
+                  executor(executor)
+                }
 
-          if (logAllRequests) {
-            serverBuilder.intercept(LoggingServerInterceptor())
-          }
+                if (logAllRequests) {
+                  intercept(LoggingServerInterceptor)
+                } else {
+                  intercept(ErrorLoggingServerInterceptor)
+                }
 
-          Builder(channel, serverBuilder).addServices()
-          grpcCleanupRule.register(serverBuilder.build().start())
+                Builder(channel, this).addServices()
+              }
+              .build()
+
+          grpcCleanupRule.register(server.start())
           base.evaluate()
         }
       }

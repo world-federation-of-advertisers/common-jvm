@@ -24,56 +24,93 @@ import io.grpc.ForwardingClientCall
 import io.grpc.ForwardingClientCallListener.SimpleForwardingClientCallListener
 import io.grpc.Metadata
 import io.grpc.MethodDescriptor
+import io.grpc.Status
+import java.util.concurrent.atomic.AtomicLong
 import java.util.logging.Level
 import java.util.logging.Logger
 import org.wfanet.measurement.common.truncateByteFields
 
 /** Logs all gRPC requests and responses for clients. */
-class LoggingClientInterceptor : ClientInterceptor {
+object LoggingClientInterceptor : ClientInterceptor {
+  private const val BYTES_TO_LOG = 100
+  private val logger: Logger = Logger.getLogger(this::class.java.name)
+  private val threadName: String
+    get() = Thread.currentThread().name
+  private val requestCounter = AtomicLong()
+
   override fun <ReqT, RespT> interceptCall(
     method: MethodDescriptor<ReqT, RespT>,
     callOptions: CallOptions,
     next: Channel
   ): ClientCall<ReqT, RespT> {
+    val requestId = requestCounter.incrementAndGet()
+    val serviceName = method.serviceName
+    val methodName = method.bareMethodName
     val nextCall = next.newCall(method, callOptions)
+
     return object : ForwardingClientCall.SimpleForwardingClientCall<ReqT, RespT>(nextCall) {
-      override fun start(responseListener: Listener<RespT>?, headers: Metadata?) {
-        logger.logp(Level.INFO, method.fullMethodName, "gRPC headers", "[$threadName] $headers")
+      override fun start(responseListener: Listener<RespT>, headers: Metadata) {
+        logger.logp(
+          Level.INFO,
+          serviceName,
+          methodName,
+          "[$threadName] gRPC client $requestId headers: $headers"
+        )
         val listener =
           object : SimpleForwardingClientCallListener<RespT>(responseListener) {
             override fun onMessage(message: RespT) {
               val messageToLog = (message as Message).truncateByteFields(BYTES_TO_LOG)
               logger.logp(
                 Level.INFO,
-                method.fullMethodName,
-                "gRPC response",
-                "[$threadName] $messageToLog"
+                serviceName,
+                methodName,
+                "[$threadName] gRPC client $requestId response: $messageToLog"
               )
               super.onMessage(message)
+            }
+
+            override fun onClose(status: Status, trailers: Metadata) {
+              if (status.isOk) {
+                logger.logp(
+                  Level.INFO,
+                  serviceName,
+                  methodName,
+                  "[$threadName] gRPC client $requestId complete"
+                )
+              } else {
+                val message =
+                  listOfNotNull(
+                      "[$threadName]",
+                      "gRPC client $requestId error:",
+                      status.code.name,
+                      status.description,
+                    )
+                    .joinToString(" ")
+                logger.logp(Level.INFO, serviceName, methodName, message, status.cause)
+              }
+              super.onClose(status, trailers)
             }
           }
         super.start(listener, headers)
       }
+
       override fun sendMessage(message: ReqT) {
         val messageToLog = (message as Message).truncateByteFields(BYTES_TO_LOG)
         logger.logp(
           Level.INFO,
-          method.fullMethodName,
-          "gRPC request",
-          "[$threadName] $messageToLog"
+          serviceName,
+          methodName,
+          "[$threadName] gRPC client $requestId request: $messageToLog"
         )
         super.sendMessage(message)
       }
     }
   }
-
-  companion object {
-    private val logger: Logger = Logger.getLogger(this::class.java.name)
-    private const val BYTES_TO_LOG = 100
-    private val threadName: String
-      get() = Thread.currentThread().name
-  }
 }
+
+/** Psuedo-constructor for backwards-compatibility. */
+@Deprecated("Use singleton object", ReplaceWith("LoggingClientInterceptor"))
+fun LoggingClientInterceptor() = LoggingClientInterceptor
 
 /**
  * Enables [LoggingClientInterceptor] on the returned [Channel].
@@ -82,7 +119,7 @@ class LoggingClientInterceptor : ClientInterceptor {
  */
 fun Channel.withVerboseLogging(enable: Boolean = true): Channel {
   return if (enable) {
-    ClientInterceptors.interceptForward(this, LoggingClientInterceptor())
+    ClientInterceptors.interceptForward(this, LoggingClientInterceptor)
   } else {
     this
   }

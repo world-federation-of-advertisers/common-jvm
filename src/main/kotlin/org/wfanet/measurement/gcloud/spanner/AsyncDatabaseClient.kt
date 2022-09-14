@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+@file:OptIn(ExperimentalTime::class)
+
 package org.wfanet.measurement.gcloud.spanner
 
 import com.google.api.core.ApiFuture
@@ -37,6 +39,10 @@ import java.util.concurrent.Executor
 import java.util.concurrent.Executors
 import java.util.logging.Level
 import java.util.logging.Logger
+import kotlin.time.ExperimentalTime
+import kotlin.time.TimeSource
+import kotlin.time.TimedValue
+import kotlin.time.measureTimedValue
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -173,9 +179,13 @@ class AsyncDatabaseClient(
   private inner class TransactionRunnerImpl(private val runner: AsyncRunner) : TransactionRunner {
     override suspend fun <R> execute(doWork: TransactionWork<R>): R {
       try {
-        return runner.run(executor, transactionTimeout) { txn ->
-          doWork(TransactionContextImpl(txn))
+        val timedResult: TimedValue<R> = measureTimedValue {
+          runner.run(executor, transactionTimeout) { txn -> doWork(TransactionContextImpl(txn)) }
         }
+        logger.info {
+          "DEBUG: Transaction completed in ${timedResult.duration.inWholeMilliseconds}ms"
+        }
+        return timedResult.value
       } catch (e: SpannerException) {
         throw e.wrappedException ?: e
       }
@@ -244,6 +254,7 @@ private class TransactionContextImpl(private val txn: TransactionContext) :
 
 /** Produces a [Flow] from the results in this [AsyncResultSet]. */
 private fun AsyncResultSet.asFlow(): Flow<Struct> {
+  val start = TimeSource.Monotonic.markNow()
   return callbackFlow<Struct> {
       fun resumeWhenReady(row: Struct) {
         launch(CoroutineName(::resumeWhenReady.name)) {
@@ -291,11 +302,15 @@ private fun AsyncResultSet.asFlow(): Flow<Struct> {
 
       completionFuture.await()
     }
-    .onCompletion {
+    .onCompletion { cause ->
       // Ensure that the AsyncResultSet is closed. Handling this in an awaitClose block alone can
       // result in leaked Spanner sessions, as the collector doesn't appear to wait for that block
       // to be called when flow collection is aborted.
       close()
+
+      AsyncDatabaseClient.logger.log(Level.INFO, cause) {
+        "DEBUG: Flow completed in ${start.elapsedNow().inWholeMilliseconds}ms"
+      }
     }
     .buffer(Channel.RENDEZVOUS)
 }
