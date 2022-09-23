@@ -37,6 +37,10 @@ import java.util.concurrent.Executor
 import java.util.concurrent.Executors
 import java.util.logging.Level
 import java.util.logging.Logger
+import kotlin.time.ExperimentalTime
+import kotlin.time.TimeSource
+import kotlin.time.TimedValue
+import kotlin.time.measureTimedValue
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.awaitClose
@@ -173,11 +177,14 @@ class AsyncDatabaseClient(
   }
 
   private inner class TransactionRunnerImpl(private val runner: AsyncRunner) : TransactionRunner {
+    @OptIn(ExperimentalTime::class) // For `measureTimedValue`.
     override suspend fun <R> execute(doWork: TransactionWork<R>): R {
       try {
-        return runner.run(executor, transactionTimeout) { txn ->
-          doWork(TransactionContextImpl(txn))
+        val timedResult: TimedValue<R> = measureTimedValue {
+          runner.run(executor, transactionTimeout) { txn -> doWork(TransactionContextImpl(txn)) }
         }
+        logger.fine { "Transaction completed in ${timedResult.duration.inWholeMilliseconds}ms" }
+        return timedResult.value
       } catch (e: SpannerException) {
         throw e.wrappedException ?: e
       }
@@ -245,7 +252,9 @@ private class TransactionContextImpl(private val txn: TransactionContext) :
 }
 
 /** Produces a [Flow] from the results in this [AsyncResultSet]. */
+@OptIn(ExperimentalTime::class) // For `TimeSource`.
 private fun AsyncResultSet.asFlow(): Flow<Struct> {
+  val start = TimeSource.Monotonic.markNow()
   return callbackFlow<Struct> {
       fun resumeWhenReady(row: Struct) {
         launch(CoroutineName(::resumeWhenReady.name)) {
@@ -299,10 +308,14 @@ private fun AsyncResultSet.asFlow(): Flow<Struct> {
         this@asFlow.close()
       }
     }
-    .onCompletion {
+    .onCompletion { cause ->
       // For some reason, having an onCompletion specified here is significant. Without it,
       // sometimes the collector will hang. See
       // https://github.com/Kotlin/kotlinx.coroutines/issues/3459
+
+      AsyncDatabaseClient.logger.log(Level.FINE, cause) {
+        "Flow completed in ${start.elapsedNow().inWholeMilliseconds}ms"
+      }
     }
     .buffer(Channel.RENDEZVOUS)
 }
