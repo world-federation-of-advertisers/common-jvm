@@ -17,6 +17,11 @@ package org.wfanet.measurement.gcloud.spanner
 import com.google.cloud.spanner.DatabaseId
 import com.google.cloud.spanner.Spanner
 import java.time.Duration
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
+import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.ThreadPoolExecutor
+import java.util.concurrent.TimeUnit
 import java.util.logging.Logger
 import kotlinx.coroutines.TimeoutCancellationException
 
@@ -29,13 +34,40 @@ class SpannerDatabaseConnector(
   instanceName: String,
   databaseName: String,
   private val readyTimeout: Duration,
+  transactionTimeout: Duration,
+  maxTransactionThreads: Int,
   emulatorHost: String?,
 ) : AutoCloseable {
-  private val spanner: Spanner = buildSpanner(projectName, emulatorHost)
+  init {
+    require(maxTransactionThreads > 0)
+  }
+
+  private val spanner: Spanner =
+    buildSpanner(projectName, emulatorHost).also {
+      Runtime.getRuntime()
+        .addShutdownHook(
+          Thread {
+            System.err.println("Ensuring Spanner is closed...")
+            if (!it.isClosed) {
+              it.close()
+            }
+            System.err.println("Spanner closed")
+          }
+        )
+    }
+  private val transactionExecutor: Lazy<ExecutorService> = lazy {
+    if (emulatorHost == null) {
+      ThreadPoolExecutor(1, maxTransactionThreads, 60L, TimeUnit.SECONDS, LinkedBlockingQueue())
+    } else {
+      // Spanner emulator only supports a single read-write transaction at a time.
+      Executors.newSingleThreadExecutor()
+    }
+  }
 
   val databaseId: DatabaseId = DatabaseId.of(projectName, instanceName, databaseName)
-
-  val databaseClient: AsyncDatabaseClient by lazy { spanner.getAsyncDatabaseClient(databaseId) }
+  val databaseClient: AsyncDatabaseClient by lazy {
+    spanner.getAsyncDatabaseClient(databaseId, transactionExecutor.value, transactionTimeout)
+  }
 
   /**
    * Suspends until [databaseClient] is ready, throwing a
@@ -47,6 +79,9 @@ class SpannerDatabaseConnector(
 
   override fun close() {
     spanner.close()
+    if (transactionExecutor.isInitialized()) {
+      transactionExecutor.value.shutdown()
+    }
   }
 
   /**
@@ -56,7 +91,9 @@ class SpannerDatabaseConnector(
   suspend fun <R> usingSpanner(block: suspend (spanner: SpannerDatabaseConnector) -> R): R {
     use { spanner ->
       try {
+        logger.info { "Waiting for Spanner connection to $databaseId to be ready..." }
         spanner.waitUntilReady()
+        logger.info { "Spanner connection to $databaseId ready" }
       } catch (e: TimeoutCancellationException) {
         // Closing Spanner can take a long time (e.g. 1 minute) and delay the
         // exception being surfaced, so we log here to give immediate feedback.
@@ -79,7 +116,9 @@ private fun SpannerFlags.toSpannerDatabaseConnector(): SpannerDatabaseConnector 
     instanceName = instanceName,
     databaseName = databaseName,
     readyTimeout = readyTimeout,
-    emulatorHost = emulatorHost
+    transactionTimeout = transactionTimeout,
+    maxTransactionThreads = maxTransactionThreads,
+    emulatorHost = emulatorHost,
   )
 }
 
