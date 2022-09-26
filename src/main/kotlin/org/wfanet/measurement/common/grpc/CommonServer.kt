@@ -41,6 +41,7 @@ private constructor(
   port: Int,
   healthPort: Int,
   threadPoolSize: Int,
+  verboseGrpcLogging: Boolean,
   services: Iterable<ServerServiceDefinition>,
   sslContext: SslContext?,
 ) {
@@ -66,6 +67,9 @@ private constructor(
   @get:VisibleForTesting
   val server: Server by lazy {
     logger.info { "$nameForLogging thread pool size: $threadPoolSize" }
+    if (verboseGrpcLogging) {
+      logger.info { "$nameForLogging verbose gRPC server logging enabled" }
+    }
 
     NettyServerBuilder.forPort(port)
       .apply {
@@ -74,6 +78,11 @@ private constructor(
           sslContext(sslContext)
         }
         services.forEach { addService(it) }
+        if (verboseGrpcLogging) {
+          intercept(LoggingServerInterceptor)
+        } else {
+          intercept(ErrorLoggingServerInterceptor)
+        }
       }
       .build()
   }
@@ -199,8 +208,9 @@ private constructor(
         port,
         healthPort,
         threadPoolSize,
-        services.run { if (verboseGrpcLogging) map { it.withVerboseLogging() } else this },
-        certs?.toServerTlsContext(clientAuth)
+        verboseGrpcLogging,
+        services,
+        certs?.toServerTlsContext(clientAuth),
       )
     }
 
