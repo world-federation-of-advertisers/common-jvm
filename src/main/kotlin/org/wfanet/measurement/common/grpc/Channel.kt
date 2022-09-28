@@ -16,6 +16,7 @@ package org.wfanet.measurement.common.grpc
 
 import io.grpc.ManagedChannel
 import io.grpc.netty.NettyChannelBuilder
+import io.netty.channel.ChannelOption
 import java.security.cert.X509Certificate
 import java.time.Duration
 import org.wfanet.measurement.common.crypto.SigningCerts
@@ -32,12 +33,18 @@ import org.wfanet.measurement.common.crypto.SigningCerts
 fun buildMutualTlsChannel(
   target: String,
   clientCerts: SigningCerts,
-  hostName: String? = null
+  hostName: String? = null,
+  options: Map<ChannelOption<Any>, Any>? = null,
 ): ManagedChannel {
   val channelBuilder =
     NettyChannelBuilder.forTarget(target)
       .directExecutor() // See https://github.com/grpc/grpc-kotlin/issues/263
       .sslContext(clientCerts.toClientTlsContext())
+  if (options != null) {
+    for (option in options) {
+      channelBuilder.withOption(option.key, option.value)
+    }
+  }
   return if (hostName == null) {
     channelBuilder.build()
   } else {
@@ -56,7 +63,7 @@ fun buildMutualTlsChannel(
 fun buildTlsChannel(
   target: String,
   trustedServerCerts: Collection<X509Certificate>,
-  hostName: String? = null
+  hostName: String? = null,
 ): ManagedChannel {
   val channelBuilder =
     NettyChannelBuilder.forTarget(target)

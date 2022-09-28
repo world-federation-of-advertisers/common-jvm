@@ -10,6 +10,7 @@ kt_jvm_library(
         "//imports/java/io/grpc:api",
         "//imports/java/io/grpc/netty",
         "//imports/java/io/grpc/protobuf/services",
+        "//imports/java/io/netty/transport",
         "//imports/java/org/jetbrains/annotations",
         "//imports/java/picocli",
         "//imports/kotlin/io/grpc/kotlin:stub",
