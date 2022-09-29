@@ -32,12 +32,18 @@ import org.wfanet.measurement.common.crypto.SigningCerts
 fun buildMutualTlsChannel(
   target: String,
   clientCerts: SigningCerts,
-  hostName: String? = null
+  hostName: String? = null,
+  serviceConfig: Map<String, *>? = null,
 ): ManagedChannel {
   val channelBuilder =
     NettyChannelBuilder.forTarget(target)
       .directExecutor() // See https://github.com/grpc/grpc-kotlin/issues/263
       .sslContext(clientCerts.toClientTlsContext())
+
+  if (serviceConfig != null) {
+    channelBuilder.defaultServiceConfig(serviceConfig).enableRetry()
+  }
+
   return if (hostName == null) {
     channelBuilder.build()
   } else {
