@@ -57,6 +57,10 @@ internal class ReadWriteContextImpl private constructor(connection: Connection) 
     close()
   }
 
+  override suspend fun rollbackTransaction() {
+    connection.rollbackTransaction().awaitFirstOrNull()
+  }
+
   companion object {
     suspend fun create(
       connection: Connection,
