@@ -149,7 +149,8 @@ class PostgresDatabaseClientTest {
     assertThat(insertResult.numRowsUpdated).isEqualTo(1L)
 
     val query = boundStatement("SELECT * FROM Cars")
-    var selectResult: Flow<Car> = readWriteContext.executeQuery(query).consume { row -> Car.parseFrom(row) }
+    var selectResult: Flow<Car> =
+      readWriteContext.executeQuery(query).consume { row -> Car.parseFrom(row) }
     assertThat(selectResult.toList()).hasSize(1)
 
     readWriteContext.rollbackTransaction()
