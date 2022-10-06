@@ -19,6 +19,7 @@ package org.wfanet.measurement.common.db.r2dbc
 import io.r2dbc.spi.Connection
 import io.r2dbc.spi.TransactionDefinition
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.cancellable
 import kotlinx.coroutines.flow.flatMapConcat
 import kotlinx.coroutines.flow.fold
 import kotlinx.coroutines.reactive.asFlow
@@ -48,6 +49,7 @@ internal class ReadWriteContextImpl private constructor(connection: Connection) 
         .execute()
         .asFlow()
         .flatMapConcat { it.rowsUpdated.asFlow() }
+        .cancellable()
         .fold(0L) { sum: Long, rowsUpdated: Long -> sum + rowsUpdated }
     return StatementResult(numRowsUpdated)
   }
