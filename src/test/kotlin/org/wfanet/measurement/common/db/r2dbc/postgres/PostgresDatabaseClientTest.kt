@@ -153,7 +153,7 @@ class PostgresDatabaseClientTest {
       readWriteContext.executeQuery(query).consume { row -> Car.parseFrom(row) }
     assertThat(selectResult.toList()).hasSize(1)
 
-    readWriteContext.rollbackTransaction()
+    readWriteContext.rollback()
     selectResult = readWriteContext.executeQuery(query).consume { row -> Car.parseFrom(row) }
     assertThat(selectResult.toList()).hasSize(0)
   }
