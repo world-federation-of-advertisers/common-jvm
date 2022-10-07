@@ -132,6 +132,33 @@ class PostgresDatabaseClientTest {
   }
 
   @Test
+  fun `rollbackTransaction rolls back the transaction`() = runBlocking {
+    val car = Car(carId = InternalId(2), year = 2020, make = "Tesla", model = "Model 3")
+    val insertStatement =
+      boundStatement("INSERT INTO Cars (CarId, Year, Make, Model) VALUES ($1, $2, $3, $4)") {
+        addBinding {
+          bind("$1", car.carId)
+          bind("$2", car.year)
+          bind("$3", car.make)
+          bind("$4", car.model)
+        }
+      }
+
+    val readWriteContext = dbClient.readWriteTransaction()
+    val insertResult = readWriteContext.executeStatement(insertStatement)
+    assertThat(insertResult.numRowsUpdated).isEqualTo(1L)
+
+    val query = boundStatement("SELECT * FROM Cars")
+    var selectResult: Flow<Car> =
+      readWriteContext.executeQuery(query).consume { row -> Car.parseFrom(row) }
+    assertThat(selectResult.toList()).hasSize(1)
+
+    readWriteContext.rollback()
+    selectResult = readWriteContext.executeQuery(query).consume { row -> Car.parseFrom(row) }
+    assertThat(selectResult.toList()).hasSize(0)
+  }
+
+  @Test
   fun `executeQuery reads writes from same transaction`(): Unit = runBlocking {
     val insertStatement =
       boundStatement(
