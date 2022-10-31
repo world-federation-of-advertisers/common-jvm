@@ -27,7 +27,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.time.withTimeout
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
@@ -43,7 +43,7 @@ class MinimumIntervalThrottlerTest {
 
       val latch = CountDownLatch(1)
 
-      withTimeout(Duration.ofSeconds(4).toMillis()) { throttler.onReady { latch.countDown() } }
+      withTimeout(Duration.ofSeconds(4)) { throttler.onReady { latch.countDown() } }
 
       assertEquals(latch.count, 0)
     }

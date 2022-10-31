@@ -49,7 +49,6 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.time.withTimeout
-import kotlinx.coroutines.withTimeout
 import org.wfanet.measurement.gcloud.common.DirectExecutor
 import org.wfanet.measurement.gcloud.common.apiFuture
 import org.wfanet.measurement.gcloud.common.await
@@ -114,7 +113,7 @@ class AsyncDatabaseClient(
     // attempting to do this would block forever if an emulator host was specified
     // with nothing listening there. Therefore, we use the async API.
     val results = singleUse().executeQuery(Statement.of("SELECT 1"))
-    withTimeout(timeout.toMillis()) {
+    withTimeout(timeout) {
       checkNotNull(results.singleOrNull()) { "No results from Spanner ready query" }
     }
   }
