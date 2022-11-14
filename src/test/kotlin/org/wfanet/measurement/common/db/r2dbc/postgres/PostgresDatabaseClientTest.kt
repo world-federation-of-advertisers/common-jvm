@@ -49,7 +49,8 @@ class PostgresDatabaseClientTest {
           (2, 1997, 'Honda', 'CR-V'),
           (3, 2012, 'Audi', 'S4'),
           (4, 2020, 'Tesla', 'Model 3')
-        """.trimIndent()
+        """
+          .trimIndent()
       )
 
     val result = runBlocking {
@@ -169,7 +170,8 @@ class PostgresDatabaseClientTest {
           (2, 1997, 'Honda', 'CR-V'),
           (3, 2012, 'Audi', 'S4'),
           (4, 2020, 'Tesla', 'Model 3')
-        """.trimIndent()
+        """
+          .trimIndent()
       )
     val txn: ReadWriteContext = dbClient.readWriteTransaction()
     txn.executeStatement(insertStatement)
@@ -194,7 +196,8 @@ class PostgresDatabaseClientTest {
           (2, 1997, 'Honda', 'CR-V'),
           (3, 2012, 'Audi', 'S4'),
           (4, 2020, 'Tesla', 'Model 3')
-        """.trimIndent()
+        """
+          .trimIndent()
       )
     val writeTxn: ReadWriteContext = dbClient.readWriteTransaction()
     writeTxn.executeStatement(insertStatement)
