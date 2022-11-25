@@ -44,6 +44,7 @@ private constructor(
       .apply {
         sslContext?.let { sslContext(it) }
         services.forEach { addService(it) }
+        maxInboundMessageSize(20 * 1024 * 1024) // 20MiB
       }
       .build()
   }
