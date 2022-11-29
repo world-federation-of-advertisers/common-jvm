@@ -137,7 +137,9 @@ class TransportSecurityTest {
     startCommonServer(ClientAuth.NONE)
 
     val channel =
-      grpcCleanup.register(buildTlsChannel("$HOSTNAME:$port", clientCerts.trustedCertificates))
+      grpcCleanup.register(
+        buildTlsChannel("$HOSTNAME:$port", clientCerts.trustedCertificates.values)
+      )
     val client = HealthCoroutineStub(channel)
 
     val response = runBlocking {

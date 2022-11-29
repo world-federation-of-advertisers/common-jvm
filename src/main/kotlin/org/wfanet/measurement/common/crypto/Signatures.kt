@@ -18,6 +18,10 @@ import com.google.protobuf.ByteString
 import com.google.protobuf.kotlin.toByteString
 import java.security.PrivateKey
 import java.security.Signature
+import java.security.cert.CertPathValidator
+import java.security.cert.CertPathValidatorException
+import java.security.cert.PKIXParameters
+import java.security.cert.TrustAnchor
 import java.security.cert.X509Certificate
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Deferred
@@ -26,6 +30,8 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.onEach
+
+private const val CERT_PATH_VALIDATOR_ALGORITHM = "PKIX"
 
 /** @see [Signature.update] */
 fun Signature.update(bytes: ByteString) {
@@ -154,3 +160,19 @@ fun X509Certificate.verifySignedFlow(
   data: Flow<ByteString>,
   signature: ByteString,
 ): Flow<ByteString> = data.verifying(this, signature)
+
+/**
+ * Validates this [X509Certificate], ensuring that it was issued by [trustedIssuer].
+ *
+ * Note that this does not check for certificate revocation.
+ *
+ * @throws CertPathValidatorException if the certificate does not validate
+ */
+fun X509Certificate.validate(trustedIssuer: X509Certificate) {
+  val trustAnchor = TrustAnchor(trustedIssuer, null)
+  val validator = CertPathValidator.getInstance(CERT_PATH_VALIDATOR_ALGORITHM)
+  validator.validate(
+    generateCertPath(listOf(this)),
+    PKIXParameters(setOf(trustAnchor)).also { it.isRevocationEnabled = false }
+  )
+}
