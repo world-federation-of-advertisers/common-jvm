@@ -65,7 +65,7 @@ private constructor(
    * Visible only for testing.
    */
   @get:VisibleForTesting
-  val server: Server by lazy {
+  internal val server: Server by lazy {
     logger.info { "$nameForLogging thread pool size: $threadPoolSize" }
     if (verboseGrpcLogging) {
       logger.info { "$nameForLogging verbose gRPC server logging enabled" }
@@ -121,7 +121,7 @@ private constructor(
     return this
   }
 
-  private fun shutdown() {
+  fun shutdown() {
     if (!started.get()) {
       return
     }
@@ -220,16 +220,9 @@ private constructor(
       nameForLogging: String,
       services: Iterable<ServerServiceDefinition>
     ): CommonServer {
-      val certs =
-        SigningCerts.fromPemFiles(
-          certificateFile = flags.tlsFlags.certFile,
-          privateKeyFile = flags.tlsFlags.privateKeyFile,
-          trustedCertCollectionFile = flags.tlsFlags.certCollectionFile
-        )
-
       return fromParameters(
         flags.debugVerboseGrpcLogging,
-        certs,
+        flags.tlsFlags.signingCerts,
         if (flags.clientAuthRequired) ClientAuth.REQUIRE else ClientAuth.NONE,
         nameForLogging,
         services,

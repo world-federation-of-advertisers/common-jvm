@@ -24,6 +24,7 @@ import java.security.KeyPairGenerator
 import java.security.PrivateKey
 import java.security.Provider
 import java.security.Security
+import java.security.cert.CertPath
 import java.security.cert.CertificateFactory
 import java.security.cert.X509Certificate
 import java.security.spec.KeySpec
@@ -94,3 +95,6 @@ fun KeySpec.toPrivateKey(algorithm: String): PrivateKey {
 fun generateKeyPair(keyAlgorithm: String): KeyPair {
   return KeyPairGenerator.getInstance(keyAlgorithm, jceProvider).genKeyPair()
 }
+
+fun generateCertPath(certificates: List<X509Certificate>): CertPath =
+  certFactory.generateCertPath(certificates)

@@ -14,14 +14,24 @@
 
 package org.wfanet.measurement.common.crypto
 
+import com.google.protobuf.ByteString
 import java.io.File
 import java.security.cert.X509Certificate
 
 /** Certificates and associated private key for digital signatures. */
 data class SigningCerts(
   val privateKeyHandle: SigningKeyHandle,
-  val trustedCertificates: Collection<X509Certificate>
+  /** [Map] of subject key identifier (SKID) to trusted [X509Certificate]. */
+  val trustedCertificates: Map<ByteString, X509Certificate>
 ) {
+  constructor(
+    privateKeyHandle: SigningKeyHandle,
+    trustedCertificates: Iterable<X509Certificate>
+  ) : this(
+    privateKeyHandle,
+    trustedCertificates.associateBy { requireNotNull(it.subjectKeyIdentifier) }
+  )
+
   companion object {
     fun fromPemFiles(
       certificateFile: File,
