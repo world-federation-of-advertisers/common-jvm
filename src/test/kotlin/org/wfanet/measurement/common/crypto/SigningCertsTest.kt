@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 The Cross-Media Measurement Authors
+ * Copyright 2022 The Cross-Media Measurement Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,27 +17,32 @@
 package org.wfanet.measurement.common.crypto
 
 import com.google.common.truth.Truth.assertThat
-import com.google.protobuf.kotlin.toByteStringUtf8
+import java.security.cert.X509Certificate
+import kotlin.test.assertFailsWith
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 import org.wfanet.measurement.common.crypto.testing.TestData
-import org.wfanet.measurement.common.crypto.testing.loadSigningKey
 
 @RunWith(JUnit4::class)
-class SigningKeyHandleTest {
+class SigningCertsTest {
   @Test
-  fun `sign generates valid signature`() {
-    val signingKey =
-      loadSigningKey(TestData.FIXED_SERVER_CERT_DER_FILE, TestData.FIXED_SERVER_KEY_DER_FILE)
-
-    val signature = signingKey.sign(MESSAGE_BINARY)
-
-    assertThat(signingKey.certificate.verifySignature(MESSAGE_BINARY, signature)).isTrue()
+  fun `constructor throws if trusted certificate AKID and SKID do not match`() {
+    val exception =
+      assertFailsWith<IllegalArgumentException> {
+        SigningCerts(SERVER_SIGNING_KEY, mapOf(SERVER_CERT.subjectKeyIdentifier!! to SERVER_CERT))
+      }
+    assertThat(exception).hasMessageThat().ignoringCase().contains("root")
   }
 
   companion object {
-    private const val MESSAGE = "A message to sign"
-    private val MESSAGE_BINARY = MESSAGE.toByteStringUtf8()
+    private val SERVER_CERT: X509Certificate by lazy {
+      readCertificate(TestData.FIXED_SERVER_CERT_PEM_FILE)
+    }
+    private val SERVER_SIGNING_KEY: SigningKeyHandle by lazy {
+      val privateKey =
+        readPrivateKey(TestData.FIXED_SERVER_KEY_FILE, SERVER_CERT.publicKey.algorithm)
+      SigningKeyHandle(SERVER_CERT, privateKey)
+    }
   }
 }

@@ -17,6 +17,7 @@ package org.wfanet.measurement.common.crypto
 import com.google.protobuf.ByteString
 import java.io.File
 import java.security.cert.X509Certificate
+import org.wfanet.measurement.common.toHexString
 
 /** Certificates and associated private key for digital signatures. */
 data class SigningCerts(
@@ -24,12 +25,30 @@ data class SigningCerts(
   /** [Map] of subject key identifier (SKID) to trusted [X509Certificate]. */
   val trustedCertificates: Map<ByteString, X509Certificate>
 ) {
+  init {
+    for ((skid, certificate) in trustedCertificates) {
+      val akid =
+        requireNotNull(certificate.authorityKeyIdentifier) {
+          "Trusted certificate with subject key identifier (SKID) ${skid.toHexString()} missing " +
+            "authority key identifier (AKID)"
+        }
+      require(skid == akid) {
+        "Trusted certificate with subject key identifier (SKID) ${skid.toHexString()} is not a " +
+          "root certificate authority (CA) certificate"
+      }
+    }
+  }
+
   constructor(
     privateKeyHandle: SigningKeyHandle,
     trustedCertificates: Iterable<X509Certificate>
   ) : this(
     privateKeyHandle,
-    trustedCertificates.associateBy { requireNotNull(it.subjectKeyIdentifier) }
+    trustedCertificates.associateBy {
+      requireNotNull(it.subjectKeyIdentifier) {
+        "Trusted certificate missing subject key identifier (SKID)"
+      }
+    }
   )
 
   companion object {
