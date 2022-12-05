@@ -81,3 +81,17 @@ kt_jvm_test(
         "//src/main/kotlin/org/wfanet/measurement/common/crypto/testing",
     ],
 )
+
+kt_jvm_test(
+    name = "SigningCertsTest",
+    srcs = ["SigningCertsTest.kt"],
+    test_class = "org.wfanet.measurement.common.crypto.SigningCertsTest",
+    deps = [
+        "//imports/java/com/google/common/truth",
+        "//imports/java/org/junit",
+        "//imports/kotlin/kotlin/test",
+        "//src/main/kotlin/org/wfanet/measurement/common/crypto:pem_io",
+        "//src/main/kotlin/org/wfanet/measurement/common/crypto:signing_certs",
+        "//src/main/kotlin/org/wfanet/measurement/common/crypto/testing",
+    ],
+)

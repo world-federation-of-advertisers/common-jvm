@@ -106,5 +106,6 @@ kt_jvm_library(
         ":pem_io",
         ":security_provider",
         ":signing_key_storage",
+        "//src/main/kotlin/org/wfanet/measurement/common",
     ],
 )

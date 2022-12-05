@@ -28,12 +28,8 @@ import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 import org.wfanet.measurement.common.HexString
 import org.wfanet.measurement.common.asBufferedFlow
-import org.wfanet.measurement.common.crypto.testing.FIXED_CA_CERT_PEM_FILE
-import org.wfanet.measurement.common.crypto.testing.FIXED_CLIENT_CERT_PEM_FILE
-import org.wfanet.measurement.common.crypto.testing.FIXED_EXPIRED_CERT_PEM_FILE
-import org.wfanet.measurement.common.crypto.testing.FIXED_SERVER_CERT_PEM_FILE
-import org.wfanet.measurement.common.crypto.testing.FIXED_SERVER_KEY_FILE
 import org.wfanet.measurement.common.crypto.testing.SignatureSubject.Companion.assertThat
+import org.wfanet.measurement.common.crypto.testing.TestData
 import org.wfanet.measurement.common.flatten
 
 private val DATA =
@@ -140,11 +136,11 @@ class SignaturesTest {
   }
 
   companion object {
-    val certificate: X509Certificate = readCertificate(FIXED_SERVER_CERT_PEM_FILE)
-    val altCertificate: X509Certificate = readCertificate(FIXED_CLIENT_CERT_PEM_FILE)
-    val expiredCertificate: X509Certificate = readCertificate(FIXED_EXPIRED_CERT_PEM_FILE)
-    val issuerCertificate: X509Certificate = readCertificate(FIXED_CA_CERT_PEM_FILE)
+    val certificate: X509Certificate = readCertificate(TestData.FIXED_SERVER_CERT_PEM_FILE)
+    val altCertificate: X509Certificate = readCertificate(TestData.FIXED_CLIENT_CERT_PEM_FILE)
+    val expiredCertificate: X509Certificate = readCertificate(TestData.FIXED_EXPIRED_CERT_PEM_FILE)
+    val issuerCertificate: X509Certificate = readCertificate(TestData.FIXED_CA_CERT_PEM_FILE)
     val privateKey: PrivateKey =
-      readPrivateKey(FIXED_SERVER_KEY_FILE, certificate.publicKey.algorithm)
+      readPrivateKey(TestData.FIXED_SERVER_KEY_FILE, certificate.publicKey.algorithm)
   }
 }

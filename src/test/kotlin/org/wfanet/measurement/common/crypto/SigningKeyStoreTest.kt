@@ -21,8 +21,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
-import org.wfanet.measurement.common.crypto.testing.FIXED_SERVER_CERT_PEM_FILE
-import org.wfanet.measurement.common.crypto.testing.FIXED_SERVER_KEY_FILE
+import org.wfanet.measurement.common.crypto.testing.TestData
 import org.wfanet.measurement.common.flatten
 import org.wfanet.measurement.storage.testing.InMemoryStorageClient
 
@@ -62,9 +61,10 @@ class SigningKeyStoreTest {
 
   companion object {
     private val CONCATENATED_PEM: String =
-      FIXED_SERVER_CERT_PEM_FILE.readText() + FIXED_SERVER_KEY_FILE.readText()
+      TestData.FIXED_SERVER_CERT_PEM_FILE.readText() + TestData.FIXED_SERVER_KEY_FILE.readText()
 
-    private val certificate: X509Certificate = readCertificate(FIXED_SERVER_CERT_PEM_FILE)
-    private val privateKey = readPrivateKey(FIXED_SERVER_KEY_FILE, certificate.publicKey.algorithm)
+    private val certificate: X509Certificate = readCertificate(TestData.FIXED_SERVER_CERT_PEM_FILE)
+    private val privateKey =
+      readPrivateKey(TestData.FIXED_SERVER_KEY_FILE, certificate.publicKey.algorithm)
   }
 }
