@@ -99,8 +99,8 @@ fun Instant.toProtoTime(): Timestamp = timestamp {
 fun Timestamp.toInstant(): Instant = Instant.ofEpochSecond(seconds, nanos.toLong())
 
 fun Duration.toProtoDuration(): ProtoDuration = duration {
-  seconds = seconds
-  nanos = nanos
+  this.seconds = seconds
+  nanos = nano
 }
 
 fun ProtoDuration.toDuration(): Duration = Duration.ofSeconds(seconds, nanos.toLong())
