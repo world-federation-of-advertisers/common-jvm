@@ -49,14 +49,22 @@ class CommandLineTestingTest {
 
   @Test
   fun `default doesn't parse ISO-8601`() {
-    val output = capturingSystemOut { commandLineMain(HelloCommandLine(), args=arrayOf(NAME, "P1DT3H5M12.99S")) }
+    val output = capturingSystemOut {
+      commandLineMain(HelloCommandLine(), args = arrayOf(NAME, "P1DT3H5M12.99S"))
+    }
 
     assertThat(output).isEqualTo("Hello $NAME. The duration is $ZERO_DURATION")
   }
 
   @Test
   fun `passing in format parses ISO-8601`() {
-    val output = capturingSystemOut { commandLineMain(HelloCommandLine(), args=arrayOf(NAME, "P1DT3H5M12.99S"), DurationFormat.ISO_8601) }
+    val output = capturingSystemOut {
+      commandLineMain(
+        HelloCommandLine(),
+        args = arrayOf(NAME, "P1DT3H5M12.99S"),
+        DurationFormat.ISO_8601
+      )
+    }
 
     assertThat(output).isEqualTo("Hello $NAME. The duration is P1DT3H5M12.99S")
   }
