@@ -17,6 +17,8 @@ package org.wfanet.measurement.common
 import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.extensions.proto.ProtoTruth.assertThat
 import com.google.protobuf.ByteString
+import com.google.protobuf.duration
+import java.time.Duration
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
@@ -82,5 +84,15 @@ class ProtoUtilsTest {
     val expectedBytes = ByteString.copyFromUtf8("12345")
     val entry = checkNotNull(results.entriesMap[keyId])
     assertThat(entry.elementsMap.values).containsExactly(expectedBytes, expectedBytes)
+  }
+
+  @Test
+  fun `toProtoDuration converts a Java Duration to a Proto Duration`() {
+    val javaDuration = Duration.ofSeconds(5L, 1L)
+    val protoDuration = duration {
+      seconds = 5
+      nanos = 1
+    }
+    assertThat(javaDuration.toProtoDuration()).isEqualTo(protoDuration)
   }
 }

@@ -98,9 +98,12 @@ fun Instant.toProtoTime(): Timestamp = timestamp {
 
 fun Timestamp.toInstant(): Instant = Instant.ofEpochSecond(seconds, nanos.toLong())
 
-fun Duration.toProtoDuration(): ProtoDuration = duration {
-  this.seconds = seconds
-  nanos = nano
+fun Duration.toProtoDuration(): ProtoDuration {
+  val source = this
+  return duration {
+    seconds = source.seconds
+    nanos = nano
+  }
 }
 
 fun ProtoDuration.toDuration(): Duration = Duration.ofSeconds(seconds, nanos.toLong())

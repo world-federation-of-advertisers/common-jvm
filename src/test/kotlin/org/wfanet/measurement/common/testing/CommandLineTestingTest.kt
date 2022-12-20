@@ -15,8 +15,10 @@
 package org.wfanet.measurement.common.testing
 
 import com.google.common.truth.Truth.assertThat
+import java.time.Duration
 import kotlin.test.assertFails
 import org.junit.Test
+import org.wfanet.measurement.common.DurationFormat
 import org.wfanet.measurement.common.commandLineMain
 import org.wfanet.measurement.common.testing.CommandLineTesting.assertExitsWith
 import org.wfanet.measurement.common.testing.CommandLineTesting.capturingSystemOut
@@ -24,6 +26,7 @@ import picocli.CommandLine.Command
 import picocli.CommandLine.Parameters
 
 const val NAME = "World"
+const val ZERO_DURATION = "PT0S"
 val ARGS = arrayOf(NAME)
 
 class CommandLineTestingTest {
@@ -41,16 +44,31 @@ class CommandLineTestingTest {
   fun `capturingSystemOut() returns system output`() {
     val output = capturingSystemOut { HelloCommandLine.main(ARGS) }
 
-    assertThat(output).isEqualTo("Hello $NAME")
+    assertThat(output).contains("Hello $NAME")
+  }
+
+  @Test
+  fun `default doesn't parse ISO-8601`() {
+    val output = capturingSystemOut { commandLineMain(HelloCommandLine(), args=arrayOf(NAME, "P1DT3H5M12.99S")) }
+
+    assertThat(output).isEqualTo("Hello $NAME. The duration is $ZERO_DURATION")
+  }
+
+  @Test
+  fun `passing in format parses ISO-8601`() {
+    val output = capturingSystemOut { commandLineMain(HelloCommandLine(), args=arrayOf(NAME, "P1DT3H5M12.99S"), DurationFormat.ISO_8601) }
+
+    assertThat(output).isEqualTo("Hello $NAME. The duration is P1DT3H5M12.99S")
   }
 }
 
 @Command(name = "hello")
 private class HelloCommandLine : Runnable {
   @Parameters(index = "0") private lateinit var name: String
+  @Parameters(index = "1") private lateinit var duration: Duration
 
   override fun run() {
-    println("Hello $name")
+    println("Hello $name. The duration is $duration")
   }
 
   companion object {
