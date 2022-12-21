@@ -36,18 +36,24 @@ fun commandLineMain(command: KFunction<*>, args: Array<String>) {
  * @param command a [Runnable] annotated with [@Command][CommandLine.Command] to execute
  * @param args command-line arguments
  */
-fun commandLineMain(command: Runnable, args: Array<String>) {
-  exitProcess(command.toCommandLine().execute(*args))
+fun commandLineMain(
+  command: Runnable,
+  args: Array<String>,
+  format: DurationFormat = DurationFormat.HUMAN_READABLE
+) {
+  exitProcess(command.toCommandLine(format).execute(*args))
 }
 
 private fun KFunction<*>.toCommandLine(): CommandLine {
   return CommandLine(javaMethod).apply { registerConverters() }
 }
 
-private fun Runnable.toCommandLine(): CommandLine {
-  return CommandLine(this).apply { registerConverters() }
+private fun Runnable.toCommandLine(
+  format: DurationFormat = DurationFormat.HUMAN_READABLE
+): CommandLine {
+  return CommandLine(this).apply { registerConverters(format) }
 }
 
-private fun CommandLine.registerConverters() {
-  registerConverter(Duration::class.java) { it.toDuration() }
+private fun CommandLine.registerConverters(format: DurationFormat = DurationFormat.HUMAN_READABLE) {
+  registerConverter(Duration::class.java) { it.toDuration(format) }
 }
