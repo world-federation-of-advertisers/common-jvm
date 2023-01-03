@@ -1,0 +1,14 @@
+load("@io_bazel_rules_kotlin//kotlin:jvm.bzl", "kt_jvm_test")
+
+kt_jvm_test(
+    name = "HighwayHashTest",
+    srcs = ["HighwayHashTest.kt"],
+    test_class = "org.wfanet.measurement.common.riegeli.HighwayHashTest",
+    deps = [
+        "//src/main/kotlin/org/wfanet/measurement/common/riegeli:highway_hash",
+        "//imports/java/com/google/common/truth/extensions/proto",
+        "//imports/java/org/junit",
+        "//imports/kotlin/kotlin/test",
+        "//src/main/kotlin/org/wfanet/measurement/common",
+    ],
+)
