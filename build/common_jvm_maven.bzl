@@ -113,6 +113,10 @@ def common_jvm_maven_artifacts_dict():
 
         # CSV library.
         "com.opencsv:opencsv": "5.6",
+
+        # Riegeli Decompressor
+        "org.apache.commons:commons-compress": "1.22",
+        "org.brotli:dec": "0.1.2",
     })
 
     return maven_artifacts
