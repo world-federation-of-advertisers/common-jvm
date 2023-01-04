@@ -1,6 +1,20 @@
+// Copyright 2017 Google Inc. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package org.wfanet.measurement.common.riegeli;
 
-//Copied from https://github.com/google/highwayhash/blob/master/java/com/google/highwayhash/HighwayHash.java
+//Taken from https://github.com/google/highwayhash/blob/master/java/com/google/highwayhash/HighwayHash.java
 //Since 2022-12-14
 
 /**
@@ -37,8 +51,9 @@ public final class HighwayHash {
     /**
      * Updates the hash with 32 bytes of data. If you can read 4 long values
      * from your data efficiently, prefer using update() instead for more speed.
+     *
      * @param packet data array which has a length of at least pos + 32
-     * @param pos position in the array to read the first of 32 bytes from
+     * @param pos    position in the array to read the first of 32 bytes from
      */
     public void updatePacket(byte[] packet, int pos) {
         if (pos < 0) {
@@ -57,6 +72,7 @@ public final class HighwayHash {
     /**
      * Updates the hash with 32 bytes of data given as 4 longs. This function is
      * more efficient than updatePacket when you can use it.
+     *
      * @param a0 first 8 bytes in little endian 64-bit long
      * @param a1 next 8 bytes in little endian 64-bit long
      * @param a2 next 8 bytes in little endian 64-bit long
@@ -91,8 +107,9 @@ public final class HighwayHash {
      * updatePacket first per 32 bytes of the data, if and only if 1 to 31 bytes
      * of the data are not processed after that, updateRemainder must be used for
      * those final bytes.
-     * @param bytes data array which has a length of at least pos + size_mod32
-     * @param pos position in the array to start reading size_mod32 bytes from
+     *
+     * @param bytes      data array which has a length of at least pos + size_mod32
+     * @param pos        position in the array to start reading size_mod32 bytes from
      * @param size_mod32 the amount of bytes to read
      */
     public void updateRemainder(byte[] bytes, int pos, int size_mod32) {
@@ -100,8 +117,7 @@ public final class HighwayHash {
             throw new IllegalArgumentException(String.format("Pos (%s) must be positive", pos));
         }
         if (size_mod32 < 0 || size_mod32 >= 32) {
-            throw new IllegalArgumentException(
-                    String.format("size_mod32 (%s) must be between 0 and 31", size_mod32));
+            throw new IllegalArgumentException(String.format("size_mod32 (%s) must be between 0 and 31", size_mod32));
         }
         if (pos + size_mod32 > bytes.length) {
             throw new IllegalArgumentException("bytes must have at least size_mod32 bytes after pos");
@@ -110,7 +126,7 @@ public final class HighwayHash {
         int remainder = size_mod32 & ~3;
         byte[] packet = new byte[32];
         for (int i = 0; i < 4; ++i) {
-            v0[i] += ((long)size_mod32 << 32) + size_mod32;
+            v0[i] += ((long) size_mod32 << 32) + size_mod32;
         }
         rotate32By(size_mod32, v1);
         for (int i = 0; i < remainder; i++) {
@@ -133,7 +149,7 @@ public final class HighwayHash {
     /**
      * Computes the hash value after all bytes were processed. Invalidates the
      * state.
-     *
+     * <p>
      * NOTE: The 64-bit HighwayHash algorithm is declared stable and no longer subject to change.
      *
      * @return 64-bit hash
@@ -150,7 +166,7 @@ public final class HighwayHash {
     /**
      * Computes the hash value after all bytes were processed. Invalidates the
      * state.
-     *
+     * <p>
      * NOTE: The 128-bit HighwayHash algorithm is not yet frozen and subject to change.
      *
      * @return array of size 2 containing 128-bit hash
@@ -172,7 +188,7 @@ public final class HighwayHash {
     /**
      * Computes the hash value after all bytes were processed. Invalidates the
      * state.
-     *
+     * <p>
      * NOTE: The 256-bit HighwayHash algorithm is not yet frozen and subject to change.
      *
      * @return array of size 4 containing 256-bit hash
@@ -190,14 +206,11 @@ public final class HighwayHash {
         permuteAndUpdate();
         done = true;
         long[] hash = new long[4];
-        modularReduction(v1[1] + mul1[1], v1[0] + mul1[0],
-                v0[1] + mul0[1], v0[0] + mul0[0],
-                hash, 0);
-        modularReduction(v1[3] + mul1[3], v1[2] + mul1[2],
-                v0[3] + mul0[3], v0[2] + mul0[2],
-                hash, 2);
+        modularReduction(v1[1] + mul1[1], v1[0] + mul1[0], v0[1] + mul0[1], v0[0] + mul0[0], hash, 0);
+        modularReduction(v1[3] + mul1[3], v1[2] + mul1[2], v0[3] + mul0[3], v0[2] + mul0[2], hash, 2);
         return hash;
     }
+
     private void reset(long key0, long key1, long key2, long key3) {
         mul0[0] = 0xdbe6d5d5fe4cce2fL;
         mul0[1] = 0xa4093822299f31d0L;
@@ -218,46 +231,32 @@ public final class HighwayHash {
     }
 
     private long zipperMerge0(long v1, long v0) {
-        return (((v0 & 0xff000000L) | (v1 & 0xff00000000L)) >>> 24) |
-                (((v0 & 0xff0000000000L) | (v1 & 0xff000000000000L)) >>> 16) |
-                (v0 & 0xff0000L) | ((v0 & 0xff00L) << 32) |
-                ((v1 & 0xff00000000000000L) >>> 8) | (v0 << 56);
+        return (((v0 & 0xff000000L) | (v1 & 0xff00000000L)) >>> 24) | (((v0 & 0xff0000000000L) | (v1 & 0xff000000000000L)) >>> 16) | (v0 & 0xff0000L) | ((v0 & 0xff00L) << 32) | ((v1 & 0xff00000000000000L) >>> 8) | (v0 << 56);
     }
 
     private long zipperMerge1(long v1, long v0) {
-        return (((v1 & 0xff000000L) | (v0 & 0xff00000000L)) >>> 24) |
-                (v1 & 0xff0000L) | ((v1 & 0xff0000000000L) >>> 16) |
-                ((v1 & 0xff00L) << 24) | ((v0 & 0xff000000000000L) >>> 8) |
-                ((v1 & 0xffL) << 48) | (v0 & 0xff00000000000000L);
+        return (((v1 & 0xff000000L) | (v0 & 0xff00000000L)) >>> 24) | (v1 & 0xff0000L) | ((v1 & 0xff0000000000L) >>> 16) | ((v1 & 0xff00L) << 24) | ((v0 & 0xff000000000000L) >>> 8) | ((v1 & 0xffL) << 48) | (v0 & 0xff00000000000000L);
     }
 
     private long read64(byte[] src, int pos) {
         // Mask with 0xffL so that it is 0..255 as long (byte can only be -128..127)
-        return (src[pos + 0] & 0xffL) | ((src[pos + 1] & 0xffL) << 8) |
-                ((src[pos + 2] & 0xffL) << 16) | ((src[pos + 3] & 0xffL) << 24) |
-                ((src[pos + 4] & 0xffL) << 32) | ((src[pos + 5] & 0xffL) << 40) |
-                ((src[pos + 6] & 0xffL) << 48) | ((src[pos + 7] & 0xffL) << 56);
+        return (src[pos + 0] & 0xffL) | ((src[pos + 1] & 0xffL) << 8) | ((src[pos + 2] & 0xffL) << 16) | ((src[pos + 3] & 0xffL) << 24) | ((src[pos + 4] & 0xffL) << 32) | ((src[pos + 5] & 0xffL) << 40) | ((src[pos + 6] & 0xffL) << 48) | ((src[pos + 7] & 0xffL) << 56);
     }
 
     private void rotate32By(long count, long[] lanes) {
         for (int i = 0; i < 4; ++i) {
             long half0 = (lanes[i] & 0xffffffffL);
             long half1 = (lanes[i] >>> 32) & 0xffffffffL;
-            lanes[i] = ((half0 << count)  & 0xffffffffL) | (half0 >>> (32 - count));
-            lanes[i] |= ((long)(((half1 << count) & 0xffffffffL) |
-                    (half1 >>> (32 - count)))) << 32;
+            lanes[i] = ((half0 << count) & 0xffffffffL) | (half0 >>> (32 - count));
+            lanes[i] |= ((long) (((half1 << count) & 0xffffffffL) | (half1 >>> (32 - count)))) << 32;
         }
     }
 
     private void permuteAndUpdate() {
-        update((v0[2] >>> 32) | (v0[2] << 32),
-                (v0[3] >>> 32) | (v0[3] << 32),
-                (v0[0] >>> 32) | (v0[0] << 32),
-                (v0[1] >>> 32) | (v0[1] << 32));
+        update((v0[2] >>> 32) | (v0[2] << 32), (v0[3] >>> 32) | (v0[3] << 32), (v0[0] >>> 32) | (v0[0] << 32), (v0[1] >>> 32) | (v0[1] << 32));
     }
 
-    private void modularReduction(long a3_unmasked, long a2, long a1,
-                                  long a0, long[] hash, int pos) {
+    private void modularReduction(long a3_unmasked, long a2, long a1, long a0, long[] hash, int pos) {
         long a3 = a3_unmasked & 0x3FFFFFFFFFFFFFFFL;
         hash[pos + 1] = a1 ^ ((a3 << 1) | (a2 >>> 63)) ^ ((a3 << 2) | (a2 >>> 62));
         hash[pos + 0] = a0 ^ (a2 << 1) ^ (a2 << 2);
@@ -268,10 +267,10 @@ public final class HighwayHash {
     /**
      * NOTE: The 64-bit HighwayHash algorithm is declared stable and no longer subject to change.
      *
-     * @param data array with data bytes
+     * @param data   array with data bytes
      * @param offset position of first byte of data to read from
      * @param length number of bytes from data to read
-     * @param key array of size 4 with the key to initialize the hash with
+     * @param key    array of size 4 with the key to initialize the hash with
      * @return 64-bit hash for the given data
      */
     public static long hash64(byte[] data, int offset, int length, long[] key) {
@@ -283,14 +282,13 @@ public final class HighwayHash {
     /**
      * NOTE: The 128-bit HighwayHash algorithm is not yet frozen and subject to change.
      *
-     * @param data array with data bytes
+     * @param data   array with data bytes
      * @param offset position of first byte of data to read from
      * @param length number of bytes from data to read
-     * @param key array of size 4 with the key to initialize the hash with
+     * @param key    array of size 4 with the key to initialize the hash with
      * @return array of size 2 containing 128-bit hash for the given data
      */
-    public static long[] hash128(
-            byte[] data, int offset, int length, long[] key) {
+    public static long[] hash128(byte[] data, int offset, int length, long[] key) {
         HighwayHash h = new HighwayHash(key);
         h.processAll(data, offset, length);
         return h.finalize128();
@@ -299,14 +297,13 @@ public final class HighwayHash {
     /**
      * NOTE: The 256-bit HighwayHash algorithm is not yet frozen and subject to change.
      *
-     * @param data array with data bytes
+     * @param data   array with data bytes
      * @param offset position of first byte of data to read from
      * @param length number of bytes from data to read
-     * @param key array of size 4 with the key to initialize the hash with
+     * @param key    array of size 4 with the key to initialize the hash with
      * @return array of size 4 containing 256-bit hash for the given data
      */
-    public static long[] hash256(
-            byte[] data, int offset, int length, long[] key) {
+    public static long[] hash256(byte[] data, int offset, int length, long[] key) {
         HighwayHash h = new HighwayHash(key);
         h.processAll(data, offset, length);
         return h.finalize256();
