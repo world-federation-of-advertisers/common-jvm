@@ -12,3 +12,18 @@ kt_jvm_test(
         "//src/main/kotlin/org/wfanet/measurement/common",
     ],
 )
+
+kt_jvm_test(
+    name = "RiegeliTest",
+    srcs = ["RiegeliTest.kt"],
+    data = [
+        "//src/test/proto/wfa/measurement/common/riegeli/test_data:single_id_model_riegeli_list",
+        "//src/test/proto/wfa/measurement/common/riegeli/test_data:toy_model_riegeli_list",
+    ],
+    test_class = "org.wfanet.measurement.common.riegeli.RiegeliTest",
+    deps = [
+        "//src/main/kotlin/org/wfanet/measurement/common/riegeli:riegeli",
+        "//imports/java/org/junit",
+        "//imports/kotlin/kotlin/test",
+    ],
+)

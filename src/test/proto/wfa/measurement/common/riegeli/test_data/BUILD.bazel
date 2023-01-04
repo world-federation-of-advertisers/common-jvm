@@ -1,0 +1,18 @@
+package(default_visibility = [
+    "//src/test/kotlin/org/wfanet/measurement/common/riegeli:__subpackages__",
+])
+
+exports_files(
+    [
+        "toy_model_riegeli_list",
+        "single_id_model_riegeli_list",
+    ],
+)
+
+filegroup(
+    name = "riegeli_test_data",
+    srcs = [
+        "toy_model_riegeli_list",
+        "single_id_model_riegeli_list",
+    ],
+)
