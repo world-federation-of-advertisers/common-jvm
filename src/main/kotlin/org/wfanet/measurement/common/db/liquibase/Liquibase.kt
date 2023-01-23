@@ -25,12 +25,13 @@ import liquibase.Scope
 import liquibase.database.DatabaseFactory
 import liquibase.database.jvm.JdbcConnection
 import liquibase.logging.core.JavaLogService
+import liquibase.resource.DirectoryResourceAccessor
 
 object Liquibase {
   fun fromPath(connection: Connection, changelogPath: Path): Liquibase {
     return Liquibase(
       changelogPath.toString(),
-      FileSystemResourceAccessor(changelogPath.fileSystem),
+      DirectoryResourceAccessor(changelogPath.fileSystem.rootDirectories.first()),
       DatabaseFactory.getInstance().findCorrectDatabaseImplementation(JdbcConnection(connection))
     )
   }

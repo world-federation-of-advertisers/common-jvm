@@ -44,6 +44,6 @@ def cloud_spanner_emulator_binaries():
     maybe(
         _cloud_spanner_emulator_binaries,
         name = "cloud_spanner_emulator",
-        sha256 = "7048efb8708e0b2af98d84c9bd86ecb158b5663116c5dea789974d6a616f0e12",
-        version = "1.4.2",
+        sha256 = "0716bf95e740328cdaef7a7e41e022037fde803596378a9db81b56bc0de1dcb9",
+        version = "1.4.9",
     )
