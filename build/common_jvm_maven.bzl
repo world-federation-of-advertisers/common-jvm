@@ -69,7 +69,7 @@ def common_jvm_maven_artifacts_dict():
         "com.adobe.testing:s3mock-junit4": "2.2.3",
         "com.google.cloud:google-cloud-bigquery": "2.10.10",
         "com.google.cloud:google-cloud-nio": "0.123.28",
-        "com.google.cloud:google-cloud-spanner": "6.34.1",
+        "com.google.cloud:google-cloud-spanner": "6.35.2",
         "com.google.cloud:google-cloud-storage": "2.6.1",
         "com.google.guava:guava": "31.0.1-jre",
         "info.picocli:picocli": "4.4.0",

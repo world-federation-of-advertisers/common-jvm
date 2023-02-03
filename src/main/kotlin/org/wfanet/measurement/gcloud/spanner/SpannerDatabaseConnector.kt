@@ -34,7 +34,6 @@ class SpannerDatabaseConnector(
   instanceName: String,
   databaseName: String,
   private val readyTimeout: Duration,
-  transactionTimeout: Duration,
   maxTransactionThreads: Int,
   emulatorHost: String?,
 ) : AutoCloseable {
@@ -66,7 +65,7 @@ class SpannerDatabaseConnector(
 
   val databaseId: DatabaseId = DatabaseId.of(projectName, instanceName, databaseName)
   val databaseClient: AsyncDatabaseClient by lazy {
-    spanner.getAsyncDatabaseClient(databaseId, transactionExecutor.value, transactionTimeout)
+    spanner.getAsyncDatabaseClient(databaseId, transactionExecutor.value)
   }
 
   /**
@@ -116,7 +115,6 @@ private fun SpannerFlags.toSpannerDatabaseConnector(): SpannerDatabaseConnector 
     instanceName = instanceName,
     databaseName = databaseName,
     readyTimeout = readyTimeout,
-    transactionTimeout = transactionTimeout,
     maxTransactionThreads = maxTransactionThreads,
     emulatorHost = emulatorHost,
   )
