@@ -20,17 +20,11 @@ import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
 import com.google.common.util.concurrent.Uninterruptibles
 import java.util.concurrent.ExecutionException
-import java.util.concurrent.Executor
-import kotlin.coroutines.CoroutineContext
-import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.CoroutineStart
-import kotlinx.coroutines.guava.future
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.guava.asListenableFuture
 import kotlinx.coroutines.suspendCancellableCoroutine
-
-object DirectExecutor : Executor by MoreExecutors.directExecutor()
 
 /**
  * Suspends until the [ApiFuture] completes.
@@ -62,20 +56,9 @@ suspend fun <T> ApiFuture<T>.await(): T {
   }
 }
 
-/**
- * Starts a new coroutine as an [ApiFuture].
- *
- * @see [future]
- */
-fun <T> CoroutineScope.apiFuture(
-  context: CoroutineContext = EmptyCoroutineContext,
-  start: CoroutineStart = CoroutineStart.DEFAULT,
-  block: suspend CoroutineScope.() -> T
-): ApiFuture<T> {
-  return future(context, start) { block() }.toApiFuture()
-}
+fun <T> Deferred<T>.asApiFuture(): ApiFuture<T> = asListenableFuture().asApiFuture()
 
 private class ListenableFutureAdapter<T>(delegate: ListenableFuture<T>) :
   SimpleForwardingListenableFuture<T>(delegate), ApiFuture<T>
 
-private fun <T> ListenableFuture<T>.toApiFuture(): ApiFuture<T> = ListenableFutureAdapter(this)
+private fun <T> ListenableFuture<T>.asApiFuture(): ApiFuture<T> = ListenableFutureAdapter(this)
