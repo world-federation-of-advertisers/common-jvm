@@ -77,6 +77,14 @@ GRPC_KOTLIN = VersionedArchiveInfo(
     prefix_template = "grpc-kotlin-{version}",
 )
 
+SPANNER_EMULATOR = VersionedArchiveInfo(
+    version = "1.4.9",
+    sha256 = "0716bf95e740328cdaef7a7e41e022037fde803596378a9db81b56bc0de1dcb9",
+    url_templates = [
+        "https://storage.googleapis.com/cloud-spanner-emulator/releases/{version}/cloud-spanner-emulator_linux_amd64-{version}.tar.gz",
+    ],
+)
+
 KOTLIN_LANGUAGE_LEVEL = "1.5"
 
 # Kotlin release version.
