@@ -15,12 +15,13 @@
 """Repository rules/macros for Google Cloud Spanner Emulator."""
 
 load("@bazel_tools//tools/build_defs/repo:utils.bzl", "maybe")
+load("//build:versions.bzl", "SPANNER_EMULATOR")
 
 def _cloud_spanner_emulator_impl(rctx):
     version = rctx.attr.version
     sha256 = rctx.attr.sha256
 
-    url = "https://storage.googleapis.com/cloud-spanner-emulator/releases/{version}/cloud-spanner-emulator_linux_amd64-{version}.tar.gz".format(version = version)
+    url = SPANNER_EMULATOR.url_templates[0].format(version = version)
 
     rctx.download_and_extract(
         url = url,
@@ -44,6 +45,6 @@ def cloud_spanner_emulator_binaries():
     maybe(
         _cloud_spanner_emulator_binaries,
         name = "cloud_spanner_emulator",
-        sha256 = "0716bf95e740328cdaef7a7e41e022037fde803596378a9db81b56bc0de1dcb9",
-        version = "1.4.9",
+        sha256 = SPANNER_EMULATOR.sha256,
+        version = SPANNER_EMULATOR.version,
     )
