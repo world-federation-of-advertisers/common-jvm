@@ -64,25 +64,54 @@ fun <T, R> Flow<T>.pairAll(block: suspend (T) -> Flow<R>): Flow<Pair<T, R>> = tr
  *   executeFlakyOperation(it)
  * }
  * ```
- * will try to run the executeFlakyOperation on each item up to five times as long as the errors
- * thrown match the [retryPredicate].
+ * will try to run the executeFlakyOperation on each item up to [maxAttempts] times as long as the
+ * errors thrown match the [retryPredicate].
  *
  * @param maxAttempts maximum number of times to try executing [onEachBlock] of code
  * @param retryPredicate retry a failed attempt of [onEachBlock] if the throwable matches this
  * predicate
  * @param onEachBlock block of code to execute for each item in the flow.
+ * @param attemptsExhaustedBlock block of code to execute for each item when reach the max attempts.
  */
 fun <T> Flow<T>.withRetriesOnEach(
   maxAttempts: Int,
   retryPredicate: (Throwable) -> Boolean = { true },
-  onEachBlock: suspend (T) -> Unit
+  attemptsExhaustedBlock: suspend (T, Throwable) -> Unit = { _, e -> throw e },
+  onEachBlock: suspend (T) -> Unit,
 ): Flow<T> = onEach {
   repeat(maxAttempts) { idx ->
     val attempt = idx + 1
     try {
       return@onEach onEachBlock(it)
     } catch (e: Throwable) {
-      if (attempt == maxAttempts || !retryPredicate(e)) throw e
+      if (attempt == maxAttempts) attemptsExhaustedBlock(it, e) else if (!retryPredicate(e)) throw e
+    }
+  }
+}
+
+/**
+ * Executes [onEachBlock] for each item in the flow. When the block throws a [Throwable] it will
+ * call [errorHandlingBlock] to handle the exception. [errorHandlingBlock] returns Boolean which
+ * indicates whether retry [onEachBlock].
+ *
+ * @param maxAttempts maximum number of times to try executing [onEachBlock] of code
+ * @param errorHandlingBlock block of code to handle the exception and indicate whether retry
+ * @param onEachBlock block of code to execute for each item in the flow.
+ */
+fun <T> Flow<T>.withRetriesOnEachWithErrorHandler(
+  maxAttempts: Int,
+  errorHandlingBlock: suspend (T, Throwable, Boolean) -> Boolean = { _, _, exhausted ->
+    !exhausted
+  },
+  onEachBlock: suspend (T) -> Unit,
+): Flow<T> = onEach {
+  repeat(maxAttempts) { idx ->
+    val attempt = idx + 1
+    try {
+      return@onEach onEachBlock(it)
+    } catch (e: Throwable) {
+      val retry = errorHandlingBlock(it, e, attempt == maxAttempts)
+      if (!retry) return@onEach
     }
   }
 }
