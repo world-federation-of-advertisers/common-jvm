@@ -32,7 +32,7 @@ import org.wfanet.measurement.storage.StorageClient
  * @param storageClient underlying client for accessing blob/object storage
  * @param aead Tink AEAD integration specific encrypt/decrypt
  * @param aeadContext context for [aead] operations, containing a
- * [kotlinx.coroutines.CoroutineDispatcher] that supports blocking calls
+ *   [kotlinx.coroutines.CoroutineDispatcher] that supports blocking calls
  */
 class KmsStorageClient
 internal constructor(

@@ -48,6 +48,7 @@ inline fun <reified T : Any> captureFirst(block: KArgumentCaptor<T>.() -> Unit):
  * for convenient chaining.
  *
  * For example: verifyProtoArgument(someMock, SomeClass::someMethod)
+ *
  * ```
  *     .comparedExpectedFieldsOnly()
  *     .isEqualTo(someExpectedProto)
