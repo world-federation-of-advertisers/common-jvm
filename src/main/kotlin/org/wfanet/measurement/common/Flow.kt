@@ -64,12 +64,13 @@ fun <T, R> Flow<T>.pairAll(block: suspend (T) -> Flow<R>): Flow<Pair<T, R>> = tr
  *   executeFlakyOperation(it)
  * }
  * ```
+ *
  * will try to run the executeFlakyOperation on each item up to five times as long as the errors
  * thrown match the [retryPredicate].
  *
  * @param maxAttempts maximum number of times to try executing [onEachBlock] of code
  * @param retryPredicate retry a failed attempt of [onEachBlock] if the throwable matches this
- * predicate
+ *   predicate
  * @param onEachBlock block of code to execute for each item in the flow.
  */
 fun <T> Flow<T>.withRetriesOnEach(
@@ -99,7 +100,7 @@ fun <T> Flow<T>.withRetriesOnEach(
  * See https://github.com/Kotlin/kotlinx.coroutines/issues/1147.
  *
  * @param scope the scope under which to launch [async] coroutines. This must contain the same
- * [CoroutineContext][kotlin.coroutines.CoroutineContext] that the flow is collected in.
+ *   [CoroutineContext][kotlin.coroutines.CoroutineContext] that the flow is collected in.
  * @param concurrency number of Deferred that can be awaiting at once
  * @param transform the mapping function
  * @return the output of mapping [transform] over the receiver
@@ -146,8 +147,8 @@ private class SingleConsumedFlowItem<T>(singleItem: T) : ConsumedFlowItem<T>() {
  *
  * @param producerContext [CoroutineContext] for producing the returned items
  * @return a [ConsumedFlowItem] containing the first item and the [Flow] of remaining items, or
- * `null` if there is no first item. The caller must ensure that the returned object is [closed]
- * [ConsumedFlowItem.close].
+ *   `null` if there is no first item. The caller must ensure that the returned object is [closed]
+ *   [ConsumedFlowItem.close].
  */
 @OptIn(
   FlowPreview::class, // For `produceIn`

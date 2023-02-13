@@ -68,7 +68,6 @@ private constructor(
      * Adds an additional binding.
      *
      * The following examples result in the same two bindings (Audi S4, Tesla Model 3):
-     *
      * ```kotlin
      * boundStatement("INSERT INTO Cars VALUES ($1, $2)") {
      *   bind("$1", "Audi")
@@ -79,7 +78,6 @@ private constructor(
      *   }
      * }
      * ```
-     *
      * ```kotlin
      * boundStatement("INSERT INTO Cars VALUES ($1, $2)") {
      *   addBinding {

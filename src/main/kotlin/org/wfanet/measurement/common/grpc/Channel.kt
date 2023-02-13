@@ -25,9 +25,9 @@ import org.wfanet.measurement.common.crypto.SigningCerts
  *
  * @param target the URI or authority string for the target server.
  * @param clientCerts the collection of client certificate and private key, as well as the trusted
- * server certificates.
+ *   server certificates.
  * @param hostName the expected DNS hostname from the Subject Alternative Name (SAN) of the server's
- * certificate
+ *   certificate
  */
 fun buildMutualTlsChannel(
   target: String,
@@ -51,7 +51,7 @@ fun buildMutualTlsChannel(
  * @param target the URI or authority string for the target server
  * @param trustedServerCerts trusted server certificates.
  * @param hostName the expected DNS hostname from the Subject Alternative Name (SAN) of the server's
- * certificate
+ *   certificate
  */
 fun buildTlsChannel(
   target: String,
