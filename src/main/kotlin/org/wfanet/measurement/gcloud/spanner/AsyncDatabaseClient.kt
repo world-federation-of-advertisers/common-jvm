@@ -35,7 +35,6 @@ import java.time.Duration
 import java.util.concurrent.Executor
 import java.util.concurrent.Executors
 import java.util.logging.Logger
-import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineName
@@ -59,7 +58,8 @@ import kotlinx.coroutines.time.withTimeout
 import org.wfanet.measurement.gcloud.common.asApiFuture
 import org.wfanet.measurement.gcloud.common.await
 
-typealias TransactionWork<R> = suspend AsyncDatabaseClient.TransactionScope.() -> R
+typealias TransactionWork<R> =
+  suspend CoroutineScope.(txn: AsyncDatabaseClient.TransactionContext) -> R
 
 /**
  * Non-blocking wrapper around [dbClient] using asynchronous Spanner Java API.
@@ -90,7 +90,7 @@ class AsyncDatabaseClient(
 
   /** @see DatabaseClient.write */
   suspend fun write(mutations: Iterable<Mutation>) {
-    readWriteTransaction().execute { txn.buffer(mutations) }
+    readWriteTransaction().execute { txn -> txn.buffer(mutations) }
   }
 
   /** @see DatabaseClient.write */
@@ -148,7 +148,15 @@ class AsyncDatabaseClient(
 
   /** Coroutine version of [AsyncRunner]. */
   interface TransactionRunner {
-    /** @see com.google.cloud.spanner.AsyncRunner.runAsync */
+    /**
+     * Executes a read/write transaction asynchronously, suspending until it is complete.
+     *
+     * @param doWork function that does work inside a transaction
+     * @see com.google.cloud.spanner.AsyncRunner.runAsync
+     *
+     * This acts as a coroutine builder. [doWork] has a [CoroutineScope] receiver to ensure that
+     * coroutine builders called from it run in the [CoroutineScope] defined by this function.
+     */
     suspend fun <R> execute(doWork: TransactionWork<R>): R
 
     suspend fun getCommitTimestamp(): Timestamp
@@ -165,12 +173,6 @@ class AsyncDatabaseClient(
     /** @see com.google.cloud.spanner.TransactionContext.executeUpdate */
     suspend fun executeUpdate(statement: Statement): Long
   }
-
-  /** [CoroutineScope] for async Spanner transactions. */
-  open class TransactionScope(
-    val txn: TransactionContext,
-    override val coroutineContext: CoroutineContext
-  ) : CoroutineScope
 
   private inner class TransactionRunnerImpl(private val runner: AsyncRunner) : TransactionRunner {
     override suspend fun <R> execute(doWork: TransactionWork<R>): R {
@@ -307,13 +309,7 @@ private suspend fun <T> AsyncRunner.run(executor: Executor, doWork: TransactionW
         async {
             // Create a separate coroutine scope so that we have normal (non-supervisor) structured
             // concurrency semantics for the actual work.
-            coroutineScope {
-              AsyncDatabaseClient.TransactionScope(
-                  txn.asAsyncTransaction(),
-                  this@coroutineScope.coroutineContext
-                )
-                .doWork()
-            }
+            coroutineScope { doWork(txn.asAsyncTransaction()) }
           }
           .asApiFuture()
       }
