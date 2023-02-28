@@ -35,6 +35,13 @@ interface ReadContext {
 
   /** Closes the underlying [Connection]. */
   suspend fun close()
+
+  /**
+   * Rollbacks the transaction.
+   *
+   * Note: Using this on a new transaction causes the transaction to be stuck in the IDLE state.
+   */
+  suspend fun rollback()
 }
 
 internal open class ReadContextImpl protected constructor(protected val connection: Connection) :
@@ -47,6 +54,10 @@ internal open class ReadContextImpl protected constructor(protected val connecti
 
   override suspend fun close() {
     connection.close().awaitFirstOrNull()
+  }
+
+  override suspend fun rollback() {
+    connection.rollbackTransaction().awaitFirstOrNull()
   }
 
   companion object {

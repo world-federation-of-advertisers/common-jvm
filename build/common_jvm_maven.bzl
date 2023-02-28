@@ -69,12 +69,13 @@ def common_jvm_maven_artifacts_dict():
         "com.adobe.testing:s3mock-junit4": "2.2.3",
         "com.google.cloud:google-cloud-bigquery": "2.10.10",
         "com.google.cloud:google-cloud-nio": "0.123.28",
-        "com.google.cloud:google-cloud-spanner": "6.27.0",
+        "com.google.cloud:google-cloud-spanner": "6.35.2",
         "com.google.cloud:google-cloud-storage": "2.6.1",
         "com.google.guava:guava": "31.0.1-jre",
         "info.picocli:picocli": "4.4.0",
         "junit:junit": "4.13",
         "org.conscrypt:conscrypt-openjdk-uber": "2.5.2",
+        "org.jetbrains:annotations": "23.0.0",
         "org.mockito.kotlin:mockito-kotlin": "3.2.0",
         "software.amazon.awssdk:s3": "2.17.258",
 
@@ -86,10 +87,10 @@ def common_jvm_maven_artifacts_dict():
         "com.opentable.components:otj-pg-embedded": "1.0.1",
 
         # Liquibase.
-        "org.liquibase:liquibase-core": "4.15.0",
         "org.yaml:snakeyaml": "1.30",
-        "com.google.cloudspannerecosystem:liquibase-spanner": "4.10.0",
-        "com.google.cloud:google-cloud-spanner-jdbc": "2.7.5",
+        "org.liquibase:liquibase-core": "4.18.0",
+        "com.google.cloudspannerecosystem:liquibase-spanner": "4.17.0",
+        "com.google.cloud:google-cloud-spanner-jdbc": "2.9.0",
         "org.liquibase.ext:liquibase-postgresql": "4.11.0",
 
         # For grpc-kotlin. This should be a version that is compatible with

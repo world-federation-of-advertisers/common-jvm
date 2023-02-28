@@ -14,11 +14,14 @@
 
 package org.wfanet.measurement.common
 
-import kotlin.coroutines.coroutineContext
+import kotlin.coroutines.CoroutineContext
+import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.async
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ClosedReceiveChannelException
 import kotlinx.coroutines.channels.ReceiveChannel
@@ -61,12 +64,13 @@ fun <T, R> Flow<T>.pairAll(block: suspend (T) -> Flow<R>): Flow<Pair<T, R>> = tr
  *   executeFlakyOperation(it)
  * }
  * ```
+ *
  * will try to run the executeFlakyOperation on each item up to five times as long as the errors
  * thrown match the [retryPredicate].
  *
  * @param maxAttempts maximum number of times to try executing [onEachBlock] of code
  * @param retryPredicate retry a failed attempt of [onEachBlock] if the throwable matches this
- * predicate
+ *   predicate
  * @param onEachBlock block of code to execute for each item in the flow.
  */
 fun <T> Flow<T>.withRetriesOnEach(
@@ -96,7 +100,7 @@ fun <T> Flow<T>.withRetriesOnEach(
  * See https://github.com/Kotlin/kotlinx.coroutines/issues/1147.
  *
  * @param scope the scope under which to launch [async] coroutines. This must contain the same
- * [CoroutineContext][kotlin.coroutines.CoroutineContext] that the flow is collected in.
+ *   [CoroutineContext][kotlin.coroutines.CoroutineContext] that the flow is collected in.
  * @param concurrency number of Deferred that can be awaiting at once
  * @param transform the mapping function
  * @return the output of mapping [transform] over the receiver
@@ -141,16 +145,19 @@ private class SingleConsumedFlowItem<T>(singleItem: T) : ConsumedFlowItem<T>() {
  * Note that this starts a new coroutine in a separate [CoroutineScope] to produce the returned
  * [Flow] items using a [Channel]. As a result, the returned [Flow] is hot.
  *
+ * @param producerContext [CoroutineContext] for producing the returned items
  * @return a [ConsumedFlowItem] containing the first item and the [Flow] of remaining items, or
- * `null` if there is no first item. The caller must ensure that the returned object is [closed]
- * [ConsumedFlowItem.close].
+ *   `null` if there is no first item. The caller must ensure that the returned object is [closed]
+ *   [ConsumedFlowItem.close].
  */
 @OptIn(
   FlowPreview::class, // For `produceIn`
   ExperimentalCoroutinesApi::class // For `Channel.isClosedForReceive`.
 )
-suspend fun <T> Flow<T>.consumeFirst(): ConsumedFlowItem<T>? {
-  val producerScope = CoroutineScope(coroutineContext)
+suspend fun <T> Flow<T>.consumeFirst(
+  producerContext: CoroutineContext = Dispatchers.Unconfined
+): ConsumedFlowItem<T>? {
+  val producerScope = CoroutineScope(producerContext + CoroutineName(::consumeFirst.name))
   val channel: ReceiveChannel<T> = buffer(Channel.RENDEZVOUS).produceIn(producerScope)
 
   // We can't know whether the flow is empty until we start collecting. Since
@@ -160,6 +167,7 @@ suspend fun <T> Flow<T>.consumeFirst(): ConsumedFlowItem<T>? {
     try {
       channel.receive()
     } catch (e: ClosedReceiveChannelException) {
+      producerScope.cancel()
       return null
     }
 
@@ -171,6 +179,7 @@ suspend fun <T> Flow<T>.consumeFirst(): ConsumedFlowItem<T>? {
 
     override fun close() {
       channel.cancel()
+      producerScope.cancel()
     }
   }
 }

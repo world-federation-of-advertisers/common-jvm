@@ -37,7 +37,7 @@ fun getRuntimePath(runfilesRelativePath: Path): Path? {
  *
  * @param name platform-independent library name
  * @param directoryPath normalized path of the directory the library is in, relative to the Bazel
- * runfiles root
+ *   runfiles root
  */
 fun loadLibrary(name: String, directoryPath: Path) {
   val relativePath = directoryPath.resolve(System.mapLibraryName(name))

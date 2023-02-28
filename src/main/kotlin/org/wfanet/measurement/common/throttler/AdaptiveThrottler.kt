@@ -20,9 +20,9 @@ import java.time.Instant
 import java.util.ArrayDeque
 import kotlin.properties.Delegates
 import kotlin.random.Random
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.time.delay
 import picocli.CommandLine
 
 /**
@@ -74,7 +74,7 @@ class AdaptiveThrottler(
   override suspend fun <T> onReady(block: suspend () -> T): T {
     while (Random.nextDouble() < rejectionProbability) {
       updateQueue(requests)
-      delay(pollDelay.toMillis())
+      delay(pollDelay)
     }
     updateQueue(requests)
     val result =

@@ -16,15 +16,7 @@
 Repository rules/macros for Protobuf.
 """
 
-load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
-load("//build:versions.bzl", "PROTOBUF_VERSION")
-
-_URL_TEMPLATE = "https://github.com/protocolbuffers/protobuf/archive/v{version}.tar.gz"
+load("//build:versions.bzl", "PROTOBUF", "versioned_http_archive")
 
 def com_github_protocolbuffers_protobuf():
-    http_archive(
-        name = "com_github_protocolbuffers_protobuf",
-        sha256 = "8b28fdd45bab62d15db232ec404248901842e5340299a57765e48abe8a80d930",
-        strip_prefix = "protobuf-" + PROTOBUF_VERSION,
-        url = _URL_TEMPLATE.format(version = PROTOBUF_VERSION),
-    )
+    versioned_http_archive(PROTOBUF, "com_github_protocolbuffers_protobuf")

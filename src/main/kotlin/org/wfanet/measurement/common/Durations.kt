@@ -51,7 +51,7 @@ fun String.toDuration(format: DurationFormat = DurationFormat.HUMAN_READABLE): D
  */
 private fun parseHumanReadableDuration(durationString: String): Duration {
   var duration = Duration.ZERO
-  val results = Regex("(\\d+)(ns|ms|s|m|h)").findAll(durationString)
+  val results = Regex("(\\d+)(ns|ms|s|m|h|d)").findAll(durationString)
   for (result in results) {
     val values = result.groupValues
     check(values.size == 3) { "Bad duration string" }
@@ -63,6 +63,7 @@ private fun parseHumanReadableDuration(durationString: String): Duration {
         "s" -> ChronoUnit.SECONDS
         "m" -> ChronoUnit.MINUTES
         "h" -> ChronoUnit.HOURS
+        "d" -> ChronoUnit.DAYS
         else -> throw IllegalArgumentException("Unsupported duration unit ${values[2]}")
       }
     duration = duration.plus(amount, unit)

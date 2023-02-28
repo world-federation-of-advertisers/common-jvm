@@ -54,7 +54,8 @@ class DotTest {
         }
         X -> Y
       }
-      """.trimIndent()
+      """
+        .trimIndent()
 
     assertThat(graph.trim()).isEqualTo(expected)
   }

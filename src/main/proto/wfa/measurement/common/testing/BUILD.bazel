@@ -1,0 +1,37 @@
+load("@rules_proto//proto:defs.bzl", "proto_library")
+load("@rules_java//java:defs.bzl", "java_proto_library")
+load("@wfa_common_jvm//build/kt_jvm_proto:defs.bzl", "kt_jvm_proto_library")
+
+package(
+    default_testonly = True,
+    default_visibility = ["//visibility:public"],
+)
+
+IMPORT_PREFIX = "/src/main/proto"
+
+proto_library(
+    name = "simple_proto",
+    srcs = ["simple.proto"],
+    strip_import_prefix = IMPORT_PREFIX,
+)
+
+proto_library(
+    name = "depends_on_simple_proto",
+    srcs = ["depends_on_simple.proto"],
+    strip_import_prefix = IMPORT_PREFIX,
+    deps = [
+        ":simple_proto",
+        "@com_google_protobuf//:timestamp_proto",
+    ],
+)
+
+java_proto_library(
+    name = "depends_on_simple_java_proto",
+    deps = [":depends_on_simple_proto"],
+)
+
+kt_jvm_proto_library(
+    name = "depends_on_simple_kt_jvm_proto",
+    srcs = [":depends_on_simple_proto"],
+    deps = [":depends_on_simple_java_proto"],
+)

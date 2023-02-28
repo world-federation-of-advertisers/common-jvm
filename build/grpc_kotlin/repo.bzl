@@ -16,9 +16,7 @@
 Repository rules/macros for Github GPRC Kotlin.
 """
 
-load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
-load("@bazel_tools//tools/build_defs/repo:utils.bzl", "maybe")
-load("//build:versions.bzl", "GRPC_KOTLIN_VERSION")
+load("//build:versions.bzl", "GRPC_KOTLIN", "versioned_http_archive")
 
 # kt_jvm_grpc_library directly depends on the stub library target below.
 GRPC_KOTLIN_OVERRIDE_TARGETS = {
@@ -26,16 +24,10 @@ GRPC_KOTLIN_OVERRIDE_TARGETS = {
 }
 
 def com_github_grpc_grpc_kotlin():
-    maybe(
-        http_archive,
-        name = "com_github_grpc_grpc_kotlin",
-        sha256 = "466d33303aac7e825822b402efa3dcfddd68e6f566ed79443634180bb75eab6e",
-        strip_prefix = "grpc-kotlin-{version}".format(version = GRPC_KOTLIN_VERSION),
-        url = "https://github.com/grpc/grpc-kotlin/archive/refs/tags/v{version}.tar.gz".format(version = GRPC_KOTLIN_VERSION),
-    )
+    versioned_http_archive(GRPC_KOTLIN, "com_github_grpc_grpc_kotlin")
 
 def grpc_kotlin_maven_artifacts_dict():
     return {
-        coordinates: GRPC_KOTLIN_VERSION
+        coordinates: GRPC_KOTLIN.version
         for coordinates in GRPC_KOTLIN_OVERRIDE_TARGETS.keys()
     }

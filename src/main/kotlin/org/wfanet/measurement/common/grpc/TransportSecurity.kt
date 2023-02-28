@@ -39,7 +39,7 @@ fun SigningCerts.toClientTlsContext(): SslContext {
   return GrpcSslContexts.forClient()
     .protocols(TLS_V13_PROTOCOL)
     .keyManager(privateKeyHandle)
-    .trustManager(trustedCertificates)
+    .trustManager(trustedCertificates.values)
     .build()
 }
 
@@ -47,7 +47,7 @@ fun SigningCerts.toClientTlsContext(): SslContext {
 fun SigningCerts.toServerTlsContext(clientAuth: ClientAuth = ClientAuth.NONE): SslContext {
   return GrpcSslContexts.configure(privateKeyHandle.newServerSslContextBuilder())
     .protocols(TLS_V13_PROTOCOL)
-    .trustManager(trustedCertificates)
+    .trustManager(trustedCertificates.values)
     .clientAuth(clientAuth)
     .build()
 }

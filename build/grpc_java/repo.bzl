@@ -14,9 +14,7 @@
 
 """Repository rules/macros for grpc-java."""
 
-load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
-load("@bazel_tools//tools/build_defs/repo:utils.bzl", "maybe")
-load("//build:versions.bzl", "GRPC_JAVA_VERSION")
+load("//build:versions.bzl", "GRPC_JAVA", "versioned_http_archive")
 
 # Known coordinates for non-Android Maven artifacts built from grpc-java.
 _MAVEN_COORDINATES = [
@@ -43,13 +41,10 @@ _MAVEN_COORDINATES = [
 ]
 
 def io_grpc_grpc_java():
-    maybe(
-        http_archive,
-        name = "io_grpc_grpc_java",
-        sha256 = "88b12b2b4e0beb849eddde98d5373f2f932513229dbf9ec86cc8e4912fc75e79",
-        strip_prefix = "grpc-java-{version}".format(version = GRPC_JAVA_VERSION),
-        url = "https://github.com/grpc/grpc-java/archive/refs/tags/v{version}.tar.gz".format(version = GRPC_JAVA_VERSION),
-    )
+    versioned_http_archive(GRPC_JAVA, "io_grpc_grpc_java")
 
 def grpc_java_maven_artifacts_dict():
-    return {coordinates: GRPC_JAVA_VERSION for coordinates in _MAVEN_COORDINATES}
+    return {
+        coordinates: GRPC_JAVA.version
+        for coordinates in _MAVEN_COORDINATES
+    }

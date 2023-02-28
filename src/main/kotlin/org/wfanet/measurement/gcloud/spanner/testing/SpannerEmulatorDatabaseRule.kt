@@ -51,15 +51,17 @@ class SpannerEmulatorDatabaseRule(
 
         SpannerEmulator().use { emulator ->
           val emulatorHost = runBlocking { emulator.start() }
-          createDatabase(emulatorHost).use { spanner ->
-            databaseClient =
-              spanner.getAsyncDatabaseClient(DatabaseId.of(PROJECT, INSTANCE, databaseName))
-            base.evaluate()
+          try {
+            createDatabase(emulatorHost).use { spanner ->
+              databaseClient =
+                spanner.getAsyncDatabaseClient(DatabaseId.of(PROJECT, INSTANCE, databaseName))
+              base.evaluate()
+            }
+          } finally {
+            // Make sure these Spanner instances from JDBC are closed before the emulator is shut
+            // down, otherwise it will block JVM shutdown.
+            SpannerPool.closeSpannerPool()
           }
-
-          // Make sure these Spanner instances from JDBC are closed before the emulator is shut
-          // down, otherwise it will block JVM shutdown.
-          SpannerPool.closeSpannerPool()
         }
       }
     }

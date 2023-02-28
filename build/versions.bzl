@@ -14,23 +14,83 @@
 
 """Version information for common dependencies."""
 
-GRPC_JAVA_VERSION = "1.48.1"
-GRPC_KOTLIN_VERSION = "1.3.0"
+load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+load("@bazel_tools//tools/build_defs/repo:utils.bzl", "maybe")
 
-# TODO(bazelbuild/rules_proto#136): Update to a newer version once fixed.
-PROTOBUF_VERSION = "3.20.1"
-PROTOBUF_JAVA_VERSION = PROTOBUF_VERSION
+VersionedArchiveInfo = provider(
+    "Versioned dependency archive",
+    fields = {
+        "version": "Version number associated with archive",
+        "sha256": "SHA-256 of archive",
+        "url_templates": "List of templates of URLs that can be filled in with a version",
+        "prefix_template": "Template of prefix to strip from archive",
+    },
+)
+
+def _format_url_templates(versioned_archive):
+    """Returns URL templates with version substituted."""
+    return [
+        template.format(version = versioned_archive.version)
+        for template in versioned_archive.url_templates
+    ]
+
+def _format_prefix(versioned_archive):
+    return versioned_archive.prefix_template.format(
+        version = versioned_archive.version,
+    )
+
+def versioned_http_archive(versioned_archive, name):
+    maybe(
+        http_archive,
+        name = name,
+        sha256 = versioned_archive.sha256,
+        strip_prefix = _format_prefix(versioned_archive),
+        urls = _format_url_templates(versioned_archive),
+    )
+
+PROTOBUF = VersionedArchiveInfo(
+    version = "21.12",
+    sha256 = "22fdaf641b31655d4b2297f9981fa5203b2866f8332d3c6333f6b0107bb320de",
+    url_templates = [
+        "https://github.com/protocolbuffers/protobuf/archive/v{version}.tar.gz",
+    ],
+    prefix_template = "protobuf-{version}",
+)
+
+PROTOBUF_JAVA_VERSION = "3." + PROTOBUF.version
 PROTOBUF_KOTLIN_VERSION = PROTOBUF_JAVA_VERSION
+
+GRPC_JAVA = VersionedArchiveInfo(
+    version = "1.52.1",
+    sha256 = "6bbe6dca6e60bb892fec8000ab2a200c474c4d9700f34e3fa205c84aaeaf33f7",
+    url_templates = [
+        "https://github.com/grpc/grpc-java/archive/refs/tags/v{version}.tar.gz",
+    ],
+    prefix_template = "grpc-java-{version}",
+)
+GRPC_KOTLIN = VersionedArchiveInfo(
+    version = "1.3.0",
+    sha256 = "466d33303aac7e825822b402efa3dcfddd68e6f566ed79443634180bb75eab6e",
+    url_templates = [
+        "https://github.com/grpc/grpc-kotlin/archive/refs/tags/v{version}.tar.gz",
+    ],
+    prefix_template = "grpc-kotlin-{version}",
+)
+
+SPANNER_EMULATOR = VersionedArchiveInfo(
+    version = "1.4.9",
+    sha256 = "0716bf95e740328cdaef7a7e41e022037fde803596378a9db81b56bc0de1dcb9",
+    url_templates = [
+        "https://storage.googleapis.com/cloud-spanner-emulator/releases/{version}/cloud-spanner-emulator_linux_amd64-{version}.tar.gz",
+    ],
+)
+
 KOTLIN_LANGUAGE_LEVEL = "1.5"
 
 # Kotlin release version.
 #
 # See https://kotlinlang.org/docs/releases.html#release-details.
 KOTLIN_RELEASE_VERSION = "1.6.21"
-
-# Version of org.jetbrains:annotations that comes bundled with
-# KOTLIN_RELEASE_VERSION.
-JETBRAINS_ANNOTATIONS_VERSION = "13.0"
 
 # kotlinx.coroutines version.
 KOTLINX_COROUTINES_VERSION = "1.6.2"

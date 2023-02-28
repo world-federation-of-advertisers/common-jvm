@@ -9,5 +9,6 @@ kt_jvm_library(
     deps = [
         "//imports/java/picocli",
         "//imports/kotlin/kotlinx/coroutines:core",
+        "//imports/kotlin/kotlinx/coroutines:jdk8",
     ],
 )

@@ -23,40 +23,82 @@ import io.grpc.protobuf.services.HealthStatusManager
 import io.netty.handler.ssl.ClientAuth
 import io.netty.handler.ssl.SslContext
 import java.io.IOException
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.ThreadPoolExecutor
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.logging.Level
 import java.util.logging.Logger
 import kotlin.properties.Delegates
+import org.jetbrains.annotations.VisibleForTesting
 import org.wfanet.measurement.common.crypto.SigningCerts
 import picocli.CommandLine
 
 class CommonServer
 private constructor(
   private val nameForLogging: String,
-  private val port: Int,
+  port: Int,
+  healthPort: Int,
+  threadPoolSize: Int,
+  verboseGrpcLogging: Boolean,
   services: Iterable<ServerServiceDefinition>,
   sslContext: SslContext?,
-  private val healthPort: Int = 0,
 ) {
+  init {
+    require(threadPoolSize > 1)
+  }
+  private val executor: ExecutorService =
+    ThreadPoolExecutor(1, threadPoolSize, 60L, TimeUnit.SECONDS, LinkedBlockingQueue())
   private val healthStatusManager = HealthStatusManager()
+  private val started = AtomicBoolean(false)
 
-  val server: Server by lazy {
+  val port: Int
+    get() = server.port
+
+  val healthPort: Int
+    get() = healthServer.port
+
+  /**
+   * Internal [Server].
+   *
+   * Visible only for testing.
+   */
+  @get:VisibleForTesting
+  internal val server: Server by lazy {
+    logger.info { "$nameForLogging thread pool size: $threadPoolSize" }
+    if (verboseGrpcLogging) {
+      logger.info { "$nameForLogging verbose gRPC server logging enabled" }
+    }
+
     NettyServerBuilder.forPort(port)
       .apply {
-        sslContext?.let { sslContext(it) }
+        executor(executor)
+        if (sslContext != null) {
+          sslContext(sslContext)
+        }
         services.forEach { addService(it) }
         maxInboundMessageSize(20 * 1024 * 1024) // 20MiB
+        if (verboseGrpcLogging) {
+          intercept(LoggingServerInterceptor)
+        } else {
+          intercept(ErrorLoggingServerInterceptor)
+        }
       }
       .build()
   }
 
   private val healthServer: Server by lazy {
     NettyServerBuilder.forPort(healthPort)
+      .executor(executor)
       .apply { addService(healthStatusManager.healthService) }
       .build()
   }
 
   @Throws(IOException::class)
+  @Synchronized
   fun start(): CommonServer {
+    check(!started.get()) { "$nameForLogging already started" }
     server.start()
     server.services.forEach {
       healthStatusManager.setStatus(it.serviceDescriptor.name, ServingStatus.SERVING)
@@ -70,29 +112,42 @@ private constructor(
           override fun run() {
             // Use stderr here since the logger may have been reset by its JVM shutdown hook.
             System.err.println("*** $nameForLogging shutting down...")
-            this@CommonServer.stop()
+            this@CommonServer.shutdown()
+            blockUntilShutdown()
             System.err.println("*** $nameForLogging shut down")
           }
         }
       )
+    started.set(true)
     return this
   }
 
-  private fun stop() {
-    healthServer.shutdownNow()
+  fun shutdown() {
+    if (!started.get()) {
+      return
+    }
+
+    healthServer.shutdown()
     server.shutdown()
+    executor.shutdown()
   }
 
   @Throws(InterruptedException::class)
   fun blockUntilShutdown() {
+    if (!started.get()) {
+      return
+    }
+
     server.awaitTermination()
+    healthServer.awaitTermination()
+    executor.awaitTermination(Long.MAX_VALUE, TimeUnit.MILLISECONDS)
   }
 
   class Flags {
     @set:CommandLine.Option(
       names = ["--port", "-p"],
       description = ["TCP port for gRPC server."],
-      defaultValue = "8443"
+      defaultValue = "8443",
     )
     var port by Delegates.notNull<Int>()
       private set
@@ -112,9 +167,16 @@ private constructor(
     @set:CommandLine.Option(
       names = ["--health-port"],
       description = ["TCP port for the non-TLS health server."],
-      defaultValue = "8080"
+      defaultValue = "8080",
     )
     var healthPort by Delegates.notNull<Int>()
+      private set
+
+    @CommandLine.Option(
+      names = ["--grpc-thread-pool-size"],
+      description = ["Size of thread pool for gRPC server.", "Defaults to number of cores * 2."],
+    )
+    var threadPoolSize: Int = DEFAULT_THREAD_POOL_SIZE
       private set
 
     @set:CommandLine.Option(
@@ -129,22 +191,27 @@ private constructor(
   companion object {
     private val logger = Logger.getLogger(this::class.java.name)
 
+    val DEFAULT_THREAD_POOL_SIZE = Runtime.getRuntime().availableProcessors() * 2
+
     /** Constructs a [CommonServer] from parameters. */
     fun fromParameters(
-      port: Int,
       verboseGrpcLogging: Boolean,
       certs: SigningCerts?,
       clientAuth: ClientAuth,
       nameForLogging: String,
       services: Iterable<ServerServiceDefinition>,
-      healthPort: Int = 0
+      port: Int = 0,
+      healthPort: Int = 0,
+      threadPoolSize: Int = DEFAULT_THREAD_POOL_SIZE
     ): CommonServer {
       return CommonServer(
         nameForLogging,
         port,
-        services.run { if (verboseGrpcLogging) map { it.withVerboseLogging() } else this },
+        healthPort,
+        threadPoolSize,
+        verboseGrpcLogging,
+        services,
         certs?.toServerTlsContext(clientAuth),
-        healthPort
       )
     }
 
@@ -154,21 +221,15 @@ private constructor(
       nameForLogging: String,
       services: Iterable<ServerServiceDefinition>
     ): CommonServer {
-      val certs =
-        SigningCerts.fromPemFiles(
-          certificateFile = flags.tlsFlags.certFile,
-          privateKeyFile = flags.tlsFlags.privateKeyFile,
-          trustedCertCollectionFile = flags.tlsFlags.certCollectionFile
-        )
-
       return fromParameters(
-        flags.port,
         flags.debugVerboseGrpcLogging,
-        certs,
+        flags.tlsFlags.signingCerts,
         if (flags.clientAuthRequired) ClientAuth.REQUIRE else ClientAuth.NONE,
         nameForLogging,
         services,
-        flags.healthPort
+        flags.port,
+        flags.healthPort,
+        flags.threadPoolSize
       )
     }
 

@@ -47,7 +47,7 @@ object SelfIssuedIdTokens {
    * Returns a self-issued id token using a generated private key.
    *
    * @throws IllegalArgumentException if the uriString doesn't match the open id connect
-   * requirements for self-issued, or doesn't include state and nonce.
+   *   requirements for self-issued, or doesn't include state and nonce.
    */
   fun generateIdToken(uriString: String, clock: Clock): String {
     return generateIdToken(PrivateJwkHandle.generateRsa(), uriString, clock)
@@ -57,7 +57,7 @@ object SelfIssuedIdTokens {
    * Returns a self-issued id token using a provided private key.
    *
    * @throws IllegalArgumentException if the uriString doesn't match the open id connect
-   * requirements for self-issued, or doesn't include state and nonce.
+   *   requirements for self-issued, or doesn't include state and nonce.
    */
   fun generateIdToken(privateJwkHandle: PrivateJwkHandle, uriString: String, clock: Clock): String {
     val uri = URI.create(uriString)

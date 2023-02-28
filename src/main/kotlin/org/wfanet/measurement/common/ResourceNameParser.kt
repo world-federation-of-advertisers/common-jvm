@@ -25,9 +25,9 @@ private const val SEGMENT_SEPARATOR = "/"
  * See [AIP-122: Resource names](https://google.aip.dev/122)
  *
  * @param pattern a resource name pattern as described in
- * [AIP-123: Resource types](https://google.aip.dev/123), consisting of segments separated by a
- * slash (`/`). Each segment can either be a literal string, or an ID variable name wrapped in
- * braces.
+ *   [AIP-123: Resource types](https://google.aip.dev/123), consisting of segments separated by a
+ *   slash (`/`). Each segment can either be a literal string, or an ID variable name wrapped in
+ *   braces.
  */
 class ResourceNameParser(pattern: String) {
   private val segments: List<Segment> =
@@ -47,7 +47,7 @@ class ResourceNameParser(pattern: String) {
    * Parses ID segments from a [relativeResourceName] that matches this parser's pattern.
    *
    * @returns a [Map] of segment variable name to value, or `null` if [relativeResourceName] does
-   * not match this parser's pattern.
+   *   not match this parser's pattern.
    */
   fun parseIdSegments(relativeResourceName: String): Map<String, String>? {
     val parts: List<String> = relativeResourceName.split(SEGMENT_SEPARATOR)

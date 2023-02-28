@@ -51,7 +51,8 @@ suspend fun assertQueryReturns(
 
     Columns:
     $expectedColumns
-    """.trimIndent()
+    """
+        .trimIndent()
     )
     .that(results)
     .containsExactlyElementsIn(expected)

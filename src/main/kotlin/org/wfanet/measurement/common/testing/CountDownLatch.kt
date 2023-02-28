@@ -17,7 +17,7 @@ package org.wfanet.measurement.common.testing
 import java.time.Duration
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.time.withTimeout
 import org.wfanet.measurement.common.CountDownLatch
 
 /**
@@ -29,7 +29,7 @@ suspend fun launchAndCancelWithLatch(
   timeout: Duration = Duration.ofSeconds(10),
   block: suspend () -> Unit
 ) {
-  withTimeout(timeout.toMillis()) {
+  withTimeout(timeout) {
     val job = launch { block() }
     latch.await()
     job.cancelAndJoin()

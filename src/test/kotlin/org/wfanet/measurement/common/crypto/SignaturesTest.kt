@@ -14,8 +14,10 @@
 
 package org.wfanet.measurement.common.crypto
 
+import com.google.common.truth.Truth.assertThat
 import com.google.protobuf.ByteString
 import java.security.PrivateKey
+import java.security.cert.CertPathValidatorException
 import java.security.cert.X509Certificate
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
@@ -26,10 +28,8 @@ import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 import org.wfanet.measurement.common.HexString
 import org.wfanet.measurement.common.asBufferedFlow
-import org.wfanet.measurement.common.crypto.testing.FIXED_CA_CERT_PEM_FILE
-import org.wfanet.measurement.common.crypto.testing.FIXED_SERVER_CERT_PEM_FILE
-import org.wfanet.measurement.common.crypto.testing.FIXED_SERVER_KEY_FILE
 import org.wfanet.measurement.common.crypto.testing.SignatureSubject.Companion.assertThat
+import org.wfanet.measurement.common.crypto.testing.TestData
 import org.wfanet.measurement.common.flatten
 
 private val DATA =
@@ -118,10 +118,29 @@ class SignaturesTest {
     assertFailsWith(InvalidSignatureException::class) { runBlocking { verifyingFlow.flatten() } }
   }
 
+  @Test
+  fun `validate does not throw exception for valid certificate`() {
+    certificate.validate(issuerCertificate)
+  }
+
+  @Test
+  fun `validate throws exception for incorrect issuer`() {
+    assertFailsWith<CertPathValidatorException> { certificate.validate(altCertificate) }
+  }
+
+  @Test
+  fun `validate throws exception for expired certificate`() {
+    val exception =
+      assertFailsWith<CertPathValidatorException> { expiredCertificate.validate(issuerCertificate) }
+    assertThat(exception.reason).isEqualTo(CertPathValidatorException.BasicReason.EXPIRED)
+  }
+
   companion object {
-    val certificate: X509Certificate = readCertificate(FIXED_SERVER_CERT_PEM_FILE)
-    val altCertificate: X509Certificate = readCertificate(FIXED_CA_CERT_PEM_FILE)
+    val certificate: X509Certificate = readCertificate(TestData.FIXED_SERVER_CERT_PEM_FILE)
+    val altCertificate: X509Certificate = readCertificate(TestData.FIXED_CLIENT_CERT_PEM_FILE)
+    val expiredCertificate: X509Certificate = readCertificate(TestData.FIXED_EXPIRED_CERT_PEM_FILE)
+    val issuerCertificate: X509Certificate = readCertificate(TestData.FIXED_CA_CERT_PEM_FILE)
     val privateKey: PrivateKey =
-      readPrivateKey(FIXED_SERVER_KEY_FILE, certificate.publicKey.algorithm)
+      readPrivateKey(TestData.FIXED_SERVER_KEY_FILE, certificate.publicKey.algorithm)
   }
 }

@@ -21,15 +21,15 @@ import com.google.protobuf.kotlin.toByteStringUtf8
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
-import org.wfanet.measurement.common.crypto.testing.FIXED_SERVER_CERT_DER_FILE
-import org.wfanet.measurement.common.crypto.testing.FIXED_SERVER_KEY_DER_FILE
+import org.wfanet.measurement.common.crypto.testing.TestData
 import org.wfanet.measurement.common.crypto.testing.loadSigningKey
 
 @RunWith(JUnit4::class)
 class SigningKeyHandleTest {
   @Test
   fun `sign generates valid signature`() {
-    val signingKey = loadSigningKey(FIXED_SERVER_CERT_DER_FILE, FIXED_SERVER_KEY_DER_FILE)
+    val signingKey =
+      loadSigningKey(TestData.FIXED_SERVER_CERT_DER_FILE, TestData.FIXED_SERVER_KEY_DER_FILE)
 
     val signature = signingKey.sign(MESSAGE_BINARY)
 

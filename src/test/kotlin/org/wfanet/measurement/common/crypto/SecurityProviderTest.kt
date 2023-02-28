@@ -23,10 +23,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 import org.wfanet.measurement.common.byteStringOf
-import org.wfanet.measurement.common.crypto.testing.FIXED_CA_CERT_PEM_FILE
-import org.wfanet.measurement.common.crypto.testing.FIXED_CLIENT_CERT_PEM_FILE
-import org.wfanet.measurement.common.crypto.testing.FIXED_SERVER_CERT_PEM_FILE
-import org.wfanet.measurement.common.crypto.testing.FIXED_SERVER_KEY_FILE
+import org.wfanet.measurement.common.crypto.testing.TestData
 
 private const val KEY_ALGORITHM = "EC"
 private val SERVER_SKID =
@@ -80,21 +77,21 @@ private val CLIENT_AKID =
 class SecurityProviderTest {
   @Test
   fun `readCertificate reads fixed cert from PEM file`() {
-    val certificate: X509Certificate = readCertificate(FIXED_SERVER_CERT_PEM_FILE)
+    val certificate: X509Certificate = readCertificate(TestData.FIXED_SERVER_CERT_PEM_FILE)
 
     assertThat(certificate.subjectDN.name).isEqualTo("CN=server.example.com,O=Server")
   }
 
   @Test
   fun `readPrivateKey reads key from PKCS#8 PEM file`() {
-    val privateKey = readPrivateKey(FIXED_SERVER_KEY_FILE, KEY_ALGORITHM)
+    val privateKey = readPrivateKey(TestData.FIXED_SERVER_KEY_FILE, KEY_ALGORITHM)
 
     assertThat(privateKey.format).isEqualTo("PKCS#8")
   }
 
   @Test
   fun `readPrivateKey reads key from PKCS#8 PEM ByteString`() {
-    val privateKey = readPrivateKey(FIXED_SERVER_KEY_FILE, KEY_ALGORITHM)
+    val privateKey = readPrivateKey(TestData.FIXED_SERVER_KEY_FILE, KEY_ALGORITHM)
     val data = ByteString.copyFrom(privateKey.getEncoded())
     val privateKeyCopy = readPrivateKey(data, KEY_ALGORITHM)
     assertThat(privateKeyCopy.format).isEqualTo("PKCS#8")
@@ -109,15 +106,15 @@ class SecurityProviderTest {
 
   @Test
   fun `subjectKeyIdentifier returns SKID`() {
-    val certificate: X509Certificate = readCertificate(FIXED_SERVER_CERT_PEM_FILE)
+    val certificate: X509Certificate = readCertificate(TestData.FIXED_SERVER_CERT_PEM_FILE)
 
     assertThat(certificate.subjectKeyIdentifier).isEqualTo(SERVER_SKID)
   }
 
   @Test
   fun `authorityKeyIdentifier returns SKID of issuer`() {
-    val issuerCertificate = readCertificate(FIXED_CA_CERT_PEM_FILE)
-    val certificate: X509Certificate = readCertificate(FIXED_SERVER_CERT_PEM_FILE)
+    val issuerCertificate = readCertificate(TestData.FIXED_CA_CERT_PEM_FILE)
+    val certificate: X509Certificate = readCertificate(TestData.FIXED_SERVER_CERT_PEM_FILE)
 
     assertThat(certificate.authorityKeyIdentifier).isEqualTo(issuerCertificate.subjectKeyIdentifier)
   }
@@ -126,7 +123,7 @@ class SecurityProviderTest {
   fun `authorityKeyIdentifier returns AKID of certificate with long extension`() {
     // Load a certificate whose AKI extension has all optional fields specified, resulting in an
     // octet string that has a content length of >127 bytes.
-    val certificate: X509Certificate = readCertificate(FIXED_CLIENT_CERT_PEM_FILE)
+    val certificate: X509Certificate = readCertificate(TestData.FIXED_CLIENT_CERT_PEM_FILE)
 
     assertThat(certificate.authorityKeyIdentifier).isEqualTo(CLIENT_AKID)
   }
