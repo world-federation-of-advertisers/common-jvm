@@ -42,6 +42,7 @@ object TestData {
       )!!
       .toFile()
 
+  val FIXED_NO_AKID_CERT_PEM_FILE = FIXED_TESTDATA_DIR.resolve("no_akid.pem")
   val FIXED_SERVER_CERT_PEM_FILE = FIXED_TESTDATA_DIR.resolve("server.pem")
   val FIXED_SERVER_KEY_FILE = FIXED_TESTDATA_DIR.resolve("server.key")
   val FIXED_SERVER_CERT_DER_FILE = FIXED_TESTDATA_DIR.resolve("server-cert.der")
