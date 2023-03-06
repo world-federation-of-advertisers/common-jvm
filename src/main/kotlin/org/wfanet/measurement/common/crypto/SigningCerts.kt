@@ -27,14 +27,11 @@ data class SigningCerts(
 ) {
   init {
     for ((skid, certificate) in trustedCertificates) {
-      val akid =
-        requireNotNull(certificate.authorityKeyIdentifier) {
-          "Trusted certificate with subject key identifier (SKID) ${skid.toHexString()} missing " +
-            "authority key identifier (AKID)"
-        }
+      // If a cert lacks an AKID, it must be a root (self-signed) cert. We can default to the SKID.
+      val akid = certificate.authorityKeyIdentifier ?: certificate.subjectKeyIdentifier!!
       require(skid == akid) {
         "Trusted certificate with subject key identifier (SKID) ${skid.toHexString()} is not a " +
-          "root certificate authority (CA) certificate"
+          "root certificate authority (CA) certificate (AKID) ${akid.toHexString()}."
       }
     }
   }
