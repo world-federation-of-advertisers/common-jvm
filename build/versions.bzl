@@ -77,6 +77,15 @@ GRPC_KOTLIN = VersionedArchiveInfo(
     prefix_template = "grpc-kotlin-{version}",
 )
 
+RULES_JVM_EXTERNAL = VersionedArchiveInfo(
+    version = "5.1",
+    sha256 = "8c3b207722e5f97f1c83311582a6c11df99226e65e2471086e296561e57cc954",
+    url_templates = [
+        "https://github.com/bazelbuild/rules_jvm_external/releases/download/{version}/rules_jvm_external-{version}.tar.gz",
+    ],
+    prefix_template = "rules_jvm_external-{version}",
+)
+
 SPANNER_EMULATOR = VersionedArchiveInfo(
     version = "1.4.9",
     sha256 = "0716bf95e740328cdaef7a7e41e022037fde803596378a9db81b56bc0de1dcb9",

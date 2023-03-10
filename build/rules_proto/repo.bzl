@@ -21,6 +21,10 @@ load("//build:versions.bzl", "PROTOBUF_JAVA_VERSION")
 _MAVEN_COORDINATES = [
     "com.google.protobuf:protobuf-java",
     "com.google.protobuf:protobuf-java-util",
+]
+
+EXCLUDED_ARTIFACTS = [
+    # protobuf-java and protobuf-javalite cannot coexist.
     "com.google.protobuf:protobuf-javalite",
 ]
 
