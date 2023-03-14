@@ -17,9 +17,13 @@ kt_jvm_test(
     srcs = ["MutationsTest.kt"],
     test_class = "org.wfanet.measurement.gcloud.spanner.MutationsTest",
     deps = [
+        "//imports/java/com/google/cloud:core",
         "//imports/java/com/google/cloud/spanner",
         "//imports/java/com/google/common/truth",
+        "//imports/java/com/google/protobuf",
         "//imports/java/org/junit",
+        "//src/main/kotlin/org/wfanet/measurement/common",
+        "//src/main/kotlin/org/wfanet/measurement/gcloud/common",
         "//src/main/kotlin/org/wfanet/measurement/gcloud/spanner",
     ],
 )
@@ -31,7 +35,9 @@ kt_jvm_test(
     deps = [
         "//imports/java/com/google/cloud/spanner",
         "//imports/java/com/google/common/truth",
+        "//imports/java/com/google/protobuf",
         "//imports/java/org/junit",
+        "//src/main/kotlin/org/wfanet/measurement/common",
         "//src/main/kotlin/org/wfanet/measurement/gcloud/spanner",
     ],
 )
