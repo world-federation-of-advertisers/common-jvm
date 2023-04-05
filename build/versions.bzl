@@ -35,6 +35,8 @@ def _format_url_templates(versioned_archive):
     ]
 
 def _format_prefix(versioned_archive):
+    if not hasattr(versioned_archive, "prefix_template"):
+        return None
     return versioned_archive.prefix_template.format(
         version = versioned_archive.version,
     )
@@ -91,6 +93,14 @@ SPANNER_EMULATOR = VersionedArchiveInfo(
     sha256 = "0716bf95e740328cdaef7a7e41e022037fde803596378a9db81b56bc0de1dcb9",
     url_templates = [
         "https://storage.googleapis.com/cloud-spanner-emulator/releases/{version}/cloud-spanner-emulator_linux_amd64-{version}.tar.gz",
+    ],
+)
+
+RULES_DOCKER = VersionedArchiveInfo(
+    version = "0.25.0",
+    sha256 = "b1e80761a8a8243d03ebca8845e9cc1ba6c82ce7c5179ce2b295cd36f7e394bf",
+    url_templates = [
+        "https://github.com/bazelbuild/rules_docker/releases/download/v{version}/rules_docker-v{version}.tar.gz",
     ],
 )
 
