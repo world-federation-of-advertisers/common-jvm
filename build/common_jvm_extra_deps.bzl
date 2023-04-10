@@ -24,7 +24,7 @@ load(
     "@io_bazel_rules_docker//java:image.bzl",
     java_image_repositories = "repositories",
 )
-load("@com_github_grpc_grpc//bazel:grpc_extra_deps.bzl", "grpc_extra_deps")
+load("//build:grpc_extra_deps.bzl", "grpc_extra_deps")
 
 def common_jvm_extra_deps():
     """
