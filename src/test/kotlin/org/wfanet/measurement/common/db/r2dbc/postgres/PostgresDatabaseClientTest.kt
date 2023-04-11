@@ -28,6 +28,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
+import org.wfanet.measurement.common.db.r2dbc.BoundStatement
 import org.wfanet.measurement.common.db.r2dbc.ReadWriteContext
 import org.wfanet.measurement.common.db.r2dbc.ResultRow
 import org.wfanet.measurement.common.db.r2dbc.boundStatement
@@ -120,6 +121,38 @@ class PostgresDatabaseClientTest {
           }
         }
       }
+
+    val statementResult =
+      with(dbClient.readWriteTransaction()) { executeStatement(insertStatement).also { commit() } }
+    assertThat(statementResult.numRowsUpdated).isEqualTo(2L)
+
+    val query = boundStatement("SELECT * FROM Cars ORDER BY CarId")
+    val result: Flow<Car> =
+      dbClient.singleUse().executeQuery(query).consume { row -> Car.parseFrom(row) }
+
+    assertThat(result.toList()).containsExactlyElementsIn(cars).inOrder()
+  }
+
+  @Test
+  fun `addBinding adds bindings when creating builder separately`() = runBlocking {
+    val cars =
+      listOf(
+        Car(carId = InternalId(1), year = 2012, make = "Audi", model = "S4"),
+        Car(carId = InternalId(2), year = 2020, make = "Tesla", model = "Model 3")
+      )
+    val insertStatementBuilder =
+      BoundStatement.builder("INSERT INTO Cars (CarId, Year, Make, Model) VALUES ($1, $2, $3, $4)")
+    val insertStatement =
+      insertStatementBuilder.apply {
+        for (car in cars) {
+          addBinding {
+            bind("$1", car.carId)
+            bind("$2", car.year)
+            bind("$3", car.make)
+            bind("$4", car.model)
+          }
+        }
+      }.build()
 
     val statementResult =
       with(dbClient.readWriteTransaction()) { executeStatement(insertStatement).also { commit() } }

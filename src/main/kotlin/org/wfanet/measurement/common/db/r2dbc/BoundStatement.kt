@@ -92,9 +92,11 @@ private constructor(
      * ```
      */
     abstract fun addBinding(bind: Binder.() -> Unit)
+
+    abstract fun build(): BoundStatement
   }
 
-  private class BinderImpl() : Binder() {
+  private class BinderImpl : Binder() {
     private val values = mutableMapOf<String, Any>()
     private val nulls = mutableMapOf<String, Class<out Any?>>()
 
@@ -133,7 +135,7 @@ private constructor(
     override fun bindNull(name: String, kClass: KClass<*>) = initialBinder.bindNull(name, kClass)
 
     /** Builds a [BoundStatement] from this builder. */
-    fun build(): BoundStatement {
+    override fun build(): BoundStatement {
       return BoundStatement(baseSql, binders.map { it.build() })
     }
   }
@@ -167,6 +169,8 @@ private constructor(
         bindNull(name, type)
       }
     }
+
+    fun builder(baseSql: String): Builder = BuilderImpl(baseSql)
   }
 }
 
