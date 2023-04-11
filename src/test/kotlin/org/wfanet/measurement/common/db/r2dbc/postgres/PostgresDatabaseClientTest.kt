@@ -141,7 +141,7 @@ class PostgresDatabaseClientTest {
         Car(carId = InternalId(2), year = 2020, make = "Tesla", model = "Model 3")
       )
     val insertStatementBuilder =
-      BoundStatement.builder("INSERT INTO Cars (CarId, Year, Make, Model) VALUES ($1, $2, $3, $4)")
+      BoundStatement.newBuilder("INSERT INTO Cars (CarId, Year, Make, Model) VALUES ($1, $2, $3, $4)")
     val insertStatement =
       insertStatementBuilder
         .apply {

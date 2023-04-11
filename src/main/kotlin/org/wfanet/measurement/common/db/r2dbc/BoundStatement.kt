@@ -170,7 +170,7 @@ private constructor(
       }
     }
 
-    fun builder(baseSql: String): Builder = BuilderImpl(baseSql)
+    fun newBuilder(baseSql: String): Builder = BuilderImpl(baseSql)
   }
 }
 
