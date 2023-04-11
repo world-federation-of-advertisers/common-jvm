@@ -26,7 +26,7 @@ load("@envoy_api//bazel:repositories.bzl", "api_dependencies")
 load("@io_bazel_rules_go//go:deps.bzl", "go_register_toolchains", "go_rules_dependencies")
 load("@upb//bazel:workspace_deps.bzl", "upb_deps")
 
-def grpc_extra_deps(ignore_version_differences = False, go_toolchanins_version = "1.19.4"):
+def grpc_extra_deps(ignore_version_differences = False, go_toolchains_version = "1.19.4"):
     """Loads additional gRPC dependencies.
 
     This is copied from https://github.com/grpc/grpc with modifications to address version compatibility issues.
@@ -60,7 +60,7 @@ def grpc_extra_deps(ignore_version_differences = False, go_toolchanins_version =
     api_dependencies()
 
     go_rules_dependencies()
-    go_register_toolchains(version = go_toolchanins_version)
+    go_register_toolchains(version = go_toolchains_version)
     gazelle_dependencies()
 
     # Pull-in the go 3rd party dependencies for protoc_gen_validate, which is
