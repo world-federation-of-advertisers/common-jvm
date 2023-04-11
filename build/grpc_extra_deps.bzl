@@ -14,8 +14,6 @@
 
 """
 Loads the dependencies necessary for the external repositories defined in grpc_deps.bzl.
-File modified from here: https://github.com/grpc/grpc/blob/master/bazel/grpc_extra_deps.bzl
-Need to update the go_register_toolchains version.
 """
 
 load("@bazel_gazelle//:deps.bzl", "gazelle_dependencies")
@@ -28,8 +26,10 @@ load("@envoy_api//bazel:repositories.bzl", "api_dependencies")
 load("@io_bazel_rules_go//go:deps.bzl", "go_register_toolchains", "go_rules_dependencies")
 load("@upb//bazel:workspace_deps.bzl", "upb_deps")
 
-def grpc_extra_deps(ignore_version_differences = False):
-    """Loads the extra dependencies.
+def grpc_extra_deps(ignore_version_differences = False, go_toolchanins_version = "1.19.4"):
+    """Loads additional gRPC dependencies.
+
+    This is copied from https://github.com/grpc/grpc with modifications to address version compatibility issues.
 
     These are necessary for using the external repositories defined in
     grpc_deps.bzl. Projects that depend on gRPC as an external repository need
@@ -42,7 +42,9 @@ def grpc_extra_deps(ignore_version_differences = False):
 
     grpc_test_only_deps()
 
-    load("@com_github_grpc_grpc//bazel:grpc_extra_deps.bzl", "grpc_extra_deps")
+    # load("@com_github_grpc_grpc//bazel:grpc_extra_deps.bzl", "grpc_extra_deps")
+    load("//build/grpc_extra_deps.bzl", "grpc_extra_deps")
+    TODO(https://github.com/grpc/grpc/issues/32850): Revert when the dependency issue is addressed.
 
     grpc_extra_deps()
     ```
@@ -58,7 +60,7 @@ def grpc_extra_deps(ignore_version_differences = False):
     api_dependencies()
 
     go_rules_dependencies()
-    go_register_toolchains(version = "1.19.4")
+    go_register_toolchains(version = go_toolchanins_version)
     gazelle_dependencies()
 
     # Pull-in the go 3rd party dependencies for protoc_gen_validate, which is
