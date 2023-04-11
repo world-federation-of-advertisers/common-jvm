@@ -143,16 +143,18 @@ class PostgresDatabaseClientTest {
     val insertStatementBuilder =
       BoundStatement.builder("INSERT INTO Cars (CarId, Year, Make, Model) VALUES ($1, $2, $3, $4)")
     val insertStatement =
-      insertStatementBuilder.apply {
-        for (car in cars) {
-          addBinding {
-            bind("$1", car.carId)
-            bind("$2", car.year)
-            bind("$3", car.make)
-            bind("$4", car.model)
+      insertStatementBuilder
+        .apply {
+          for (car in cars) {
+            addBinding {
+              bind("$1", car.carId)
+              bind("$2", car.year)
+              bind("$3", car.make)
+              bind("$4", car.model)
+            }
           }
         }
-      }.build()
+        .build()
 
     val statementResult =
       with(dbClient.readWriteTransaction()) { executeStatement(insertStatement).also { commit() } }
