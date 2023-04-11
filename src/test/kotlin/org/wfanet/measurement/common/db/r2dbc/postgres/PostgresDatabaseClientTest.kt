@@ -28,10 +28,10 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
-import org.wfanet.measurement.common.db.r2dbc.BoundStatement
 import org.wfanet.measurement.common.db.r2dbc.ReadWriteContext
 import org.wfanet.measurement.common.db.r2dbc.ResultRow
 import org.wfanet.measurement.common.db.r2dbc.boundStatement
+import org.wfanet.measurement.common.db.r2dbc.newBoundStatementBuilder
 import org.wfanet.measurement.common.db.r2dbc.postgres.testing.EmbeddedPostgresDatabaseProvider
 import org.wfanet.measurement.common.getJarResourcePath
 import org.wfanet.measurement.common.identity.InternalId
@@ -141,7 +141,9 @@ class PostgresDatabaseClientTest {
         Car(carId = InternalId(2), year = 2020, make = "Tesla", model = "Model 3")
       )
     val insertStatementBuilder =
-      BoundStatement.newBuilder("INSERT INTO Cars (CarId, Year, Make, Model) VALUES ($1, $2, $3, $4)")
+      newBoundStatementBuilder(
+        "INSERT INTO Cars (CarId, Year, Make, Model) VALUES ($1, $2, $3, $4)"
+      )
     val insertStatement =
       insertStatementBuilder
         .apply {

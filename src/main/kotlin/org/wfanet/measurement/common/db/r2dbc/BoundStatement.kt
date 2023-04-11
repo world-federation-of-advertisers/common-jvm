@@ -170,7 +170,7 @@ private constructor(
       }
     }
 
-    fun newBuilder(baseSql: String): Builder = BuilderImpl(baseSql)
+    internal fun newBuilder(baseSql: String): Builder = BuilderImpl(baseSql)
   }
 }
 
@@ -179,3 +179,6 @@ private data class Binding(val values: Map<String, Any>, val nulls: Map<String, 
 /** Builds a [BoundStatement]. */
 fun boundStatement(baseSql: String, bind: BoundStatement.Builder.() -> Unit = {}): BoundStatement =
   BoundStatement.boundStatement(baseSql, bind)
+
+fun newBoundStatementBuilder(baseSql: String): BoundStatement.Builder =
+  BoundStatement.newBuilder(baseSql)
