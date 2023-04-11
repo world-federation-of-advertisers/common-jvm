@@ -52,6 +52,8 @@ def grpc_extra_deps(ignore_version_differences = False, go_toolchains_version = 
     Args:
       ignore_version_differences: Plumbed directly to the invocation of
         apple_rules_dependencies.
+      go_toolchains_version: Plumbed directly to the invocation of 
+        go_register_toolchains.
     """
     protobuf_deps()
 
