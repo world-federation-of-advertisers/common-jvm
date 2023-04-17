@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Loads the dependencies necessary for the external repositories defined in grpc_deps.bzl.
-
+"""Loads the dependencies necessary for the external repositories defined in grpc_deps.bzl.
+"""
 
 load("@bazel_gazelle//:deps.bzl", "gazelle_dependencies")
 load("@build_bazel_apple_support//lib:repositories.bzl", "apple_support_dependencies")
