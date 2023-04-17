@@ -32,8 +32,7 @@ def grpc_extra_deps(ignore_version_differences = False, go_toolchains_version = 
     with modifications to address version compatibility issues.
     It must be run after `grpc_deps`.
 
-    TODO(https://github.com/grpc/grpc/issues/32850):
-    Revert when the dependency issue is addressed.
+    TODO(grpc/grpc#32850): Revert when the dependency issue is addressed.
 
     Args:
       ignore_version_differences: Plumbed directly to the invocation of
