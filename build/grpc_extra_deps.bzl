@@ -12,9 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""
-Loads the dependencies necessary for the external repositories defined in grpc_deps.bzl.
-"""
+# Loads the dependencies necessary for the external repositories defined in grpc_deps.bzl.
+
 
 load("@bazel_gazelle//:deps.bzl", "gazelle_dependencies")
 load("@build_bazel_apple_support//lib:repositories.bzl", "apple_support_dependencies")
@@ -29,10 +28,12 @@ load("@upb//bazel:workspace_deps.bzl", "upb_deps")
 def grpc_extra_deps(ignore_version_differences = False, go_toolchains_version = "1.19.4"):
     """Loads additional gRPC dependencies.
 
-    This is copied from https://github.com/grpc/grpc with modifications to address version compatibility issues.
+    This is copied from https://github.com/grpc/grpc
+    with modifications to address version compatibility issues.
     It must be run after `grpc_deps`.
 
-    TODO(https://github.com/grpc/grpc/issues/32850): Revert when the dependency issue is addressed.
+    TODO(https://github.com/grpc/grpc/issues/32850):
+    Revert when the dependency issue is addressed.
 
     Args:
       ignore_version_differences: Plumbed directly to the invocation of
