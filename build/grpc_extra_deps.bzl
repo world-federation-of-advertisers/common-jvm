@@ -28,9 +28,9 @@ load("@upb//bazel:workspace_deps.bzl", "upb_deps")
 
 def grpc_extra_deps(ignore_version_differences = False, go_toolchains_version = "1.19.4"):
     """Loads additional gRPC dependencies.
-    
+
     This is copied from https://github.com/grpc/grpc with modifications to address version compatibility issues. It must be run after `grpc_deps`.
-    
+
     TODO(https://github.com/grpc/grpc/issues/32850): Revert when the dependency issue is addressed.
 
     Args:
