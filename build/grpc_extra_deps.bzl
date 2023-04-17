@@ -28,26 +28,10 @@ load("@upb//bazel:workspace_deps.bzl", "upb_deps")
 
 def grpc_extra_deps(ignore_version_differences = False, go_toolchains_version = "1.19.4"):
     """Loads additional gRPC dependencies.
-
-    This is copied from https://github.com/grpc/grpc with modifications to address version compatibility issues.
-
-    These are necessary for using the external repositories defined in
-    grpc_deps.bzl. Projects that depend on gRPC as an external repository need
-    to call both grpc_deps and grpc_extra_deps, if they have not already loaded
-    the extra dependencies. For example, they can do the following in their
-    WORKSPACE
-    ```
-    load("@com_github_grpc_grpc//bazel:grpc_deps.bzl", "grpc_deps", "grpc_test_only_deps")
-    grpc_deps()
-
-    grpc_test_only_deps()
-
-    # load("@com_github_grpc_grpc//bazel:grpc_extra_deps.bzl", "grpc_extra_deps")
-    load("//build/grpc_extra_deps.bzl", "grpc_extra_deps")
+    
+    This is copied from https://github.com/grpc/grpc with modifications to address version compatibility issues. It must be run after `grpc_deps`.
+    
     TODO(https://github.com/grpc/grpc/issues/32850): Revert when the dependency issue is addressed.
-
-    grpc_extra_deps()
-    ```
 
     Args:
       ignore_version_differences: Plumbed directly to the invocation of
