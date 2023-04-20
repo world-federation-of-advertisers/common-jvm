@@ -8,6 +8,7 @@ kt_jvm_library(
     deps = [
         "//imports/java/com/google/protobuf",
         "//imports/java/io/r2dbc",
+        "//imports/java/org/postgresql:r2dbc",
         "//imports/java/org/reactivestreams",
         "//imports/kotlin/com/google/protobuf/kotlin",
         "//imports/kotlin/kotlinx/coroutines:core",

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package org.wfanet.measurement.common.db.r2dbc;
+package org.wfanet.measurement.common.db.r2dbc
 
 import io.r2dbc.postgresql.api.PostgresqlException
 import kotlin.time.Duration.Companion.seconds

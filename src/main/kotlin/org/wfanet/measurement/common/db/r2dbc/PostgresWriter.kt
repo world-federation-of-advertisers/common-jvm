@@ -12,14 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package org.wfanet.measurement.common.db.r2dbc;
+package org.wfanet.measurement.common.db.r2dbc
 
 import io.r2dbc.postgresql.api.PostgresqlException
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.logging.Logger
-import org.wfanet.measurement.common.db.r2dbc.DatabaseClient
-import org.wfanet.measurement.common.db.r2dbc.ReadWriteContext
-import org.wfanet.measurement.common.db.r2dbc.SerializableErrors
 import org.wfanet.measurement.common.identity.IdGenerator
 
 /** Abstraction for writing to Postgres. */
