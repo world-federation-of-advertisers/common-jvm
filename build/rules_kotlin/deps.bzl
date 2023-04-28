@@ -25,10 +25,10 @@ load("//build:versions.bzl", "KOTLIN_RELEASE_VERSION")
 # KOTLIN_RELEASE_VERSION.
 JETBRAINS_ANNOTATIONS_VERSION = "13.0"
 
-def rules_kotlin_deps():
+def rules_kotlin_deps(name = "com_github_jetbrains_kotlin"):
     compiler_release = kotlinc_version(
         release = KOTLIN_RELEASE_VERSION,
-        sha256 = "632166fed89f3f430482f5aa07f2e20b923b72ef688c8f5a7df3aa1502c6d8ba",
+        sha256 = "6e43c5569ad067492d04d92c28cdf8095673699d81ce460bd7270443297e8fd7",
     )
     kotlin_repositories(
         compiler_release = compiler_release,
@@ -39,7 +39,7 @@ def rules_kotlin_deps():
     # TODO(bazelbuild/rules_kotlin#752): Drop once compiler repo deps are
     # tagged with Maven coordinates.
     _kotlin_compiler_repo(
-        name = "com_github_jetbrains_kotlin",
+        name = name,
         urls = [
             url.format(version = compiler_release.version)
             for url in compiler_release.url_templates
