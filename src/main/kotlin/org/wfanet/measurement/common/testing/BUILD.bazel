@@ -7,9 +7,7 @@ kt_jvm_library(
     testonly = True,
     srcs = glob(["*.kt"]),
     runtime_deps = [
-        # Workaround for `NoClassDefFoundError: kotlin/jdk7/AutoCloseableKt`.
-        # See https://github.com/bazelbuild/rules_kotlin/issues/333
-        "//imports/kotlin/kotlin:stdlib_jdk7",
+        "//imports/kotlin/kotlin:stdlib",
     ],
     deps = [
         "//imports/java/com/google/common/truth",
