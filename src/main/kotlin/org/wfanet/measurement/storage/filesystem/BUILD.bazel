@@ -23,7 +23,7 @@ kt_jvm_library(
         ":client",
         "//imports/java/io/grpc:api",
         "//imports/java/org/jetbrains/annotations",
-        "//imports/kotlin/kotlin:stdlib_jdk7",
+        "//imports/kotlin/kotlin:stdlib",
         "//imports/kotlin/kotlinx/coroutines:core",
         "//src/main/kotlin/org/wfanet/measurement/common",
         "//src/main/kotlin/org/wfanet/measurement/storage:client",
