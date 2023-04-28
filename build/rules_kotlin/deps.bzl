@@ -28,7 +28,7 @@ JETBRAINS_ANNOTATIONS_VERSION = "13.0"
 def rules_kotlin_deps():
     compiler_release = kotlinc_version(
         release = KOTLIN_RELEASE_VERSION,
-        sha256 = "632166fed89f3f430482f5aa07f2e20b923b72ef688c8f5a7df3aa1502c6d8ba",
+        sha256 = "6e43c5569ad067492d04d92c28cdf8095673699d81ce460bd7270443297e8fd7",
     )
     kotlin_repositories(
         compiler_release = compiler_release,

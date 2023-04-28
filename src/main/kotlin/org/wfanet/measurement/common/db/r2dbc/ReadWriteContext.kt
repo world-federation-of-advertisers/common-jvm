@@ -18,7 +18,6 @@ package org.wfanet.measurement.common.db.r2dbc
 
 import io.r2dbc.spi.Connection
 import io.r2dbc.spi.TransactionDefinition
-import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.cancellable
 import kotlinx.coroutines.flow.flatMapConcat
 import kotlinx.coroutines.flow.fold
@@ -41,7 +40,7 @@ interface ReadWriteContext : ReadContext {
 internal class ReadWriteContextImpl private constructor(connection: Connection) :
   ReadWriteContext, ReadContextImpl(connection) {
 
-  @OptIn(FlowPreview::class) // For `flatMapConcat`.
+  @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
   override suspend fun executeStatement(statement: BoundStatement): StatementResult {
     val numRowsUpdated =
       statement
