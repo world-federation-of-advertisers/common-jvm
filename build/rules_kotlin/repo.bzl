@@ -24,8 +24,6 @@ load("//build:versions.bzl", "KOTLIN_RELEASE_VERSION")
 _JETBRAINS_KOTLIN_OVERRIDE_TARGETS = {
     "org.jetbrains.kotlin:kotlin-stdlib": "@com_github_jetbrains_kotlin//:kotlin-stdlib",
     "org.jetbrains.kotlin:kotlin-stdlib-common": "@com_github_jetbrains_kotlin//:kotlin-stdlib",
-    "org.jetbrains.kotlin:kotlin-stdlib-jdk7": "@com_github_jetbrains_kotlin//:kotlin-stdlib-jdk7",
-    "org.jetbrains.kotlin:kotlin-stdlib-jdk8": "@com_github_jetbrains_kotlin//:kotlin-stdlib-jdk8",
     "org.jetbrains.kotlin:kotlin-reflect": "@com_github_jetbrains_kotlin//:kotlin-reflect",
     "org.jetbrains.kotlin:kotlin-test": "@com_github_jetbrains_kotlin//:kotlin-test",
 }
@@ -51,8 +49,8 @@ def _rules_kotlin_repo(version, sha256):
 
 def io_bazel_rules_kotlin():
     _rules_kotlin_repo(
-        version = "v1.6.0-RC-2",
-        sha256 = "88d19c92a1fb63fb64ddb278cd867349c3b0d648b6fe9ef9a200b9abcacd489d",
+        version = "v1.8-RC-1",
+        sha256 = "1779628569eb3b0fe97a3fb5c3ed8090e6503e425600b401c7b1afb6b23a3098",
     )
 
 def rules_kotlin_maven_artifacts_dict():
