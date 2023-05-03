@@ -63,8 +63,8 @@ PROTOBUF_JAVA_VERSION = "3." + PROTOBUF.version
 PROTOBUF_KOTLIN_VERSION = PROTOBUF_JAVA_VERSION
 
 GRPC_JAVA = VersionedArchiveInfo(
-    version = "1.52.1",
-    sha256 = "6bbe6dca6e60bb892fec8000ab2a200c474c4d9700f34e3fa205c84aaeaf33f7",
+    version = "1.54.1",
+    sha256 = "98c32df8a878cbca5a6799922d28e9df93a4d5607316e0e3f8269a5886d9e429",
     url_templates = [
         "https://github.com/grpc/grpc-java/archive/refs/tags/v{version}.tar.gz",
     ],
