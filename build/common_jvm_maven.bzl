@@ -18,7 +18,6 @@ Adds external repos necessary for common-jvm.
 
 load(
     "//build/rules_kotlin:repo.bzl",
-    "RULES_KOTLIN_OVERRIDE_TARGETS",
     "rules_kotlin_maven_artifacts_dict",
 )
 load(
@@ -113,7 +112,7 @@ def common_jvm_maven_artifacts_dict():
 
     return maven_artifacts
 
-COMMON_JVM_MAVEN_OVERRIDE_TARGETS = dict(RULES_KOTLIN_OVERRIDE_TARGETS.items() + GRPC_KOTLIN_OVERRIDE_TARGETS.items())
+COMMON_JVM_MAVEN_OVERRIDE_TARGETS = GRPC_KOTLIN_OVERRIDE_TARGETS
 
 COMMON_JVM_EXCLUDED_ARTIFACTS = [
     # Until the log2shell has been more widely mitigated, prohibit log4j totally.
