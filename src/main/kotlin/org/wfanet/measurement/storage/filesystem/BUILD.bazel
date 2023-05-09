@@ -1,10 +1,10 @@
-load("@io_bazel_rules_kotlin//kotlin:jvm.bzl", "kt_jvm_library")
+load("//build/rules_kotlin:defs.bzl", "kt_jvm_library_with_maven_kotlin_stdlib")
 load("@rules_java//java:defs.bzl", "java_binary")
 load("@io_bazel_rules_docker//java:image.bzl", "java_image")
 
 package(default_visibility = ["//visibility:public"])
 
-kt_jvm_library(
+kt_jvm_library_with_maven_kotlin_stdlib(
     name = "client",
     srcs = ["FileSystemStorageClient.kt"],
     deps = [
@@ -16,14 +16,13 @@ kt_jvm_library(
     ],
 )
 
-kt_jvm_library(
+kt_jvm_library_with_maven_kotlin_stdlib(
     name = "service",
     srcs = ["FileSystemStorageService.kt"],
     deps = [
         ":client",
         "//imports/java/io/grpc:api",
         "//imports/java/org/jetbrains/annotations",
-        "//imports/kotlin/kotlin:stdlib",
         "//imports/kotlin/kotlinx/coroutines:core",
         "//src/main/kotlin/org/wfanet/measurement/common",
         "//src/main/kotlin/org/wfanet/measurement/storage:client",
@@ -31,7 +30,7 @@ kt_jvm_library(
     ],
 )
 
-kt_jvm_library(
+kt_jvm_library_with_maven_kotlin_stdlib(
     name = "server",
     srcs = ["FileSystemStorageServer.kt"],
     visibility = ["//visibility:private"],

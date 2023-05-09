@@ -1,15 +1,15 @@
-load("@io_bazel_rules_kotlin//kotlin:jvm.bzl", "kt_jvm_library")
+load("//build/rules_kotlin:defs.bzl", "kt_jvm_library_with_maven_kotlin_stdlib")
 
 package(default_visibility = ["//visibility:public"])
 
-kt_jvm_library(
+kt_jvm_library_with_maven_kotlin_stdlib(
     name = "invalid_signature_exception",
     srcs = ["InvalidSignatureException.kt"],
     deps = [
     ],
 )
 
-kt_jvm_library(
+kt_jvm_library_with_maven_kotlin_stdlib(
     name = "hashing",
     srcs = ["Hashing.kt"],
     deps = [
@@ -19,7 +19,7 @@ kt_jvm_library(
     ],
 )
 
-kt_jvm_library(
+kt_jvm_library_with_maven_kotlin_stdlib(
     name = "key_storage",
     srcs = [
         "KeyHandle.kt",
@@ -33,7 +33,7 @@ kt_jvm_library(
     ],
 )
 
-kt_jvm_library(
+kt_jvm_library_with_maven_kotlin_stdlib(
     name = "pem_io",
     srcs = [
         "PemIo.kt",
@@ -43,7 +43,7 @@ kt_jvm_library(
     ],
 )
 
-kt_jvm_library(
+kt_jvm_library_with_maven_kotlin_stdlib(
     name = "signing_key_storage",
     srcs = [
         "SigningKeyHandle.kt",
@@ -62,7 +62,7 @@ kt_jvm_library(
     ],
 )
 
-kt_jvm_library(
+kt_jvm_library_with_maven_kotlin_stdlib(
     name = "security_provider",
     srcs = [
         "DerEncoding.kt",
@@ -75,7 +75,7 @@ kt_jvm_library(
     ],
 )
 
-kt_jvm_library(
+kt_jvm_library_with_maven_kotlin_stdlib(
     name = "signatures",
     srcs = ["Signatures.kt"],
     deps = [
@@ -87,7 +87,7 @@ kt_jvm_library(
     ],
 )
 
-kt_jvm_library(
+kt_jvm_library_with_maven_kotlin_stdlib(
     name = "signed_blob",
     srcs = ["SignedBlob.kt"],
     deps = [
@@ -99,7 +99,7 @@ kt_jvm_library(
     ],
 )
 
-kt_jvm_library(
+kt_jvm_library_with_maven_kotlin_stdlib(
     name = "signing_certs",
     srcs = ["SigningCerts.kt"],
     deps = [

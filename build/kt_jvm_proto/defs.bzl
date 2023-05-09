@@ -18,7 +18,7 @@ Provides kt_jvm_proto_library to generate Kotlin protos.
 
 load("//build:defs.bzl", "get_real_short_path")
 load("@rules_proto//proto:defs.bzl", "ProtoInfo")
-load("@io_bazel_rules_kotlin//kotlin:jvm.bzl", "kt_jvm_library")
+load("//build/rules_kotlin:defs.bzl", "kt_jvm_library_with_maven_kotlin_stdlib")
 
 KtProtoLibInfo = provider(
     "Information for a Kotlin JVM proto library.",
@@ -183,7 +183,7 @@ def kt_jvm_proto_library(name, srcs = None, deps = None, **kwargs):
         visibility = ["//visibility:private"],
     )
 
-    kt_jvm_library(
+    kt_jvm_library_with_maven_kotlin_stdlib(
         name = name,
         srcs = [generated_srcjar],
         # TODO: add Bazel rule in protobuf instead of relying on Maven

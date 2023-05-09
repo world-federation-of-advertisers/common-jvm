@@ -6,7 +6,7 @@ common_jvm_repositories()
 
 load("//build:common_jvm_deps.bzl", "common_jvm_deps")
 
-common_jvm_deps()
+common_jvm_deps(name = "common_jvm_deps")
 
 load(
     "//build:common_jvm_maven.bzl",
@@ -14,7 +14,6 @@ load(
     "COMMON_JVM_MAVEN_OVERRIDE_TARGETS",
     "common_jvm_maven_artifacts",
 )
-
 load("@rules_jvm_external//:defs.bzl", "maven_install")
 
 maven_install(

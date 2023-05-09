@@ -35,7 +35,7 @@ load(
 )
 load("@tink_java//:tink_java_deps.bzl", "tink_java_deps")
 
-def common_jvm_deps():
+def common_jvm_deps(name):
     """
     Adds all external repos necessary for common-jvm.
     """
@@ -45,8 +45,8 @@ def common_jvm_deps():
     rules_proto_toolchains()
     grpc_deps()
     container_repositories()
-    rules_kotlin_deps()
-    base_java_images()
+    rules_kotlin_deps(name = name + "_rules_kotlin_deps")
+    base_java_images(name = name + "_base_java_images")
     switched_rules_by_language(
         name = "com_google_googleapis_imports",
         java = True,

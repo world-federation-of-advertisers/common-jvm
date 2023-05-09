@@ -1,10 +1,10 @@
 # Blob/object storage specifics for Google Cloud Storage (GCS).
 
-load("@io_bazel_rules_kotlin//kotlin:jvm.bzl", "kt_jvm_library")
+load("//build/rules_kotlin:defs.bzl", "kt_jvm_library_with_maven_kotlin_stdlib")
 
 package(default_visibility = ["//visibility:public"])
 
-kt_jvm_library(
+kt_jvm_library_with_maven_kotlin_stdlib(
     name = "gcs",
     srcs = glob(["*.kt"]),
     deps = [
