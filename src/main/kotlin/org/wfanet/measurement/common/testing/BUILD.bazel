@@ -1,4 +1,4 @@
-load("@io_bazel_rules_kotlin//kotlin:jvm.bzl", "kt_jvm_library")
+load("//build/rules_kotlin:defs.bzl", "kt_jvm_library")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -6,9 +6,6 @@ kt_jvm_library(
     name = "testing",
     testonly = True,
     srcs = glob(["*.kt"]),
-    runtime_deps = [
-        "//imports/kotlin/kotlin:stdlib",
-    ],
     deps = [
         "//imports/java/com/google/common/truth",
         "//imports/java/com/google/common/truth/extensions/proto",
