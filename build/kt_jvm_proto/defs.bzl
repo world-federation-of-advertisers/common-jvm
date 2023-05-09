@@ -18,7 +18,7 @@ Provides kt_jvm_proto_library to generate Kotlin protos.
 
 load("//build:defs.bzl", "get_real_short_path")
 load("@rules_proto//proto:defs.bzl", "ProtoInfo")
-load("@io_bazel_rules_kotlin//kotlin:jvm.bzl", "kt_jvm_library")
+load("//build/rules_kotlin:defs.bzl", "kt_jvm_library")
 
 KtProtoLibInfo = provider(
     "Information for a Kotlin JVM proto library.",
