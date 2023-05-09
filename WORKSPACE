@@ -14,7 +14,6 @@ load(
     "COMMON_JVM_MAVEN_OVERRIDE_TARGETS",
     "common_jvm_maven_artifacts",
 )
-
 load("@rules_jvm_external//:defs.bzl", "maven_install")
 
 maven_install(
