@@ -4,3 +4,8 @@ alias(
     name = "stdlib",
     actual = "@maven//:org_jetbrains_kotlin_kotlin_stdlib",
 )
+
+alias(
+    name = "reflect",
+    actual = "@maven//:org_jetbrains_kotlin_kotlin_reflect",
+)

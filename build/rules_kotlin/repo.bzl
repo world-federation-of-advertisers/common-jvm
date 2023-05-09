@@ -21,23 +21,12 @@ load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 load("@bazel_tools//tools/build_defs/repo:utils.bzl", "maybe")
 load("//build:versions.bzl", "KOTLIN_RELEASE_VERSION")
 
-_JETBRAINS_KOTLIN_OVERRIDE_TARGETS = {
-    "org.jetbrains.kotlin:kotlin-stdlib": "@com_github_jetbrains_kotlin//:kotlin-stdlib",
-    "org.jetbrains.kotlin:kotlin-stdlib-common": "@com_github_jetbrains_kotlin//:kotlin-stdlib",
-    "org.jetbrains.kotlin:kotlin-reflect": "@com_github_jetbrains_kotlin//:kotlin-reflect",
-    "org.jetbrains.kotlin:kotlin-test": "@com_github_jetbrains_kotlin//:kotlin-test",
-}
-
-_JETBRAINS_OVERRIDE_TARGETS = {
-    "org.jetbrains:annotations": "@com_github_jetbrains_kotlin//:annotations",
-}  # @unused
-
-# Override targets for rules_kotlin.
-#
-# Despite the fact that the Kotlin compiler release bundles JetBrains,
-# annotations, we intentionally do not include it as an override target since
-# as of the 1.6 compiler release it is quite an old version (13).
-RULES_KOTLIN_OVERRIDE_TARGETS = _JETBRAINS_KOTLIN_OVERRIDE_TARGETS
+_JETBRAINS_KOTLIN_LIBRARIES = [
+    "org.jetbrains.kotlin:kotlin-stdlib",
+    "org.jetbrains.kotlin:kotlin-stdlib-common",
+    "org.jetbrains.kotlin:kotlin-reflect",
+    "org.jetbrains.kotlin:kotlin-test",
+]
 
 def _rules_kotlin_repo(version, sha256):
     maybe(
@@ -49,13 +38,13 @@ def _rules_kotlin_repo(version, sha256):
 
 def io_bazel_rules_kotlin():
     _rules_kotlin_repo(
-        version = "v1.8-RC-1",
-        sha256 = "1779628569eb3b0fe97a3fb5c3ed8090e6503e425600b401c7b1afb6b23a3098",
+        version = "v1.8-RC-12",
+        sha256 = "8e5c8ab087e0fa3fbb58e1f6b99d8fe40f75bac44994c3d208eba723284465d6",
     )
 
 def rules_kotlin_maven_artifacts_dict():
     artifacts_dict = {
         coordinates: KOTLIN_RELEASE_VERSION
-        for coordinates in _JETBRAINS_KOTLIN_OVERRIDE_TARGETS.keys()
+        for coordinates in _JETBRAINS_KOTLIN_LIBRARIES
     }
     return artifacts_dict
