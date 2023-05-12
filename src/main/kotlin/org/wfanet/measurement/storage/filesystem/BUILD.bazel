@@ -1,4 +1,4 @@
-load("@io_bazel_rules_kotlin//kotlin:jvm.bzl", "kt_jvm_library")
+load("//build/rules_kotlin:defs.bzl", "kt_jvm_library")
 load("@rules_java//java:defs.bzl", "java_binary")
 load("@io_bazel_rules_docker//java:image.bzl", "java_image")
 
@@ -23,7 +23,6 @@ kt_jvm_library(
         ":client",
         "//imports/java/io/grpc:api",
         "//imports/java/org/jetbrains/annotations",
-        "//imports/kotlin/kotlin:stdlib_jdk7",
         "//imports/kotlin/kotlinx/coroutines:core",
         "//src/main/kotlin/org/wfanet/measurement/common",
         "//src/main/kotlin/org/wfanet/measurement/storage:client",

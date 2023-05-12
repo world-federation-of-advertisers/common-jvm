@@ -1,14 +1,10 @@
-load("@io_bazel_rules_kotlin//kotlin:jvm.bzl", "kt_jvm_library")
+load("//build/rules_kotlin:defs.bzl", "kt_jvm_library")
 
 package(default_visibility = ["//visibility:public"])
 
 kt_jvm_library(
     name = "common",
     srcs = glob(["*.kt"]),
-    runtime_deps = [
-        "//imports/kotlin/kotlin:stdlib_jdk7",
-        "//imports/kotlin/kotlin/reflect/jvm",
-    ],
     deps = [
         "//imports/java/com/google/common:guava",
         "//imports/java/com/google/devtools/build/runfiles",

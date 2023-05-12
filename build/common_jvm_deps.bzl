@@ -35,9 +35,9 @@ load(
 )
 load("@tink_java//:tink_java_deps.bzl", "tink_java_deps")
 
+# buildifier: disable=unnamed-macro
 def common_jvm_deps():
-    """
-    Adds all external repos necessary for common-jvm.
+    """Adds all external repos necessary for common-jvm.
     """
     rules_pkg_dependencies()
     rules_pkg_register_toolchains()
