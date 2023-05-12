@@ -49,6 +49,24 @@ def tink_java():
         strip_prefix = "tink-{commit}/java_src".format(commit = TINK_COMMIT),
     )
 
+def tink_cc():
+    _tink_base()
+
+    maybe(
+        http_archive,
+        name = "tink_cc",
+        url = _URL,
+        sha256 = _SHA256,
+        strip_prefix = "tink-{commit}/cc".format(commit = TINK_COMMIT),
+        repo_mapping = {
+            # TODO(bazelbuild/rules_proto#121): Remove this once
+            # protobuf_workspace is fixed.
+            "@com_google_protobuf": "@com_github_protocolbuffers_protobuf",
+        },
+    )
+    _tink_base()
+
+
 def _tink_base():
     maybe(
         http_archive,
