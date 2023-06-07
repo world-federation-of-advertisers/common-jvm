@@ -80,8 +80,8 @@ GRPC_KOTLIN = VersionedArchiveInfo(
 )
 
 RULES_JVM_EXTERNAL = VersionedArchiveInfo(
-    version = "5.1",
-    sha256 = "8c3b207722e5f97f1c83311582a6c11df99226e65e2471086e296561e57cc954",
+    version = "5.2",
+    sha256 = "f86fd42a809e1871ca0aabe89db0d440451219c3ce46c58da240c7dcdc00125f",
     url_templates = [
         "https://github.com/bazelbuild/rules_jvm_external/releases/download/{version}/rules_jvm_external-{version}.tar.gz",
     ],
