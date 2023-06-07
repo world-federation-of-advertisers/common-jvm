@@ -7,7 +7,6 @@ load("//build:versions.bzl", "KOTLIN_LANGUAGE_LEVEL")
 
 kt_kotlinc_options(
     name = "default_opts",
-    include_stdlibs = "none",
     x_optin = ["kotlin.RequiresOptIn"],
 )
 

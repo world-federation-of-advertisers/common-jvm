@@ -49,6 +49,7 @@ kt_jvm_test(
     deps = [
         "//imports/java/com/google/common/truth",
         "//imports/java/org/junit",
+        "//imports/kotlin/kotlin:stdlib_jdk7",
         "//imports/kotlin/kotlin/test",
         "//imports/kotlin/kotlinx/coroutines:core",
         "//imports/kotlin/kotlinx/coroutines/test",
