@@ -1,0 +1,83 @@
+# Replacement BUILD file for kotlin_compiler_repository from rules_kotlin.
+
+load("@io_bazel_rules_kotlin//kotlin:jvm.bzl", "kt_jvm_import")
+load("@io_bazel_rules_kotlin//kotlin:js.bzl", "kt_js_import")
+
+package(default_visibility = ["//visibility:public"])
+
+KOTLIN_RELEASE_VERSION = "{{kotlin_release_version}}"
+
+JETBRAINS_ANNOTATIONS_VERSION = "{{jetbrains_annotations_version}}"
+
+KT_JVM_STDLIBS = [
+    "kotlin-stdlib",
+    "kotlin-stdlib-jdk7",
+    "kotlin-stdlib-jdk8",
+    "kotlin-reflect",
+    "kotlin-test",
+    "kotlin-script-runtime",
+]
+
+KT_JS_STDLIBS = [
+    "kotlin-test-js",
+    "kotlin-stdlib-js",
+]
+
+filegroup(
+    name = "home",
+    srcs = glob(["**"]),
+)
+
+kt_jvm_import(
+    name = "annotations",
+    jar = "lib/annotations-{version}.jar".format(
+        version = JETBRAINS_ANNOTATIONS_VERSION,
+    ),
+    neverlink = 1,
+    tags = [
+        "maven_coordinates=org.jetbrains:annotations:{version}".format(
+            version = JETBRAINS_ANNOTATIONS_VERSION,
+        ),
+    ],
+)
+
+kt_jvm_import(
+    name = "jvm-abi-gen",
+    jar = "lib/jvm-abi-gen.jar",
+)
+
+kt_jvm_import(
+    name = "kotlin-compiler",
+    jar = "lib/kotlin-compiler.jar",
+    neverlink = 1,
+)
+
+[
+    kt_jvm_import(
+        name = lib,
+        jar = "lib/{lib}.jar".format(lib = lib),
+        srcjar = "lib/{lib}-sources.jar".format(lib = lib),
+        tags = [
+            "maven_coordinates=org.jetbrains.kotlin:{lib}:{version}".format(
+                lib = lib,
+                version = KOTLIN_RELEASE_VERSION,
+            ),
+        ],
+    )
+    for lib in KT_JVM_STDLIBS
+]
+
+[
+    kt_js_import(
+        name = lib,
+        jars = ["lib/{lib}.jar".format(lib = lib)],
+        srcjar = "lib/{lib}-sources.jar".format(lib = lib),
+        tags = [
+            "maven_coordinates=org.jetbrains.kotlin:{lib}:{version}".format(
+                lib = lib,
+                version = KOTLIN_RELEASE_VERSION,
+            ),
+        ],
+    )
+    for lib in KT_JS_STDLIBS
+]

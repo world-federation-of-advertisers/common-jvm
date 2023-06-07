@@ -1,4 +1,4 @@
-load("//build/rules_kotlin:defs.bzl", "kt_jvm_library")
+load("@io_bazel_rules_kotlin//kotlin:jvm.bzl", "kt_jvm_library")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -6,6 +6,11 @@ kt_jvm_library(
     name = "testing",
     testonly = True,
     srcs = glob(["*.kt"]),
+    runtime_deps = [
+        # Workaround for `NoClassDefFoundError: kotlin/jdk7/AutoCloseableKt`.
+        # See https://github.com/bazelbuild/rules_kotlin/issues/333
+        "//imports/kotlin/kotlin:stdlib_jdk7",
+    ],
     deps = [
         "//imports/java/com/google/common/truth/extensions/proto",
         "//imports/java/com/google/protobuf",

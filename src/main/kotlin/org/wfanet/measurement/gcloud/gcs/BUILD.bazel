@@ -1,6 +1,6 @@
 # Blob/object storage specifics for Google Cloud Storage (GCS).
 
-load("//build/rules_kotlin:defs.bzl", "kt_jvm_library")
+load("@io_bazel_rules_kotlin//kotlin:jvm.bzl", "kt_jvm_library")
 
 package(default_visibility = ["//visibility:public"])
 

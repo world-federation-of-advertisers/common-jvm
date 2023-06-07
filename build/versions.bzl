@@ -104,15 +104,15 @@ RULES_DOCKER = VersionedArchiveInfo(
     ],
 )
 
-KOTLIN_LANGUAGE_LEVEL = "1.7"
+KOTLIN_LANGUAGE_LEVEL = "1.5"
 
 # Kotlin release version.
 #
 # See https://kotlinlang.org/docs/releases.html#release-details.
-KOTLIN_RELEASE_VERSION = "1.8.21"
+KOTLIN_RELEASE_VERSION = "1.6.21"
 
 # kotlinx.coroutines version.
-KOTLINX_COROUTINES_VERSION = "1.7.0-RC"
+KOTLINX_COROUTINES_VERSION = "1.6.2"
 
 # Tink commit that is newer than v1.6.1.
 #
