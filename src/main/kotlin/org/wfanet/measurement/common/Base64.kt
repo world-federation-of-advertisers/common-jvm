@@ -14,12 +14,14 @@
 
 package org.wfanet.measurement.common
 
+import com.google.gson.JsonPrimitive
 import com.google.protobuf.ByteString
 import java.nio.ByteBuffer
 import java.util.Base64
 
 private val urlEncoder = Base64.getUrlEncoder().withoutPadding()
 private val urlDecoder = Base64.getUrlDecoder()
+private val mimeDecoder = Base64.getMimeDecoder()
 
 /** Encodes this [ByteString] into an RFC 7515 base64url-encoded [String]. */
 fun ByteString.base64UrlEncode(): String = encode(urlEncoder)
@@ -33,6 +35,8 @@ fun ByteArray.base64UrlEncode(): String = urlEncoder.encodeToString(this)
 fun Long.base64UrlEncode(): String {
   return toReadOnlyByteBuffer().encode(urlEncoder)
 }
+
+fun JsonPrimitive.base64MimeDecode(): ByteString = asString.decode(mimeDecoder)
 
 private fun ByteString.encode(encoder: Base64.Encoder): String {
   return asReadOnlyByteBuffer().encode(encoder)
