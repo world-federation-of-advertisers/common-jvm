@@ -24,7 +24,6 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
-import org.wfanet.measurement.common.base64UrlDecode
 import org.wfanet.measurement.common.db.r2dbc.boundStatement
 import org.wfanet.measurement.common.db.r2dbc.postgres.testing.EmbeddedPostgresDatabaseProvider
 import org.wfanet.measurement.common.getJarResourcePath
@@ -69,13 +68,15 @@ class PostgresBase64DecoderTest {
             )
           ) as json
           FROM CarDescriptions
-        """.trimIndent()
+        """
+          .trimIndent()
       )
-    val jsonObj = readWriteContext.executeQuery(selectStatement).consume { row ->
-      JsonParser.parseString(row["json"]).asJsonObject
-    }.first()
-    assertThat(
-      jsonObj.getAsJsonPrimitive("Description").decodePostgresBase64().decodeToString()
-    ).isEqualTo(description)
+    val jsonObj =
+      readWriteContext
+        .executeQuery(selectStatement)
+        .consume { row -> JsonParser.parseString(row["json"]).asJsonObject }
+        .first()
+    assertThat(jsonObj.getAsJsonPrimitive("Description").decodePostgresBase64().decodeToString())
+      .isEqualTo(description)
   }
 }
