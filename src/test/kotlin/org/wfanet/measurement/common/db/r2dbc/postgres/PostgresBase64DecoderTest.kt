@@ -39,7 +39,7 @@ class PostgresBase64DecoderTest {
   private val dbClient = dbProvider.createNewDatabase()
 
   @Test
-  fun `executeStatement returns result with updated rows`() = runBlocking {
+  fun `decodePostgresBase64 decodes postgres base64 encoded byte string`() = runBlocking {
     val readWriteContext = dbClient.readWriteTransaction()
 
     val description = "description"
@@ -53,7 +53,6 @@ class PostgresBase64DecoderTest {
       ) {
         bind("$1", description.toByteArray())
       }
-
     val insertResult = readWriteContext.executeStatement(insertStatement)
     assertThat(insertResult.numRowsUpdated).isEqualTo(1L)
 
@@ -76,6 +75,7 @@ class PostgresBase64DecoderTest {
         .executeQuery(selectStatement)
         .consume { row -> JsonParser.parseString(row["json"]).asJsonObject }
         .first()
+
     assertThat(jsonObj.getAsJsonPrimitive("Description").decodePostgresBase64().decodeToString())
       .isEqualTo(description)
   }
