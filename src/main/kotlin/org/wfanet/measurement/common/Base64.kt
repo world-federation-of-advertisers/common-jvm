@@ -16,7 +16,6 @@ package org.wfanet.measurement.common
 
 import com.google.gson.JsonPrimitive
 import com.google.protobuf.ByteString
-import com.google.protobuf.kotlin.toByteString
 import java.nio.ByteBuffer
 import java.util.Base64
 
@@ -37,9 +36,7 @@ fun Long.base64UrlEncode(): String {
   return toReadOnlyByteBuffer().encode(urlEncoder)
 }
 
-fun JsonPrimitive.base64MimeDecode(): ByteString {
-  return mimeDecoder.decode(this.asString).toByteString()
-}
+fun JsonPrimitive.base64MimeDecode(): ByteString = asString.decode(mimeDecoder)
 
 private fun ByteString.encode(encoder: Base64.Encoder): String {
   return asReadOnlyByteBuffer().encode(encoder)
