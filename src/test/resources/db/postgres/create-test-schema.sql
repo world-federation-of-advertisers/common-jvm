@@ -29,3 +29,10 @@ CREATE TABLE Cars (
 
   PRIMARY KEY (CarId)
 );
+
+CREATE TABLE CarDescriptions (
+    CarId bigint NOT NULL,
+    Description bytea,
+
+    PRIMARY KEY (CarId)
+)

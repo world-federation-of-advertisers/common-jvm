@@ -20,3 +20,24 @@ kt_jvm_test(
         "//src/main/proto/google/type:latlng_kt_jvm_proto",
     ],
 )
+
+kt_jvm_test(
+    name = "PostgresBase64DecoderTest",
+    srcs = ["PostgresBase64DecoderTest.kt"],
+    resources = [
+        "//src/test/resources/db/postgres",
+    ],
+    test_class = "org.wfanet.measurement.common.db.r2dbc.postgres.PostgresBase64DecoderTest",
+    runtime_deps = [
+        "//imports/java/org/yaml:snakeyaml",
+    ],
+    deps = [
+        "//imports/java/com/google/common/truth",
+        "//imports/java/org/junit",
+        "//src/main/kotlin/org/wfanet/measurement/common",
+        "//src/main/kotlin/org/wfanet/measurement/common/db/r2dbc/postgres",
+        "//src/main/kotlin/org/wfanet/measurement/common/db/r2dbc/postgres/testing:embedded_postgres",
+        "//src/main/proto/google/type:dayofweek_kt_jvm_proto",
+        "//src/main/proto/google/type:latlng_kt_jvm_proto",
+    ],
+)
