@@ -20,21 +20,38 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.security.MessageDigest
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.collect
 
 private const val SHA_256 = "SHA-256"
 
-/** Computes the SHA-256 hash of [data]. */
-fun hashSha256(data: ByteString): ByteString {
-  return newSha256Hasher().digest(data)
+object Hashing {
+  /** Computes the SHA-256 hash of [data]. */
+  fun hashSha256(data: ByteString): ByteString {
+    return newSha256Hasher().digest(data)
+  }
+
+  /**
+   * Computes the SHA-256 hash of [data].
+   *
+   * @param byteOrder the byte order to use when converting [data] to bytes
+   */
+  fun hashSha256(data: Long, byteOrder: ByteOrder = ByteOrder.BIG_ENDIAN): ByteString {
+    val buffer = ByteBuffer.allocate(8).order(byteOrder).putLong(data).asReadOnlyBuffer()
+    buffer.flip()
+    return newSha256Hasher().apply { update(buffer) }.digest().toByteString()
+  }
+
+  @PublishedApi
+  internal fun newSha256Hasher(): MessageDigest {
+    return MessageDigest.getInstance(SHA_256)
+  }
 }
 
-/** Computes the SHA-256 hash of [data]. */
-fun hashSha256(data: Long): ByteString {
-  val buffer = ByteBuffer.allocate(8).order(ByteOrder.BIG_ENDIAN).putLong(data).asReadOnlyBuffer()
-  buffer.flip()
-  return newSha256Hasher().apply { update(buffer) }.digest().toByteString()
-}
+@Deprecated("Use Hashing.hashSha256", ReplaceWith("Hashing.hashSha256(data)"))
+fun hashSha256(data: ByteString): ByteString = Hashing.hashSha256(data)
+
+@Deprecated("Use Hashing.hashSha256", ReplaceWith("Hashing.hashSha256(data, byteOrder)"))
+fun hashSha256(data: Long, byteOrder: ByteOrder = ByteOrder.BIG_ENDIAN): ByteString =
+  Hashing.hashSha256(data, byteOrder)
 
 /**
  * Terminal flow operator that collects the given flow with the provided [action] and computes the
@@ -45,17 +62,12 @@ fun hashSha256(data: Long): ByteString {
 suspend inline fun Flow<ByteString>.collectAndHashSha256(
   crossinline action: suspend (ByteString) -> Unit
 ): ByteString {
-  val hasher = newSha256Hasher()
+  val hasher = Hashing.newSha256Hasher()
   collect { bytes ->
     action(bytes)
     hasher.update(bytes)
   }
   return hasher.digest().toByteString()
-}
-
-@PublishedApi
-internal fun newSha256Hasher(): MessageDigest {
-  return MessageDigest.getInstance(SHA_256)
 }
 
 @PublishedApi

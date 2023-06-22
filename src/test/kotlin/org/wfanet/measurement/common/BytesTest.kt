@@ -16,6 +16,7 @@ package org.wfanet.measurement.common
 
 import com.google.common.truth.Truth.assertThat
 import com.google.protobuf.ByteString
+import java.nio.ByteOrder
 import kotlin.test.assertFails
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.toList
@@ -33,6 +34,15 @@ class BytesTest {
 
     assertThat(longValue.toByteString()).isEqualTo(binaryValue)
     assertThat(binaryValue.toLong()).isEqualTo(longValue)
+  }
+
+  @Test
+  fun `ByteString is bidirectionally convertible with Long using little endian`() {
+    val longValue = -3519155157501101422L
+    val binaryValue = HexString("92BAA98F077329CF").bytes
+
+    assertThat(longValue.toByteString(ByteOrder.LITTLE_ENDIAN)).isEqualTo(binaryValue)
+    assertThat(binaryValue.toLong(ByteOrder.LITTLE_ENDIAN)).isEqualTo(longValue)
   }
 
   @Test
