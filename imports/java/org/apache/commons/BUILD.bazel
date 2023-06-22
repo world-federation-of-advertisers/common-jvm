@@ -4,3 +4,8 @@ alias(
     name = "math3",
     actual = "@maven//:org_apache_commons_commons_math3",
 )
+
+alias(
+    name = "numbers_gamma",
+    actual = "@maven//:org_apache_commons_commons_numbers_gamma",
+)
