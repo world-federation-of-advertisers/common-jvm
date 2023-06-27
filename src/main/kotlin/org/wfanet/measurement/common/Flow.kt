@@ -17,13 +17,12 @@ package org.wfanet.measurement.common
 import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.channels.ClosedReceiveChannelException
+import kotlinx.coroutines.channels.ChannelResult
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.buffer
@@ -151,8 +150,7 @@ private class SingleConsumedFlowItem<T>(singleItem: T) : ConsumedFlowItem<T>() {
  *   [ConsumedFlowItem.close].
  */
 @OptIn(
-  FlowPreview::class, // For `produceIn`
-  ExperimentalCoroutinesApi::class // For `Channel.isClosedForReceive`.
+  DelicateCoroutinesApi::class // For `Channel.isClosedForReceive`.
 )
 suspend fun <T> Flow<T>.consumeFirst(
   producerContext: CoroutineContext = Dispatchers.Unconfined
@@ -163,17 +161,15 @@ suspend fun <T> Flow<T>.consumeFirst(
   // We can't know whether the flow is empty until we start collecting. Since
   // we're using a rendezvous channel, this means the channel won't be closed
   // until after we attempt to receive the first item.
-  val item =
-    try {
-      channel.receive()
-    } catch (e: ClosedReceiveChannelException) {
-      producerScope.cancel()
-      return null
-    }
+  val result: ChannelResult<T> = channel.receiveCatching()
+  if (result.isClosed) {
+    producerScope.cancel()
+    return null
+  }
 
   val hasRemaining = !channel.isClosedForReceive
   return object : ConsumedFlowItem<T>() {
-    override val item = item
+    override val item = result.getOrThrow()
     override val remaining = if (hasRemaining) channel.consumeAsFlow() else flowOf()
     override val hasRemaining = hasRemaining
 
