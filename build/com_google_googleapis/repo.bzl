@@ -23,7 +23,7 @@ def com_google_googleapis():
     maybe(
         http_archive,
         name = "com_google_googleapis",
-        sha256 = "65b3c3c4040ba3fc767c4b49714b839fe21dbe8467451892403ba90432bb5851",
-        strip_prefix = "googleapis-a1af63efb82f54428ab35ea76869d9cd57ca52b8",
-        urls = ["https://github.com/googleapis/googleapis/archive/a1af63efb82f54428ab35ea76869d9cd57ca52b8.tar.gz"],
+        sha256 = "70cdef593fbfe340d558ca10c6858b5c0410a54576381c422dc3b9158a12ba03",
+        strip_prefix = "googleapis-18becb1d1426feb7399db144d7beeb3284f1ccb0",
+        urls = ["https://github.com/googleapis/googleapis/archive/18becb1d1426feb7399db144d7beeb3284f1ccb0.tar.gz"],
     )

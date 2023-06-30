@@ -26,6 +26,8 @@ import com.google.protobuf.TypeRegistry
 import com.google.protobuf.duration
 import com.google.protobuf.timestamp
 import com.google.protobuf.util.JsonFormat
+import com.google.type.Interval
+import com.google.type.interval
 import java.io.File
 import java.time.Clock
 import java.time.Duration
@@ -109,6 +111,16 @@ fun Duration.toProtoDuration(): ProtoDuration {
 fun ProtoDuration.toDuration(): Duration = Duration.ofSeconds(seconds, nanos.toLong())
 
 fun Clock.protoTimestamp(): Timestamp = instant().toProtoTime()
+
+/** Converts this [Interval] to an [OpenEndTimeRange]. */
+fun Interval.toRange(): OpenEndTimeRange =
+  OpenEndTimeRange(startTime.toInstant(), endTime.toInstant())
+
+/** Converts this [OpenEndTimeRange] to an [Interval]. */
+fun OpenEndTimeRange.toInterval(): Interval = interval {
+  startTime = start.toProtoTime()
+  endTime = endExclusive.toProtoTime()
+}
 
 val ProtocolMessageEnum.numberAsLong: Long
   get() = number.toLong()
