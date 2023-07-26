@@ -26,12 +26,14 @@ import com.google.protobuf.TypeRegistry
 import com.google.protobuf.duration
 import com.google.protobuf.timestamp
 import com.google.protobuf.util.JsonFormat
+import com.google.type.Date
 import com.google.type.Interval
 import com.google.type.interval
 import java.io.File
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
+import java.time.ZoneOffset
 
 /** Converts a protobuf [MessageOrBuilder] into its canonical JSON representation. */
 fun MessageOrBuilder.toJson(): String {
@@ -127,6 +129,21 @@ val ProtocolMessageEnum.numberAsLong: Long
 
 fun Message.Builder.mergeFromTextProto(textProto: Readable, typeRegistry: TypeRegistry) {
   TextFormat.Parser.newBuilder().setTypeRegistry(typeRegistry).build().merge(textProto, this)
+}
+
+/** Converts this [Timestamp] to a [Date]. */
+fun Timestamp.toProtoDate(): Date {
+  return toInstant().atZone(ZoneOffset.UTC).toLocalDate().toProtoDate()
+}
+
+/** Converts this [Date] to a [Timestamp]. */
+fun Date.toProtoTime(): Timestamp {
+  return toLocalDate().atStartOfDay().toInstant(ZoneOffset.UTC).toProtoTime()
+}
+
+/** Converts this [Instant] to a [Date] */
+private fun Instant.toDate(): Date {
+  return this.atZone(ZoneOffset.UTC).toLocalDate().toProtoDate()
 }
 
 @Suppress("UNCHECKED_CAST") // Safe per Message contract.
