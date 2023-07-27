@@ -132,18 +132,13 @@ fun Message.Builder.mergeFromTextProto(textProto: Readable, typeRegistry: TypeRe
 }
 
 /** Converts this [Timestamp] to a [Date]. */
-fun Timestamp.toProtoDate(): Date {
+fun Timestamp.toDateUtc(): Date {
   return toInstant().atZone(ZoneOffset.UTC).toLocalDate().toProtoDate()
 }
 
 /** Converts this [Date] to a [Timestamp]. */
-fun Date.toProtoTime(): Timestamp {
+fun Date.atStartOfDayUtc(): Timestamp {
   return toLocalDate().atStartOfDay().toInstant(ZoneOffset.UTC).toProtoTime()
-}
-
-/** Converts this [Instant] to a [Date] */
-private fun Instant.toDate(): Date {
-  return this.atZone(ZoneOffset.UTC).toLocalDate().toProtoDate()
 }
 
 @Suppress("UNCHECKED_CAST") // Safe per Message contract.
