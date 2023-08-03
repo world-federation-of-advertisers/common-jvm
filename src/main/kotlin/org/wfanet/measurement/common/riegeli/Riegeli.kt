@@ -417,8 +417,8 @@ class Riegeli {
        * Helper function for the block header builder function.
        * Compares the headerHash element of the block's header to a highway hash of the block's other header elements.
        *
-       * @param headerHash      64-bit ByteArray containing a HighwayHash of the other chunk header elements
-       *                        (dataSize, dataHash, chunkType, numRecords, and decodedDataSize).
+       * @param headerHash      64-bit ByteArray containing a HighwayHash of the other block header elements
+       *                        (previousChunk and nextChunk).
        * @param previousChunk   ByteArray representing the distance from the beginning of the chunk interrupted by this
        *                        block header to the beginning of the block as a 64-bit, little-endian long.
        * @param nextChunk       ByteArray representing the distance from the beginning of the block to the end of the chunk
