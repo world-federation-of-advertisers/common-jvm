@@ -118,6 +118,18 @@ fun ByteString.withPadding(paddedSize: Int): ByteString {
     .concat(this)
 }
 
+fun ByteString.withTrailingPadding(paddedSize: Int): ByteString {
+  if (size >= paddedSize) {
+    return this
+  }
+
+  return this.concat(ByteString.newOutput(paddedSize - size)
+    .use { output ->
+      repeat(paddedSize - size) { output.write(0x00) }
+      output.toByteString()
+    })
+}
+
 /** Returns a [ByteString] containing the specified elements. */
 fun byteStringOf(vararg bytesAsInts: Int): ByteString {
   return ByteString.newOutput(bytesAsInts.size).use {
@@ -326,4 +338,74 @@ fun Byte.toStringHex(): String {
 )
 fun String.hexAsByteString(): ByteString {
   return HexString(this).bytes
+}
+
+/**
+ * Converts a bytearray representing a little-endian, 64-bit number into a long.
+ *
+ * @param byteArray A ByteArray with 8 elements which represents a little-endian, 64-bit number.
+ * @return A long representation of the provided ByteArray.
+ * @throws IndexOutOfBoundsException if the size of the provided ByteArray is not 8.
+ */
+fun readLittleEndian64Long(byteString: ByteString): Long {
+  if (byteString.size() != 8) {
+    throw IndexOutOfBoundsException("Byte array provided is not the correct length")
+  }
+
+  val byteArray = byteString.toByteArray()
+
+  return ByteBuffer.wrap(byteArray).order(ByteOrder.LITTLE_ENDIAN).long
+}
+
+/**
+ * Converts a bytearray representing a little-endian, 64-bit number into an int.
+ *
+ * @param byteArray A ByteArray with 8 elements which represents a little-endian, 64-bit number.
+ * @return An integer representation of the provided ByteArray.
+ * @throws IndexOutOfBoundsException if the size of the provided ByteArray is not 8.
+ */
+fun readLittleEndian64Int(byteString: ByteString): Int {
+  return readLittleEndian64Long(byteString).toInt()
+}
+
+/**
+ * Converts a bytearray representing a little-endian, 56-bit number into an int.
+ *
+ * @param byteArray A ByteArray with 7 elements which represents a little-endian, 56-bit number.
+ * @return An integer representation of the provided ByteArray.
+ * @throws IndexOutOfBoundsException if the size of the provided ByteArray is not 7.
+ */
+fun readLittleEndian56Int(byteString: ByteString): Int {
+  if (byteString.size() != 7) {
+    throw IndexOutOfBoundsException("Byte array provided is not the correct length")
+  }
+
+  return readLittleEndian64Int(byteString.withTrailingPadding(8))
+}
+
+/**
+ * Reads a varint from an InputStream.
+ * Varints are variable-width integers.
+ *
+ * Code snippet taken from
+ *   https://github.com/bazelbuild/bazel/blob/master/src/main/java/com/google/devtools/build/lib/util/VarInt.java
+ *
+ * @param inputStream The input stream from which the varint should be read.
+ * @return The varint which has been read from the input stream.
+ */
+fun getVarInt(byteBuffer: ByteBuffer): Int {
+  var result = 0
+  var shift = 0
+  var b: Int
+  do {
+    if (shift >= 32) {
+      // Out of range
+      throw IndexOutOfBoundsException("varint too long")
+    }
+    // Get 7 bits from next byte
+    b = byteBuffer.get().toInt()
+    result = result or (b and 0x7F shl shift)
+    shift += 7
+  } while (b and 0x80 != 0)
+  return result
 }

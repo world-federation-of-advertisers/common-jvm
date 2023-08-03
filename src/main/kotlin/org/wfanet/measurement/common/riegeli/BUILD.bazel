@@ -9,15 +9,12 @@ kt_jvm_library(
         "Riegeli.kt"
     ],
     deps = [
-        ":highway_hash",
-        "@maven//:org_apache_commons_commons_compress",
-        "@maven//:org_brotli_dec",
-    ]
-)
-
-java_library(
-    name = "highway_hash",
-    srcs = [
-        "HighwayHash.java"
+        "@com_google_highwayhash//:highway_hash",
+        "//imports/java/org/apache/commons:compress",
+        "//imports/java/org/brotli:dec",
+        "//imports/java/com/github/luben:zstd-jni",
+        "//imports/java/com/google/protobuf",
+        "//imports/kotlin/com/google/protobuf/kotlin",
+        "//src/main/kotlin/org/wfanet/measurement/common:common"
     ]
 )
