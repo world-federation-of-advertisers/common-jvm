@@ -1,0 +1,6 @@
+package(default_visibility = ["//visibility:public"])
+
+alias(
+    name = "dec",
+    actual = "@maven//:org_brotli_dec",
+)

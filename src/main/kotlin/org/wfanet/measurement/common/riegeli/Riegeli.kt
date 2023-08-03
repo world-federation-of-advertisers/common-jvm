@@ -14,92 +14,46 @@
 
 package org.wfanet.measurement.common.riegeli
 
+import com.google.highwayhash.HighwayHash
+import com.google.protobuf.ByteString
+import com.google.protobuf.kotlin.toByteString
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.InputStream
 import java.nio.ByteBuffer
-import java.nio.ByteOrder
 import java.util.LinkedList
+import java.util.logging.Logger
 import org.apache.commons.compress.compressors.CompressorInputStream
 import org.apache.commons.compress.compressors.brotli.BrotliCompressorInputStream
 import org.apache.commons.compress.compressors.snappy.SnappyCompressorInputStream
 import org.apache.commons.compress.compressors.zstandard.ZstdCompressorInputStream
 import org.apache.commons.compress.utils.CountingInputStream
+import org.wfanet.measurement.common.getVarInt
+import org.wfanet.measurement.common.readLittleEndian56Int
+import org.wfanet.measurement.common.readLittleEndian64Int
+import org.wfanet.measurement.common.readLittleEndian64Long
+
+
 
 
 // Package-level constant representing the fixed-size of a block within a Riegeli compressed file.
 const val kBlockSize = 1 shl 16
 
-/**
- * Converts a bytearray representing a little-endian, 64-bit number into a long.
- *
- * @param byteArray A ByteArray with 8 elements which represents a little-endian, 64-bit number.
- * @return A long representation of the provided ByteArray.
- * @throws IndexOutOfBoundsException if the size of the provided ByteArray is not 8.
- */
-fun readLittleEndian64Long(byteArray: ByteArray): Long {
-  if (byteArray.size != 8) {
-    throw IndexOutOfBoundsException("Byte array provided is not the correct length")
-  }
+fun readInputStreamIntoByteBuffer(inputStream: InputStream, byteBuffer: ByteBuffer): Boolean {
+  while (byteBuffer.hasRemaining()) {
+    val temp = inputStream.read()
 
-  return ByteBuffer.wrap(byteArray).order(ByteOrder.LITTLE_ENDIAN).long
-}
-
-/**
- * Converts a bytearray representing a little-endian, 64-bit number into an int.
- *
- * @param byteArray A ByteArray with 8 elements which represents a little-endian, 64-bit number.
- * @return An integer representation of the provided ByteArray.
- * @throws IndexOutOfBoundsException if the size of the provided ByteArray is not 8.
- */
-fun readLittleEndian64Int(byteArray: ByteArray): Int {
-  return readLittleEndian64Long(byteArray).toInt()
-}
-
-/**
- * Converts a bytearray representing a little-endian, 56-bit number into an int.
- *
- * @param byteArray A ByteArray with 7 elements which represents a little-endian, 56-bit number.
- * @return An integer representation of the provided ByteArray.
- * @throws IndexOutOfBoundsException if the size of the provided ByteArray is not 7.
- */
-fun readLittleEndian56Int(byteArray: ByteArray): Int {
-  if (byteArray.size != 7) {
-    throw IndexOutOfBoundsException("Byte array provided is not the correct length")
-  }
-
-  val tempOutputStream = ByteArrayOutputStream()
-  tempOutputStream.write(byteArray)
-  tempOutputStream.write(0x00)
-  return readLittleEndian64Int(tempOutputStream.toByteArray())
-}
-
-/**
- * Reads a varint from an InputStream.
- * Varints are variable-width integers.
- *
- * Code snippet taken from
- *   https://github.com/bazelbuild/bazel/blob/master/src/main/java/com/google/devtools/build/lib/util/VarInt.java
- *
- * @param inputStream The input stream from which the varint should be read.
- * @return The varint which has been read from the input stream.
- */
-fun getVarInt(inputStream: InputStream): Int {
-  var result = 0
-  var shift = 0
-  var b: Int
-  do {
-    if (shift >= 32) {
-      // Out of range
-      throw IndexOutOfBoundsException("varint too long")
+    if (temp == -1) {
+      //There is no more to read
+      return false
     }
-    // Get 7 bits from next byte
-    b = inputStream.read()
-    result = result or (b and 0x7F shl shift)
-    shift += 7
-  } while (b and 0x80 != 0)
-  return result
+
+    byteBuffer.put(temp.toByte())
+
+  }
+
+  return true
 }
 
 /**
@@ -146,7 +100,13 @@ class Riegeli {
    *                        little-endian long
    * @param data            ByteArray with the chunk's compressed data. The array's size is represented by dataSize.
    */
-  private class Chunk private constructor(val headerHash: ByteArray, val dataSize: ByteArray, val dataHash: ByteArray, val chunkType: ByteArray, val numRecords: ByteArray, val decodedDataSize: ByteArray, val data: ByteArray) {
+  private class Chunk private constructor(val headerHash: ByteString,
+                                          val dataSize: ByteString,
+                                          val dataHash: ByteString,
+                                          val chunkType: ByteString,
+                                          val numRecords: ByteString,
+                                          val decodedDataSize: ByteString,
+                                          val data: ByteBuffer) {
 
 
     companion object {
@@ -167,22 +127,32 @@ class Riegeli {
        */
       fun fromInputStream(inputStream: CountingInputStream): Chunk? {
 
-        val headerHash = ByteArray(8)
-        val dataSize = ByteArray(8)
-        val dataHash = ByteArray(8)
-        val chunkType = ByteArray(1)
-        val numRecords = ByteArray(7)
-        val decodedDataSize = ByteArray(8)
+        val headerHashArray = ByteArray(8)
+        val dataSizeArray = ByteArray(8)
+        val dataHashArray = ByteArray(8)
+        val chunkTypeArray = ByteArray(1)
+        val numRecordsArray = ByteArray(7)
+        val decodedDataSizeArray = ByteArray(8)
 
-        if (inputStream.read(headerHash) == -1) {
+        if (inputStream.read(headerHashArray) == -1) {
           //There is no more to read
           return null
         }
-        inputStream.read(dataSize)
-        inputStream.read(dataHash)
-        inputStream.read(chunkType)
-        inputStream.read(numRecords)
-        inputStream.read(decodedDataSize)
+
+        inputStream.read(dataSizeArray)
+        inputStream.read(dataHashArray)
+        inputStream.read(chunkTypeArray)
+        inputStream.read(numRecordsArray)
+        inputStream.read(decodedDataSizeArray)
+
+        val headerHash = headerHashArray.toByteString()
+        val dataSize = dataSizeArray.toByteString()
+        val dataHash = dataHashArray.toByteString()
+        val chunkType = chunkTypeArray.toByteString()
+        val numRecords = numRecordsArray.toByteString()
+        val decodedDataSize = decodedDataSizeArray.toByteString()
+
+
 
         if (!isValidHeader(headerHash, dataSize, dataHash, chunkType, numRecords, decodedDataSize)) {
           throw Exception("Riegeli: Chunk header is invalid")
@@ -200,7 +170,7 @@ class Riegeli {
           dataStream.write(inputStream.read())
         }
 
-        val data = dataStream.toByteArray()
+        val data = ByteBuffer.wrap(dataStream.toByteArray())
 
         if (!isValidData(dataSize, dataHash, data)) {
           throw Exception("Riegeli: Chunk data is invalid")
@@ -225,18 +195,24 @@ class Riegeli {
        *                        64-bit, little-endian long
        * @return True if the chunk's header is valid, false if it is not.
        */
-      private fun isValidHeader(headerHash: ByteArray, dataSize: ByteArray, dataHash: ByteArray, chunkType: ByteArray, numRecords: ByteArray, decodedDataSize: ByteArray): Boolean {
+      private fun isValidHeader(headerHash: ByteString,
+                                dataSize: ByteString,
+                                dataHash: ByteString,
+                                chunkType: ByteString,
+                                numRecords: ByteString,
+                                decodedDataSize: ByteString): Boolean {
+
         val highwayHash = generateHighwayHash()
 
         val headerData = dataSize + dataHash + chunkType + numRecords + decodedDataSize
 
-        highwayHash.updatePacket(headerData, 0)
+        highwayHash.updatePacket(headerData.toByteArray(), 0)
 
-        val hashedDataString = java.lang.Long.toHexString(highwayHash.finalize64())
+        val hashedDataLong = highwayHash.finalize64()
 
-        val headerHashString = java.lang.Long.toHexString(readLittleEndian64Long(headerHash))
+        val headerHashLong = readLittleEndian64Long(headerHash)
 
-        return hashedDataString.equals(headerHashString)
+        return hashedDataLong == headerHashLong
       }
 
       /**
@@ -249,35 +225,26 @@ class Riegeli {
        * @param data      ByteArray with the chunk's compressed data. The array's size is represented by dataSize.
        * @return True if the chunk's header is valid, false if it is not.
        */
-      private fun isValidData(dataSize: ByteArray, dataHash: ByteArray, data: ByteArray): Boolean {
+      private fun isValidData(dataSize: ByteString, dataHash: ByteString, data: ByteBuffer): Boolean {
         val highwayHash = generateHighwayHash()
 
         var position = 0
         val dataSizeInt = readLittleEndian64Int(dataSize)
 
         while (dataSizeInt - position >= 32) {
-          highwayHash.updatePacket(data, position)
+          highwayHash.updatePacket(data.array(), position)
           position += 32
         }
 
         if (dataSizeInt - position > 0) {
-          highwayHash.updateRemainder(data, position, dataSizeInt - position)
+          highwayHash.updateRemainder(data.array(), position, dataSizeInt - position)
         }
 
-        val dataHashString = java.lang.Long.toHexString(readLittleEndian64Long(dataHash))
-        val hashedDataString = java.lang.Long.toHexString(highwayHash.finalize64())
+        val dataHashLong = readLittleEndian64Long(dataHash)
+        val hashedDataLong = highwayHash.finalize64()
 
-        return dataHashString.equals(hashedDataString)
+        return dataHashLong == hashedDataLong
       }
-    }
-
-    /**
-     * Creates and returns a ByteArrayInputStream of the chunk's compressed data.
-     *
-     * @return A ByteArrayInputStream of the chunk's compressed data.
-     */
-    fun dataInputStream(): InputStream {
-      return ByteArrayInputStream(this.data)
     }
 
     /**
@@ -294,24 +261,32 @@ class Riegeli {
      *                          - 0x73: Snappy
      * @return A ByteArray containing the decompressed data from the buffer.
      */
-    private fun readCompressedBuffer(inputStream: CountingInputStream, compressedSize: Int, compressionType: Byte): ByteArray {
-      val startingPoint = inputStream.bytesRead
+    private fun readCompressedBuffer(dataBuffer: ByteBuffer, compressedSize: Int, compressionType: Byte): ByteBuffer {
+      val startingPoint = dataBuffer.position()
+
+      println("STARTING POINT: ${startingPoint}")
 
       //If compression type is 0, there is not a varint at the beginning of the buffer so do not read it.
-      val decompressedSize = if (compressionType == 0x00.toByte()) -1 else getVarInt(inputStream)
+      val decompressedSize = if (compressionType == 0x00.toByte()) -1 else getVarInt(dataBuffer)
 
-      val sizeOfVarInt = (inputStream.bytesRead - startingPoint).toInt()
+      val sizeOfVarInt = (dataBuffer.position() - startingPoint).toInt()
 
-      val compressedByteArray = ByteArray(compressedSize - sizeOfVarInt)
+      println("Size of VARINT: ${sizeOfVarInt}")
+      println("Ending POINT: ${dataBuffer.position()}")
+      println("DEcompressed Size: ${decompressedSize}")
 
-      inputStream.read(compressedByteArray)
+      val compressedBuffer = ByteBuffer.allocate(compressedSize - sizeOfVarInt)
+
+      while (compressedBuffer.hasRemaining()) {
+        compressedBuffer.put(dataBuffer.get())
+      }
 
       // If compression type is 0, the output stream is already decompressed
       if (compressionType == 0x00.toByte()) {
-        return compressedByteArray
+        return compressedBuffer
       }
 
-      val tempInputStream = ByteArrayInputStream(compressedByteArray)
+      val tempInputStream = ByteArrayInputStream(compressedBuffer.array())
 
       val compressedInputStream: CompressorInputStream = when (compressionType) {
         0x62.toByte() -> BrotliCompressorInputStream(tempInputStream)
@@ -320,11 +295,11 @@ class Riegeli {
         else -> throw Exception("Invalid Compression Type for Compressed Buffer")
       }
 
-      val byteArr = ByteArray(decompressedSize)
+      val uncompressedBuffer = ByteBuffer.allocate(decompressedSize)
 
-      compressedInputStream.read(byteArr)
+      readInputStreamIntoByteBuffer(compressedInputStream, uncompressedBuffer)
 
-      return byteArr
+      return uncompressedBuffer
     }
 
     /**
@@ -344,45 +319,47 @@ class Riegeli {
      * @return  A list where each element is a ByteArray representing a decompressed record. If there are no records
      *          within the chunk, an empty list is returned.
      */
-    fun getRecords(): LinkedList<ByteArray> {
+    fun getRecords(): LinkedList<ByteString> {
 
       //If the chunk is not a chunk with records, return an empty list
-      if (this.chunkType[0] != 0x72.toByte()) {
-        return LinkedList<ByteArray>()
+      if (this.chunkType.byteAt(0) != 0x72.toByte()) {
+        return LinkedList<ByteString>()
       }
 
-      val inputStream = CountingInputStream(this.dataInputStream())
+      val dataBuffer = this.data.duplicate().rewind()
 
-      val startingPoint = inputStream.bytesRead
+      val startingPoint = dataBuffer.position()
 
-      val compressionType = ByteArray(1)
-      inputStream.read(compressionType)
+      val compressionType = dataBuffer.get()
 
-      val compressedSizesSizeInt = getVarInt(inputStream)
+      val compressedSizesSizeInt = getVarInt(dataBuffer)
 
       val numRecords = readLittleEndian56Int(this.numRecords)
 
-      val sizesByteArr = readCompressedBuffer(inputStream, compressedSizesSizeInt, compressionType[0])
-      val sizesStream = ByteArrayInputStream(sizesByteArr)
+      val sizesByteBuffer = readCompressedBuffer(dataBuffer, compressedSizesSizeInt, compressionType)
+      sizesByteBuffer.rewind()
       val sizes = LinkedList<Int>()
 
       repeat(numRecords) {
-        sizes.add(getVarInt(sizesStream))
+        sizes.add(getVarInt(sizesByteBuffer))
       }
 
-      val chunkBeginningSize = inputStream.bytesRead - startingPoint
+      val chunkBeginningSize = dataBuffer.position() - startingPoint
       val encodedDataSize = (readLittleEndian64Long(this.dataSize) - chunkBeginningSize).toInt()
 
-      val valuesByteArr = readCompressedBuffer(inputStream, encodedDataSize, compressionType[0])
+      val valuesByteBuffer = readCompressedBuffer(dataBuffer, encodedDataSize, compressionType)
+      valuesByteBuffer.rewind()
 
-      val valuesByteBuffer = ByteBuffer.wrap(valuesByteArr)
-
-      val records = LinkedList<ByteArray>()
+      val records = LinkedList<ByteString>()
 
       for (size in sizes) {
-        val arr = ByteArray(size)
-        valuesByteBuffer.get(arr)
-        records.add(arr)
+        val recordByteBuffer = ByteBuffer.allocate(size)
+
+        while(recordByteBuffer.hasRemaining()) {
+          recordByteBuffer.put(valuesByteBuffer.get())
+        }
+
+        records.add(recordByteBuffer.toByteString())
       }
 
       return records
@@ -402,7 +379,7 @@ class Riegeli {
    * @param nextChunk       ByteArray representing the distance from the beginning of the block to the end of the chunk
    *                        interrupted by this block header as a 64-bit, little-endian long.
    */
-  private class BlockHeader private constructor(val headerHash: ByteArray, val previousChunk: ByteArray, val nextChunk: ByteArray) {
+  private class BlockHeader private constructor(val headerHash: ByteString, val previousChunk: ByteString, val nextChunk: ByteString) {
 
     companion object {
 
@@ -417,13 +394,17 @@ class Riegeli {
        * @return A new BlockHeader object as read from the inputStream.
        */
       fun fromInputStream(inputStream: InputStream): BlockHeader {
-        val headerHash = ByteArray(8)
-        val previousChunk = ByteArray(8)
-        val nextChunk = ByteArray(8)
+        val headerHashArray = ByteArray(8)
+        val previousChunkArray = ByteArray(8)
+        val nextChunkArray = ByteArray(8)
 
-        inputStream.read(headerHash)
-        inputStream.read(previousChunk)
-        inputStream.read(nextChunk)
+        inputStream.read(headerHashArray)
+        inputStream.read(previousChunkArray)
+        inputStream.read(nextChunkArray)
+
+        val headerHash = headerHashArray.toByteString()
+        val previousChunk = previousChunkArray.toByteString()
+        val nextChunk = nextChunkArray.toByteString()
 
         if (!this.isValid(headerHash, previousChunk, nextChunk)) {
           throw Exception("Riegeli: Block header is invalid")
@@ -444,18 +425,18 @@ class Riegeli {
        *                        interrupted by this block header as a 64-bit, little-endian long.
        * @return True if the block's header is valid, false if it is not.
        */
-      private fun isValid(headerHash: ByteArray, previousChunk: ByteArray, nextChunk: ByteArray): Boolean {
+      private fun isValid(headerHash: ByteString, previousChunk: ByteString, nextChunk: ByteString): Boolean {
         val highwayHash = generateHighwayHash()
 
         val headerData = previousChunk + nextChunk
 
-        highwayHash.updateRemainder(headerData, 0, headerData.size)
+        highwayHash.updateRemainder(headerData.toByteArray(), 0, headerData.size)
 
-        val hashedDataString = java.lang.Long.toHexString(highwayHash.finalize64())
+        val hashedDataLong = highwayHash.finalize64()
 
-        val headerHashString = java.lang.Long.toHexString(readLittleEndian64Long(headerHash))
+        val headerHashLong = readLittleEndian64Long(headerHash)
 
-        return hashedDataString.equals(headerHashString)
+        return hashedDataLong == headerHashLong
       }
     }
   }
@@ -466,21 +447,27 @@ class Riegeli {
    * @param incomingInputStream An input stream which contains data which should be decompressed using Riegeli.
    * @return A list where each element is a ByteArray containing the bytes of a record.
    */
-  fun readCompressedInputStreamWithRecords(incomingInputStream: InputStream): List<ByteArray> {
+  fun readCompressedInputStreamWithRecords(incomingInputStream: InputStream): List<ByteString> {
     val inputStream = CountingInputStream(incomingInputStream)
     BlockHeader.fromInputStream(inputStream)
 
     Chunk.fromInputStream(inputStream)
-    val records = LinkedList<ByteArray>()
+    val records = LinkedList<ByteString>()
 
     while (true) {
       val chunk = Chunk.fromInputStream(inputStream) ?: break
 
-      //Chunk type is simple chunk with records
-      if (chunk.chunkType[0] == 0x72.toByte()) {
+      //Chunk type is simple chunk with records (0x72)
+      if (chunk.chunkType.byteAt(0) == 0x72.toByte()) {
         records.addAll(chunk.getRecords())
       } else {
-        println("NON RECORD CHUNK -- Chunk type: ${chunk.chunkType[0]}")
+        //Ignored/unsupported chunk types:
+        //0x73 - File Signature - Present at the beginning of the file, encodes no records, is ignored
+        //0x6d - File Metadata - provides information describing the records, not necessary to read, is ignored
+        //0x70 - Padding - encodes no records and only occupies file space, is ignored
+        //0x74 - Transposed Chunk with Records - no documentation provided for the format of this chunk, unimplementable
+
+        logger.info("NON RECORD CHUNK -- Chunk type: ${chunk.chunkType.byteAt(0)}")
       }
     }
 
@@ -493,7 +480,7 @@ class Riegeli {
    * @param filename The path of the file which should be decompressed using Riegeli.
    * @return A list where each element is a ByteArray containing the bytes of a record.
    */
-  fun readCompressedFileWithRecords(filename: String): List<ByteArray> {
+  fun readCompressedFileWithRecords(filename: String): List<ByteString> {
     val inputStream = File(filename).inputStream()
 
     val list = readCompressedInputStreamWithRecords(inputStream)
@@ -501,5 +488,9 @@ class Riegeli {
     inputStream.close()
 
     return list
+  }
+
+  companion object {
+    private val logger = Logger.getLogger(this::class.java.name)
   }
 }
