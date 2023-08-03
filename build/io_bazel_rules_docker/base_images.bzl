@@ -25,22 +25,22 @@ def base_java_images():
     See https://console.cloud.google.com/gcr/images/distroless/GLOBAL/java
 
     We currently use
-    gcr.io/distroless/java11-debian11:nonroot
+    gcr.io/distroless/java11-debian11:nonroot-amd64
     and
-    gcr.io/distroless/java11-debian11:debug-nonroot
+    gcr.io/distroless/java11-debian11:debug-nonroot-amd64
     as the base images.
     """
 
     container_pull(
         name = "java_image_base",
-        digest = "sha256:a9be9ef912e263a1cf386a91648ee2454b892e5607ddf285875a5c4e2b0079b3",
+        digest = "sha256:6652063a30969dd5380cb5b34f36a7f9d2a682af6ad81d0a7ca8113d6e8d3d5c",
         registry = "gcr.io",
         repository = "distroless/java11-debian11",
     )
 
     container_pull(
         name = "java_debug_image_base",
-        digest = "sha256:b33c5d712678985705cd85d884daf4444333a00f590fc7c48a7b8165c5a902a8",
+        digest = "sha256:f9231c515b187ea1b586858003ad2292d6289447415caccb1d91e85adfb5a47a",
         registry = "gcr.io",
         repository = "distroless/java11-debian11",
     )

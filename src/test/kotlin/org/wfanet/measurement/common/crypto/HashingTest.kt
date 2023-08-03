@@ -16,6 +16,7 @@ package org.wfanet.measurement.common.crypto
 
 import com.google.common.truth.Truth.assertThat
 import com.google.protobuf.ByteString
+import java.nio.ByteOrder
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
@@ -25,7 +26,7 @@ import org.wfanet.measurement.common.HexString
 class HashingTest {
   @Test
   fun `hashSha256 get expected result`() {
-    val result = hashSha256(ByteString.copyFromUtf8("foo"))
+    val result = Hashing.hashSha256(ByteString.copyFromUtf8("foo"))
     assertThat(HexString(result))
       .isEqualTo(HexString("2C26B46B68FFC68FF99B453C1D30413413422D706483BFA0F98A5E886266E7AE"))
   }
@@ -34,9 +35,20 @@ class HashingTest {
   fun `hashSha256 get expected result for Long`() {
     val signedFixed64 = -5720240472533425799L // Hex: B09D9F98ECD52179
 
-    val result = hashSha256(signedFixed64)
+    val result = Hashing.hashSha256(signedFixed64)
 
     // Compare to value obtained using `echo 'B09D9F98ECD52179' | xxd -r -p | sha256sum`
+    assertThat(HexString(result))
+      .isEqualTo(HexString("5258F08862A1715F8D95B310D0D509A88EC1FD79BF1F512DD4350961659E9884"))
+  }
+
+  @Test
+  fun `hashSha256 get expected result for little endian Long`() {
+    val signedFixed64 = 8728492764970327472 // Hex: 7921D5EC989F9DB0
+
+    val result = Hashing.hashSha256(signedFixed64, ByteOrder.LITTLE_ENDIAN)
+
+    // Compare to value obtained using `echo '7921D5EC989F9DB0' | xxd -e -r -p | sha256sum`
     assertThat(HexString(result))
       .isEqualTo(HexString("5258F08862A1715F8D95B310D0D509A88EC1FD79BF1F512DD4350961659E9884"))
   }

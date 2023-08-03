@@ -29,7 +29,11 @@ load(
     "@com_github_grpc_grpc_kotlin//:repositories.bzl",
     GRPC_KOTLIN_MAVEN_DEPS = "IO_GRPC_GRPC_KOTLIN_ARTIFACTS",
 )
-load("//build/rules_proto:repo.bzl", "rules_proto_maven_artifacts_dict")
+load(
+    "//build/rules_proto:repo.bzl",
+    "rules_proto_maven_artifacts_dict",
+    RULES_PROTO_EXCLUDED_ARTIFACTS = "EXCLUDED_ARTIFACTS",
+)
 load("//build/grpc_java:repo.bzl", "grpc_java_maven_artifacts_dict")
 load(
     "//build/grpc_kotlin:repo.bzl",
@@ -102,6 +106,7 @@ def common_jvm_maven_artifacts_dict():
 
         # Math library.
         "org.apache.commons:commons-math3": "3.6.1",
+        "org.apache.commons:commons-numbers-gamma": "1.1",
 
         # CSV library.
         "com.opencsv:opencsv": "5.6",
@@ -116,11 +121,11 @@ def common_jvm_maven_artifacts_dict():
 
 COMMON_JVM_MAVEN_OVERRIDE_TARGETS = dict(RULES_KOTLIN_OVERRIDE_TARGETS.items() + GRPC_KOTLIN_OVERRIDE_TARGETS.items())
 
-# Until the log2shell has been more widely mitigated, prohibit log4j totally.
 COMMON_JVM_EXCLUDED_ARTIFACTS = [
+    # Until the log2shell has been more widely mitigated, prohibit log4j totally.
     "org.apache.logging.log4j:log4j",
     "org.apache.logging.log4j:log4j-api",
     "org.apache.logging.log4j:log4j-core",
     "org.slf4j:log4j-over-slf4j",
     "org.slf4j:slf4j-log4j12",
-]
+] + RULES_PROTO_EXCLUDED_ARTIFACTS

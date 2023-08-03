@@ -69,17 +69,29 @@ fun Iterable<ByteString>.toByteArray(): ByteArray {
 val ByteString.size: Int
   get() = size()
 
-fun ByteString.toLong(): Long {
+fun ByteString.toLong(byteOrder: ByteOrder = ByteOrder.BIG_ENDIAN): Long {
   require(size == 8) { "Expected 8 bytes, got $size" }
-  return asReadOnlyByteBuffer().long
+  return asReadOnlyByteBuffer().order(byteOrder).long
 }
 
-fun Long.toByteString(): ByteString {
-  return ByteString.copyFrom(toReadOnlyByteBuffer())
+/**
+ * Converts this [Long] to a [ByteString].
+ *
+ * @param byteOrder the byte order to use when converting the [Long] to bytes
+ */
+fun Long.toByteString(byteOrder: ByteOrder = ByteOrder.BIG_ENDIAN): ByteString {
+  return ByteString.copyFrom(toReadOnlyByteBuffer(byteOrder))
 }
 
-fun Long.toReadOnlyByteBuffer(): ByteBuffer {
-  val buffer = ByteBuffer.allocate(8).order(ByteOrder.BIG_ENDIAN).putLong(this)
+/**
+ * Converts this [Long] to a [ByteBuffer].
+ *
+ * @param byteOrder the byte order to use when converting the [Long] to bytes. Note that this does
+ *   not affect the [order][ByteBuffer.order] of the returned [ByteBuffer], which is always
+ *   [ByteOrder.BIG_ENDIAN].
+ */
+fun Long.toReadOnlyByteBuffer(byteOrder: ByteOrder = ByteOrder.BIG_ENDIAN): ByteBuffer {
+  val buffer = ByteBuffer.allocate(8).order(byteOrder).putLong(this)
   buffer.flip()
   return buffer.asReadOnlyBuffer()
 }

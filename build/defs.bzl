@@ -60,3 +60,36 @@ def get_real_short_path(file):
     if virtual_imports in short_path:
         short_path = short_path.split(virtual_imports)[1].split("/", 1)[1]
     return short_path
+
+def _expand_template_impl(ctx):
+    substitutions = {
+        key: ctx.expand_make_variables("value", value, {})
+        for key, value in ctx.attr.substitutions.items()
+    }
+    ctx.actions.expand_template(
+        template = ctx.file.template,
+        output = ctx.outputs.out,
+        substitutions = substitutions,
+    )
+
+expand_template = rule(
+    implementation = _expand_template_impl,
+    doc = """Template expansion with "Make" variable substitution.
+
+    This delegates to ctx.actions.expand_template. See that function's documentation for the attributes.
+    """,
+    attrs = {
+        "template": attr.label(
+            mandatory = True,
+            allow_single_file = True,
+        ),
+        "substitutions": attr.string_dict(
+            mandatory = True,
+            doc = "A dictionary mapping strings to their substitutions. The values are subject to \"Make\" variable substitution.",
+        ),
+        "out": attr.output(
+            mandatory = True,
+        ),
+    },
+    output_to_genfiles = True,
+)
