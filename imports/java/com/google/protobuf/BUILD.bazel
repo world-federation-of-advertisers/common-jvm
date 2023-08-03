@@ -2,5 +2,5 @@ package(default_visibility = ["//visibility:public"])
 
 alias(
     name = "protobuf",
-    actual = "@com_google_protobuf//:protobuf_java",
+    actual = "@maven//:com_google_protobuf_protobuf_java",
 )

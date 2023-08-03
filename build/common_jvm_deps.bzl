@@ -22,6 +22,7 @@ load(
     "rules_proto_dependencies",
     "rules_proto_toolchains",
 )
+load("@rules_jvm_external//:repositories.bzl", "rules_jvm_external_deps")
 load(
     "@io_bazel_rules_docker//repositories:repositories.bzl",
     container_repositories = "repositories",
@@ -35,14 +36,14 @@ load(
 )
 load("@tink_java//:tink_java_deps.bzl", "tink_java_deps")
 
+# buildifier: disable=unnamed-macro
 def common_jvm_deps():
-    """
-    Adds all external repos necessary for common-jvm.
-    """
+    """Adds transitive dependencies of external repos for common-jvm."""
     rules_pkg_dependencies()
     rules_pkg_register_toolchains()
     rules_proto_dependencies()
     rules_proto_toolchains()
+    rules_jvm_external_deps()
     grpc_deps()
     container_repositories()
     rules_kotlin_deps()

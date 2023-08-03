@@ -12,12 +12,14 @@ kt_jvm_library(
     deps = [
         "//imports/java/com/google/common:guava",
         "//imports/java/com/google/devtools/build/runfiles",
+        "//imports/java/com/google/gson",
         "//imports/java/com/google/protobuf",
         "//imports/java/com/google/protobuf/util",
         "//imports/java/org/jetbrains/annotations",
         "//imports/java/picocli",
         "//imports/kotlin/com/google/protobuf/kotlin",
         "//imports/kotlin/kotlinx/coroutines:core",
+        "//src/main/proto/google/type:interval_kt_jvm_proto",
         "@com_google_googleapis//google/type:type_java_proto",
     ],
 )
