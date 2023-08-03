@@ -109,6 +109,7 @@ def common_jvm_maven_artifacts_dict():
         # Riegeli Decompressor
         "org.apache.commons:commons-compress": "1.22",
         "org.brotli:dec": "0.1.2",
+        "com.github.luben:zstd-jni": "1.5.2-5",
     })
 
     return maven_artifacts

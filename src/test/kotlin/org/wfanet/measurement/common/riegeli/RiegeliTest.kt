@@ -28,7 +28,7 @@ class RiegeliTest {
   fun `test toy model`() {
     val filename = "$DATA_PATH/toy_model_riegeli_list"
     val records = Riegeli().readCompressedFileWithRecords(filename)
-
+    
     assertEquals(records.size, 140)
   }
 

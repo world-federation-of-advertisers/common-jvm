@@ -30,6 +30,7 @@ load("//build/io_bazel_rules_docker:repo.bzl", "io_bazel_rules_docker")
 load("//build/com_google_googleapis:repo.bzl", "com_google_googleapis")
 load("//build/rules_kotlin:repo.bzl", "io_bazel_rules_kotlin")
 load("//build/tink:repo.bzl", "tink_java")
+load("//build/com_google_highwayhash:repo.bzl", "com_google_highwayhash")
 
 def common_jvm_repositories():
     """
@@ -49,3 +50,4 @@ def common_jvm_repositories():
     io_bazel_rules_docker()
     com_google_googleapis()
     tink_java()
+    com_google_highwayhash()
