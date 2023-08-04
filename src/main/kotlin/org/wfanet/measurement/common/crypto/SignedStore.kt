@@ -16,14 +16,11 @@ package org.wfanet.measurement.common.crypto
 
 import com.google.protobuf.ByteString
 import java.security.PrivateKey
-import com.google.protobuf.kotlin.toByteString
 import java.security.cert.X509Certificate
-import org.wfanet.measurement.common.flatten
 import org.wfanet.measurement.storage.StorageClient
 
 /** Store of blob and signature. */
-class SignedStore(storageClient: StorageClient) {
-  private val storageClient = storageClient
+class SignedStore(private val storageClient: StorageClient) {
 
   internal fun blobKeyForSignature(blobKey: String): String {
     return "signature.$blobKey"
@@ -33,44 +30,31 @@ class SignedStore(storageClient: StorageClient) {
     return "content.$blobKey"
   }
 
-  internal suspend fun write(blobKey: String, x509: X509Certificate, privateKey: PrivateKey, content: Flow<ByteString>): String {
+  internal suspend fun write(
+    blobKey: String,
+    x509: X509Certificate,
+    privateKey: PrivateKey,
+    content: Flow<ByteString>
+  ): String {
     // Since StorageClient has no concept of "overwriting" a blob, we first delete existing blobs.
     // This is to ensure that transient failures after some blobs are written do not cause problems
     // when re-attempting to write.
     storageClient.getBlob(blobKeyForContent(blobKey))?.delete()
     storageClient.getBlob(blobKeyForSignature(blobKey))?.delete()
 
-    val signedBlob = content.onEach(privateKey.newSigner(x509)::update)
-    val signature = privateKey.newSigner(x509).sign().toByteString()
-    storageClient.writeBlob(blobKeyForContent(blobKey), signedBlob)
+    val signature = privateKey.sign(x509, content)
+    storageClient.writeBlob(blobKeyForContent(blobKey), content)
     storageClient.writeBlob(blobKeyForSignature(blobKey), signature)
     return blobKey
   }
 
   @Throws(BlobNotFoundException::class)
-  suspend fun read(blobKey: String, x509: X509Certificate): VerifiedBlob? {
-    val signedBlob = storageClient.getBlob(blobKeyForContent(blobKey)) ?: throw BlobNotFoundException(blobKey)
+  internal suspend fun read(blobKey: String, x509: X509Certificate): SignedBlob? {
+    val content =
+      storageClient.getBlob(blobKeyForContent(blobKey)) ?: throw BlobNotFoundException(blobKey)
     val signature = storageClient.getBlob(blobKeyForSignature(blobKey))
-    return VerifiedBlob(SignedBlob(signedBlob, signature), x509)
+    return SignedBlob(content, signature)
   }
-
 
   class BlobNotFoundException(inputKey: String) : Exception("$inputKey not found")
-
-  class VerifiedBlob(private val sourceBlob: SignedBlob, private val x509: X509Certificate) {
-    val size: Long
-      get() = sourceBlob.size
-
-    val signature: ByteString
-      get() = sourceBlob.signature
-
-    /** Reads the underlying blob. Throws if the signature was invalid. */
-    fun read(): Flow<ByteString> = sourceBlob.readVerifying(x509)
-
-    /** @see [StorageClient::toByteString]. */
-    suspend fun toByteString(): ByteString = read().flatten()
-
-    /** Reads the blob into a UTF8 String. */
-    suspend fun toStringUtf8(): String = toByteString().toStringUtf8()
-  }
 }
