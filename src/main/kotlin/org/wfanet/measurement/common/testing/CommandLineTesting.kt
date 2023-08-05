@@ -14,57 +14,101 @@
 
 package org.wfanet.measurement.common.testing
 
-import com.google.common.truth.Truth
+import com.google.common.truth.FailureMetadata
+import com.google.common.truth.IntegerSubject
+import com.google.common.truth.StringSubject
+import com.google.common.truth.Subject
+import com.google.common.truth.Truth.assertAbout
 import java.io.ByteArrayOutputStream
 import java.io.PrintStream
 import java.security.Permission
-import kotlin.test.assertFailsWith
 
+/** Utilities for testing command line applications. */
 object CommandLineTesting {
-  fun capturingSystemOut(block: () -> Unit): String {
-    val originalOut = System.out
-    val outputStream = ByteArrayOutputStream()
+  data class CapturedOutput(val out: String, val err: String, val status: Int)
 
-    System.setOut(PrintStream(outputStream, true))
+  /**
+   * Executes [block], capturing its output.
+   *
+   * @param block a function which calls the `main` function of a command line application
+   */
+  inline fun capturingOutput(block: () -> Unit): CapturedOutput {
+    val originalOut = System.out
+    val originalErr = System.err
+    val outStream = ByteArrayOutputStream()
+    val errStream = ByteArrayOutputStream()
+    System.setOut(PrintStream(outStream, true))
+    System.setErr(PrintStream(errStream, true))
+
+    var status = 0
     try {
       block()
+    } catch (e: ExitInterceptingSecurityManager.ExitException) {
+      status = e.status
     } finally {
+      System.setErr(originalErr)
       System.setOut(originalOut)
     }
 
-    return outputStream.toString()
+    return CapturedOutput(outStream.toString(), errStream.toString(), status)
   }
 
   /**
-   * Assert the exit code is equal to the status
+   * Executes [main], capturing its output.
    *
-   * The kt_jvm_test target should add a jvm_flag of
-   * "-Dcom.google.testing.junit.runner.shouldInstallTestSecurityManager=false"
+   * @param args arguments to the command line application
+   * @param main the `main` function of a command line application
    */
-  fun assertExitsWith(status: Int, block: () -> Unit) {
-    val exception: ExitException = assertFailsWith {
-      val originalSecurityManager: SecurityManager? = System.getSecurityManager()
-      System.setSecurityManager(
-        object : SecurityManager() {
-          override fun checkPermission(perm: Permission?) {
-            // Allow everything.
-          }
-
-          override fun checkExit(status: Int) {
-            super.checkExit(status)
-            throw ExitException(status)
-          }
-        }
-      )
-
-      try {
-        block()
-      } finally {
-        System.setSecurityManager(originalSecurityManager)
-      }
-    }
-    Truth.assertThat(exception.status).isEqualTo(status)
+  inline fun capturingOutput(args: Array<String>, main: (Array<String>) -> Unit): CapturedOutput {
+    return capturingOutput { main(args) }
   }
 
-  private class ExitException(val status: Int) : RuntimeException()
+  fun assertThat(actual: CapturedOutput): CapturedOutputSubject =
+    assertAbout(CapturedOutputSubject.capturedOutputs()).that(actual)
+
+  class CapturedOutputSubject
+  private constructor(
+    metadata: FailureMetadata,
+    private val actual: CapturedOutput,
+  ) : Subject(metadata, actual) {
+    fun status(): IntegerSubject {
+      return check("status").that(actual.status)
+    }
+
+    fun out(): StringSubject {
+      return check("out").that(actual.out)
+    }
+
+    fun err(): StringSubject {
+      return check("err").that(actual.err)
+    }
+
+    companion object {
+      fun capturedOutputs(): (FailureMetadata, CapturedOutput) -> CapturedOutputSubject =
+        ::CapturedOutputSubject
+    }
+  }
+}
+
+/**
+ * [SecurityManager] which throws [ExitException] on exit with non-zero status.
+ *
+ * To install this in a Bazel test, set the
+ * `com.google.testing.junit.runner.shouldInstallTestSecurityManager` system property to `false`.
+ * This can be done via the `jvm_flags` attribute.
+ */
+object ExitInterceptingSecurityManager : SecurityManager() {
+  class ExitException(val status: Int) : RuntimeException()
+
+  override fun checkPermission(perm: Permission?) {
+    // Allow everything.
+  }
+  override fun checkExit(status: Int) {
+    super.checkExit(status)
+
+    if (status != 0) {
+      // Prevent actual exit from happening.
+      throw ExitException(status)
+    }
+  }
 }

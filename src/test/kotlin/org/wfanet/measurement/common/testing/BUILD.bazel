@@ -14,7 +14,6 @@ kt_jvm_test(
 kt_jvm_test(
     name = "CommandLineTestingTest",
     srcs = ["CommandLineTestingTest.kt"],
-    associates = ["//src/main/kotlin/org/wfanet/measurement/common/testing:testing"],
     jvm_flags = ["-Dcom.google.testing.junit.runner.shouldInstallTestSecurityManager=false"],
     test_class = "org.wfanet.measurement.common.testing.CommandLineTestingTest",
     deps = [
@@ -22,5 +21,6 @@ kt_jvm_test(
         "//imports/java/org/junit",
         "//imports/java/picocli",
         "//imports/kotlin/kotlin/test",
+        "//src/main/kotlin/org/wfanet/measurement/common/testing",
     ],
 )
