@@ -88,7 +88,7 @@ def common_jvm_maven_artifacts_dict():
         "com.google.cloud.sql:cloud-sql-connector-r2dbc-postgres": "1.6.2",
         "org.postgresql:postgresql": "42.4.0",
         "org.postgresql:r2dbc-postgresql": "0.9.1.RELEASE",
-        "com.opentable.components:otj-pg-embedded": "1.0.1",
+        "org.testcontainers:postgresql": "1.18.3",
 
         # Liquibase.
         "org.yaml:snakeyaml": "1.30",
