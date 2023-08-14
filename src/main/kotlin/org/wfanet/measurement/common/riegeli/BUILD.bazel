@@ -11,10 +11,15 @@ kt_jvm_library(
     deps = [
         "@com_google_highwayhash//:highway_hash",
         "//imports/java/org/apache/commons:compress",
-        "//imports/java/org/brotli:dec",
-        "//imports/java/com/github/luben:zstd-jni",
         "//imports/java/com/google/protobuf",
         "//imports/kotlin/com/google/protobuf/kotlin",
         "//src/main/kotlin/org/wfanet/measurement/common:common"
+    ],
+
+    # The following imports are optional dependencies of //imports/java/org/apache/commons:compress.
+    # They are required for this implementation of Riegeli and are listed here as runtime dependencies.
+    runtime_deps = [
+        "//imports/java/org/brotli/dec:dec",
+        "//imports/java/com/github/luben/zstd:zstd",
     ]
 )
