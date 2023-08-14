@@ -22,6 +22,7 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.InputStream
 import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.util.LinkedList
 import java.util.logging.Logger
 import org.apache.commons.compress.compressors.CompressorInputStream
