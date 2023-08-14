@@ -21,6 +21,7 @@ import java.io.InputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.channels.ReadableByteChannel
+import java.util.*
 import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
@@ -123,11 +124,8 @@ fun ByteString.withTrailingPadding(paddedSize: Int): ByteString {
     return this
   }
 
-  return this.concat(ByteString.newOutput(paddedSize - size)
-    .use { output ->
-      repeat(paddedSize - size) { output.write(0x00) }
-      output.toByteString()
-    })
+  val padding = ByteArray(paddedSize - size)
+  return concat(ByteString.copyFrom(padding))
 }
 
 /** Returns a [ByteString] containing the specified elements. */
@@ -341,71 +339,42 @@ fun String.hexAsByteString(): ByteString {
 }
 
 /**
- * Converts a bytearray representing a little-endian, 64-bit number into a long.
- *
- * @param byteArray A ByteArray with 8 elements which represents a little-endian, 64-bit number.
- * @return A long representation of the provided ByteArray.
- * @throws IndexOutOfBoundsException if the size of the provided ByteArray is not 8.
- */
-fun readLittleEndian64Long(byteString: ByteString): Long {
-  if (byteString.size() != 8) {
-    throw IndexOutOfBoundsException("Byte array provided is not the correct length")
-  }
-
-  val byteArray = byteString.toByteArray()
-
-  return ByteBuffer.wrap(byteArray).order(ByteOrder.LITTLE_ENDIAN).long
-}
-
-/**
- * Converts a bytearray representing a little-endian, 64-bit number into an int.
- *
- * @param byteArray A ByteArray with 8 elements which represents a little-endian, 64-bit number.
- * @return An integer representation of the provided ByteArray.
- * @throws IndexOutOfBoundsException if the size of the provided ByteArray is not 8.
- */
-fun readLittleEndian64Int(byteString: ByteString): Int {
-  return readLittleEndian64Long(byteString).toInt()
-}
-
-/**
- * Converts a bytearray representing a little-endian, 56-bit number into an int.
- *
- * @param byteArray A ByteArray with 7 elements which represents a little-endian, 56-bit number.
- * @return An integer representation of the provided ByteArray.
- * @throws IndexOutOfBoundsException if the size of the provided ByteArray is not 7.
- */
-fun readLittleEndian56Int(byteString: ByteString): Int {
-  if (byteString.size() != 7) {
-    throw IndexOutOfBoundsException("Byte array provided is not the correct length")
-  }
-
-  return readLittleEndian64Int(byteString.withTrailingPadding(8))
-}
-
-/**
  * Reads a varint from an InputStream.
- * Varints are variable-width integers.
- *
- * Code snippet taken from
- *   https://github.com/bazelbuild/bazel/blob/master/src/main/java/com/google/devtools/build/lib/util/VarInt.java
+ * Varints are variable-width integers, supporting up to 64-bit integers.
  *
  * @param inputStream The input stream from which the varint should be read.
- * @return The varint which has been read from the input stream.
+ * @return The 64-bit varint which has been read from the input stream. This is returned as a Long.
  */
-fun getVarInt(byteBuffer: ByteBuffer): Int {
-  var result = 0
-  var shift = 0
-  var b: Int
+
+fun getVarLong(byteBuffer: ByteBuffer): Long {
+  val bytes = Stack<Int>()
+
+  // Load bytes used in the varint
   do {
-    if (shift >= 32) {
-      // Out of range
-      throw IndexOutOfBoundsException("varint too long")
-    }
-    // Get 7 bits from next byte
-    b = byteBuffer.get().toInt()
-    result = result or (b and 0x7F shl shift)
-    shift += 7
-  } while (b and 0x80 != 0)
+    val currentByte = byteBuffer.get().toInt()
+
+    // Use a stack to store bytes so that the order is implicitly in big-endian when reading.
+    bytes.push(currentByte)
+
+    // If the current byte's MSB is 0, it is the final bit in the varint.
+    // Otherwise, keep reading.
+  } while (currentByte and 0x80 != 0)
+
+  var result = 0L
+
+  while (!bytes.empty()) {
+    // Move anything currently in the result 7 bits to the left to make way for new bits.
+    result = result shl 7
+
+    // Read the next bit from the stack
+    var currentByte = bytes.pop()
+
+    // Add the least-significant 7 bits to the result
+    currentByte = currentByte and 0x7f
+    result = result or currentByte.toLong()
+
+  }
+
   return result
+
 }

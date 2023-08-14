@@ -1,4 +1,4 @@
-# Copyright 2021 The Cross-Media Measurement Authors
+# Copyright 2023 The Cross-Media Measurement Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,7 +19,8 @@ def com_google_highwayhash():
     maybe(
         http_archive,
         name = "com_google_highwayhash",
-        sha256 = "5380cb7cf19e7c9591f31792b7794d48084f6a3ab7c03d637cd6a32cf2ee8686",
-        url = "https://github.com/google/highwayhash/archive/a7f68e2f95fac08b24327d74747521cf634d5aff.zip",
-        build_file = Label("@wfa_common_jvm//build/com_google_highwayhash:BUILD.external")
+        sha256 = "1e4e32f6198facbac7a35b04fa4c1acb5e6d9bb13f983c60903da9cbbbd9f5b5",
+        url = "https://github.com/google/highwayhash/archive/a7f68e2f95fac08b24327d74747521cf634d5aff.tar.gz",
+        build_file = Label("@wfa_common_jvm//build/com_google_highwayhash:BUILD.external"),
+        strip_prefix = "highwayhash-a7f68e2f95fac08b24327d74747521cf634d5aff"
     )

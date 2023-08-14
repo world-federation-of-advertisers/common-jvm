@@ -22,6 +22,7 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.InputStream
 import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.util.LinkedList
 import java.util.logging.Logger
 import org.apache.commons.compress.compressors.CompressorInputStream
@@ -29,40 +30,19 @@ import org.apache.commons.compress.compressors.brotli.BrotliCompressorInputStrea
 import org.apache.commons.compress.compressors.snappy.SnappyCompressorInputStream
 import org.apache.commons.compress.compressors.zstandard.ZstdCompressorInputStream
 import org.apache.commons.compress.utils.CountingInputStream
-import org.wfanet.measurement.common.getVarInt
-import org.wfanet.measurement.common.readLittleEndian56Int
-import org.wfanet.measurement.common.readLittleEndian64Int
-import org.wfanet.measurement.common.readLittleEndian64Long
-
-
+import org.wfanet.measurement.common.*
 
 
 // Package-level constant representing the fixed-size of a block within a Riegeli compressed file.
 const val kBlockSize = 1 shl 16
 
-fun readInputStreamIntoByteBuffer(inputStream: InputStream, byteBuffer: ByteBuffer): Boolean {
-  while (byteBuffer.hasRemaining()) {
-    val temp = inputStream.read()
-
-    if (temp == -1) {
-      //There is no more to read
-      return false
-    }
-
-    byteBuffer.put(temp.toByte())
-
-  }
-
-  return true
-}
-
 /**
- * Generates a HighwayHash object with the key
+ * builds a HighwayHash object with the key
  * 'Riegeli/', 'records\n', 'Riegeli/', 'records\n'
  *
  * @return A HighwayHash object with specified key.
  */
-fun generateHighwayHash(): HighwayHash {
+fun buildHighwayHash(): HighwayHash {
   return HighwayHash(0x2f696c6567656952, 0x0a7364726f636572, 0x2f696c6567656952, 0x0a7364726f636572)
 }
 
@@ -159,7 +139,7 @@ class Riegeli {
         }
 
         val dataStream = ByteArrayOutputStream()
-        val dataSizeInt = readLittleEndian64Int(dataSize)
+        val dataSizeInt = dataSize.toLong(ByteOrder.LITTLE_ENDIAN).toInt()
 
         repeat(dataSizeInt) {
 
@@ -202,7 +182,7 @@ class Riegeli {
                                 numRecords: ByteString,
                                 decodedDataSize: ByteString): Boolean {
 
-        val highwayHash = generateHighwayHash()
+        val highwayHash = buildHighwayHash()
 
         val headerData = dataSize + dataHash + chunkType + numRecords + decodedDataSize
 
@@ -210,7 +190,7 @@ class Riegeli {
 
         val hashedDataLong = highwayHash.finalize64()
 
-        val headerHashLong = readLittleEndian64Long(headerHash)
+        val headerHashLong = headerHash.toLong(ByteOrder.LITTLE_ENDIAN)
 
         return hashedDataLong == headerHashLong
       }
@@ -226,10 +206,10 @@ class Riegeli {
        * @return True if the chunk's header is valid, false if it is not.
        */
       private fun isValidData(dataSize: ByteString, dataHash: ByteString, data: ByteBuffer): Boolean {
-        val highwayHash = generateHighwayHash()
+        val highwayHash = buildHighwayHash()
 
         var position = 0
-        val dataSizeInt = readLittleEndian64Int(dataSize)
+        val dataSizeInt = dataSize.toLong(ByteOrder.LITTLE_ENDIAN).toInt()
 
         while (dataSizeInt - position >= 32) {
           highwayHash.updatePacket(data.array(), position)
@@ -240,7 +220,7 @@ class Riegeli {
           highwayHash.updateRemainder(data.array(), position, dataSizeInt - position)
         }
 
-        val dataHashLong = readLittleEndian64Long(dataHash)
+        val dataHashLong = dataHash.toLong(ByteOrder.LITTLE_ENDIAN)
         val hashedDataLong = highwayHash.finalize64()
 
         return dataHashLong == hashedDataLong
@@ -267,7 +247,7 @@ class Riegeli {
       println("STARTING POINT: ${startingPoint}")
 
       //If compression type is 0, there is not a varint at the beginning of the buffer so do not read it.
-      val decompressedSize = if (compressionType == 0x00.toByte()) -1 else getVarInt(dataBuffer)
+      val decompressedSize = if (compressionType == 0x00.toByte()) -1 else getVarLong(dataBuffer).toInt()
 
       val sizeOfVarInt = (dataBuffer.position() - startingPoint).toInt()
 
@@ -295,11 +275,11 @@ class Riegeli {
         else -> throw Exception("Invalid Compression Type for Compressed Buffer")
       }
 
-      val uncompressedBuffer = ByteBuffer.allocate(decompressedSize)
+      val uncompressedBytes = ByteArray(decompressedSize)
 
-      readInputStreamIntoByteBuffer(compressedInputStream, uncompressedBuffer)
+      compressedInputStream.read(uncompressedBytes)
 
-      return uncompressedBuffer
+      return ByteBuffer.wrap(uncompressedBytes)
     }
 
     /**
@@ -332,20 +312,20 @@ class Riegeli {
 
       val compressionType = dataBuffer.get()
 
-      val compressedSizesSizeInt = getVarInt(dataBuffer)
+      val compressedSizesSizeInt = getVarLong(dataBuffer).toInt()
 
-      val numRecords = readLittleEndian56Int(this.numRecords)
+      val numRecords = this.numRecords.withTrailingPadding(8).toLong(ByteOrder.LITTLE_ENDIAN).toInt()
 
       val sizesByteBuffer = readCompressedBuffer(dataBuffer, compressedSizesSizeInt, compressionType)
       sizesByteBuffer.rewind()
       val sizes = LinkedList<Int>()
 
       repeat(numRecords) {
-        sizes.add(getVarInt(sizesByteBuffer))
+        sizes.add(getVarLong(sizesByteBuffer).toInt())
       }
 
       val chunkBeginningSize = dataBuffer.position() - startingPoint
-      val encodedDataSize = (readLittleEndian64Long(this.dataSize) - chunkBeginningSize).toInt()
+      val encodedDataSize = (this.dataSize.toLong(ByteOrder.LITTLE_ENDIAN) - chunkBeginningSize).toInt()
 
       val valuesByteBuffer = readCompressedBuffer(dataBuffer, encodedDataSize, compressionType)
       valuesByteBuffer.rewind()
@@ -426,7 +406,7 @@ class Riegeli {
        * @return True if the block's header is valid, false if it is not.
        */
       private fun isValid(headerHash: ByteString, previousChunk: ByteString, nextChunk: ByteString): Boolean {
-        val highwayHash = generateHighwayHash()
+        val highwayHash = buildHighwayHash()
 
         val headerData = previousChunk + nextChunk
 
@@ -434,7 +414,7 @@ class Riegeli {
 
         val hashedDataLong = highwayHash.finalize64()
 
-        val headerHashLong = readLittleEndian64Long(headerHash)
+        val headerHashLong = headerHash.toLong(ByteOrder.LITTLE_ENDIAN)
 
         return hashedDataLong == headerHashLong
       }

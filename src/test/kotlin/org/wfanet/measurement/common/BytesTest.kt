@@ -16,6 +16,7 @@ package org.wfanet.measurement.common
 
 import com.google.common.truth.Truth.assertThat
 import com.google.protobuf.ByteString
+import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.test.assertFails
 import kotlinx.coroutines.flow.map
@@ -63,4 +64,40 @@ class BytesTest {
   fun `ByteString asBufferedFlow with invalid buffer size`(): Unit = runBlocking {
     assertFails { ByteString.copyFromUtf8("this should throw").asBufferedFlow(0).toList() }
   }
+
+  @Test
+  fun `ByteString with trailing padding on empty ByteString`() = runBlocking {
+    val byteString = ByteString.EMPTY
+    val byteStringWithPadding = byteString.withTrailingPadding(8)
+
+    assertThat(byteStringWithPadding.size()).isEqualTo(8)
+    byteString.forEach { byte ->
+      assertThat(byte).isEqualTo(0x00.toByte())
+    }
+  }
+
+  @Test
+  fun `ByteString with trailing padding on normal ByteString`() = runBlocking {
+    val byteString = ByteString.copyFrom(byteArrayOf(0x96.toByte(), 0x01.toByte()))
+    val byteStringWithPadding = byteString.withTrailingPadding(4)
+
+    assertThat(byteStringWithPadding.size()).isEqualTo(4)
+
+    val comparableByteArray = byteArrayOf(0x96.toByte(), 0x01.toByte(), 0x00.toByte(), 0x00.toByte())
+
+    byteString.forEachIndexed { index, byte ->
+      assertThat(byte).isEqualTo(comparableByteArray[index])
+    }
+  }
+
+  @Test
+  fun `Read 64 bit varint from ByteBuffer`() = runBlocking {
+    // [10010110, 00000001]
+    val bytes = byteArrayOf(0x96.toByte(), 0x01.toByte())
+    val byteBuffer = ByteBuffer.wrap(bytes)
+
+    assertThat(getVarLong(byteBuffer)).isEqualTo(150L)
+
+  }
+
 }
