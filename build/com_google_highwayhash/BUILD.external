@@ -2,6 +2,6 @@ package(default_visibility = ["//visibility:public"])
 
 java_library(
     name = "highway_hash",
-    srcs = glob(["java/com/google/highwayhash/HighwayHash.java"]),
+    srcs = ["java/com/google/highwayhash/HighwayHash.java"],
     visibility = ["//visibility:public"],
 )

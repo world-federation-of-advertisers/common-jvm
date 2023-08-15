@@ -339,19 +339,20 @@ fun String.hexAsByteString(): ByteString {
 }
 
 /**
- * Reads a varint from an InputStream.
- * Varints are variable-width integers, supporting up to 64-bit integers.
+ * Reads a varint from a ByteBuffer.
+ * Varints are variable-width unsigned integers, supporting up to 64-bit integers.
  *
- * @param inputStream The input stream from which the varint should be read.
- * @return The 64-bit varint which has been read from the input stream. This is returned as a Long.
+ * The specification for varints can be found here: https://protobuf.dev/programming-guides/encoding/#varints
+ *
+ * @return The 64-bit unsigned varint which has been read from the ByteBuffer. This is returned as a Long.
  */
 
-fun getVarLong(byteBuffer: ByteBuffer): Long {
+fun ByteBuffer.getVarInt64(): Long {
   val bytes = Stack<Int>()
 
   // Load bytes used in the varint
   do {
-    val currentByte = byteBuffer.get().toInt()
+    val currentByte = this.get().toInt()
 
     // Use a stack to store bytes so that the order is implicitly in big-endian when reading.
     bytes.push(currentByte)
