@@ -64,21 +64,21 @@ class Riegeli {
    *
    * Chunks are interrupted by block headers at every multiple of the block size (which is 64 KiB).
    *
-   * @param headerHash      64-bit ByteArray containing a HighwayHash of the other chunk header elements
+   * @param headerHash      64-bit ByteString containing a HighwayHash of the other chunk header elements
    *                        (dataSize, dataHash, chunkType, numRecords, and decodedDataSize).
-   * @param dataSize        ByteArray representing the size of the chunk data, excluding intervening block headers,
+   * @param dataSize        ByteString representing the size of the chunk data, excluding intervening block headers,
    *                        as a 64-bit, little-endian long.
-   * @param dataHash        ByteArray containing a HighwayHash of the data within the chunk.
-   * @param chunkType       ByteArray containing a single byte which represents the chunk type.
+   * @param dataHash        ByteString containing a HighwayHash of the data within the chunk.
+   * @param chunkType       ByteString containing a single byte which represents the chunk type.
    *                          - If chunkType is 0x6d, the chunk is a file metadata chunk.
    *                          - If chunkType is 0x70, the chunk is a padding chunk.
    *                          - If chunkType is 0x72, the chunk is a simple chunk with records.
    *                          - if chunkType is 0x74, the chunk is a transposed chunk with records.
-   * @param numRecords      ByteArray representing the number of records inside the chunk as a 64-bit,
+   * @param numRecords      ByteString representing the number of records inside the chunk as a 64-bit,
    *                        little-endian long.
-   * @param decodedDataSize ByteArray representing the size of the chunk's data after it has been decoded as a 64-bit,
+   * @param decodedDataSize ByteString representing the size of the chunk's data after it has been decoded as a 64-bit,
    *                        little-endian long
-   * @param data            ByteArray with the chunk's compressed data. The array's size is represented by dataSize.
+   * @param data            ByteBuffer with the chunk's compressed data. The buffer's size is represented by dataSize.
    */
   private class Chunk private constructor(val headerHash: ByteString,
                                           val dataSize: ByteString,
@@ -163,15 +163,15 @@ class Riegeli {
        * Helper function for the chunk builder function.
        * Compares the headerHash element of the chunk's header to a highway hash of the chunk's other header elements.
        *
-       * @param headerHash      64-bit ByteArray containing a HighwayHash of the other chunk header elements
+       * @param headerHash      64-bit ByteString containing a HighwayHash of the other chunk header elements
        *                        (dataSize, dataHash, chunkType, numRecords, and decodedDataSize).
-       * @param dataSize        ByteArray representing the size of the chunk data, excluding intervening block headers,
+       * @param dataSize        ByteString representing the size of the chunk data, excluding intervening block headers,
        *                        as a 64-bit, little-endian long.
-       * @param dataHash        ByteArray containing a HighwayHash of the data within the chunk.
-       * @param chunkType       ByteArray containing a single byte which represents the chunk type.
-       * @param numRecords      ByteArray representing the number of records inside the chunk as a 64-bit,
+       * @param dataHash        ByteString containing a HighwayHash of the data within the chunk.
+       * @param chunkType       ByteString containing a single byte which represents the chunk type.
+       * @param numRecords      ByteString representing the number of records inside the chunk as a 64-bit,
        *                        little-endian long.
-       * @param decodedDataSize ByteArray representing the size of the chunk's data after it has been decoded as a
+       * @param decodedDataSize ByteString representing the size of the chunk's data after it has been decoded as a
        *                        64-bit, little-endian long
        * @return True if the chunk's header is valid, false if it is not.
        */
@@ -199,10 +199,10 @@ class Riegeli {
        * Helper function for the chunk builder function.
        * Compares the dataHash element of the chunk's header to a highway hash of the chunk's data.
        *
-       * @param dataSize  ByteArray representing the size of the chunk data, excluding intervening block headers,
+       * @param dataSize  ByteString representing the size of the chunk data, excluding intervening block headers,
        *                  as a 64-bit, little-endian long.
-       * @param dataHash  ByteArray containing a HighwayHash of the data within the chunk.
-       * @param data      ByteArray with the chunk's compressed data. The array's size is represented by dataSize.
+       * @param dataHash  ByteString containing a HighwayHash of the data within the chunk.
+       * @param data      ByteBuffer with the chunk's compressed data. The buffer's size is represented by dataSize.
        * @return True if the chunk's header is valid, false if it is not.
        */
       private fun isValidData(dataSize: ByteString, dataHash: ByteString, data: ByteBuffer): Boolean {
@@ -232,28 +232,22 @@ class Riegeli {
      *
      * Compressed buffers, if compressionType is not 0, are prefixed with a varint containing their decompressed size.
      *
-     * @param inputStream     The input stream from which the buffer should be read.
+     * @param dataBuffer      The ByteBuffer from which the compressed buffer should be read.
      * @param compressedSize  The size of the buffer, the number of bytes that should be read from the input stream.
      * @param compressionType A Byte representing the type of compression used in the compressed buffer.
      *                          - 0x00: none
      *                          - 0x62: Brotli
      *                          - 0x7a: Zstd
      *                          - 0x73: Snappy
-     * @return A ByteArray containing the decompressed data from the buffer.
+     * @return A ByteBuffer containing the decompressed data from the buffer.
      */
     private fun readCompressedBuffer(dataBuffer: ByteBuffer, compressedSize: Int, compressionType: Byte): ByteBuffer {
       val startingPoint = dataBuffer.position()
 
-      println("STARTING POINT: ${startingPoint}")
-
       //If compression type is 0, there is not a varint at the beginning of the buffer so do not read it.
-      val decompressedSize = if (compressionType == 0x00.toByte()) -1 else getVarLong(dataBuffer).toInt()
+      val decompressedSize = if (compressionType == 0x00.toByte()) -1 else dataBuffer.getVarInt64().toInt()
 
-      val sizeOfVarInt = (dataBuffer.position() - startingPoint).toInt()
-
-      println("Size of VARINT: ${sizeOfVarInt}")
-      println("Ending POINT: ${dataBuffer.position()}")
-      println("DEcompressed Size: ${decompressedSize}")
+      val sizeOfVarInt = (dataBuffer.position() - startingPoint)
 
       val compressedBuffer = ByteBuffer.allocate(compressedSize - sizeOfVarInt)
 
@@ -296,7 +290,7 @@ class Riegeli {
      *  - compressedValues:     A compressed buffer with the record values. After decompression,
      *                          contains decodedDataSize bytes.
      *
-     * @return  A list where each element is a ByteArray representing a decompressed record. If there are no records
+     * @return  A list where each element is a ByteString representing a decompressed record. If there are no records
      *          within the chunk, an empty list is returned.
      */
     fun getRecords(): LinkedList<ByteString> {
@@ -312,7 +306,7 @@ class Riegeli {
 
       val compressionType = dataBuffer.get()
 
-      val compressedSizesSizeInt = getVarLong(dataBuffer).toInt()
+      val compressedSizesSizeInt = dataBuffer.getVarInt64().toInt()
 
       val numRecords = this.numRecords.withTrailingPadding(8).toLong(ByteOrder.LITTLE_ENDIAN).toInt()
 
@@ -321,7 +315,7 @@ class Riegeli {
       val sizes = LinkedList<Int>()
 
       repeat(numRecords) {
-        sizes.add(getVarLong(sizesByteBuffer).toInt())
+        sizes.add(sizesByteBuffer.getVarInt64().toInt())
       }
 
       val chunkBeginningSize = dataBuffer.position() - startingPoint
@@ -352,11 +346,11 @@ class Riegeli {
    * The full specification of a block header is provided here:
    *   https://github.com/google/riegeli/blob/master/doc/riegeli_records_file_format.md#block-header
    *
-   * @param headerHash      64-bit ByteArray containing a HighwayHash of the other block header elements
+   * @param headerHash      64-bit ByteString containing a HighwayHash of the other block header elements
    *                        (previousChunk and nextChunk).
-   * @param previousChunk   ByteArray representing the distance from the beginning of the chunk interrupted by this
+   * @param previousChunk   ByteString representing the distance from the beginning of the chunk interrupted by this
    *                        block header to the beginning of the block as a 64-bit, little-endian long.
-   * @param nextChunk       ByteArray representing the distance from the beginning of the block to the end of the chunk
+   * @param nextChunk       ByteString representing the distance from the beginning of the block to the end of the chunk
    *                        interrupted by this block header as a 64-bit, little-endian long.
    */
   private class BlockHeader private constructor(val headerHash: ByteString, val previousChunk: ByteString, val nextChunk: ByteString) {
@@ -373,7 +367,7 @@ class Riegeli {
        * @throws Exception if the block header does not hash properly, meaning that the block header is corrupted.
        * @return A new BlockHeader object as read from the inputStream.
        */
-      fun fromInputStream(inputStream: InputStream): BlockHeader {
+      fun fromInputStream(inputStream: CountingInputStream): BlockHeader {
         val headerHashArray = ByteArray(8)
         val previousChunkArray = ByteArray(8)
         val nextChunkArray = ByteArray(8)
@@ -397,11 +391,11 @@ class Riegeli {
        * Helper function for the block header builder function.
        * Compares the headerHash element of the block's header to a highway hash of the block's other header elements.
        *
-       * @param headerHash      64-bit ByteArray containing a HighwayHash of the other block header elements
+       * @param headerHash      64-bit ByteString containing a HighwayHash of the other block header elements
        *                        (previousChunk and nextChunk).
-       * @param previousChunk   ByteArray representing the distance from the beginning of the chunk interrupted by this
+       * @param previousChunk   ByteString representing the distance from the beginning of the chunk interrupted by this
        *                        block header to the beginning of the block as a 64-bit, little-endian long.
-       * @param nextChunk       ByteArray representing the distance from the beginning of the block to the end of the chunk
+       * @param nextChunk       ByteString representing the distance from the beginning of the block to the end of the chunk
        *                        interrupted by this block header as a 64-bit, little-endian long.
        * @return True if the block's header is valid, false if it is not.
        */
@@ -425,7 +419,7 @@ class Riegeli {
    * Reads and decompresses a Riegeli compressed input stream with records.
    *
    * @param incomingInputStream An input stream which contains data which should be decompressed using Riegeli.
-   * @return A list where each element is a ByteArray containing the bytes of a record.
+   * @return A list where each element is a ByteString containing the bytes of a record.
    */
   fun readCompressedInputStreamWithRecords(incomingInputStream: InputStream): List<ByteString> {
     val inputStream = CountingInputStream(incomingInputStream)
@@ -458,7 +452,7 @@ class Riegeli {
    * Reads and decompresses a Riegeli compressed file with records.
    *
    * @param filename The path of the file which should be decompressed using Riegeli.
-   * @return A list where each element is a ByteArray containing the bytes of a record.
+   * @return A list where each element is a ByteString containing the bytes of a record.
    */
   fun readCompressedFileWithRecords(filename: String): List<ByteString> {
     val inputStream = File(filename).inputStream()

@@ -66,7 +66,7 @@ class BytesTest {
   }
 
   @Test
-  fun `ByteString with trailing padding on empty ByteString`() = runBlocking {
+  fun `ByteString with trailing padding on empty ByteString`() {
     val byteString = ByteString.EMPTY
     val byteStringWithPadding = byteString.withTrailingPadding(8)
 
@@ -77,7 +77,7 @@ class BytesTest {
   }
 
   @Test
-  fun `ByteString with trailing padding on normal ByteString`() = runBlocking {
+  fun `ByteString with trailing padding on normal ByteString`() {
     val byteString = ByteString.copyFrom(byteArrayOf(0x96.toByte(), 0x01.toByte()))
     val byteStringWithPadding = byteString.withTrailingPadding(4)
 
@@ -91,12 +91,12 @@ class BytesTest {
   }
 
   @Test
-  fun `Read 64 bit varint from ByteBuffer`() = runBlocking {
+  fun `Read 64 bit varint from ByteBuffer`() {
     // [10010110, 00000001]
     val bytes = byteArrayOf(0x96.toByte(), 0x01.toByte())
     val byteBuffer = ByteBuffer.wrap(bytes)
 
-    assertThat(getVarLong(byteBuffer)).isEqualTo(150L)
+    assertThat(byteBuffer.getVarInt64()).isEqualTo(150L)
 
   }
 
