@@ -27,7 +27,10 @@ import picocli.CommandLine
  * @param args command-line arguments
  */
 fun commandLineMain(command: KFunction<*>, args: Array<String>) {
-  exitProcess(command.toCommandLine().execute(*args))
+  val status: Int = command.toCommandLine().execute(*args)
+  if (status != 0) {
+    exitProcess(status)
+  }
 }
 
 /**
@@ -41,7 +44,10 @@ fun commandLineMain(
   args: Array<String>,
   format: DurationFormat = DurationFormat.HUMAN_READABLE
 ) {
-  exitProcess(command.toCommandLine(format).execute(*args))
+  val status: Int = command.toCommandLine(format).execute(*args)
+  if (status != 0) {
+    exitProcess(status)
+  }
 }
 
 private fun KFunction<*>.toCommandLine(): CommandLine {
