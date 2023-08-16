@@ -22,11 +22,11 @@ import org.wfanet.measurement.storage.StorageClient
 /** Store of blob and signature. */
 class SignedStore(private val storageClient: StorageClient) {
 
-  internal fun blobKeyForSignature(blobKey: String): String {
+  private fun blobKeyForSignature(blobKey: String): String {
     return "signature/$blobKey"
   }
 
-  internal fun blobKeyForContent(blobKey: String): String {
+  private fun blobKeyForContent(blobKey: String): String {
     return "content/$blobKey"
   }
 
@@ -49,7 +49,7 @@ class SignedStore(private val storageClient: StorageClient) {
   }
 
   @Throws(BlobNotFoundException::class)
-  suspend fun read(blobKey: String, x509: X509Certificate): Flow<ByteString>? {
+  suspend fun read(blobKey: String, x509: X509Certificate): Flow<ByteString> {
     val content =
       storageClient.getBlob(blobKeyForContent(blobKey)) ?: throw BlobNotFoundException(blobKey)
     val signature = storageClient.getBlob(blobKeyForSignature(blobKey))
