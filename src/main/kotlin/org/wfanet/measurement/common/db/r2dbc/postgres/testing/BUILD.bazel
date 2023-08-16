@@ -6,14 +6,14 @@ package(
 )
 
 kt_jvm_library(
-    name = "embedded_postgres",
-    srcs = ["EmbeddedPostgresDatabaseProvider.kt"],
+    name = "database_provider",
+    srcs = ["PostgresDatabaseProvider.kt"],
     runtime_deps = [
         "//imports/java/liquibase/ext:postgresql",
     ],
     deps = [
-        "//imports/java/com/opentable/db/postgres:pg_embedded",
-        "//src/main/kotlin/org/wfanet/measurement/common",
+        "//imports/java/org/testcontainers/containers:postgresql",
+        "//imports/kotlin/kotlinx/coroutines/reactive",
         "//src/main/kotlin/org/wfanet/measurement/common/db/liquibase",
         "//src/main/kotlin/org/wfanet/measurement/common/db/r2dbc/postgres",
     ],

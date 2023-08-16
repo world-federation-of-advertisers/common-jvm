@@ -25,19 +25,20 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
+import org.junit.ClassRule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 import org.wfanet.measurement.common.db.r2dbc.ReadWriteContext
 import org.wfanet.measurement.common.db.r2dbc.ResultRow
 import org.wfanet.measurement.common.db.r2dbc.boundStatement
-import org.wfanet.measurement.common.db.r2dbc.postgres.testing.EmbeddedPostgresDatabaseProvider
+import org.wfanet.measurement.common.db.r2dbc.postgres.testing.PostgresDatabaseProviderRule
 import org.wfanet.measurement.common.getJarResourcePath
 import org.wfanet.measurement.common.identity.InternalId
 
 @RunWith(JUnit4::class)
 class PostgresDatabaseClientTest {
-  private val dbClient = dbProvider.createNewDatabase()
+  private val dbClient = databaseProvider.createDatabase()
 
   @Test
   fun `executeStatement returns result with updated rows`() {
@@ -215,7 +216,8 @@ class PostgresDatabaseClientTest {
   companion object {
     private val CHANGELOG_PATH: Path =
       this::class.java.classLoader.getJarResourcePath("db/postgres/changelog.yaml")!!
-    private val dbProvider = EmbeddedPostgresDatabaseProvider(CHANGELOG_PATH)
+
+    @get:ClassRule @JvmStatic val databaseProvider = PostgresDatabaseProviderRule(CHANGELOG_PATH)
   }
 }
 
