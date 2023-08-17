@@ -17,6 +17,8 @@ package org.wfanet.measurement.common.crypto
 import com.google.protobuf.ByteString
 import java.security.PrivateKey
 import java.security.cert.X509Certificate
+import kotlinx.coroutines.flow.Flow
+import org.wfanet.measurement.common.flatten
 import org.wfanet.measurement.storage.StorageClient
 
 /** Store of blob and signature. */
@@ -42,7 +44,7 @@ class SignedStore(private val storageClient: StorageClient) {
     storageClient.getBlob(blobKeyForContent(blobKey))?.delete()
     storageClient.getBlob(blobKeyForSignature(blobKey))?.delete()
 
-    val signature = privateKey.sign(x509, content)
+    val signature = privateKey.sign(x509, content.flatten())
     storageClient.writeBlob(blobKeyForContent(blobKey), content)
     storageClient.writeBlob(blobKeyForSignature(blobKey), signature)
     return blobKey
@@ -53,7 +55,9 @@ class SignedStore(private val storageClient: StorageClient) {
     val content =
       storageClient.getBlob(blobKeyForContent(blobKey)) ?: throw BlobNotFoundException(blobKey)
     val signature = storageClient.getBlob(blobKeyForSignature(blobKey))
-    return SignedBlob(content, signature).readVerifying(x509)
+    if (signature != null) {
+      return SignedBlob(content, signature.read().flatten()).readVerifying(x509)
+    } else throw BlobNotFoundException(blobKey)
   }
 
   class BlobNotFoundException(inputKey: String) : Exception("$inputKey not found")

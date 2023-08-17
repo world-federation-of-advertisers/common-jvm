@@ -109,3 +109,20 @@ kt_jvm_library(
         "//src/main/kotlin/org/wfanet/measurement/common",
     ],
 )
+
+kt_jvm_library(
+    name = "signed_store",
+    srcs = ["SignedStore.kt"],
+    deps = [
+        ":signed_blob",
+    ],
+)
+
+kt_jvm_library(
+    name = "encrypted_signed_store",
+    srcs = ["EncryptedSignedStore.kt"],
+    deps = [
+        "//src/main/kotlin/org/wfanet/measurement/common/crypto:key_storage",
+        "//src/main/kotlin/org/wfanet/measurement/common/crypto:signed_store",
+    ],
+)
