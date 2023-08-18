@@ -1,0 +1,18 @@
+load("@io_bazel_rules_kotlin//kotlin:jvm.bzl", "kt_jvm_library")
+
+package(default_visibility = ["//visibility:public"])
+
+kt_jvm_library(
+    name = "update_schema",
+    srcs = ["UpdateSchema.kt"],
+    runtime_deps = [
+        "//imports/java/org/postgresql:j2dbc",
+    ],
+    deps = [
+        "//src/main/kotlin/org/wfanet/measurement/aws/postgres:flags",
+        "//src/main/kotlin/org/wfanet/measurement/aws/postgres:postgres_credentials",
+        "//src/main/kotlin/org/wfanet/measurement/common",
+        "//src/main/kotlin/org/wfanet/measurement/common/db/liquibase",
+        "//src/main/kotlin/org/wfanet/measurement/common/db/liquibase/tools:update_schema",
+    ],
+)

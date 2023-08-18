@@ -1,4 +1,4 @@
-// Copyright 2022 The Cross-Media Measurement Authors
+// Copyright 2023 The Cross-Media Measurement Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -44,7 +44,8 @@ class PostgresFlags {
 
   @CommandLine.Option(
     names = ["--postgres-credential-secret-name"],
-    description = ["Name of the AWS Secrets Manager secret that stores the password of the Postgres database."],
+    description =
+      ["Name of the AWS Secrets Manager secret that stores the password of the Postgres database."],
     required = true
   )
   lateinit var credentialSecretName: String

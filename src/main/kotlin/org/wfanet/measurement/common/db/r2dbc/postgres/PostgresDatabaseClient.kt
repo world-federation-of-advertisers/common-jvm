@@ -16,8 +16,8 @@
 
 package org.wfanet.measurement.common.db.r2dbc.postgres
 
-import io.r2dbc.postgresql.api.PostgresTransactionDefinition
 import io.r2dbc.postgresql.PostgresqlConnectionFactoryProvider
+import io.r2dbc.postgresql.api.PostgresTransactionDefinition
 import io.r2dbc.postgresql.client.SSLMode
 import io.r2dbc.spi.ConnectionFactories
 import io.r2dbc.spi.ConnectionFactory
@@ -32,6 +32,7 @@ import org.wfanet.measurement.common.db.r2dbc.DatabaseClient
 class PostgresDatabaseClient(getConnection: ConnectionProvider) : DatabaseClient(getConnection) {
   override val readTransactionDefinition: PostgresTransactionDefinition
     get() = Companion.readTransactionDefinition
+
   override val readWriteTransactionDefinition: PostgresTransactionDefinition
     get() = Companion.readWriteTransactionDefinition
 

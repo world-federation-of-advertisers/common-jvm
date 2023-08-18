@@ -82,8 +82,8 @@ def common_jvm_maven_artifacts_dict():
         "org.jetbrains:annotations": "23.0.0",
         "org.mockito.kotlin:mockito-kotlin": "3.2.0",
         "software.amazon.awssdk:s3": AWS_JAVA_SDK_VERSION,
-        "software.amazon.awssdk:rds": AWS_JAVA_SDK_VERSION,
         "software.amazon.awssdk:secretsmanager": AWS_JAVA_SDK_VERSION,
+        "software.amazon.awssdk:sts": AWS_JAVA_SDK_VERSION,
 
         # PostgreSQL.
         "com.google.cloud.sql:postgres-socket-factory": "1.6.2",
