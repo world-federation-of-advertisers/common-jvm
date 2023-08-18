@@ -17,6 +17,8 @@
 package org.wfanet.measurement.common.db.r2dbc.postgres
 
 import io.r2dbc.postgresql.api.PostgresTransactionDefinition
+import io.r2dbc.postgresql.PostgresqlConnectionFactoryProvider
+import io.r2dbc.postgresql.client.SSLMode
 import io.r2dbc.spi.ConnectionFactories
 import io.r2dbc.spi.ConnectionFactory
 import io.r2dbc.spi.ConnectionFactoryOptions
@@ -50,6 +52,7 @@ class PostgresDatabaseClient(getConnection: ConnectionProvider) : DatabaseClient
             .option(ConnectionFactoryOptions.USER, flags.user)
             .option(ConnectionFactoryOptions.PASSWORD, flags.password)
             .option(ConnectionFactoryOptions.DATABASE, flags.database)
+            .option(PostgresqlConnectionFactoryProvider.SSL_MODE, SSLMode.REQUIRE)
             .build()
         )
 

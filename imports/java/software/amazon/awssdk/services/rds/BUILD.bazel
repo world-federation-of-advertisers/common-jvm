@@ -1,0 +1,6 @@
+package(default_visibility = ["//visibility:public"])
+
+alias(
+    name = "rds",
+    actual = "@maven//:software_amazon_awssdk_rds",
+)
