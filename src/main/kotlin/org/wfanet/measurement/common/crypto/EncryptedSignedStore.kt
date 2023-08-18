@@ -23,6 +23,7 @@ import org.wfanet.measurement.common.asBufferedFlow
 import org.wfanet.measurement.common.crypto.PrivateKeyHandle
 import org.wfanet.measurement.common.crypto.PublicKeyHandle
 import org.wfanet.measurement.common.crypto.SignedStore
+import org.wfanet.measurement.common.crypto.SignedStore.BlobNotFoundException
 import org.wfanet.measurement.common.flatten
 import org.wfanet.measurement.storage.StorageClient
 
@@ -50,7 +51,7 @@ class EncryptedSignedStore(private val storageClient: StorageClient) {
     )
   }
 
-  @Throws(SignedStore.BlobNotFoundException::class)
+  @Throws(BlobNotFoundException::class)
   suspend fun read(
     blobKey: String,
     signingX509: X509Certificate,
