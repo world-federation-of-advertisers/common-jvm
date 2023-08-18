@@ -50,11 +50,12 @@ class EncryptedSignedStore(private val storageClient: StorageClient) {
     )
   }
 
+  @Throws(SignedStore.BlobNotFoundException::class)
   suspend fun read(
     blobKey: String,
     signingX509: X509Certificate,
     decryptingPrivateKeyHandle: PrivateKeyHandle
-  ): Flow<ByteString>? {
+  ): Flow<ByteString> {
     val encryptedContent = signedStore.read(blobKey, signingX509)
     return decryptingPrivateKeyHandle
       .hybridDecrypt(encryptedContent.flatten())
