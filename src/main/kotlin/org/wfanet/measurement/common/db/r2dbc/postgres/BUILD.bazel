@@ -8,9 +8,6 @@ kt_jvm_library(
     deps = [
         "//imports/java/org/postgresql:r2dbc",
         "//imports/java/org/reactivestreams",
-        "//imports/java/software/amazon/awssdk/services/rds",
-        "//imports/kotlin/kotlinx/coroutines:core",
-        "//imports/kotlin/kotlinx/coroutines/reactive",
         "//src/main/kotlin/org/wfanet/measurement/common/db/postgres:flags",
         "//src/main/kotlin/org/wfanet/measurement/common/db/r2dbc",
     ],
