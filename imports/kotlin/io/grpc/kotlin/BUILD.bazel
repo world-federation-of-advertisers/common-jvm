@@ -4,8 +4,3 @@ alias(
     name = "stub",
     actual = "@maven//:io_grpc_grpc_kotlin_stub",
 )
-
-alias(
-    name = "context",
-    actual = "@maven//:io_grpc_grpc_kotlin_context",
-)
