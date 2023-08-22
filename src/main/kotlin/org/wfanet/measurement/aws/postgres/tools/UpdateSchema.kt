@@ -18,7 +18,7 @@ package org.wfanet.measurement.aws.postgres.tools
 
 import java.sql.DriverManager
 import java.util.Properties
-import org.wfanet.measurement.aws.postgres.PostgresCredentials.Companion.getPostgresCredentialsFromAwsSecretManager
+import org.wfanet.measurement.aws.postgres.PostgresCredentials.Companion.fromAwsSecretManager
 import org.wfanet.measurement.aws.postgres.PostgresFlags
 import org.wfanet.measurement.common.commandLineMain
 import org.wfanet.measurement.common.db.liquibase.tools.BaseUpdateSchema
@@ -32,8 +32,7 @@ class UpdateSchema : BaseUpdateSchema() {
   override fun run() {
     val connectionString = flags.jdbcConnectionString
     val props = Properties()
-    val postgresCredentials =
-      getPostgresCredentialsFromAwsSecretManager(flags.region, flags.credentialSecretName)
+    val postgresCredentials = fromAwsSecretManager(flags.region, flags.credentialSecretName)
     props.setProperty("user", postgresCredentials.username)
     props.setProperty("password", postgresCredentials.password)
     DriverManager.getConnection(connectionString, props).use { run(it) }

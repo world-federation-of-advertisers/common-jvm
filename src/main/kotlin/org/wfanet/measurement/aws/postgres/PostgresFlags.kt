@@ -14,6 +14,7 @@
 
 package org.wfanet.measurement.aws.postgres
 
+import kotlin.properties.Delegates
 import picocli.CommandLine
 
 /** Common command-line flags for connecting to a single Postgres database. */
@@ -23,7 +24,7 @@ class PostgresFlags {
     description = ["Name of the Postgres database."],
     required = false
   )
-  var database: String = ""
+  var database: String? = null
     private set
 
   @CommandLine.Option(
@@ -34,12 +35,12 @@ class PostgresFlags {
   lateinit var host: String
     private set
 
-  @CommandLine.Option(
+  @set:CommandLine.Option(
     names = ["--postgres-port"],
     description = ["Port of the Postgres database."],
     required = true
   )
-  var port: Int = 0
+  var port: Int by Delegates.notNull()
     private set
 
   @CommandLine.Option(

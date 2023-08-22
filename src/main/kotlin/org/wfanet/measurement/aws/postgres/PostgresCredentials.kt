@@ -26,10 +26,7 @@ data class PostgresCredentials(
   val password: String,
 ) {
   companion object {
-    fun getPostgresCredentialsFromAwsSecretManager(
-      region: String,
-      secretName: String
-    ): PostgresCredentials {
+    fun fromAwsSecretManager(region: String, secretName: String): PostgresCredentials {
       val secretManagerCli =
         SecretsManagerClient.builder()
           .region(Region.of(region))

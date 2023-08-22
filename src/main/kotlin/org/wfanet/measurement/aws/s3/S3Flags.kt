@@ -15,6 +15,8 @@
 package org.wfanet.measurement.aws.s3
 
 import picocli.CommandLine
+import picocli.CommandLine.ITypeConverter
+import software.amazon.awssdk.regions.Region
 
 /** Common command-line flags for connecting to a single Postgres database. */
 class S3Flags {
@@ -27,8 +29,17 @@ class S3Flags {
 
   @CommandLine.Option(
     names = ["--s3-region"],
+    converter = [RegionConverter::class],
     description = ["The region the s3 bucket is located in."],
   )
-  lateinit var s3Region: String
+  lateinit var s3Region: Region
     private set
+
+  companion object {
+    internal class RegionConverter : ITypeConverter<Region> {
+      override fun convert(value: String): Region {
+        return Region.of(value)
+      }
+    }
+  }
 }

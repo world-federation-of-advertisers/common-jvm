@@ -35,7 +35,6 @@ import org.wfanet.measurement.storage.StorageClient
 import software.amazon.awssdk.core.async.AsyncRequestBody
 import software.amazon.awssdk.core.async.AsyncResponseTransformer
 import software.amazon.awssdk.core.async.ResponsePublisher
-import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.s3.S3AsyncClient
 import software.amazon.awssdk.services.s3.model.AbortMultipartUploadResponse
 import software.amazon.awssdk.services.s3.model.CompleteMultipartUploadResponse
@@ -186,9 +185,6 @@ class S3StorageClient(private val s3: S3AsyncClient, private val bucketName: Str
   companion object {
     /** Constructs a [S3StorageClient] from command-line flags. */
     fun fromFlags(s3Flags: S3Flags) =
-      S3StorageClient(
-        S3AsyncClient.builder().region(Region.of(s3Flags.s3Region)).build(),
-        s3Flags.s3Bucket
-      )
+      S3StorageClient(S3AsyncClient.builder().region(s3Flags.s3Region).build(), s3Flags.s3Bucket)
   }
 }
