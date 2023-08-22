@@ -24,7 +24,6 @@ import org.wfanet.measurement.common.commandLineMain
 import org.wfanet.measurement.common.db.liquibase.tools.BaseUpdateSchema
 import picocli.CommandLine.Command
 import picocli.CommandLine.Mixin
-import software.amazon.awssdk.regions.Region
 
 @Command
 class UpdateSchema : BaseUpdateSchema() {
@@ -34,10 +33,7 @@ class UpdateSchema : BaseUpdateSchema() {
     val connectionString = flags.jdbcConnectionString
     val props = Properties()
     val postgresCredentials =
-      getPostgresCredentialsFromAwsSecretManager(
-        Region.of(flags.region),
-        flags.credentialSecretName
-      )
+      getPostgresCredentialsFromAwsSecretManager(flags.region, flags.credentialSecretName)
     props.setProperty("user", postgresCredentials.username)
     props.setProperty("password", postgresCredentials.password)
     DriverManager.getConnection(connectionString, props).use { run(it) }

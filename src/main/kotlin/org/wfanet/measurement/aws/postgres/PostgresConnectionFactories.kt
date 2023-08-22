@@ -20,17 +20,13 @@ import io.r2dbc.spi.ConnectionFactories
 import io.r2dbc.spi.ConnectionFactory
 import io.r2dbc.spi.ConnectionFactoryOptions
 import org.wfanet.measurement.aws.postgres.PostgresCredentials.Companion.getPostgresCredentialsFromAwsSecretManager
-import software.amazon.awssdk.regions.Region
 
 object PostgresConnectionFactories {
 
   @JvmStatic
   fun buildConnectionFactory(flags: PostgresFlags): ConnectionFactory {
     val postgresCredentials =
-      getPostgresCredentialsFromAwsSecretManager(
-        Region.of(flags.region),
-        flags.credentialSecretName
-      )
+      getPostgresCredentialsFromAwsSecretManager(flags.region, flags.credentialSecretName)
     return ConnectionFactories.get(
       ConnectionFactoryOptions.builder()
         .option(

@@ -53,7 +53,7 @@ class PostgresFlags {
 
   @CommandLine.Option(
     names = ["--postgres-region"],
-    description = ["AWS region of the postgres."],
+    description = ["AWS region that the postgres is located in."],
     required = true
   )
   lateinit var region: String
