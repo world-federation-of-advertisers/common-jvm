@@ -84,6 +84,7 @@ def common_jvm_maven_artifacts_dict():
         "software.amazon.awssdk:s3": AWS_JAVA_SDK_VERSION,
         "software.amazon.awssdk:secretsmanager": AWS_JAVA_SDK_VERSION,
         "software.amazon.awssdk:sts": AWS_JAVA_SDK_VERSION,
+        "software.amazon.awssdk:regions": AWS_JAVA_SDK_VERSION,
 
         # PostgreSQL.
         "com.google.cloud.sql:postgres-socket-factory": "1.6.2",

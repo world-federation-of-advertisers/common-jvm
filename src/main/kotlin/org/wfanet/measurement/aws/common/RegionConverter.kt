@@ -12,26 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package org.wfanet.measurement.aws.s3
+package org.wfanet.measurement.aws.common
 
-import org.wfanet.measurement.aws.common.RegionConverter
 import picocli.CommandLine
 import software.amazon.awssdk.regions.Region
 
-/** Common command-line flags for connecting to a single Postgres database. */
-class S3Flags {
-  @CommandLine.Option(
-    names = ["--s3-storage-bucket"],
-    description = ["The name of the s3 bucket used for default private storage."],
-  )
-  lateinit var s3Bucket: String
-    private set
-
-  @CommandLine.Option(
-    names = ["--s3-region"],
-    converter = [RegionConverter::class],
-    description = ["The region the s3 bucket is located in."],
-  )
-  lateinit var s3Region: Region
-    private set
+class RegionConverter : CommandLine.ITypeConverter<Region> {
+  override fun convert(value: String): Region {
+    return Region.of(value)
+  }
 }

@@ -5,7 +5,10 @@ package(default_visibility = ["//visibility:public"])
 kt_jvm_library(
     name = "flags",
     srcs = ["PostgresFlags.kt"],
-    deps = ["//imports/java/picocli"],
+    deps = [
+        "//imports/java/picocli",
+        "//src/main/kotlin/org/wfanet/measurement/aws/common:region_converter",
+    ],
 )
 
 kt_jvm_library(

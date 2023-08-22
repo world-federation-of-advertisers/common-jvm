@@ -15,16 +15,18 @@
 package org.wfanet.measurement.aws.postgres
 
 import kotlin.properties.Delegates
+import org.wfanet.measurement.aws.common.RegionConverter
 import picocli.CommandLine
+import software.amazon.awssdk.regions.Region
 
 /** Common command-line flags for connecting to a single Postgres database. */
 class PostgresFlags {
   @CommandLine.Option(
     names = ["--postgres-database"],
     description = ["Name of the Postgres database."],
-    required = false
+    required = true
   )
-  var database: String? = null
+  lateinit var database: String
     private set
 
   @CommandLine.Option(
@@ -55,9 +57,10 @@ class PostgresFlags {
   @CommandLine.Option(
     names = ["--postgres-region"],
     description = ["AWS region that the postgres is located in."],
+    converter = [RegionConverter::class],
     required = true
   )
-  lateinit var region: String
+  lateinit var region: Region
     private set
 
   val jdbcConnectionString: String
