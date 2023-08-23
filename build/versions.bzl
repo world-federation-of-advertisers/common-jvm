@@ -118,3 +118,5 @@ KOTLINX_COROUTINES_VERSION = "1.6.2"
 #
 # TODO: Use version once there's a release that contains AesSivBoringSsl.
 TINK_COMMIT = "0f65dc5d079fb3107c71908734a082079e98ae45"
+
+AWS_JAVA_SDK_VERSION = "2.17.258"

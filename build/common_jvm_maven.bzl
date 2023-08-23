@@ -44,7 +44,7 @@ load("//build/com_google_truth:repo.bzl", "com_google_truth_artifact_dict")
 load("//build/kotlinx_coroutines:repo.bzl", "kotlinx_coroutines_artifact_dict")
 load("//build/maven:artifacts.bzl", "artifacts")
 load("//build/tink:repo.bzl", "TINK_JAVA_KMS_MAVEN_DEPS")
-load("//build:versions.bzl", "PROTOBUF_KOTLIN_VERSION")
+load("//build:versions.bzl", "AWS_JAVA_SDK_VERSION", "PROTOBUF_KOTLIN_VERSION")
 
 # buildifier: disable=function-docstring-return
 def common_jvm_maven_artifacts():
@@ -81,7 +81,10 @@ def common_jvm_maven_artifacts_dict():
         "org.conscrypt:conscrypt-openjdk-uber": "2.5.2",
         "org.jetbrains:annotations": "23.0.0",
         "org.mockito.kotlin:mockito-kotlin": "3.2.0",
-        "software.amazon.awssdk:s3": "2.17.258",
+        "software.amazon.awssdk:s3": AWS_JAVA_SDK_VERSION,
+        "software.amazon.awssdk:secretsmanager": AWS_JAVA_SDK_VERSION,
+        "software.amazon.awssdk:sts": AWS_JAVA_SDK_VERSION,
+        "software.amazon.awssdk:regions": AWS_JAVA_SDK_VERSION,
 
         # PostgreSQL.
         "com.google.cloud.sql:postgres-socket-factory": "1.6.2",

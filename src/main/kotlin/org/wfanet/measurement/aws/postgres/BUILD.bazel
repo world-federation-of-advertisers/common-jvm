@@ -1,0 +1,37 @@
+load("@io_bazel_rules_kotlin//kotlin:jvm.bzl", "kt_jvm_library")
+
+package(default_visibility = ["//visibility:public"])
+
+kt_jvm_library(
+    name = "flags",
+    srcs = ["PostgresFlags.kt"],
+    deps = [
+        "//imports/java/picocli",
+        "//src/main/kotlin/org/wfanet/measurement/aws/common:region_converter",
+    ],
+)
+
+kt_jvm_library(
+    name = "factories",
+    srcs = ["PostgresConnectionFactories.kt"],
+    runtime_deps = [
+        "//imports/java/software/amazon/awssdk/services/sts",
+    ],
+    deps = [
+        ":flags",
+        ":postgres_credentials",
+        "//imports/java/org/postgresql:r2dbc",
+    ],
+)
+
+kt_jvm_library(
+    name = "postgres_credentials",
+    srcs = ["PostgresCredentials.kt"],
+    runtime_deps = [
+        "//imports/java/software/amazon/awssdk/services/sts",
+    ],
+    deps = [
+        "//imports/java/com/google/gson",
+        "//imports/java/software/amazon/awssdk/services/secretsmanager",
+    ],
+)
