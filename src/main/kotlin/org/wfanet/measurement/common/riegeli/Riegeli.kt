@@ -332,6 +332,7 @@ class Riegeli {
         while(recordByteBuffer.hasRemaining()) {
           recordByteBuffer.put(valuesByteBuffer.get())
         }
+        recordByteBuffer.rewind()
 
         records.add(recordByteBuffer.toByteString())
       }
@@ -433,7 +434,9 @@ class Riegeli {
 
       //Chunk type is simple chunk with records (0x72)
       if (chunk.chunkType.byteAt(0) == 0x72.toByte()) {
-        records.addAll(chunk.getRecords())
+        logger.info(" RECORD CHUNK -- Chunk type: ${chunk.chunkType.byteAt(0)}")
+        val tempRecs = chunk.getRecords()
+        records.addAll(tempRecs)
       } else {
         //Ignored/unsupported chunk types:
         //0x73 - File Signature - Present at the beginning of the file, encodes no records, is ignored
