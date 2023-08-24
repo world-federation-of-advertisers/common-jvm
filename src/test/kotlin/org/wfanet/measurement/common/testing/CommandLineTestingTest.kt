@@ -15,68 +15,69 @@
 package org.wfanet.measurement.common.testing
 
 import com.google.common.truth.Truth.assertThat
-import java.time.Duration
-import kotlin.test.assertFails
+import kotlin.test.assertFailsWith
 import org.junit.Test
-import org.wfanet.measurement.common.DurationFormat
+import org.junit.runner.RunWith
+import org.junit.runners.JUnit4
 import org.wfanet.measurement.common.commandLineMain
-import org.wfanet.measurement.common.testing.CommandLineTesting.assertExitsWith
-import org.wfanet.measurement.common.testing.CommandLineTesting.capturingSystemOut
+import org.wfanet.measurement.common.testing.CommandLineTesting.assertThat
 import picocli.CommandLine.Command
 import picocli.CommandLine.Parameters
 
 const val NAME = "World"
-const val ZERO_DURATION = "PT0S"
 val ARGS = arrayOf(NAME)
 
+@RunWith(JUnit4::class)
 class CommandLineTestingTest {
   @Test
-  fun `assertExitsWith does not raise execption when exit code is 0`() {
-    assertExitsWith(0) { HelloCommandLine.main(ARGS) }
+  fun `capturingOutput captures STDOUT`() {
+    val output: CommandLineTesting.CapturedOutput =
+      CommandLineTesting.capturingOutput(ARGS, HelloCommandLine::main)
+
+    assertThat(output).out().contains("Hello $NAME")
   }
 
   @Test
-  fun `assertExitsWith raises execption when exit code is not 0`() {
-    assertFails { assertExitsWith(0) { HelloCommandLine.main(arrayOf()) } }
+  fun `capturingOutput captures STDERR`() {
+    val output: CommandLineTesting.CapturedOutput =
+      CommandLineTesting.capturingOutput(ARGS, HelloCommandLine::main)
+
+    assertThat(output).err().contains("Goodbye $NAME")
   }
 
   @Test
-  fun `capturingSystemOut() returns system output`() {
-    val output = capturingSystemOut { HelloCommandLine.main(ARGS) }
+  fun `capturingOutput captures status when SecurityManager installed`() {
+    val output: CommandLineTesting.CapturedOutput =
+      CommandLineTesting.capturingOutput(emptyArray(), HelloCommandLine::main)
 
-    assertThat(output).contains("Hello $NAME")
+    assertThat(output).status().isEqualTo(2)
   }
 
   @Test
-  fun `default doesn't parse ISO-8601`() {
-    val output = capturingSystemOut {
-      commandLineMain(HelloCommandLine(), args = arrayOf(NAME, "P1DT3H5M12.99S"))
+  fun `main throws ExitException on non-zero status when SecurityManger installed`() {
+    val exception =
+      assertFailsWith<ExitInterceptingSecurityManager.ExitException> {
+        HelloCommandLine.main(emptyArray())
+      }
+
+    assertThat(exception.status).isEqualTo(2)
+  }
+
+  companion object {
+    init {
+      // Install security manager to intercept system exit.
+      System.setSecurityManager(ExitInterceptingSecurityManager)
     }
-
-    assertThat(output).isEqualTo("Hello $NAME. The duration is $ZERO_DURATION")
-  }
-
-  @Test
-  fun `passing in format parses ISO-8601`() {
-    val output = capturingSystemOut {
-      commandLineMain(
-        HelloCommandLine(),
-        args = arrayOf(NAME, "P1DT3H5M12.99S"),
-        DurationFormat.ISO_8601
-      )
-    }
-
-    assertThat(output).isEqualTo("Hello $NAME. The duration is P1DT3H5M12.99S")
   }
 }
 
 @Command(name = "hello")
 private class HelloCommandLine : Runnable {
   @Parameters(index = "0") private lateinit var name: String
-  @Parameters(index = "1") private lateinit var duration: Duration
 
   override fun run() {
-    println("Hello $name. The duration is $duration")
+    println("Hello $name")
+    System.err.println("Goodbye $name")
   }
 
   companion object {

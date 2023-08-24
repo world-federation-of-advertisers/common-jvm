@@ -181,4 +181,10 @@ class S3StorageClient(private val s3: S3AsyncClient, private val bucketName: Str
         .await()
     }
   }
+
+  companion object {
+    /** Constructs a [S3StorageClient] from command-line flags. */
+    fun fromFlags(s3Flags: S3Flags) =
+      S3StorageClient(S3AsyncClient.builder().region(s3Flags.s3Region).build(), s3Flags.s3Bucket)
+  }
 }
