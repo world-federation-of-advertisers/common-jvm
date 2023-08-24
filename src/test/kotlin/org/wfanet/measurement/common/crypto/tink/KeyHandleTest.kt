@@ -27,7 +27,7 @@ import org.wfanet.measurement.common.crypto.testing.TestData
 class KeyHandleTest {
   @Test
   fun `generated private key can decrypt value`() {
-    val privateKey = TinkPrivateKeyHandle.generateEcies()
+    val privateKey = TinkPrivateKeyHandle.generateEcies(true)
 
     val cipherText = privateKey.publicKey.hybridEncrypt(PLAIN_TEXT_MESSAGE_BINARY)
     assertThat(privateKey.hybridDecrypt(cipherText)).isEqualTo(PLAIN_TEXT_MESSAGE_BINARY)

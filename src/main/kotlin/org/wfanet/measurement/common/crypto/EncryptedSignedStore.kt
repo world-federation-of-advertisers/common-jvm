@@ -22,8 +22,9 @@ import org.wfanet.measurement.common.BYTES_PER_MIB
 import org.wfanet.measurement.common.asBufferedFlow
 import org.wfanet.measurement.common.crypto.PrivateKeyHandle
 import org.wfanet.measurement.common.crypto.PublicKeyHandle
-import org.wfanet.measurement.common.crypto.SignedStore
 import org.wfanet.measurement.common.crypto.SignedStore.BlobNotFoundException
+import org.wfanet.measurement.common.crypto.sign
+import org.wfanet.measurement.common.crypto.verifying
 import org.wfanet.measurement.common.flatten
 import org.wfanet.measurement.storage.StorageClient
 
@@ -31,8 +32,13 @@ private const val WRITE_BUFFER_SIZE = BYTES_PER_MIB * 5
 
 class EncryptedSignedStore(private val storageClient: StorageClient) {
 
-  private val signedStore: SignedStore = SignedStore(storageClient)
+  private fun blobKeyForSignature(blobKey: String): String {
+    return "signature/$blobKey"
+  }
 
+  private fun blobKeyForContent(blobKey: String): String {
+    return "content/$blobKey"
+  }
   //  PrivateKey and X509Certificate used to create the signature when writing the data
   //  PublicKey used to encrypt the content
   suspend fun write(
@@ -42,13 +48,24 @@ class EncryptedSignedStore(private val storageClient: StorageClient) {
     encryptingPublicKeyHandle: PublicKeyHandle,
     content: Flow<ByteString>
   ): String {
-    val encryptedData = encryptingPublicKeyHandle.hybridEncrypt(content.flatten())
-    return signedStore.write(
-      blobKey,
-      signingX509,
-      signingPrivateKey,
-      encryptedData.asBufferedFlow(WRITE_BUFFER_SIZE)
-    )
+    val signature = signingPrivateKey.sign(signingX509, content.flatten()).asBufferedFlow(3)
+//    val blob = storageClient.writeBlob(blobKey, content)
+//    val combinedFlow = content.zip(signature) { a, b -> ByteString.EMPTY.concat(a).concat(ByteString.copyFromUtf8("_") ).concat(b) }
+////    val signedBlob = SignedBlob(blob, signature)
+//    println("joj signature: ${signature.flatten()}")
+//    println("joj content: ${content.flatten()}")
+//    val (a,b) = combinedFlow.
+//    println("joj bytestring example: ${combinedFlow.flatten()}")
+//    val encryptedData = encryptingPublicKeyHandle.hybridEncrypt(combinedFlow.flatten())
+    val encryptedContent = encryptingPublicKeyHandle.hybridEncrypt(content)
+//    keyHandle.getPrimitive(Aead::class.java)
+//    val x = KeysetHandle.generateNew(KeyTemplates.get("AES128_GCM"))
+//    x.getPrimitive(Aead::class.java)
+    val encryptedSignature = encryptingPublicKeyHandle.hybridEncrypt(signature.flatten())
+
+    storageClient.writeBlob(blobKeyForSignature(blobKey), encryptedSignature)
+    storageClient.writeBlob(blobKeyForContent(blobKey), encryptedContent)
+    return blobKey
   }
 
   @Throws(BlobNotFoundException::class)
@@ -56,10 +73,14 @@ class EncryptedSignedStore(private val storageClient: StorageClient) {
     blobKey: String,
     signingX509: X509Certificate,
     decryptingPrivateKeyHandle: PrivateKeyHandle
-  ): Flow<ByteString> {
-    val encryptedContent = signedStore.read(blobKey, signingX509)
-    return decryptingPrivateKeyHandle
-      .hybridDecrypt(encryptedContent.flatten())
+  ): Flow<ByteString>? {
+    val encryptedContent = storageClient.getBlob(blobKeyForContent(blobKey)) ?: return null
+    val decryptedContent = decryptingPrivateKeyHandle
+      .hybridDecrypt(encryptedContent.read())
+    val encryptedSignature = storageClient.getBlob(blobKeyForSignature(blobKey)) ?: return null
+    val decryptedSignature = decryptingPrivateKeyHandle
+      .hybridDecrypt(encryptedSignature.read().flatten())
       .asBufferedFlow(WRITE_BUFFER_SIZE)
+    return decryptedContent.verifying(signingX509, decryptedSignature.flatten())
   }
 }
