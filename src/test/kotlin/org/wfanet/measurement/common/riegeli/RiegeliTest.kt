@@ -14,22 +14,40 @@
 
 package org.wfanet.measurement.common.riegeli
 
+import com.google.common.truth.Truth.assertThat
 import com.google.protobuf.ByteString
-import java.io.FileInputStream
-import java.io.InputStream
+import java.io.File
+import java.nio.file.Paths
 import kotlin.math.min
-import kotlin.test.assertContentEquals
-import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
-import riegeli.tests.SimpleMessageOuterClass.SimpleMessage
-
-private const val DATA_PATH = "src/test/proto/wfa/measurement/common/riegeli/test_data"
+import org.wfa.measurement.testing.riegeli.SimpleMessageOuterClass.SimpleMessage
+import org.wfanet.measurement.common.getRuntimePath
 
 @RunWith(JUnit4::class)
 class RiegeliTest {
+
+  private val FIXED_TESTDATA_DIR: File =
+    getRuntimePath(
+      Paths.get(
+        "wfa_common_jvm",
+        "src",
+        "main",
+        "proto",
+        "wfa",
+        "measurement",
+        "testing",
+        "riegeli",
+        "test_data"
+      )
+    )!!
+    .toFile()
+
+
+  private val SIMPLE_MESSAGE_RIEGELI_FILE = FIXED_TESTDATA_DIR.resolve("simple_message_riegeli")
+  private val CORRUPTED_MESSAGE_RIEGELI_FILE = FIXED_TESTDATA_DIR.resolve("corrupted_message_riegeli")
 
   fun sampleString(i: Int, size: Int): ByteString {
     val piece = "$i ".encodeToByteArray()
@@ -43,55 +61,47 @@ class RiegeliTest {
   }
 
   @Test
-  fun `test read record from file` () {
-    val filename = "$DATA_PATH/simple_message_riegeli"
-    val records = Riegeli().readCompressedFileWithRecords(filename)
+  fun `readCompressedFilesWithRecords returns records` () {
+    val records = Riegeli.readCompressedFileWithRecords(SIMPLE_MESSAGE_RIEGELI_FILE)
 
-    val simpleMessages = records.map {
-      SimpleMessage.parseFrom(it)
-    }.toTypedArray()
-
-    simpleMessages.forEachIndexed { index: Int, simpleMessage: SimpleMessage ->
-      assertEquals(simpleMessage.id, index)
-      assert(simpleMessage.payload.equals(sampleString(index, 10000)))
+    records.forEachIndexed { index: Int, it ->
+      val simpleMessage = SimpleMessage.parseFrom(it)
+      assertThat(simpleMessage.id).isEqualTo(index)
+      assertThat(simpleMessage.payload).isEqualTo(sampleString(index, 10000))
     }
   }
 
   @Test
-  fun `test read record from input stream` () {
-    val filename = "$DATA_PATH/simple_message_riegeli"
-    val fileInputStream = FileInputStream(filename)
+  fun `readCompressedInputStreamWithRecords returns records` () {
+    val fileInputStream = SIMPLE_MESSAGE_RIEGELI_FILE.inputStream()
 
-    Riegeli()
+    Riegeli
       .readCompressedInputStreamWithRecords(fileInputStream)
       .forEachIndexed { index: Int, messageBytes: ByteString ->
         val messageObject = SimpleMessage.parseFrom(messageBytes)
-        assertEquals(messageObject.id, index)
-        assert(messageObject.payload.equals(sampleString(index, 10000)))
+        assertThat(messageObject.id).isEqualTo(index)
+        assertThat(messageObject.payload).isEqualTo(sampleString(index, 10000))
       }
   }
 
   @Test
-  fun `test read records` () {
-    val filename = "$DATA_PATH/simple_message_riegeli"
-    val records = Riegeli().readCompressedFileWithRecords(filename)
+  fun `readCompressedFileWithRecords can be collected` () {
+    val records = Riegeli.readCompressedFileWithRecords(SIMPLE_MESSAGE_RIEGELI_FILE)
 
     val simpleMessages = records.map {
       SimpleMessage.parseFrom(it).payload
-    }.toTypedArray()
+    }
 
-    val comparisonArray = Array(23) {index -> sampleString(index, 10000)}
+    val comparisonArray = List(23) {index -> sampleString(index, 10000)}
 
-    assertContentEquals(simpleMessages, comparisonArray)
+    assertThat(simpleMessages.toList()).isEqualTo(comparisonArray)
   }
 
   @Test
-  fun `test_invalid_records_exception` () {
-    val filename = "$DATA_PATH/corrupted_message_riegeli"
-    val fileInputStream = FileInputStream(filename)
-
+  fun `readCompressedInputStreamWithRecords with corrupted file throws exception` () {
     assertFailsWith<Exception> {
-      Riegeli().readCompressedInputStreamWithRecords(fileInputStream)
+      // Need to call toList in order to get the reader to go through the file
+      Riegeli.readCompressedFileWithRecords(CORRUPTED_MESSAGE_RIEGELI_FILE).toList()
     }
   }
 }
