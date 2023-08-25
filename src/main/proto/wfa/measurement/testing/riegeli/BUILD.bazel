@@ -10,7 +10,7 @@ package(
 proto_library(
     name = "simple_message_proto",
     srcs = ["simple_message.proto"],
-    strip_import_prefix = "/src/test/proto",
+    strip_import_prefix = "/src/main/proto",
 )
 
 java_proto_library(

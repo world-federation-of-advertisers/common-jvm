@@ -2,6 +2,9 @@ package(default_visibility = [
     "//src/test/kotlin/org/wfanet/measurement/common/riegeli:__subpackages__",
 ])
 
+# The following files are used by the Riegeli decompressor unit tests. These files allow us to mirror our unit
+# tests for to the google/riegeli repository. The
+
 exports_files(
     [
         "simple_message_riegeli",

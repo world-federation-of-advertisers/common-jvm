@@ -1,6 +1,6 @@
 syntax = "proto2";
 
-package riegeli.tests;
+package org.wfa.measurement.testing.riegeli;
 
 message SimpleMessage {
   optional int32 id = 1;
