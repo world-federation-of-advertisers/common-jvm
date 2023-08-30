@@ -1,8 +1,12 @@
-syntax = "proto2";
+syntax = "proto3";
 
-package org.wfa.measurement.testing.riegeli;
+package wfa.measurement.testing.riegeli;
+
+option java_package = "org.wfanet.measurement.testing.riegeli";
+option java_multiple_files = true;
+option java_outer_classname = "SimpleMessageProto";
 
 message SimpleMessage {
-  optional int32 id = 1;
-  optional bytes payload = 2;
+  int32 id = 1;
+  bytes payload = 2;
 }
