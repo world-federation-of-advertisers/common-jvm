@@ -61,33 +61,35 @@ object Riegeli {
    * Reads and decompresses a Riegeli compressed input stream with records.
    *
    * @param incomingInputStream An input stream which contains data which should be decompressed using Riegeli.
+   *                            This input stream will be closed when the sequence has been exhausted or upon any error.
    * @return A sequence where each element is a ByteString containing the bytes of a record.
    */
-  fun readCompressedInputStreamWithRecords(incomingInputStream: InputStream): Sequence<ByteString> {
+  fun readRecords(incomingInputStream: InputStream): Sequence<ByteString> {
     return sequence<ByteString> {
+      incomingInputStream.use { incomingInputStream ->
+        val inputStream = CountingInputStream(incomingInputStream)
 
-      val inputStream = CountingInputStream(incomingInputStream)
+        // Riegeli files start with a block header. Read and discard this block header.
+        BlockHeader.readFrom(inputStream)
 
-      // Riegeli files start with a block header. Read and discard this block header.
-      BlockHeader.readFrom(inputStream)
+        while (true) {
+          val chunk = Chunk.readFrom(inputStream) ?: break
 
-      while (true) {
-        val chunk = Chunk.readFrom(inputStream) ?: break
+          //Chunk type is simple chunk with records (0x72)
+          if (chunk.chunkType == 0x72.toByte()) {
+            logger.finer { "RECORD CHUNK -- Chunk type: ${chunk.chunkType}" }
 
-        //Chunk type is simple chunk with records (0x72)
-        if (chunk.chunkType == 0x72.toByte()) {
-          logger.finer { "RECORD CHUNK -- Chunk type: ${chunk.chunkType}" }
+            yieldAll(chunk.getRecords())
 
-          yieldAll(chunk.getRecords())
+          } else {
+            //Ignored/unsupported chunk types:
+            //0x73 - File Signature - Present at the beginning of the file, encodes no records, is ignored
+            //0x6d - File Metadata - provides information describing the records, not necessary to read, is ignored
+            //0x70 - Padding - encodes no records and only occupies file space, is ignored
+            //0x74 - Transposed ChuFnk with Records - no documentation provided for the format of this chunk, unimplementable
 
-        } else {
-          //Ignored/unsupported chunk types:
-          //0x73 - File Signature - Present at the beginning of the file, encodes no records, is ignored
-          //0x6d - File Metadata - provides information describing the records, not necessary to read, is ignored
-          //0x70 - Padding - encodes no records and only occupies file space, is ignored
-          //0x74 - Transposed ChuFnk with Records - no documentation provided for the format of this chunk, unimplementable
-
-          logger.finer { "NON RECORD CHUNK -- Chunk type: ${chunk.chunkType}" }
+            logger.finer { "NON RECORD CHUNK -- Chunk type: ${chunk.chunkType}" }
+          }
         }
       }
     }
@@ -99,10 +101,8 @@ object Riegeli {
    * @param file The file which should be decompressed using Riegeli.
    * @return A sequence where each element is a ByteString containing the bytes of a record.
    */
-  fun readCompressedFileWithRecords(file: File): List<ByteString> {
-    file.inputStream().use { inputStream ->
-      return readCompressedInputStreamWithRecords(inputStream).toList()
-    }
+  fun readRecords(file: File): Sequence<ByteString> {
+      return readRecords(file.inputStream())
   }
 
   private val logger = Logger.getLogger(this::class.java.name)
