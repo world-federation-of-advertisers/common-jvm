@@ -57,6 +57,6 @@ class PostgresFlags {
 
   val jdbcConnectionString: String
     get() {
-      return "jdbc:postgresql://$host:$port/$database"
+      return "jdbc:postgresql://$host:$port/"
     }
 }
