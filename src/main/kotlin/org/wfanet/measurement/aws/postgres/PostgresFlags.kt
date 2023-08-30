@@ -22,14 +22,6 @@ import software.amazon.awssdk.regions.Region
 /** Common command-line flags for connecting to a single Postgres database. */
 class PostgresFlags {
   @CommandLine.Option(
-    names = ["--postgres-database"],
-    description = ["Name of the Postgres database."],
-    required = true
-  )
-  lateinit var database: String
-    private set
-
-  @CommandLine.Option(
     names = ["--postgres-host"],
     description = ["Host name of the Postgres database."],
     required = true
