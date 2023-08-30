@@ -23,7 +23,6 @@ import java.io.File
 import java.io.InputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
-import java.nio.file.Path
 import java.util.LinkedList
 import java.util.logging.Logger
 import org.apache.commons.compress.compressors.CompressorInputStream
@@ -35,20 +34,6 @@ import org.wfanet.measurement.common.getVarInt64
 import org.wfanet.measurement.common.toLong
 import org.wfanet.measurement.common.withTrailingPadding
 
-
-//Constant representing the fixed-size of a block within a Riegeli compressed file.
-private const val BLOCK_SIZE = 1 shl 16
-
-/**
- * builds a HighwayHash object with the key
- * 'Riegeli/', 'records\n', 'Riegeli/', 'records\n'
- *
- * @return A HighwayHash object with specified key.
- */
-private fun buildHighwayHash(): HighwayHash {
-  return HighwayHash(0x2f696c6567656952, 0x0a7364726f636572, 0x2f696c6567656952, 0x0a7364726f636572)
-}
-
 /**
  * Native kotlin implementation of a Riegeli decompressor.
  *
@@ -58,36 +43,51 @@ private fun buildHighwayHash(): HighwayHash {
 object Riegeli {
 
   /**
+   * Constant representing the fixed-size of a block within a Riegeli compressed file.
+   */
+  private const val BLOCK_SIZE = 1 shl 16
+
+  /**
+   * builds a HighwayHash object with the key
+   * 'Riegeli/', 'records\n', 'Riegeli/', 'records\n'
+   *
+   * @return A HighwayHash object with specified key.
+   */
+  private fun buildHighwayHash(): HighwayHash {
+    return HighwayHash(0x2f696c6567656952, 0x0a7364726f636572, 0x2f696c6567656952, 0x0a7364726f636572)
+  }
+
+  /**
    * Reads and decompresses a Riegeli compressed input stream with records.
    *
    * @param incomingInputStream An input stream which contains data which should be decompressed using Riegeli.
-   * @return A list where each element is a ByteString containing the bytes of a record.
+   * @return A sequence where each element is a ByteString containing the bytes of a record.
    */
   fun readCompressedInputStreamWithRecords(incomingInputStream: InputStream): Sequence<ByteString> {
     return sequence<ByteString> {
 
-      CountingInputStream(incomingInputStream).use { inputStream ->
+      val inputStream = CountingInputStream(incomingInputStream)
 
-        BlockHeader.fromInputStream(inputStream)
+      // Riegeli files start with a block header. Read and discard this block header.
+      BlockHeader.readFrom(inputStream)
 
-        while (true) {
-          val chunk = Chunk.readFrom(inputStream) ?: break
+      while (true) {
+        val chunk = Chunk.readFrom(inputStream) ?: break
 
-          //Chunk type is simple chunk with records (0x72)
-          if (chunk.chunkType == 0x72.toByte()) {
-            logger.info("RECORD CHUNK -- Chunk type: ${chunk.chunkType}")
+        //Chunk type is simple chunk with records (0x72)
+        if (chunk.chunkType == 0x72.toByte()) {
+          logger.finer { "RECORD CHUNK -- Chunk type: ${chunk.chunkType}" }
 
-            yieldAll(chunk.getRecords())
+          yieldAll(chunk.getRecords())
 
-          } else {
-            //Ignored/unsupported chunk types:
-            //0x73 - File Signature - Present at the beginning of the file, encodes no records, is ignored
-            //0x6d - File Metadata - provides information describing the records, not necessary to read, is ignored
-            //0x70 - Padding - encodes no records and only occupies file space, is ignored
-            //0x74 - Transposed Chunk with Records - no documentation provided for the format of this chunk, unimplementable
+        } else {
+          //Ignored/unsupported chunk types:
+          //0x73 - File Signature - Present at the beginning of the file, encodes no records, is ignored
+          //0x6d - File Metadata - provides information describing the records, not necessary to read, is ignored
+          //0x70 - Padding - encodes no records and only occupies file space, is ignored
+          //0x74 - Transposed ChuFnk with Records - no documentation provided for the format of this chunk, unimplementable
 
-            logger.info("NON RECORD CHUNK -- Chunk type: ${chunk.chunkType}")
-          }
+          logger.finer { "NON RECORD CHUNK -- Chunk type: ${chunk.chunkType}" }
         }
       }
     }
@@ -97,10 +97,12 @@ object Riegeli {
    * Reads and decompresses a Riegeli compressed file with records.
    *
    * @param file The file which should be decompressed using Riegeli.
-   * @return A list where each element is a ByteString containing the bytes of a record.
+   * @return A sequence where each element is a ByteString containing the bytes of a record.
    */
-  fun readCompressedFileWithRecords(file: File): Sequence<ByteString> {
-    return readCompressedInputStreamWithRecords(file.inputStream())
+  fun readCompressedFileWithRecords(file: File): List<ByteString> {
+    file.inputStream().use { inputStream ->
+      return readCompressedInputStreamWithRecords(inputStream).toList()
+    }
   }
 
   private val logger = Logger.getLogger(this::class.java.name)
@@ -118,27 +120,40 @@ object Riegeli {
    * @param headerHash      BteString containing a HighwayHash of the other chunk header elements
    *                        (dataSize, dataHash, chunkType, numRecords, and decodedDataSize).
    * @param dataSize        ByteString containing the size of the chunk data, excluding intervening block headers.
-   *                        The ByteString should be storing a 64-bit, little-endian unsigned long.
+   *                        The ByteString should be storing a 64-bit, little-endian unsigned integer.
    * @param dataHash        ByteString containing a HighwayHash of the data within the chunk.
    * @param chunkType       Byte containing a single byte which represents the chunk type.
    *                          - If chunkType is 0x6d, the chunk is a file metadata chunk.
    *                          - If chunkType is 0x70, the chunk is a padding chunk.
    *                          - If chunkType is 0x72, the chunk is a simple chunk with records.
    *                          - if chunkType is 0x74, the chunk is a transposed chunk with records.
-   * @param numRecords      ByteString representing the number of records inside the chunk. The ByteString should be storing
-   *                        a 56-bit, little-endian unsigned long.
+   * @param numRecords      ByteString representing the number of records inside the chunk. The ByteString should be
+   *                        storing a 56-bit, little-endian unsigned integer.
    * @param decodedDataSize ByteString representing the size of the chunk's data after it has been decoded.
-   *                        The ByteString should be storing a 64-bit, little-endian unsigned long.
+   *                        The ByteString should be storing a 64-bit, little-endian unsigned integer.
    * @param data            ByteBuffer with the chunk's compressed data. The buffer's size is represented by dataSize.
+   * @throws IllegalArgumentException   if the chunk's header does not hash properly, meaning that the chunk header
+   *                                    is corrupted.
+   * @throws IllegalArgumentException   if the hash of the chunk's data does not match dataHash within the chunk header,
+   *                                    meaning the chunk's data is corrupted.
    */
-  private class Chunk constructor(val headerHash: ByteString,
-                                  val dataSize: ByteString,
-                                  val dataHash: ByteString,
-                                  val chunkType: Byte,
-                                  val numRecords: ByteString,
-                                  val decodedDataSize: ByteString,
-                                  val data: ByteBuffer) {
+  private class Chunk private constructor(val headerHash: ByteString,
+                                          val dataSize: ByteString,
+                                          val dataHash: ByteString,
+                                          val chunkType: Byte,
+                                          val numRecords: ByteString,
+                                          val decodedDataSize: ByteString,
+                                          val data: ByteBuffer) {
 
+    init {
+      require(isValidHeader(headerHash, dataSize, dataHash, chunkType, numRecords, decodedDataSize)) {
+        "Riegeli: Chunk header is invalid"
+      }
+
+      require(isValidData(dataSize, dataHash, data)) {
+        "Riegeli: Chunk data is invalid"
+      }
+    }
 
     companion object {
 
@@ -151,9 +166,6 @@ object Riegeli {
        *
        * @param inputStream Counting input stream from which the chunk should be read. The input stream's count must
        *                    have started at the beginning of a file.
-       * @throws Exception if the chunk's header does not hash properly, meaning that the chunk header is corrupted.
-       * @throws Exception if the hash of the chunk's data does not match dataHash within the chunk header, meaning
-       *         the chunk's data is corrupted.
        * @return A new chunk object as read from the inputStream.
        */
       fun readFrom(inputStream: CountingInputStream): Chunk? {
@@ -183,29 +195,19 @@ object Riegeli {
         val numRecords = numRecordsArray.toByteString()
         val decodedDataSize = decodedDataSizeArray.toByteString()
 
-
-
-        if (!isValidHeader(headerHash, dataSize, dataHash, chunkType, numRecords, decodedDataSize)) {
-          throw Exception("Riegeli: Chunk header is invalid")
-        }
-
         val dataStream = ByteArrayOutputStream()
         val dataSizeInt = dataSize.toLong(ByteOrder.LITTLE_ENDIAN).toInt()
 
         repeat(dataSizeInt) {
 
           if (inputStream.bytesRead % BLOCK_SIZE == 0L) {
-            BlockHeader.fromInputStream(inputStream)
+            BlockHeader.readFrom(inputStream)
           }
 
           dataStream.write(inputStream.read())
         }
 
         val data = ByteBuffer.wrap(dataStream.toByteArray())
-
-        if (!isValidData(dataSize, dataHash, data)) {
-          throw Exception("Riegeli: Chunk data is invalid")
-        }
 
         return Chunk(headerHash, dataSize, dataHash, chunkType, numRecords, decodedDataSize, data)
       }
@@ -217,13 +219,13 @@ object Riegeli {
        * @param headerHash      64-bit ByteString containing a HighwayHash of the other chunk header elements
        *                        (dataSize, dataHash, chunkType, numRecords, and decodedDataSize).
        * @param dataSize        ByteString representing the size of the chunk data, excluding intervening block headers.
-       *                        The ByteString should be storing a 64-bit, little-endian unsigned long.
+       *                        The ByteString should be storing a 64-bit, little-endian unsigned integer.
        * @param dataHash        ByteString containing a HighwayHash of the data within the chunk.
        * @param chunkType       Byte containing a single byte which represents the chunk type.
        * @param numRecords      ByteString representing the number of records inside the chunk. The ByteString is
-       *                        storing a 56-bit, little-endian unsigned long.
+       *                        storing a 56-bit, little-endian unsigned integer.
        * @param decodedDataSize ByteString representing the size of the chunk's data after it has been decoded.
-       *                        The ByteString should be storing a 64-bit, little-endian unsigned long.
+       *                        The ByteString should be storing a 64-bit, little-endian unsigned integer.
        * @return True if the chunk's header is valid, false if it is not.
        */
       private fun isValidHeader(headerHash: ByteString,
@@ -251,8 +253,7 @@ object Riegeli {
        * Compares the dataHash element of the chunk's header to a highway hash of the chunk's data.
        *
        * @param dataSize  ByteString representing the size of the chunk data, excluding intervening block headers.
-       *                  The ByteString should be storing a 64-bit, little-endian unsigned long.
-       * @param dataHash  ByteString containing a HighwayHash of the data within the chunk.
+       *                  The ByteString should be storing a 64-bit, little-endian unsigned integer.
        * @param data      ByteBuffer with the chunk's compressed data. The buffer's size is represented by dataSize.
        * @return True if the chunk's header is valid, false if it is not.
        */
@@ -328,8 +329,6 @@ object Riegeli {
     }
 
     /**
-     * Gets the records stored within the chunk as a list of ByteArrays.
-     *
      * The full specification for a chunk with records can be found here:
      *  https://github.com/google/riegeli/blob/master/doc/riegeli_records_file_format.md#simple-chunk-with-records
      *
@@ -344,11 +343,11 @@ object Riegeli {
      * @return  A list where each element is a ByteString representing a decompressed record. If there are no records
      *          within the chunk, an empty list is returned.
      */
-    fun getRecords(): Sequence<ByteString> {
+    fun getRecords(): List<ByteString> {
 
       //If the chunk is not a chunk with records, return an empty list
       if (this.chunkType != 0x72.toByte()) {
-        return emptySequence()
+        return emptyList()
       }
 
       val dataBuffer = this.data.duplicate().rewind()
@@ -375,17 +374,17 @@ object Riegeli {
       val valuesByteBuffer = readCompressedBuffer(dataBuffer, encodedDataSize, compressionType)
       valuesByteBuffer.rewind()
 
-      val records = sequence<ByteString> {
-        for (size in sizes) {
-          val recordByteBuffer = ByteBuffer.allocate(size)
+      val records = LinkedList<ByteString>()
 
-          while(recordByteBuffer.hasRemaining()) {
-            recordByteBuffer.put(valuesByteBuffer.get())
-          }
-          recordByteBuffer.rewind()
+      for (size in sizes) {
+        val recordByteBuffer = ByteBuffer.allocate(size)
 
-          yield(recordByteBuffer.toByteString())
+        while(recordByteBuffer.hasRemaining()) {
+          recordByteBuffer.put(valuesByteBuffer.get())
         }
+        recordByteBuffer.rewind()
+
+        records.add(recordByteBuffer.toByteString())
       }
 
       return records
@@ -402,12 +401,20 @@ object Riegeli {
    *                        (previousChunk and nextChunk).
    * @param previousChunk   ByteString representing the distance from the beginning of the chunk interrupted by this
    *                        block header to the beginning of the block. The ByteString should be storing a 64-bit,
-   *                        little-endian unsigned long.
+   *                        little-endian unsigned integer.
    * @param nextChunk       ByteString representing the distance from the beginning of the block to the end of the chunk
    *                        interrupted by this block header. The ByteString should be storing a 64-bit, little-endian
-   *                        unsigned long.
+   *                        unsigned integer.
+   * @throws IllegalArgumentException   if the block header does not hash properly, meaning that the block header
+   *                                    is corrupted.
    */
-  private class BlockHeader constructor(val headerHash: ByteString, val previousChunk: ByteString, val nextChunk: ByteString) {
+  private class BlockHeader private constructor(val headerHash: ByteString, val previousChunk: ByteString, val nextChunk: ByteString) {
+
+    init {
+      require(isValid(headerHash, previousChunk, nextChunk)) {
+        "Riegeli: Block header is invalid"
+      }
+    }
 
     companion object {
 
@@ -418,10 +425,9 @@ object Riegeli {
        *
        * @param inputStream Counting input stream from which the chunk should be read. The input stream's count must
        *                    have started at the beginning of a file.
-       * @throws Exception if the block header does not hash properly, meaning that the block header is corrupted.
        * @return A new BlockHeader object as read from the inputStream.
        */
-      fun fromInputStream(inputStream: CountingInputStream): BlockHeader {
+      fun readFrom(inputStream: InputStream): BlockHeader {
         val headerHashArray = ByteArray(8)
         val previousChunkArray = ByteArray(8)
         val nextChunkArray = ByteArray(8)
@@ -434,10 +440,6 @@ object Riegeli {
         val previousChunk = previousChunkArray.toByteString()
         val nextChunk = nextChunkArray.toByteString()
 
-        if (!this.isValid(headerHash, previousChunk, nextChunk)) {
-          throw Exception("Riegeli: Block header is invalid")
-        }
-
         return BlockHeader(headerHash, previousChunk, nextChunk)
       }
 
@@ -449,10 +451,10 @@ object Riegeli {
        *                        and nextChunk).
        * @param previousChunk   ByteString representing the distance from the beginning of the chunk interrupted by this
        *                        block header to the beginning of the block. The ByteString should be storing a 64-bit,
-       *                        little-endian unsigned long.
+       *                        little-endian unsigned integer.
        * @param nextChunk       ByteString representing the distance from the beginning of the block to the end of the
        *                        chunk interrupted by this block header. The ByteString should be storing a 64-bit,
-       *                        little-endian unsigned long.
+       *                        little-endian unsigned integer.
        * @return True if the block's header is valid, false if it is not.
        */
       private fun isValid(headerHash: ByteString, previousChunk: ByteString, nextChunk: ByteString): Boolean {
