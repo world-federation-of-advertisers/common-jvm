@@ -28,6 +28,73 @@ import org.wfanet.measurement.common.getRuntimePath
 
 @RunWith(JUnit4::class)
 class RiegeliTest {
+  
+  fun sampleString(i: Int, size: Int): ByteString {
+    val piece = "$i ".encodeToByteArray()
+    val result = ByteArray(size)
+    var j = 0
+    while (j < size) {
+      System.arraycopy(piece, 0, result, j, min(piece.size, size - j))
+      j += piece.size
+    }
+    return ByteString.copyFrom(result.copyOf(size))
+  }
+
+  @Test
+  fun `readCompressedFilesWithRecords returns records` () {
+    val records = Riegeli.readRecords(SIMPLE_MESSAGE_RIEGELI_FILE)
+
+    records.forEachIndexed { index: Int, it ->
+      val simpleMessage = SimpleMessage.parseFrom(it)
+      assertThat(simpleMessage.id).isEqualTo(index)
+      assertThat(simpleMessage.payload).isEqualTo(sampleString(index, 10000))
+    }
+  }
+
+  @Test
+  fun `readCompressedInputStreamWithRecords returns records` () {
+    Riegeli
+      .readRecords(SIMPLE_MESSAGE_RIEGELI_FILE.inputStream())
+      .forEachIndexed { index: Int, messageBytes: ByteString ->
+        val messageObject = SimpleMessage.parseFrom(messageBytes)
+        assertThat(messageObject.id).isEqualTo(index)
+        assertThat(messageObject.payload).isEqualTo(sampleString(index, 10000))
+      }
+  }
+
+  @Test
+  fun `readCompressedFileWithRecords can be collected` () {
+    val records = Riegeli.readRecords(SIMPLE_MESSAGE_RIEGELI_FILE)
+
+    val simpleMessages = records.map {
+      SimpleMessage.parseFrom(it).payload
+    }
+
+    val comparisonArray = List(23) {index -> sampleString(index, 10000)}
+
+    assertThat(simpleMessages.toList()).isEqualTo(comparisonArray)
+  }
+
+  @Test
+  fun `readCompressedInputStreamWithRecords can be collected` () {
+    val records = Riegeli.readRecords(SIMPLE_MESSAGE_RIEGELI_FILE.inputStream())
+
+    val simpleMessages = records.map {
+      SimpleMessage.parseFrom(it).payload
+    }
+
+    val comparisonArray = List(23) {index -> sampleString(index, 10000)}
+
+    assertThat(simpleMessages.toList()).isEqualTo(comparisonArray)
+  }
+
+  @Test
+  fun `readCompressedFileWithRecords with corrupted file throws exception` () {
+    assertFailsWith<Exception> {
+      // Need to call toList in order to get the reader to go through the file
+      Riegeli.readRecords(CORRUPTED_MESSAGE_RIEGELI_FILE).toList()
+    }
+  }
 
   companion object {
     private val FIXED_TESTDATA_DIR: File =
@@ -50,76 +117,5 @@ class RiegeliTest {
 
     private val SIMPLE_MESSAGE_RIEGELI_FILE = FIXED_TESTDATA_DIR.resolve("simple_message_riegeli")
     private val CORRUPTED_MESSAGE_RIEGELI_FILE = FIXED_TESTDATA_DIR.resolve("corrupted_message_riegeli")
-  }
-
-  fun sampleString(i: Int, size: Int): ByteString {
-    val piece = "$i ".encodeToByteArray()
-    val result = ByteArray(size)
-    var j = 0
-    while (j < size) {
-      System.arraycopy(piece, 0, result, j, min(piece.size, size - j))
-      j += piece.size
-    }
-    return ByteString.copyFrom(result.copyOf(size))
-  }
-
-  @Test
-  fun `readCompressedFilesWithRecords returns records` () {
-    val records = Riegeli.readCompressedFileWithRecords(SIMPLE_MESSAGE_RIEGELI_FILE)
-
-    records.forEachIndexed { index: Int, it ->
-      val simpleMessage = SimpleMessage.parseFrom(it)
-      assertThat(simpleMessage.id).isEqualTo(index)
-      assertThat(simpleMessage.payload).isEqualTo(sampleString(index, 10000))
-    }
-  }
-
-  @Test
-  fun `readCompressedInputStreamWithRecords returns records` () {
-    SIMPLE_MESSAGE_RIEGELI_FILE.inputStream().use { fileInputStream ->
-      Riegeli
-        .readCompressedInputStreamWithRecords(fileInputStream)
-        .forEachIndexed { index: Int, messageBytes: ByteString ->
-          val messageObject = SimpleMessage.parseFrom(messageBytes)
-          assertThat(messageObject.id).isEqualTo(index)
-          assertThat(messageObject.payload).isEqualTo(sampleString(index, 10000))
-        }
-    }
-  }
-
-  @Test
-  fun `readCompressedFileWithRecords can be collected` () {
-    val records = Riegeli.readCompressedFileWithRecords(SIMPLE_MESSAGE_RIEGELI_FILE)
-
-    val simpleMessages = records.map {
-      SimpleMessage.parseFrom(it).payload
-    }
-
-    val comparisonArray = List(23) {index -> sampleString(index, 10000)}
-
-    assertThat(simpleMessages.toList()).isEqualTo(comparisonArray)
-  }
-
-  @Test
-  fun `readCompressedInputStreamWithRecords can be collected` () {
-    SIMPLE_MESSAGE_RIEGELI_FILE.inputStream().use { fileInputStream ->
-      val records = Riegeli.readCompressedInputStreamWithRecords(fileInputStream)
-
-      val simpleMessages = records.map {
-        SimpleMessage.parseFrom(it).payload
-      }
-
-      val comparisonArray = List(23) {index -> sampleString(index, 10000)}
-
-      assertThat(simpleMessages.toList()).isEqualTo(comparisonArray)
-    }
-  }
-
-  @Test
-  fun `readCompressedFileWithRecords with corrupted file throws exception` () {
-    assertFailsWith<Exception> {
-      // Need to call toList in order to get the reader to go through the file
-      Riegeli.readCompressedFileWithRecords(CORRUPTED_MESSAGE_RIEGELI_FILE).toList()
-    }
   }
 }
