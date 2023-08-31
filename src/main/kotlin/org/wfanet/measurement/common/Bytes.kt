@@ -339,14 +339,15 @@ fun String.hexAsByteString(): ByteString {
 }
 
 /**
- * Reads a varint from a ByteBuffer.
- * Varints are variable-width unsigned integers, supporting up to 64-bit integers.
+ * Reads a varint from a ByteBuffer. Varints are variable-width unsigned integers, supporting up to
+ * 64-bit integers.
  *
- * The specification for varints can be found here: https://protobuf.dev/programming-guides/encoding/#varints
+ * The specification for varints can be found here:
+ * https://protobuf.dev/programming-guides/encoding/#varints
  *
- * @return The 64-bit unsigned varint which has been read from the ByteBuffer. This is returned as a Long.
+ * @return The 64-bit unsigned varint which has been read from the ByteBuffer. This is returned as a
+ *   Long.
  */
-
 fun ByteBuffer.getVarInt64(): Long {
   val bytes = Stack<Int>()
 
@@ -373,9 +374,7 @@ fun ByteBuffer.getVarInt64(): Long {
     // Add the least-significant 7 bits to the result
     currentByte = currentByte and 0x7f
     result = result or currentByte.toLong()
-
   }
 
   return result
-
 }

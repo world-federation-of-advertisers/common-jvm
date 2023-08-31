@@ -23,12 +23,12 @@ import kotlin.test.assertFailsWith
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
-import org.wfanet.measurement.testing.riegeli.SimpleMessage
 import org.wfanet.measurement.common.getRuntimePath
+import org.wfanet.measurement.testing.riegeli.SimpleMessage
 
 @RunWith(JUnit4::class)
 class RiegeliTest {
-  
+
   fun sampleString(i: Int, size: Int): ByteString {
     val piece = "$i ".encodeToByteArray()
     val result = ByteArray(size)
@@ -41,7 +41,7 @@ class RiegeliTest {
   }
 
   @Test
-  fun `readCompressedFilesWithRecords returns records` () {
+  fun `readCompressedFilesWithRecords returns records`() {
     val records = Riegeli.readRecords(SIMPLE_MESSAGE_RIEGELI_FILE)
 
     records.forEachIndexed { index: Int, it ->
@@ -52,44 +52,40 @@ class RiegeliTest {
   }
 
   @Test
-  fun `readCompressedInputStreamWithRecords returns records` () {
-    Riegeli
-      .readRecords(SIMPLE_MESSAGE_RIEGELI_FILE.inputStream())
-      .forEachIndexed { index: Int, messageBytes: ByteString ->
-        val messageObject = SimpleMessage.parseFrom(messageBytes)
-        assertThat(messageObject.id).isEqualTo(index)
-        assertThat(messageObject.payload).isEqualTo(sampleString(index, 10000))
-      }
+  fun `readCompressedInputStreamWithRecords returns records`() {
+    Riegeli.readRecords(SIMPLE_MESSAGE_RIEGELI_FILE.inputStream()).forEachIndexed {
+      index: Int,
+      messageBytes: ByteString ->
+      val messageObject = SimpleMessage.parseFrom(messageBytes)
+      assertThat(messageObject.id).isEqualTo(index)
+      assertThat(messageObject.payload).isEqualTo(sampleString(index, 10000))
+    }
   }
 
   @Test
-  fun `readCompressedFileWithRecords can be collected` () {
+  fun `readCompressedFileWithRecords can be collected`() {
     val records = Riegeli.readRecords(SIMPLE_MESSAGE_RIEGELI_FILE)
 
-    val simpleMessages = records.map {
-      SimpleMessage.parseFrom(it).payload
-    }
+    val simpleMessages = records.map { SimpleMessage.parseFrom(it).payload }
 
-    val comparisonArray = List(23) {index -> sampleString(index, 10000)}
+    val comparisonArray = List(23) { index -> sampleString(index, 10000) }
 
     assertThat(simpleMessages.toList()).isEqualTo(comparisonArray)
   }
 
   @Test
-  fun `readCompressedInputStreamWithRecords can be collected` () {
+  fun `readCompressedInputStreamWithRecords can be collected`() {
     val records = Riegeli.readRecords(SIMPLE_MESSAGE_RIEGELI_FILE.inputStream())
 
-    val simpleMessages = records.map {
-      SimpleMessage.parseFrom(it).payload
-    }
+    val simpleMessages = records.map { SimpleMessage.parseFrom(it).payload }
 
-    val comparisonArray = List(23) {index -> sampleString(index, 10000)}
+    val comparisonArray = List(23) { index -> sampleString(index, 10000) }
 
     assertThat(simpleMessages.toList()).isEqualTo(comparisonArray)
   }
 
   @Test
-  fun `readCompressedFileWithRecords with corrupted file throws exception` () {
+  fun `readCompressedFileWithRecords with corrupted file throws exception`() {
     assertFailsWith<Exception> {
       // Need to call toList in order to get the reader to go through the file
       Riegeli.readRecords(CORRUPTED_MESSAGE_RIEGELI_FILE).toList()
@@ -99,23 +95,23 @@ class RiegeliTest {
   companion object {
     private val FIXED_TESTDATA_DIR: File =
       getRuntimePath(
-        Paths.get(
-          "wfa_common_jvm",
-          "src",
-          "main",
-          "kotlin",
-          "org",
-          "wfanet",
-          "measurement",
-          "common",
-          "riegeli",
-          "testing"
-        )
-      )!!
+          Paths.get(
+            "wfa_common_jvm",
+            "src",
+            "main",
+            "kotlin",
+            "org",
+            "wfanet",
+            "measurement",
+            "common",
+            "riegeli",
+            "testing"
+          )
+        )!!
         .toFile()
 
-
     private val SIMPLE_MESSAGE_RIEGELI_FILE = FIXED_TESTDATA_DIR.resolve("simple_message_riegeli")
-    private val CORRUPTED_MESSAGE_RIEGELI_FILE = FIXED_TESTDATA_DIR.resolve("corrupted_message_riegeli")
+    private val CORRUPTED_MESSAGE_RIEGELI_FILE =
+      FIXED_TESTDATA_DIR.resolve("corrupted_message_riegeli")
   }
 }

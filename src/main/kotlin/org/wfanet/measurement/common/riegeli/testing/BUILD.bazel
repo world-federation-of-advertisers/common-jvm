@@ -8,14 +8,14 @@ package(default_visibility = [
 exports_files(
     [
         "simple_message_riegeli",
-        "corrupted_message_riegeli"
+        "corrupted_message_riegeli",
     ],
 )
 
 filegroup(
     name = "riegeli_test_data",
     srcs = [
+        "corrupted_message_riegeli",
         "simple_message_riegeli",
-        "corrupted_message_riegeli"
     ],
 )
