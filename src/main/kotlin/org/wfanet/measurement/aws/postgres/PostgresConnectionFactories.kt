@@ -34,7 +34,6 @@ object PostgresConnectionFactories {
         .option(ConnectionFactoryOptions.PROTOCOL, "postgresql")
         .option(ConnectionFactoryOptions.USER, postgresCredentials.username)
         .option(ConnectionFactoryOptions.PASSWORD, postgresCredentials.password)
-        .option(ConnectionFactoryOptions.DATABASE, flags.database)
         .option(ConnectionFactoryOptions.HOST, flags.host)
         .option(PostgresqlConnectionFactoryProvider.SSL_MODE, SSLMode.REQUIRE)
         .build()
