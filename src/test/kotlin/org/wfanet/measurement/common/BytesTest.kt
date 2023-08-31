@@ -71,9 +71,7 @@ class BytesTest {
     val byteStringWithPadding = byteString.withTrailingPadding(8)
 
     assertThat(byteStringWithPadding.size()).isEqualTo(8)
-    byteString.forEach { byte ->
-      assertThat(byte).isEqualTo(0x00.toByte())
-    }
+    byteString.forEach { byte -> assertThat(byte).isEqualTo(0x00.toByte()) }
   }
 
   @Test
@@ -83,7 +81,8 @@ class BytesTest {
 
     assertThat(byteStringWithPadding.size()).isEqualTo(4)
 
-    val comparableByteArray = byteArrayOf(0x96.toByte(), 0x01.toByte(), 0x00.toByte(), 0x00.toByte())
+    val comparableByteArray =
+      byteArrayOf(0x96.toByte(), 0x01.toByte(), 0x00.toByte(), 0x00.toByte())
 
     byteString.forEachIndexed { index, byte ->
       assertThat(byte).isEqualTo(comparableByteArray[index])
@@ -97,7 +96,5 @@ class BytesTest {
     val byteBuffer = ByteBuffer.wrap(bytes)
 
     assertThat(byteBuffer.getVarInt64()).isEqualTo(150L)
-
   }
-
 }

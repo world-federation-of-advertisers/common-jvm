@@ -26,5 +26,5 @@ def com_google_highwayhash():
         sha256 = "1e4e32f6198facbac7a35b04fa4c1acb5e6d9bb13f983c60903da9cbbbd9f5b5",
         url = "https://github.com/google/highwayhash/archive/a7f68e2f95fac08b24327d74747521cf634d5aff.tar.gz",
         build_file = Label("@wfa_common_jvm//build/com_google_highwayhash:BUILD.external"),
-        strip_prefix = "highwayhash-a7f68e2f95fac08b24327d74747521cf634d5aff"
+        strip_prefix = "highwayhash-a7f68e2f95fac08b24327d74747521cf634d5aff",
     )
