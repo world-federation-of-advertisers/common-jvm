@@ -21,6 +21,7 @@ import java.io.InputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.channels.ReadableByteChannel
+import java.util.Stack
 import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
@@ -116,6 +117,15 @@ fun ByteString.withPadding(paddedSize: Int): ByteString {
       output.toByteString()
     }
     .concat(this)
+}
+
+fun ByteString.withTrailingPadding(paddedSize: Int): ByteString {
+  if (size >= paddedSize) {
+    return this
+  }
+
+  val padding = ByteArray(paddedSize - size)
+  return concat(ByteString.copyFrom(padding))
 }
 
 /** Returns a [ByteString] containing the specified elements. */
@@ -326,4 +336,45 @@ fun Byte.toStringHex(): String {
 )
 fun String.hexAsByteString(): ByteString {
   return HexString(this).bytes
+}
+
+/**
+ * Reads a varint from a ByteBuffer. Varints are variable-width unsigned integers, supporting up to
+ * 64-bit integers.
+ *
+ * The specification for varints can be found here:
+ * https://protobuf.dev/programming-guides/encoding/#varints
+ *
+ * @return The 64-bit unsigned varint which has been read from the ByteBuffer. This is returned as a
+ *   Long.
+ */
+fun ByteBuffer.getVarInt64(): Long {
+  val bytes = Stack<Int>()
+
+  // Load bytes used in the varint
+  do {
+    val currentByte = this.get().toInt()
+
+    // Use a stack to store bytes so that the order is implicitly in big-endian when reading.
+    bytes.push(currentByte)
+
+    // If the current byte's MSB is 0, it is the final bit in the varint.
+    // Otherwise, keep reading.
+  } while (currentByte and 0x80 != 0)
+
+  var result = 0L
+
+  while (!bytes.empty()) {
+    // Move anything currently in the result 7 bits to the left to make way for new bits.
+    result = result shl 7
+
+    // Read the next bit from the stack
+    var currentByte = bytes.pop()
+
+    // Add the least-significant 7 bits to the result
+    currentByte = currentByte and 0x7f
+    result = result or currentByte.toLong()
+  }
+
+  return result
 }

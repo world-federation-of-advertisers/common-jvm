@@ -1,0 +1,7 @@
+package(default_visibility = ["//visibility:public"])
+
+java_library(
+    name = "highway_hash",
+    srcs = ["java/com/google/highwayhash/HighwayHash.java"],
+    visibility = ["//visibility:public"],
+)

@@ -1,0 +1,20 @@
+load("@io_bazel_rules_kotlin//kotlin:jvm.bzl", "kt_jvm_test")
+
+kt_jvm_test(
+    name = "RiegeliTest",
+    srcs = ["RiegeliTest.kt"],
+    data = [
+        "//src/main/kotlin/org/wfanet/measurement/common/riegeli/testing:corrupted_message_riegeli",
+        "//src/main/kotlin/org/wfanet/measurement/common/riegeli/testing:simple_message_riegeli",
+    ],
+    test_class = "org.wfanet.measurement.common.riegeli.RiegeliTest",
+    deps = [
+        "//imports/java/com/google/common/truth",
+        "//imports/java/com/google/protobuf",
+        "//imports/java/com/google/protobuf/util",
+        "//imports/java/org/junit",
+        "//imports/kotlin/kotlin/test",
+        "//src/main/kotlin/org/wfanet/measurement/common/riegeli",
+        "//src/main/proto/wfa/measurement/testing/riegeli:simple_message_kt_jvm_proto",
+    ],
+)
