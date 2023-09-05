@@ -15,8 +15,6 @@ kt_jvm_library(
         "//src/main/kotlin/org/wfanet/measurement/storage:client",
         "//src/main/kotlin/org/wfanet/measurement/storage:store",
         "@tink_java//src/main/java/com/google/crypto/tink:aead",
-        "@tink_java//src/main/java/com/google/crypto/tink:streaming_aead",
-        "@tink_java//src/main/java/com/google/crypto/tink/streamingaead:streaming_aead_config",
         "@tink_java//src/main/java/com/google/crypto/tink:binary_keyset_reader",
         "@tink_java//src/main/java/com/google/crypto/tink:binary_keyset_writer",
         "@tink_java//src/main/java/com/google/crypto/tink:cleartext_keyset_handle",

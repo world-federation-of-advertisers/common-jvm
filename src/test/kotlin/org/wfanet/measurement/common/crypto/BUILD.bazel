@@ -106,29 +106,3 @@ kt_jvm_test(
         "//src/main/kotlin/org/wfanet/measurement/storage/testing",
     ],
 )
-
-kt_jvm_test(
-    name = "EncryptedSignedStoreTest",
-    srcs = ["EncryptedSignedStoreTest.kt"],
-    test_class = "org.wfanet.measurement.common.crypto.EncryptedSignedStoreTest",
-    deps = [
-        "//imports/java/com/google/common/truth",
-        "//imports/java/com/google/protobuf",
-        "//imports/java/org/junit",
-        "//imports/kotlin/com/google/protobuf/kotlin",
-        "//imports/kotlin/kotlin/test",
-        "//imports/kotlin/kotlinx/coroutines:core",
-        "//src/main/kotlin/org/wfanet/measurement/common",
-        "//src/main/kotlin/org/wfanet/measurement/common/crypto:encrypted_signed_store",
-        "//src/main/kotlin/org/wfanet/measurement/common/crypto:security_provider",
-        "//src/main/kotlin/org/wfanet/measurement/common/crypto:signatures",
-        "//src/main/kotlin/org/wfanet/measurement/common/crypto:signing_key_storage",
-        "//src/main/kotlin/org/wfanet/measurement/common/crypto/testing",
-        "//src/main/kotlin/org/wfanet/measurement/common/crypto/tink",
-        "//src/main/kotlin/org/wfanet/measurement/common/crypto/tink/testing",
-        "//src/main/kotlin/org/wfanet/measurement/storage:client",
-        "//src/main/kotlin/org/wfanet/measurement/storage:store",
-        "//src/main/kotlin/org/wfanet/measurement/storage/testing",
-        "@tink_java//src/main/java/com/google/crypto/tink/aead:aead_config",
-    ],
-)

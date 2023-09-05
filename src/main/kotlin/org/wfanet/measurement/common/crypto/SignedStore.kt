@@ -38,27 +38,17 @@ class SignedStore(private val storageClient: StorageClient) {
     privateKey: PrivateKey,
     content: Flow<ByteString>
   ): String {
-    // Since StorageClient has no concept of "overwriting" a blob, we first delete existing blobs.
-    // This is to ensure that transient failures after some blobs are written do not cause problems
-    // when re-attempting to write.
-    storageClient.getBlob(blobKeyForContent(blobKey))?.delete()
-    storageClient.getBlob(blobKeyForSignature(blobKey))?.delete()
-
     val signature = privateKey.sign(x509, content.flatten())
     storageClient.writeBlob(blobKeyForContent(blobKey), content)
     storageClient.writeBlob(blobKeyForSignature(blobKey), signature)
     return blobKey
   }
 
-  @Throws(BlobNotFoundException::class)
-  suspend fun read(blobKey: String, x509: X509Certificate): Flow<ByteString> {
-    val content =
-      storageClient.getBlob(blobKeyForContent(blobKey)) ?: throw BlobNotFoundException(blobKey)
+  suspend fun read(blobKey: String, x509: X509Certificate): Flow<ByteString>? {
+    val content = storageClient.getBlob(blobKeyForContent(blobKey)) ?: return null
     val signature = storageClient.getBlob(blobKeyForSignature(blobKey))
-    if (signature != null) {
-      return SignedBlob(content, signature.read().flatten()).readVerifying(x509)
-    } else throw BlobNotFoundException(blobKey)
+    return if (signature != null) {
+      SignedBlob(content, signature.read().flatten()).readVerifying(x509)
+    } else null
   }
-
-  class BlobNotFoundException(inputKey: String) : Exception("$inputKey not found")
 }

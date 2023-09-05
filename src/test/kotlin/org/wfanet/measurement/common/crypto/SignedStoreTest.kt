@@ -17,13 +17,11 @@ package org.wfanet.measurement.common.crypto
 import com.google.common.truth.Truth.assertThat
 import com.google.protobuf.ByteString
 import java.security.cert.X509Certificate
-import kotlin.test.assertFailsWith
 import kotlinx.coroutines.runBlocking
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 import org.wfanet.measurement.common.asBufferedFlow
-import org.wfanet.measurement.common.crypto.SignedStore.BlobNotFoundException
 import org.wfanet.measurement.common.crypto.testing.TestData
 import org.wfanet.measurement.common.flatten
 import org.wfanet.measurement.storage.testing.InMemoryStorageClient
@@ -37,25 +35,23 @@ class SignedStoreTest {
 
     // read blob
     val readData = signedStore.read(blobKey, certificate)
-    assertThat(readData.flatten().toStringUtf8())
+    assertThat(readData?.flatten()?.toStringUtf8())
       .isEqualTo(DATA.asBufferedFlow(24).flatten().toStringUtf8())
   }
 
   @Test
-  fun `write and read model blob to storage throws BlobNotFoundException if blobKey is not valid`() =
-    runBlocking {
-      // write blob
-      val blobKey = "blob-key"
+  fun `write and read model blob to storage returns null if blobKey is not valid`() = runBlocking {
+    // write blob
+    val blobKey = "blob-key"
 
-      signedStore.write(blobKey, certificate, privateKey, DATA.asBufferedFlow(24))
+    signedStore.write(blobKey, certificate, privateKey, DATA.asBufferedFlow(24))
 
-      val invalidBlobKey = "invalid-blob-key"
-      // read blob
-      val exception =
-        assertFailsWith<BlobNotFoundException> { signedStore.read(invalidBlobKey, certificate) }
+    val invalidBlobKey = "invalid-blob-key"
+    // read blob
+    val nullBlob = signedStore.read(invalidBlobKey, certificate)
 
-      assertThat(exception).hasMessageThat().ignoringCase().contains("$invalidBlobKey not found")
-    }
+    assertThat(nullBlob).isEqualTo(null)
+  }
 
   companion object {
     private val storageClient = InMemoryStorageClient()
