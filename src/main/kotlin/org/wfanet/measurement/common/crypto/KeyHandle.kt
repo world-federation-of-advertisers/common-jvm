@@ -15,7 +15,6 @@
 package org.wfanet.measurement.common.crypto
 
 import com.google.protobuf.ByteString
-import kotlinx.coroutines.flow.Flow
 
 /** Handle to the public key of an encryption key pair. */
 interface PublicKeyHandle {

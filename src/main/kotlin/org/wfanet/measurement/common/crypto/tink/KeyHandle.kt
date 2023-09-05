@@ -89,7 +89,6 @@ class TinkPrivateKeyHandle internal constructor(internal val keysetHandle: Keyse
     fun generateEcies(): TinkPrivateKeyHandle {
       return TinkPrivateKeyHandle(KeysetHandle.generateNew(ECIES_KEY_TEMPLATE))
     }
-
   }
 }
 
