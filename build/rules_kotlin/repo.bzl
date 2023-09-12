@@ -17,9 +17,12 @@
 See https://github.com/bazelbuild/rules_kotlin
 """
 
-load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
-load("@bazel_tools//tools/build_defs/repo:utils.bzl", "maybe")
-load("//build:versions.bzl", "KOTLIN_RELEASE_VERSION")
+load(
+    "//build:versions.bzl",
+    "KOTLIN_RELEASE_VERSION",
+    "RULES_KOTLIN",
+    "versioned_http_archive",
+)
 
 _JETBRAINS_KOTLIN_LIBRARIES = [
     "org.jetbrains.kotlin:kotlin-stdlib",
@@ -28,19 +31,8 @@ _JETBRAINS_KOTLIN_LIBRARIES = [
     "org.jetbrains.kotlin:kotlin-test",
 ]
 
-def _rules_kotlin_repo(version, sha256):
-    maybe(
-        http_archive,
-        name = "io_bazel_rules_kotlin",
-        urls = ["https://github.com/bazelbuild/rules_kotlin/releases/download/%s/rules_kotlin_release.tgz" % version],
-        sha256 = sha256,
-    )
-
 def io_bazel_rules_kotlin():
-    _rules_kotlin_repo(
-        version = "v1.8-RC-12",
-        sha256 = "8e5c8ab087e0fa3fbb58e1f6b99d8fe40f75bac44994c3d208eba723284465d6",
-    )
+    versioned_http_archive(RULES_KOTLIN, "io_bazel_rules_kotlin")
 
 def rules_kotlin_maven_artifacts_dict():
     artifacts_dict = {
