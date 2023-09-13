@@ -75,7 +75,6 @@ class ResultRow(private val delegate: Row) {
 }
 
 @Suppress("EXTENSION_SHADOWED_BY_MEMBER")
-@OptIn(ExperimentalStdlibApi::class) // For `typeOf`.
 inline operator fun <reified T> Readable.get(name: String): T {
   val value = get(name, T::class)
   if (value == null) {
