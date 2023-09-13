@@ -19,8 +19,8 @@ import org.junit.Rule
 import org.wfanet.measurement.gcloud.spanner.AsyncDatabaseClient
 
 /**
- * Base class for JUnit4 tests using Cloud Spanner databases running in a test [Instance]
- * [com.google.cloud.spanner.Instance] in Cloud Spanner Emulator.
+ * Base class for JUnit4 tests using Cloud Spanner databases running in a test
+ * [Instance][com.google.cloud.spanner.Instance] in Cloud Spanner Emulator.
  *
  * One emulator and test instance is created per test class, and one database is created per test
  * case method. The [AsyncDatabaseClient] is accessible via the [databaseClient] property.
