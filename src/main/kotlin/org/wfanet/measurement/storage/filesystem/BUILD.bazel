@@ -38,6 +38,7 @@ kt_jvm_library(
     deps = [
         ":service",
         "//imports/java/picocli",
+        "//imports/kotlin/kotlinx/coroutines:core",
         "//src/main/kotlin/org/wfanet/measurement/common",
         "//src/main/kotlin/org/wfanet/measurement/common/grpc",
     ],

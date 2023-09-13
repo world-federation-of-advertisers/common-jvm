@@ -14,14 +14,23 @@
 
 """Macros for kt_jvm_library to include Maven kotlin stdlib."""
 
-load("@io_bazel_rules_kotlin//kotlin:jvm.bzl", old_kt_jvm_library = "kt_jvm_library")
+load(
+    "@io_bazel_rules_kotlin//kotlin:jvm.bzl",
+    _kt_jvm_library = "kt_jvm_library",
+)
 
-def kt_jvm_library(name, deps = [], **kwargs):
-    old_kt_jvm_library(
+_STDLIBS = [
+    "//imports/kotlin/kotlin:stdlib",
+    "//imports/kotlin/kotlin/reflect",
+]
+
+def kt_jvm_library(name, deps = None, exports = None, **kwargs):
+    deps = deps or []
+    exports = exports or []
+
+    _kt_jvm_library(
         name = name,
-        deps = [
-            "//imports/kotlin/kotlin:stdlib",
-            "//imports/kotlin/kotlin/reflect",
-        ] + deps,
+        deps = deps + _STDLIBS,
+        exports = exports + _STDLIBS,
         **kwargs
     )

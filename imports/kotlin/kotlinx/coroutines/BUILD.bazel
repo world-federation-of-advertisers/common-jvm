@@ -1,8 +1,13 @@
+load("@rules_java//java:defs.bzl", "java_library")
+
 package(default_visibility = ["//visibility:public"])
 
-alias(
+java_library(
     name = "core",
-    actual = "@maven//:org_jetbrains_kotlinx_kotlinx_coroutines_core",
+    exports = [
+        "@maven//:org_jetbrains_kotlinx_kotlinx_coroutines_core",
+        "@maven//:org_jetbrains_kotlinx_kotlinx_coroutines_core_jvm",
+    ],
 )
 
 alias(
