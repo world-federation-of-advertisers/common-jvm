@@ -8,10 +8,13 @@ kt_jvm_library(
     deps = [
         "//imports/java/com/google/protobuf",
         "//imports/java/io/grpc:api",
+        "//imports/java/io/grpc:context",
         "//imports/java/io/grpc/netty",
         "//imports/java/io/grpc/protobuf/services",
+        "//imports/java/io/netty/handler",
         "//imports/java/org/jetbrains/annotations",
         "//imports/java/picocli",
+        "//imports/kotlin/io/grpc/kotlin:context",
         "//imports/kotlin/io/grpc/kotlin:stub",
         "//imports/kotlin/kotlinx/coroutines:core",
         "//src/main/kotlin/org/wfanet/measurement/common",
