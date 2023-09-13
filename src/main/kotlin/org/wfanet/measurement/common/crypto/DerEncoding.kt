@@ -33,7 +33,6 @@ private enum class Asn1TagClass {
   PRIVATE;
 
   companion object {
-    @OptIn(ExperimentalUnsignedTypes::class)
     fun fromIdentifier(octet: Byte): Asn1TagClass =
       when (val tagClass = octet.toUByte().toInt() ushr 6) {
         0 -> UNIVERSAL
