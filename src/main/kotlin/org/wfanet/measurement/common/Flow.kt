@@ -146,8 +146,8 @@ private class SingleConsumedFlowItem<T>(singleItem: T) : ConsumedFlowItem<T>() {
  *
  * @param producerContext [CoroutineContext] for producing the returned items
  * @return a [ConsumedFlowItem] containing the first item and the [Flow] of remaining items, or
- *   `null` if there is no first item. The caller must ensure that the returned object is [closed]
- *   [ConsumedFlowItem.close].
+ *   `null` if there is no first item. The caller must ensure that the returned object is
+ *   [closed][ConsumedFlowItem.close].
  */
 @OptIn(
   DelicateCoroutinesApi::class // For `Channel.isClosedForReceive`.
