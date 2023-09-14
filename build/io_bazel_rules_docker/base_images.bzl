@@ -33,14 +33,14 @@ def base_java_images():
 
     container_pull(
         name = "java_image_base",
-        digest = "sha256:6652063a30969dd5380cb5b34f36a7f9d2a682af6ad81d0a7ca8113d6e8d3d5c",
+        digest = "sha256:241064293d5477b6b91fb75abc923023a5fde11740a8ef56f54666579f8fef42",
         registry = "gcr.io",
         repository = "distroless/java11-debian11",
     )
 
     container_pull(
         name = "java_debug_image_base",
-        digest = "sha256:f9231c515b187ea1b586858003ad2292d6289447415caccb1d91e85adfb5a47a",
+        digest = "sha256:b7bfe2e8e38fc34180de94ec4b2e34a1fc4aa4021215edc87675710b95e663e2",
         registry = "gcr.io",
         repository = "distroless/java11-debian11",
     )
