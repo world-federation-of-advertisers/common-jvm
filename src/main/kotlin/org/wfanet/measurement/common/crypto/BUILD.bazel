@@ -1,4 +1,4 @@
-load("@io_bazel_rules_kotlin//kotlin:jvm.bzl", "kt_jvm_library")
+load("//build/rules_kotlin:defs.bzl", "kt_jvm_library")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -106,6 +106,7 @@ kt_jvm_library(
         ":pem_io",
         ":security_provider",
         ":signing_key_storage",
+        "//imports/java/com/google/protobuf",
         "//src/main/kotlin/org/wfanet/measurement/common",
     ],
 )

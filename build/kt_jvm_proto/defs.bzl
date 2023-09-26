@@ -18,7 +18,7 @@ Provides kt_jvm_proto_library to generate Kotlin protos.
 
 load("//build:defs.bzl", "get_real_short_path")
 load("@rules_proto//proto:defs.bzl", "ProtoInfo")
-load("@io_bazel_rules_kotlin//kotlin:jvm.bzl", "kt_jvm_library")
+load("//build/rules_kotlin:defs.bzl", "kt_jvm_library")
 
 KtProtoLibInfo = provider(
     "Information for a Kotlin JVM proto library.",
@@ -153,6 +153,10 @@ _kt_jvm_proto_library_helper = rule(
     implementation = _kt_jvm_proto_library_helper_impl,
 )
 
+_KT_JVM_PROTO_DEPS = [
+    "@com_google_protobuf_protobuf_kotlin",
+]
+
 def kt_jvm_proto_library(name, srcs = None, deps = None, **kwargs):
     """Generates Kotlin code for a protocol buffer library.
 
@@ -186,9 +190,8 @@ def kt_jvm_proto_library(name, srcs = None, deps = None, **kwargs):
     kt_jvm_library(
         name = name,
         srcs = [generated_srcjar],
-        # TODO: add Bazel rule in protobuf instead of relying on Maven
-        deps = deps + ["@maven//:com_google_protobuf_protobuf_kotlin"],
-        exports = deps,
+        deps = deps + _KT_JVM_PROTO_DEPS,
+        exports = deps + _KT_JVM_PROTO_DEPS,
         kotlinc_opts = "@wfa_common_jvm//build/kt_jvm_proto:proto_gen_kt_options",
         **kwargs
     )

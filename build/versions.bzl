@@ -104,15 +104,23 @@ RULES_DOCKER = VersionedArchiveInfo(
     ],
 )
 
-KOTLIN_LANGUAGE_LEVEL = "1.5"
+RULES_KOTLIN = VersionedArchiveInfo(
+    version = "1.8.1",
+    sha256 = "a630cda9fdb4f56cf2dc20a4bf873765c41cf00e9379e8d59cd07b24730f4fde",
+    url_templates = [
+        "https://github.com/bazelbuild/rules_kotlin/releases/download/v{version}/rules_kotlin_release.tgz",
+    ],
+)
+
+KOTLIN_LANGUAGE_LEVEL = "1.8"
 
 # Kotlin release version.
 #
 # See https://kotlinlang.org/docs/releases.html#release-details.
-KOTLIN_RELEASE_VERSION = "1.6.21"
+KOTLIN_RELEASE_VERSION = "1.8.21"
 
 # kotlinx.coroutines version.
-KOTLINX_COROUTINES_VERSION = "1.6.2"
+KOTLINX_COROUTINES_VERSION = "1.7.3"
 
 # Tink commit that is newer than v1.6.1.
 #

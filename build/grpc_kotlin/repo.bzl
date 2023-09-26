@@ -18,7 +18,7 @@ Repository rules/macros for Github GPRC Kotlin.
 
 load("//build:versions.bzl", "GRPC_KOTLIN", "versioned_http_archive")
 
-# kt_jvm_grpc_library directly depends on the stub library target below.
+# kt_jvm_grpc_library directly depends on these library targets.
 GRPC_KOTLIN_OVERRIDE_TARGETS = {
     "io.grpc:grpc-kotlin-stub": "@com_github_grpc_grpc_kotlin//stub/src/main/java/io/grpc/kotlin:stub",
 }
