@@ -31,9 +31,16 @@ class SigningKeyHandleTest {
     val signingKey =
       loadSigningKey(TestData.FIXED_SERVER_CERT_DER_FILE, TestData.FIXED_SERVER_KEY_DER_FILE)
 
-    val signature = signingKey.sign(MESSAGE_BINARY)
+    val signature = signingKey.sign(SignatureAlgorithm.ECDSA_WITH_SHA256, MESSAGE_BINARY)
 
-    assertThat(signingKey.certificate.verifySignature(MESSAGE_BINARY, signature)).isTrue()
+    assertThat(
+        signingKey.certificate.verifySignature(
+          SignatureAlgorithm.ECDSA_WITH_SHA256,
+          MESSAGE_BINARY,
+          signature
+        )
+      )
+      .isTrue()
   }
 
   companion object {
