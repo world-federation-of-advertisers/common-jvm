@@ -22,6 +22,7 @@ import com.google.common.truth.Subject
 import com.google.common.truth.Truth
 import com.google.protobuf.ByteString
 import java.security.cert.X509Certificate
+import org.wfanet.measurement.common.crypto.SignatureAlgorithm
 import org.wfanet.measurement.common.crypto.subjectKeyIdentifier
 import org.wfanet.measurement.common.crypto.verifySignature
 
@@ -30,8 +31,8 @@ class SignatureSubject private constructor(failureMetadata: FailureMetadata, sub
 
   private val actual = subject
 
-  fun isValidFor(certificate: X509Certificate, data: ByteString) {
-    if (!certificate.verifySignature(data, actual)) {
+  fun isValidFor(certificate: X509Certificate, algorithm: SignatureAlgorithm, data: ByteString) {
+    if (!certificate.verifySignature(algorithm, data, actual)) {
       failWithActual(
         Fact.simpleFact("cannot be verified"),
         Fact.fact("certificate SKID", certificate.subjectKeyIdentifier),
