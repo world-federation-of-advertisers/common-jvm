@@ -42,6 +42,10 @@ def generate_root_certificate(
         common_name,
         hostname,
         valid_days = 3650,
+        digest = "sha256",
+        newkey = "ec",
+        pkeyopts = ["ec_paramgen_curve:prime256v1"],
+        sigopts = None,
         cache_version = 0,
         visibility = None):
     """Generates a root certificate and private key.
@@ -54,23 +58,29 @@ def generate_root_certificate(
         common_name: Subject common name.
         hostname: DNS hostname for Subject Alternative Name extension.
         valid_days: How many days the certificate is valid for.
+        digest: Digest algorithm.
+        newkey: Arg passed to the -newkey option.
+        pkeyopts: Args passed to each -pkeyopt option.
+        sigopts: Args passed to each -sigopt option.
         cache_version: The Bazel build cache version of this target. This can be
             used to invalidate any cached cert, e.g. if it has expired.
         visibility: The visibility of the generated target.
     """
     cert = name + ".pem"
     key = name + ".key"
+    pkeyopts = pkeyopts or []
+    sigopts = sigopts or []
     cmd = [
         "openssl",
         "req",
         "-out",
         _location(cert),
         "-new",
-        "-newkey ec",
-        "-pkeyopt ec_paramgen_curve:prime256v1",
+        "-newkey " + newkey,
         "-nodes",
         "-keyout",
         _location(key),
+        "-" + digest,
         "-x509",
         "-days",
         str(valid_days),
@@ -81,8 +91,13 @@ def generate_root_certificate(
         _CA_KEY_USAGE_EXT,
         "-addext",
         _subject_alt_name([hostname]),
-        "# cache_version:" + str(cache_version),
-    ]
+    ] + [
+        "-sigopt " + opt
+        for opt in sigopts
+    ] + [
+        "-pkeyopt " + opt
+        for opt in pkeyopts
+    ] + ["# cache_version:" + str(cache_version)]
     native.genrule(
         name = "gen_" + name,
         outs = [
@@ -110,6 +125,10 @@ def generate_user_certificate(
         common_name,
         hostnames,
         valid_days = 365,
+        digest = "sha256",
+        newkey = "ec",
+        pkeyopts = ["ec_paramgen_curve:prime256v1"],
+        sigopts = None,
         cache_version = 0,
         visibility = None):
     """Generates a private key and a certificate that is signed by the root authority.
@@ -124,6 +143,10 @@ def generate_user_certificate(
         common_name: Subject common name.
         hostnames: DNS hostnames for Subject Alternative Name extension.
         valid_days: How many days the certificate is valid for.
+        digest: Digest algorithm.
+        newkey: Arg passed to the -newkey option.
+        pkeyopts: Args passed to each -pkeyopt option.
+        sigopts: Args passed to each -sigopt option.
         cache_version: The Bazel build cache version of this target. This can be
             used to invalidate any cached cert, e.g. if it has expired.
         visibility: The visibility of the generated target.
@@ -132,6 +155,8 @@ def generate_user_certificate(
     key = name + ".key"
     csr = name + ".csr"
     v3_config = name + ".cnf"
+    pkeyopts = pkeyopts or []
+    sigopts = sigopts or []
 
     san_ext = _subject_alt_name(hostnames)
 
@@ -141,13 +166,16 @@ def generate_user_certificate(
         "-out",
         _location(csr),
         "-new",
-        "-newkey ec",
-        "-pkeyopt ec_paramgen_curve:prime256v1",
+        "-newkey " + newkey,
         "-nodes",
         "-keyout",
         _location(key),
+        "-" + digest,
         "-subj",
         _subject(org = org, common_name = common_name),
+    ] + [
+        "-pkeyopt " + opt
+        for opt in pkeyopts
     ]
     native.genrule(
         name = name + "_csr",
@@ -191,8 +219,10 @@ def generate_user_certificate(
         "-extfile",
         _location(v3_config),
         "-extensions usr_cert",
-        "# cache_version:" + str(cache_version),
-    ]
+    ] + [
+        "-sigopt " + opt
+        for opt in sigopts
+    ] + ["# cache_version:" + str(cache_version)]
     native.genrule(
         name = "gen_" + name,
         outs = [cert],
