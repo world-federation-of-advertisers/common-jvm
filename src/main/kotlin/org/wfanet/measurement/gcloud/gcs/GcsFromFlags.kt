@@ -35,7 +35,6 @@ class GcsFromFlags(private val flags: Flags) {
     @CommandLine.Option(
       names = ["--google-cloud-storage-project"],
       description = ["Name of the Google Cloud Storage project to use."],
-      required = true
     )
     lateinit var projectName: String
       private set
@@ -43,7 +42,6 @@ class GcsFromFlags(private val flags: Flags) {
     @CommandLine.Option(
       names = ["--google-cloud-storage-bucket"],
       description = ["Name of the Google Cloud Storage project to use."],
-      required = true
     )
     lateinit var bucket: String
       private set
