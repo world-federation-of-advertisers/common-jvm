@@ -16,14 +16,18 @@ package org.wfanet.measurement.common.crypto
 
 import com.google.protobuf.ByteString
 import com.google.protobuf.kotlin.toByteString
+import java.security.PrivateKey
 import java.security.Signature
 import java.security.cert.X509Certificate
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.onEach
 import org.wfanet.measurement.storage.StorageClient
 
-class SignedBlob(wrapped: StorageClient.Blob, val signature: ByteString) :
-  StorageClient.Blob by wrapped {
+class SignedBlob(
+  wrapped: StorageClient.Blob,
+  val signature: ByteString,
+  val algorithm: SignatureAlgorithm
+) : StorageClient.Blob by wrapped {
 
   /**
    * Reads the blob content as a flow, collecting it with [action] and verifying it against
@@ -35,7 +39,7 @@ class SignedBlob(wrapped: StorageClient.Blob, val signature: ByteString) :
     certificate: X509Certificate,
     crossinline action: suspend (ByteString) -> Unit
   ): Boolean {
-    return read().collectAndVerify(certificate, signature, action)
+    return read().collectAndVerify(certificate, algorithm, signature, action)
   }
 
   /**
@@ -43,8 +47,22 @@ class SignedBlob(wrapped: StorageClient.Blob, val signature: ByteString) :
    * if [signature] is not valid for the blob content.
    */
   fun readVerifying(certificate: X509Certificate): Flow<ByteString> {
-    return read().verifying(certificate, signature)
+    return read().verifying(certificate, algorithm, signature)
   }
+}
+
+suspend fun StorageClient.createSignedBlob(
+  blobKey: String,
+  content: Flow<ByteString>,
+  privateKey: PrivateKey,
+  algorithm: SignatureAlgorithm,
+): SignedBlob {
+  val signer = privateKey.newSigner(algorithm)
+  val outFlow = content.onEach(signer::update)
+  val blob = writeBlob(blobKey, outFlow)
+  val signature = signer.sign().toByteString()
+
+  return SignedBlob(blob, signature, algorithm)
 }
 
 suspend fun StorageClient.createSignedBlob(
@@ -57,5 +75,5 @@ suspend fun StorageClient.createSignedBlob(
   val blob = writeBlob(blobKey, outFlow)
   val signature = signer.sign().toByteString()
 
-  return SignedBlob(blob, signature)
+  return SignedBlob(blob, signature, requireNotNull(signer.signatureAlgorithm))
 }
