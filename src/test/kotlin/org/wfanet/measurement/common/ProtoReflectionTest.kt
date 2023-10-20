@@ -73,4 +73,11 @@ class ProtoReflectionTest {
         Sibling.getDescriptor().fullName,
       )
   }
+
+  @Test
+  fun `getDefaultInstance returns default instance`() {
+    val timestamp: Timestamp = ProtoReflection.getDefaultInstance()
+
+    assertThat(timestamp).isEqualToDefaultInstance()
+  }
 }
