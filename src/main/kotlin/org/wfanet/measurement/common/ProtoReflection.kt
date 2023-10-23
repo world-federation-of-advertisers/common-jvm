@@ -16,20 +16,27 @@
 
 package org.wfanet.measurement.common
 
+import com.google.protobuf.Any as ProtoAny
 import com.google.protobuf.AnyProto
 import com.google.protobuf.ApiProto
 import com.google.protobuf.DescriptorProtos
 import com.google.protobuf.Descriptors
 import com.google.protobuf.DurationProto
 import com.google.protobuf.EmptyProto
+import com.google.protobuf.Message
 import com.google.protobuf.StructProto
 import com.google.protobuf.TimestampProto
 import com.google.protobuf.TypeProto
 import com.google.protobuf.WrappersProto
 import com.google.protobuf.fileDescriptorSet
+import kotlin.reflect.KClass
+import kotlin.reflect.full.staticFunctions
 
 /** Utility object for protobuf reflection. */
 object ProtoReflection {
+  /** Default type URL prefix (without a trailing `/`). */
+  const val DEFAULT_TYPE_URL_PREFIX = "type.googleapis.com"
+
   /**
    * [Descriptors.FileDescriptor]s of
    * [well-known types](https://developers.google.com/protocol-buffers/docs/reference/google.protobuf)
@@ -49,6 +56,43 @@ object ProtoReflection {
     )
 
   private val WELL_KNOWN_TYPES_BY_NAME = WELL_KNOWN_TYPES.associateBy { it.name }
+
+  /** Returns the type URL for the specified message type. */
+  fun getTypeUrl(
+    descriptor: Descriptors.Descriptor,
+    typeUrlPrefix: String = DEFAULT_TYPE_URL_PREFIX
+  ): String {
+    return getTypeUrl(descriptor.fullName, typeUrlPrefix)
+  }
+
+  /**
+   * Returns the type URL for the specified message type.
+   *
+   * Prefer the other overload when a [Descriptors.Descriptor] is available.
+   */
+  fun getTypeUrl(fullName: String, typeUrlPrefix: String = DEFAULT_TYPE_URL_PREFIX): String {
+    return if (typeUrlPrefix.endsWith("/")) {
+      typeUrlPrefix + fullName
+    } else {
+      "$typeUrlPrefix/$fullName"
+    }
+  }
+
+  /** Reflectively calls the `getDefaultInstance` static function for [T]. */
+  inline fun <reified T : Message> getDefaultInstance(): T {
+    return getDefaultInstance(T::class)
+  }
+
+  /** Reflectively calls the `getDefaultInstance` static function for [T]. */
+  fun <T : Message> getDefaultInstance(kclass: KClass<T>): T {
+    // Every Message type should have a static getDefaultInstance function.
+    @Suppress("UNCHECKED_CAST") // Guaranteed by predicate.
+    val function =
+      kclass.staticFunctions.single { it.name == "getDefaultInstance" && it.parameters.isEmpty() }
+        as kotlin.reflect.KFunction0<T>
+
+    return function.call()
+  }
 
   /**
    * Builds a [DescriptorProtos.FileDescriptorSet] from [descriptor], including direct and
@@ -177,4 +221,9 @@ object ProtoReflection {
     }
     return associateBy { it.name }
   }
+}
+
+/** See [ProtoAny.pack]. */
+fun Message.pack(): ProtoAny {
+  return ProtoAny.pack(this)
 }
