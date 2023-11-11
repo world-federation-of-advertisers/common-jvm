@@ -18,6 +18,7 @@ Adds external repos necessary for common-jvm.
 
 load("//build/bazel_skylib:repo.bzl", "bazel_skylib")
 load("//build/rules_pkg:repo.bzl", "rules_pkg")
+load("//build/rules_python:repo.bzl", "rules_python")
 load("//build/protobuf:repo.bzl", "com_github_protocolbuffers_protobuf")
 load("//build/rules_proto:repo.bzl", "rules_proto")
 load("//build/platforms:repo.bzl", "platforms_repo")
@@ -36,6 +37,7 @@ def common_jvm_repositories():
     """
     Adds all external repos necessary for common-jvm.
     """
+    rules_python()
     platforms_repo()
     bazel_skylib()
     rules_pkg()

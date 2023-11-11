@@ -50,6 +50,15 @@ def versioned_http_archive(versioned_archive, name):
         urls = _format_url_templates(versioned_archive),
     )
 
+RULES_PYTHON = VersionedArchiveInfo(
+    version = "0.24.0",
+    sha256 = "0a8003b044294d7840ac7d9d73eef05d6ceb682d7516781a4ec62eeb34702578",
+    url_templates = [
+        "https://github.com/bazelbuild/rules_python/releases/download/{version}/rules_python-{version}.tar.gz",
+    ],
+    prefix_template = "rules_python-{version}",
+)
+
 PROTOBUF = VersionedArchiveInfo(
     version = "21.12",
     sha256 = "22fdaf641b31655d4b2297f9981fa5203b2866f8332d3c6333f6b0107bb320de",
