@@ -1,4 +1,4 @@
-# Copyright 2021 The Cross-Media Measurement Authors
+# Copyright 2023 The Cross-Media Measurement Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,18 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""
-Repository rules/macros for Github GRPC.
-"""
+"""Repository rules/macros for rules_go."""
 
-load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
-load("@bazel_tools//tools/build_defs/repo:utils.bzl", "maybe")
+load("//build:versions.bzl", "RULES_GO", "versioned_http_archive")
 
-def com_github_grpc_grpc():
-    maybe(
-        http_archive,
-        name = "com_github_grpc_grpc",
-        sha256 = "84e31a77017911b2f1647ecadb0172671d96049ea9ad5109f02b4717c0f03702",
-        strip_prefix = "grpc-1.56.3",
-        urls = ["https://github.com/grpc/grpc/archive/v1.56.3.tar.gz"],
-    )
+def io_bazel_rules_go():
+    versioned_http_archive(RULES_GO, "io_bazel_rules_go")
