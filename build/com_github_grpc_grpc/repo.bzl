@@ -23,7 +23,7 @@ def com_github_grpc_grpc():
     maybe(
         http_archive,
         name = "com_github_grpc_grpc",
-        sha256 = "67423a4cd706ce16a88d1549297023f0f9f0d695a96dd684adc21e67b021f9bc",
-        strip_prefix = "grpc-1.46.0",
-        urls = ["https://github.com/grpc/grpc/archive/v1.46.0.tar.gz"],
+        sha256 = "84e31a77017911b2f1647ecadb0172671d96049ea9ad5109f02b4717c0f03702",
+        strip_prefix = "grpc-1.56.3",
+        urls = ["https://github.com/grpc/grpc/archive/v1.56.3.tar.gz"],
     )
