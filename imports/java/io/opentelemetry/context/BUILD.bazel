@@ -1,0 +1,6 @@
+package(default_visibility = ["//visibility:public"])
+
+alias(
+    name = "context",
+    actual = "@maven//:io_opentelemetry_opentelemetry_context",
+)

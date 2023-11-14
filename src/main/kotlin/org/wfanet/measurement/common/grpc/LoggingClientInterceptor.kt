@@ -36,6 +36,7 @@ object LoggingClientInterceptor : ClientInterceptor {
   private val logger: Logger = Logger.getLogger(this::class.java.name)
   private val threadName: String
     get() = Thread.currentThread().name
+
   private val requestCounter = AtomicLong()
 
   override fun <ReqT, RespT> interceptCall(
@@ -43,7 +44,8 @@ object LoggingClientInterceptor : ClientInterceptor {
     callOptions: CallOptions,
     next: Channel
   ): ClientCall<ReqT, RespT> {
-    val requestId = requestCounter.incrementAndGet()
+    val requestNumber = requestCounter.incrementAndGet()
+    val requestId = Tracing.getOtelTraceId() ?: requestNumber.toString()
     val serviceName = method.serviceName
     val methodName = method.bareMethodName
     val nextCall = next.newCall(method, callOptions)
@@ -54,7 +56,7 @@ object LoggingClientInterceptor : ClientInterceptor {
           Level.INFO,
           serviceName,
           methodName,
-          "[$threadName] gRPC client $requestId headers: $headers"
+          "[$threadName] gRPC client $requestId headers:\n$headers"
         )
         val listener =
           object : SimpleForwardingClientCallListener<RespT>(responseListener) {
@@ -64,7 +66,7 @@ object LoggingClientInterceptor : ClientInterceptor {
                 Level.INFO,
                 serviceName,
                 methodName,
-                "[$threadName] gRPC client $requestId response: $messageToLog"
+                "[$threadName] gRPC client $requestId response:\n$messageToLog"
               )
               super.onMessage(message)
             }
