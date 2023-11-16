@@ -36,6 +36,7 @@ object LoggingServerInterceptor : ServerInterceptor {
   private const val BYTES_TO_LOG = 100
   private val threadName: String
     get() = Thread.currentThread().name
+
   private val requestCounter = AtomicLong()
 
   override fun <ReqT, RespT> interceptCall(
@@ -43,7 +44,8 @@ object LoggingServerInterceptor : ServerInterceptor {
     headers: Metadata?,
     next: ServerCallHandler<ReqT, RespT>
   ): ServerCall.Listener<ReqT> {
-    val requestId = requestCounter.incrementAndGet()
+    val requestNumber = requestCounter.incrementAndGet()
+    val requestId = Tracing.getOtelTraceId() ?: requestNumber.toString()
     val serviceName = call.methodDescriptor.serviceName
     val methodName = call.methodDescriptor.bareMethodName
     val interceptedCall =

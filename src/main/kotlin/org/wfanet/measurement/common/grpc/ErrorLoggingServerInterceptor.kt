@@ -43,7 +43,9 @@ object ErrorLoggingServerInterceptor : ServerInterceptor {
               val message =
                 listOfNotNull(
                     "[$threadName]",
-                    "gRPC error:",
+                    "gRPC",
+                    Tracing.getOtelTraceId(),
+                    "error:",
                     status.code.name,
                     status.description,
                   )

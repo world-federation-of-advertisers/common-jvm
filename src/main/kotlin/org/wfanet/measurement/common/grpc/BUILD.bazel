@@ -12,6 +12,8 @@ kt_jvm_library(
         "//imports/java/io/grpc/netty",
         "//imports/java/io/grpc/protobuf/services",
         "//imports/java/io/netty/handler",
+        "//imports/java/io/opentelemetry/api",
+        "//imports/java/io/opentelemetry/context",
         "//imports/java/org/jetbrains/annotations",
         "//imports/java/picocli",
         "//imports/kotlin/io/grpc/kotlin:stub",
