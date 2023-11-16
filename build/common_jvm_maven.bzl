@@ -43,7 +43,12 @@ load("//build/com_google_truth:repo.bzl", "com_google_truth_artifact_dict")
 load("//build/kotlinx_coroutines:repo.bzl", "kotlinx_coroutines_artifact_dict")
 load("//build/maven:artifacts.bzl", "artifacts")
 load("//build/tink:repo.bzl", "TINK_JAVA_KMS_MAVEN_DEPS")
-load("//build:versions.bzl", "AWS_JAVA_SDK_VERSION", "PROTOBUF_KOTLIN_VERSION")
+load(
+    "//build:versions.bzl",
+    "AWS_JAVA_SDK_VERSION",
+    "OPENTELEMETRY_JAVA_VERSION",
+    "PROTOBUF_KOTLIN_VERSION",
+)
 
 # buildifier: disable=function-docstring-return
 def common_jvm_maven_artifacts():
@@ -76,6 +81,7 @@ def common_jvm_maven_artifacts_dict():
         "com.google.cloud:google-cloud-storage": "2.6.1",
         "com.google.guava:guava": "31.0.1-jre",
         "info.picocli:picocli": "4.4.0",
+        "io.opentelemetry:opentelemetry-api": OPENTELEMETRY_JAVA_VERSION,
         "junit:junit": "4.13",
         "org.conscrypt:conscrypt-openjdk-uber": "2.5.2",
         "org.jetbrains:annotations": "23.0.0",
