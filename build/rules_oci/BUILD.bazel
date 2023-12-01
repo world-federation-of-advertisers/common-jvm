@@ -1,0 +1,4 @@
+exports_files([
+    "repositories_tmpl.txt",
+    "tags_tmpl.txt",
+])

@@ -1,4 +1,4 @@
-load("//build/rules_kotlin:defs.bzl", "kt_jvm_library")
+load("@wfa_rules_kotlin_jvm//kotlin:defs.bzl", "kt_jvm_library")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -8,6 +8,5 @@ kt_jvm_library(
     deps = [
         "//imports/java/picocli",
         "//imports/kotlin/kotlinx/coroutines:core",
-        "//imports/kotlin/kotlinx/coroutines:jdk8",
     ],
 )
