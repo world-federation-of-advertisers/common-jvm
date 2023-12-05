@@ -2,5 +2,5 @@ package(default_visibility = ["//visibility:public"])
 
 alias(
     name = "reflect",
-    actual = "@maven//:org_jetbrains_kotlin_kotlin_reflect",
+    actual = "@wfa_rules_kotlin_jvm//imports/kotlin/reflect",
 )

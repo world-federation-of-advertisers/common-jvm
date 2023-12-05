@@ -1,3 +1,8 @@
+# Enable Bzlmod.
+common --enable_bzlmod
+common --registry=https://raw.githubusercontent.com/SanjayVas/bazel-registry/main/
+common --registry=https://bcr.bazel.build
+
 # Use clang as C++ compiler.
 build --repo_env='CC=clang'
 

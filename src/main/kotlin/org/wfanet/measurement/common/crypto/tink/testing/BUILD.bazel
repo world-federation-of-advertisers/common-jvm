@@ -1,4 +1,4 @@
-load("//build/rules_kotlin:defs.bzl", "kt_jvm_library")
+load("@wfa_rules_kotlin_jvm//kotlin:defs.bzl", "kt_jvm_library")
 
 package(
     default_testonly = True,
@@ -10,8 +10,6 @@ kt_jvm_library(
     srcs = glob(["*.kt"]),
     associates = ["//src/main/kotlin/org/wfanet/measurement/common/crypto/tink"],
     deps = [
-        "@tink_java//src/main/java/com/google/crypto/tink:kms_client",
-        "@tink_java//src/main/java/com/google/crypto/tink:kms_clients",
-        "@tink_java//src/main/java/com/google/crypto/tink:registry_cluster",
+        "//imports/java/com/google/crypto/tink",
     ],
 )
