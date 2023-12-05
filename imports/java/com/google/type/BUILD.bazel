@@ -1,6 +1,23 @@
+load("@wfa_rules_kotlin_jvm//kotlin:defs.bzl", "kt_jvm_proto_library")
+
 package(default_visibility = ["//visibility:public"])
 
-alias(
-    name = "type_java_proto",
-    actual = "@com_google_googleapis//google/type:type_java_proto",
+kt_jvm_proto_library(
+    name = "dayofweek_kt_jvm_proto",
+    deps = ["@com_google_googleapis//google/type:dayofweek_proto"],
+)
+
+kt_jvm_proto_library(
+    name = "date_kt_jvm_proto",
+    deps = ["@com_google_googleapis//google/type:date_proto"],
+)
+
+kt_jvm_proto_library(
+    name = "latlng_kt_jvm_proto",
+    deps = ["@com_google_googleapis//google/type:latlng_proto"],
+)
+
+kt_jvm_proto_library(
+    name = "interval_kt_jvm_proto",
+    deps = ["@com_google_googleapis//google/type:interval_proto"],
 )

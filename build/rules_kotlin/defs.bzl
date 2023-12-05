@@ -14,23 +14,19 @@
 
 """Macros for kt_jvm_library to include Maven kotlin stdlib."""
 
-load(
-    "@io_bazel_rules_kotlin//kotlin:jvm.bzl",
-    _kt_jvm_library = "kt_jvm_library",
-)
+load("@wfa_rules_kotlin_jvm//kotlin:defs.bzl", _kt_jvm_library = "kt_jvm_library")
 
-_STDLIBS = [
-    "@wfa_common_jvm//imports/kotlin/kotlin:stdlib",
-    "@wfa_common_jvm//imports/kotlin/kotlin/reflect",
-]
+def kt_jvm_library(*args, **kwargs):
+    """Forwarding macro for kt_jvm_library.
 
-def kt_jvm_library(name, deps = None, exports = None, **kwargs):
-    deps = deps or []
-    exports = exports or []
+    Deprecated:
+        Load @wfa_rules_kotlin_jvm//kotlin:defs.bzl
+    """
 
-    _kt_jvm_library(
-        name = name,
-        deps = deps + _STDLIBS,
-        exports = exports + _STDLIBS,
-        **kwargs
+    # buildifier: disable=print
+    print(
+        "{context}: kt_jvm_library should be loaded from @wfa_rules_kotlin_jvm//kotlin:defs.bzl".format(
+            context = native.package_name(),
+        ),
     )
+    _kt_jvm_library(*args, **kwargs)

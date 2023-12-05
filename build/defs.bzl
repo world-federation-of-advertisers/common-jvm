@@ -14,16 +14,12 @@
 
 """Utility functions definitions."""
 
+# buildifier: disable=unnamed-macro
 def to_label(label_string):
     """Returns a Label object for a possibly relative label string."""
-    if label_string.startswith("@") or label_string.startswith("//"):
-        return Label(label_string)
+    return native.package_relative_label(label_string)
 
-    return Label("{repo}//{package}".format(
-        repo = native.repository_name(),
-        package = native.package_name(),
-    )).relative(label_string)
-
+# buildifier: disable=unnamed-macro
 def test_target(target):
     """Returns the label for the corresponding target in the test tree."""
     label = to_label(target)

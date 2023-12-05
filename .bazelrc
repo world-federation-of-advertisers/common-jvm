@@ -1,3 +1,9 @@
+# Enable Bzlmod.
+common --enable_bzlmod
+# TODO(@SanjayVas): Update this when the repo has been moved to the WFA org.
+common --registry=https://raw.githubusercontent.com/SanjayVas/bazel-registry/main/
+common --registry=https://bcr.bazel.build
+
 # Use clang as C++ compiler.
 build --repo_env='CC=clang'
 
