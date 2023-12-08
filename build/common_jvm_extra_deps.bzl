@@ -16,16 +16,13 @@
 Adds external repos necessary for common-jvm.
 """
 
-load("@rules_jvm_external//:setup.bzl", "rules_jvm_external_setup")
 load("@com_github_grpc_grpc_kotlin//:repositories.bzl", "grpc_kt_repositories")
 load("@io_grpc_grpc_java//:repositories.bzl", "grpc_java_repositories")
 load("@maven//:compat.bzl", "compat_repositories")
-load("@io_bazel_rules_docker//repositories:deps.bzl", container_deps = "deps")
-load(
-    "@io_bazel_rules_docker//java:image.bzl",
-    java_image_repositories = "repositories",
-)
+load("@rules_jvm_external//:setup.bzl", "rules_jvm_external_setup")
+load("@rules_oci//oci:repositories.bzl", "LATEST_CRANE_VERSION", "oci_register_toolchains")
 load("//build:grpc_extra_deps.bzl", "grpc_extra_deps")
+load("//build/rules_oci:base_images.bzl", "base_java_images")
 
 def common_jvm_extra_deps():
     """
@@ -34,7 +31,10 @@ def common_jvm_extra_deps():
     rules_jvm_external_setup()
     grpc_extra_deps()
     compat_repositories()
-    container_deps()
-    java_image_repositories()
+    oci_register_toolchains(
+        name = "oci",
+        crane_version = LATEST_CRANE_VERSION,
+    )
+    base_java_images()
     grpc_kt_repositories()
     grpc_java_repositories()

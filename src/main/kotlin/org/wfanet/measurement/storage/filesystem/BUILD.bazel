@@ -1,6 +1,6 @@
-load("//build/rules_kotlin:defs.bzl", "kt_jvm_library")
 load("@rules_java//java:defs.bzl", "java_binary")
-load("@io_bazel_rules_docker//java:image.bzl", "java_image")
+load("//build/rules_kotlin:defs.bzl", "kt_jvm_library")
+load("//build/rules_oci:defs.bzl", "java_image")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -53,6 +53,5 @@ java_binary(
 
 java_image(
     name = "server_image",
-    main_class = "org.wfanet.measurement.storage.filesystem.FileSystemStorageServerKt",
-    runtime_deps = [":server"],
+    deploy_jar = ":FileSystemStorageServer_deploy.jar",
 )
