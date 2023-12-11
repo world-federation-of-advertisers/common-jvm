@@ -38,7 +38,14 @@ fun getRuntimePath(runfilesRelativePath: Path): Path? {
  * @param name platform-independent library name
  * @param directoryPath normalized path of the directory the library is in, relative to the Bazel
  *   runfiles root
+ * @deprecated This is not portable. Runfiles should only be used in test code where we can be sure
+ *   of a Bazel context. Note that this is not needed to work around
+ *   https://github.com/bazelbuild/rules_kotlin/issues/1088.
  */
+@Deprecated(
+  "Use System.loadLibrary, ensuring that the java.library.path property includes the path to the " +
+    "native library"
+)
 fun loadLibrary(name: String, directoryPath: Path) {
   val relativePath = directoryPath.resolve(System.mapLibraryName(name))
   val runtimePath = requireNotNull(getRuntimePath(relativePath))

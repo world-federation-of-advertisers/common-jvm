@@ -96,14 +96,6 @@ SPANNER_EMULATOR = VersionedArchiveInfo(
     ],
 )
 
-RULES_DOCKER = VersionedArchiveInfo(
-    version = "0.25.0",
-    sha256 = "b1e80761a8a8243d03ebca8845e9cc1ba6c82ce7c5179ce2b295cd36f7e394bf",
-    url_templates = [
-        "https://github.com/bazelbuild/rules_docker/releases/download/v{version}/rules_docker-v{version}.tar.gz",
-    ],
-)
-
 RULES_KOTLIN = VersionedArchiveInfo(
     version = "1.8.1",
     sha256 = "a630cda9fdb4f56cf2dc20a4bf873765c41cf00e9379e8d59cd07b24730f4fde",
