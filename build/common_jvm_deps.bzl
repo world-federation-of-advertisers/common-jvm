@@ -16,25 +16,21 @@
 Adds external repos necessary for common-jvm.
 """
 
+load("@com_github_grpc_grpc//bazel:grpc_deps.bzl", "grpc_deps")
+load(
+    "@com_google_googleapis//:repository_rules.bzl",
+    "switched_rules_by_language",
+)
+load("@rules_jvm_external//:repositories.bzl", "rules_jvm_external_deps")
+load("@rules_oci//oci:dependencies.bzl", "rules_oci_dependencies")
 load("@rules_pkg//pkg:deps.bzl", "rules_pkg_dependencies", "rules_pkg_register_toolchains")
 load(
     "@rules_proto//proto:repositories.bzl",
     "rules_proto_dependencies",
     "rules_proto_toolchains",
 )
-load("@rules_jvm_external//:repositories.bzl", "rules_jvm_external_deps")
-load(
-    "@io_bazel_rules_docker//repositories:repositories.bzl",
-    container_repositories = "repositories",
-)
-load("//build/rules_kotlin:deps.bzl", "rules_kotlin_deps")
-load("//build/io_bazel_rules_docker:base_images.bzl", "base_java_images")
-load("@com_github_grpc_grpc//bazel:grpc_deps.bzl", "grpc_deps")
-load(
-    "@com_google_googleapis//:repository_rules.bzl",
-    "switched_rules_by_language",
-)
 load("@tink_java//:tink_java_deps.bzl", "tink_java_deps")
+load("//build/rules_kotlin:deps.bzl", "rules_kotlin_deps")
 
 # buildifier: disable=unnamed-macro
 def common_jvm_deps():
@@ -45,9 +41,8 @@ def common_jvm_deps():
     rules_proto_toolchains()
     rules_jvm_external_deps()
     grpc_deps()
-    container_repositories()
     rules_kotlin_deps()
-    base_java_images()
+    rules_oci_dependencies()
     switched_rules_by_language(
         name = "com_google_googleapis_imports",
         java = True,
