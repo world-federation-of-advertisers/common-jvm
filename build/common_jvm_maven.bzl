@@ -80,6 +80,7 @@ def common_jvm_maven_artifacts_dict():
         "com.google.cloud:google-cloud-spanner": "6.35.2",
         "com.google.cloud:google-cloud-storage": "2.6.1",
         "com.google.guava:guava": "31.0.1-jre",
+        "io.opentelemetry:opentelemetry-opencensus-shim": "1.22.0-alpha",
         "info.picocli:picocli": "4.4.0",
         "io.opentelemetry:opentelemetry-api": OPENTELEMETRY_JAVA_VERSION,
         "junit:junit": "4.13",
