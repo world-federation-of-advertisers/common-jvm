@@ -14,9 +14,11 @@
 
 """Defs for rules_oci."""
 
+load("@bazel_skylib//lib:dicts.bzl", "dicts")
 load("@rules_multirun//:defs.bzl", "command", "multirun")
 load("@rules_oci//oci:defs.bzl", "oci_image", "oci_push_rule")
 load("@rules_pkg//pkg:mappings.bzl", "pkg_files")
+load("@rules_pkg//pkg:providers.bzl", "PackageFilesInfo")
 load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
 load("//build:defs.bzl", "expand_template", "to_label")
 
@@ -49,6 +51,36 @@ _java_native_libraries = rule(
     },
 )
 
+def _runfiles_pkg_impl(ctx):
+    default_infos = [dep[DefaultInfo] for dep in ctx.attr.deps]
+    runfiles_list = [
+        default_info.default_runfiles
+        for default_info in default_infos
+        if default_info.default_runfiles != None
+    ]
+    merged_runfiles = ctx.runfiles().merge_all(runfiles_list)
+    prefix = "/".join([ctx.attr.name, ctx.workspace_name])
+    return [
+        PackageFilesInfo(
+            dest_src_map = {
+                "/".join([prefix, file.short_path]): file
+                for file in merged_runfiles.files.to_list()
+            },
+        ),
+        DefaultInfo(files = merged_runfiles.files),
+    ]
+
+_runfiles_pkg = rule(
+    doc = "Merged runfiles as files",
+    implementation = _runfiles_pkg_impl,
+    attrs = {
+        "deps": attr.label_list(
+            providers = [DefaultInfo],
+            mandatory = True,
+        ),
+    },
+)
+
 def java_image(
         name,
         binary,
@@ -73,6 +105,7 @@ def java_image(
       visibility: standard attribute
       **kwargs: other args to pass to the resulting target
     """
+    env = env or {}
     binary_label = to_label(binary)
     deploy_jar_label = binary_label.relative(binary_label.name + "_deploy.jar")
     cmd_args = cmd_args or []
@@ -105,12 +138,22 @@ def java_image(
         **kwargs
     )
 
+    # TODO(bazelbuild/rules_pkg#754): Use rules_pkg runfiles support when available.
+    runfiles_pkg_name = "{name}_runfiles_pkg".format(name = name)
+    _runfiles_pkg(
+        name = runfiles_pkg_name,
+        deps = [binary],
+        visibility = ["//visibility:private"],
+        **kwargs
+    )
+
     layer_name = "{name}_layer".format(name = name)
     pkg_tar(
         name = layer_name,
         srcs = [
             ":" + jar_files_name,
             ":" + native_library_files_name,
+            ":" + runfiles_pkg_name,
         ],
         visibility = ["//visibility:private"],
         **kwargs
@@ -127,7 +170,7 @@ def java_image(
             "/app_deploy.jar",
         ] + cmd_args,
         labels = labels,
-        env = env,
+        env = dicts.add(env, RUNFILES_DIR = "/" + runfiles_pkg_name),
         visibility = visibility,
         **kwargs
     )
