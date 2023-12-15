@@ -17,6 +17,8 @@
 package org.wfanet.measurement.gcloud.logging
 
 import com.google.gson.JsonObject
+import java.io.PrintWriter
+import java.io.StringWriter
 import java.time.Instant
 import java.util.logging.Formatter
 import java.util.logging.Level
@@ -40,14 +42,14 @@ class StructuredLoggingFormatter : Formatter() {
   private data class LogEntryPayload(
     val severity: LogSeverity,
     val timestamp: Instant,
-    val message: String,
+    val textPayload: String,
     val sourceLocation: LogEntrySourceLocation,
   ) {
     fun toJsonObject(): JsonObject {
       return JsonObject().apply {
         addProperty(LogFields.SEVERITY, severity.name)
         addProperty(LogFields.TIME, timestamp.toString())
-        addProperty(LogFields.MESSAGE, message)
+        addProperty(LogFields.MESSAGE, textPayload)
         add(LogFields.SOURCE_LOCATION, sourceLocation.toJsonObject())
       }
     }
@@ -78,10 +80,22 @@ class StructuredLoggingFormatter : Formatter() {
   companion object {
     private fun LogRecord.toEntryPayload(): LogEntryPayload {
       val sourceLocation = LogEntrySourceLocation(function = "$sourceClassName.$sourceMethodName")
+      val textPayload =
+        if (thrown == null) {
+          message
+        } else {
+          StringWriter().use { stringWriter ->
+            PrintWriter(stringWriter).use { printWriter ->
+              printWriter.println(message)
+              thrown.printStackTrace(printWriter)
+            }
+            stringWriter.toString()
+          }
+        }
       return LogEntryPayload(
         level.toSeverity(),
         Instant.ofEpochMilli(millis),
-        message,
+        textPayload,
         sourceLocation
       )
     }
