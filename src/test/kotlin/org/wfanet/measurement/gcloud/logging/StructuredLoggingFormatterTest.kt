@@ -22,6 +22,7 @@ import com.google.gson.JsonParser
 import com.google.gson.JsonPrimitive
 import java.io.ByteArrayOutputStream
 import java.time.Instant
+import java.util.logging.Level
 import java.util.logging.Logger
 import java.util.logging.StreamHandler
 import org.junit.Before
@@ -65,5 +66,21 @@ class StructuredLoggingFormatterTest {
         entryPayload[StructuredLoggingFormatter.LogFields.SOURCE_LOCATION].asJsonObject.asMap()
       )
       .containsExactly("function", JsonPrimitive(qualifiedFunctionName))
+  }
+
+  @Test
+  fun `logs entry with stack trace`() {
+    val innerClass: Class<*> = object {}.javaClass
+    val message = "Log message"
+    val exception = Exception("cause")
+
+    logger.log(Level.WARNING, message, exception)
+
+    loggingHandler.flush()
+    val log = logStream.toString()
+    val entryPayload: JsonObject = JsonParser.parseString(log).asJsonObject
+    val textPayload = entryPayload[StructuredLoggingFormatter.LogFields.MESSAGE].asString
+    assertThat(textPayload).startsWith(message)
+    assertThat(textPayload).contains(innerClass.enclosingClass.name)
   }
 }
