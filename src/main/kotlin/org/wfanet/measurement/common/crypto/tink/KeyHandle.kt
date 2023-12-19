@@ -22,6 +22,7 @@ import com.google.crypto.tink.HybridEncrypt
 import com.google.crypto.tink.KeyTemplates
 import com.google.crypto.tink.KeysetHandle
 import com.google.crypto.tink.hybrid.HybridConfig
+import com.google.crypto.tink.hybrid.HybridPublicKey
 import com.google.protobuf.ByteString
 import com.google.protobuf.kotlin.toByteString
 import java.io.File
@@ -32,7 +33,7 @@ class TinkPublicKeyHandle internal constructor(internal val keysetHandle: Keyset
   PublicKeyHandle {
 
   init {
-    require(!keysetHandle.primaryKey().hasSecret())
+    require(keysetHandle.primary.key is HybridPublicKey)
   }
 
   constructor(serializedKeyset: ByteString) : this(parseKeyset(serializedKeyset))
@@ -66,10 +67,6 @@ class TinkPublicKeyHandle internal constructor(internal val keysetHandle: Keyset
 class TinkPrivateKeyHandle internal constructor(internal val keysetHandle: KeysetHandle) :
   PrivateKeyHandle {
 
-  init {
-    require(keysetHandle.primaryKey().hasSecret())
-  }
-
   override val publicKey = TinkPublicKeyHandle(keysetHandle.publicKeysetHandle)
 
   override fun hybridDecrypt(ciphertext: ByteString, contextInfo: ByteString?): ByteString {
@@ -94,10 +91,18 @@ class TinkPrivateKeyHandle internal constructor(internal val keysetHandle: Keyse
 
 /** Loads a private key from a cleartext binary Tink Keyset. */
 fun loadPrivateKey(binaryKeyset: File): TinkPrivateKeyHandle {
-  return TinkPrivateKeyHandle(CleartextKeysetHandle.read(BinaryKeysetReader.withFile(binaryKeyset)))
+  val keysetHandle: KeysetHandle =
+    binaryKeyset.inputStream().use { input ->
+      CleartextKeysetHandle.read(BinaryKeysetReader.withInputStream(input))
+    }
+  return TinkPrivateKeyHandle(keysetHandle)
 }
 
 /** Loads a public key from a cleartext binary Tink Keyset. */
 fun loadPublicKey(binaryKeyset: File): TinkPublicKeyHandle {
-  return TinkPublicKeyHandle(KeysetHandle.readNoSecret(BinaryKeysetReader.withFile(binaryKeyset)))
+  val keysetHandle: KeysetHandle =
+    binaryKeyset.inputStream().use { input ->
+      KeysetHandle.readNoSecret(BinaryKeysetReader.withInputStream(input))
+    }
+  return TinkPublicKeyHandle(keysetHandle)
 }
