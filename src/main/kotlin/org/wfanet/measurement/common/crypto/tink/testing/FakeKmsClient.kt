@@ -18,7 +18,6 @@ package org.wfanet.measurement.common.crypto.tink.testing
 
 import com.google.crypto.tink.Aead
 import com.google.crypto.tink.KmsClient
-import com.google.crypto.tink.KmsClients
 import java.security.GeneralSecurityException
 
 class FakeKmsClient : KmsClient {
@@ -56,20 +55,5 @@ class FakeKmsClient : KmsClient {
   companion object {
     const val KEY_URI_SCHEME = "fake-kms"
     const val KEY_URI_PREFIX = "$KEY_URI_SCHEME://"
-
-    /** Creates and registers a [FakeKmsClient] with the Tink runtime. */
-    fun register(vararg keyUriAeads: Pair<String, Aead>) {
-      val kmsClient = FakeKmsClient()
-      for ((keyUri, aead) in keyUriAeads) {
-        kmsClient.setAead(keyUri, aead)
-      }
-
-      KmsClients.add(kmsClient)
-    }
-
-    /** Creates and registers a [FakeKmsClient] with the Tink runtime. */
-    fun register(keyUri: String, aead: Aead) {
-      register(keyUri to aead)
-    }
   }
 }

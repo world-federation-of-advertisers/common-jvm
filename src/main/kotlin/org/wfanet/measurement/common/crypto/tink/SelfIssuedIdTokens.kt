@@ -26,6 +26,7 @@ import java.net.URI
 import java.security.GeneralSecurityException
 import java.time.Clock
 import org.wfanet.measurement.common.base64UrlEncode
+import org.wfanet.measurement.common.crypto.Hashing
 import org.wfanet.measurement.common.crypto.hashSha256
 
 private const val EXPIRATION_SECONDS = 5000L
@@ -108,7 +109,7 @@ object SelfIssuedIdTokens {
   }
 
   fun calculateRsaThumbprint(jwk: String): String {
-    val hash = hashSha256(jwk.toByteStringUtf8())
+    val hash = Hashing.hashSha256(jwk.toByteStringUtf8())
     return hash.base64UrlEncode()
   }
 

@@ -29,7 +29,6 @@ load(
     "rules_proto_dependencies",
     "rules_proto_toolchains",
 )
-load("@tink_java//:tink_java_deps.bzl", "tink_java_deps")
 load("//build/rules_kotlin:deps.bzl", "rules_kotlin_deps")
 
 # buildifier: disable=unnamed-macro
@@ -47,4 +46,3 @@ def common_jvm_deps():
         name = "com_google_googleapis_imports",
         java = True,
     )
-    tink_java_deps()
