@@ -48,7 +48,7 @@ class KmsStorageClientTest : AbstractStorageClientTest<KmsStorageClient>() {
   @Before
   fun initStorageClient() {
     storageClient =
-      TinkKeyStorageProvider().makeKmsStorageClient(wrappedStorageClient, KEK_URI)
+      TinkKeyStorageProvider(kmsClient).makeKmsStorageClient(wrappedStorageClient, KEK_URI)
         as KmsStorageClient
   }
 
@@ -74,12 +74,10 @@ class KmsStorageClientTest : AbstractStorageClientTest<KmsStorageClient>() {
     init {
       AeadConfig.register()
     }
+
     private val AEAD_KEY_TEMPLATE = KeyTemplates.get("AES128_GCM")
     private val KEY_ENCRYPTION_KEY = KeysetHandle.generateNew(AEAD_KEY_TEMPLATE)
     private val aead = KEY_ENCRYPTION_KEY.getPrimitive(Aead::class.java)
-
-    init {
-      FakeKmsClient.register(KEK_URI, aead)
-    }
+    private val kmsClient = FakeKmsClient().also { it.setAead(KEK_URI, aead) }
   }
 }

@@ -22,7 +22,6 @@ import com.google.crypto.tink.jwt.JwtPublicKeyVerify
 import com.google.crypto.tink.jwt.JwtSignatureConfig
 import com.google.crypto.tink.jwt.JwtValidator
 import com.google.crypto.tink.jwt.RawJwt
-import com.google.crypto.tink.tinkkey.KeyAccess
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
@@ -35,10 +34,7 @@ class PublicJwkHandle internal constructor(private val keysetHandle: KeysetHandl
 
   fun getJwk(): JsonObject {
     val jwkSet =
-      JsonParser.parseString(
-          JwkSetConverter.fromKeysetHandle(keysetHandle, KeyAccess.publicAccess())
-        )
-        .asJsonObject
+      JsonParser.parseString(JwkSetConverter.fromPublicKeysetHandle(keysetHandle)).asJsonObject
     return jwkSet.getAsJsonArray("keys").get(0).asJsonObject
   }
 
@@ -67,9 +63,7 @@ class PublicJwkHandle internal constructor(private val keysetHandle: KeysetHandl
       keys.add(jwk)
       keyset.add("keys", keys)
 
-      return PublicJwkHandle(
-        JwkSetConverter.toKeysetHandle(keyset.toString(), KeyAccess.publicAccess())
-      )
+      return PublicJwkHandle(JwkSetConverter.toPublicKeysetHandle(keyset.toString()))
     }
   }
 }
