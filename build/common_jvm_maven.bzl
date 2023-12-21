@@ -17,37 +17,36 @@ Adds external repos necessary for common-jvm.
 """
 
 load(
-    "//build/rules_kotlin:repo.bzl",
-    "rules_kotlin_maven_artifacts_dict",
+    "@com_github_grpc_grpc_kotlin//:repositories.bzl",
+    GRPC_KOTLIN_MAVEN_DEPS = "IO_GRPC_GRPC_KOTLIN_ARTIFACTS",
 )
 load(
     "@io_grpc_grpc_java//:repositories.bzl",
     GRPC_JAVA_MAVEN_DEPS = "IO_GRPC_GRPC_JAVA_ARTIFACTS",
 )
 load(
-    "@com_github_grpc_grpc_kotlin//:repositories.bzl",
-    GRPC_KOTLIN_MAVEN_DEPS = "IO_GRPC_GRPC_KOTLIN_ARTIFACTS",
+    "//build:versions.bzl",
+    "AWS_JAVA_SDK_VERSION",
+    "OPENTELEMETRY_JAVA_VERSION",
+    "PROTOBUF_KOTLIN_VERSION",
 )
-load(
-    "//build/rules_proto:repo.bzl",
-    "rules_proto_maven_artifacts_dict",
-    RULES_PROTO_EXCLUDED_ARTIFACTS = "EXCLUDED_ARTIFACTS",
-)
+load("//build/com_google_truth:repo.bzl", "com_google_truth_artifact_dict")
 load("//build/grpc_java:repo.bzl", "grpc_java_maven_artifacts_dict")
 load(
     "//build/grpc_kotlin:repo.bzl",
     "GRPC_KOTLIN_OVERRIDE_TARGETS",
     "grpc_kotlin_maven_artifacts_dict",
 )
-load("//build/com_google_truth:repo.bzl", "com_google_truth_artifact_dict")
 load("//build/kotlinx_coroutines:repo.bzl", "kotlinx_coroutines_artifact_dict")
 load("//build/maven:artifacts.bzl", "artifacts")
-load("//build/tink:repo.bzl", "TINK_JAVA_KMS_MAVEN_DEPS")
 load(
-    "//build:versions.bzl",
-    "AWS_JAVA_SDK_VERSION",
-    "OPENTELEMETRY_JAVA_VERSION",
-    "PROTOBUF_KOTLIN_VERSION",
+    "//build/rules_kotlin:repo.bzl",
+    "rules_kotlin_maven_artifacts_dict",
+)
+load(
+    "//build/rules_proto:repo.bzl",
+    "rules_proto_maven_artifacts_dict",
+    RULES_PROTO_EXCLUDED_ARTIFACTS = "EXCLUDED_ARTIFACTS",
 )
 
 # buildifier: disable=function-docstring-return
@@ -67,7 +66,6 @@ def common_jvm_maven_artifacts_dict():
     maven_artifacts.update(rules_kotlin_maven_artifacts_dict())
     maven_artifacts.update(grpc_java_maven_artifacts_dict())
     maven_artifacts.update(grpc_kotlin_maven_artifacts_dict())
-    maven_artifacts.update(TINK_JAVA_KMS_MAVEN_DEPS)
     maven_artifacts.update(com_google_truth_artifact_dict(version = "1.0.1"))
     maven_artifacts.update(kotlinx_coroutines_artifact_dict())
 
@@ -80,6 +78,7 @@ def common_jvm_maven_artifacts_dict():
         "com.google.cloud:google-cloud-spanner": "6.35.2",
         "com.google.cloud:google-cloud-storage": "2.6.1",
         "com.google.guava:guava": "31.0.1-jre",
+        "com.google.crypto.tink:tink": "1.12.0",
         "info.picocli:picocli": "4.4.0",
         "io.opentelemetry:opentelemetry-api": OPENTELEMETRY_JAVA_VERSION,
         "junit:junit": "4.13",

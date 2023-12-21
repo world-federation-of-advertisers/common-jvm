@@ -31,10 +31,6 @@ import org.wfanet.measurement.common.crypto.PublicKeyHandle
 class TinkPublicKeyHandle internal constructor(internal val keysetHandle: KeysetHandle) :
   PublicKeyHandle {
 
-  init {
-    require(!keysetHandle.primaryKey().hasSecret())
-  }
-
   constructor(serializedKeyset: ByteString) : this(parseKeyset(serializedKeyset))
 
   fun toByteString(): ByteString {
@@ -66,10 +62,6 @@ class TinkPublicKeyHandle internal constructor(internal val keysetHandle: Keyset
 class TinkPrivateKeyHandle internal constructor(internal val keysetHandle: KeysetHandle) :
   PrivateKeyHandle {
 
-  init {
-    require(keysetHandle.primaryKey().hasSecret())
-  }
-
   override val publicKey = TinkPublicKeyHandle(keysetHandle.publicKeysetHandle)
 
   override fun hybridDecrypt(ciphertext: ByteString, contextInfo: ByteString?): ByteString {
@@ -94,10 +86,18 @@ class TinkPrivateKeyHandle internal constructor(internal val keysetHandle: Keyse
 
 /** Loads a private key from a cleartext binary Tink Keyset. */
 fun loadPrivateKey(binaryKeyset: File): TinkPrivateKeyHandle {
-  return TinkPrivateKeyHandle(CleartextKeysetHandle.read(BinaryKeysetReader.withFile(binaryKeyset)))
+  val keysetHandle: KeysetHandle =
+    binaryKeyset.inputStream().use { input ->
+      CleartextKeysetHandle.read(BinaryKeysetReader.withInputStream(input))
+    }
+  return TinkPrivateKeyHandle(keysetHandle)
 }
 
 /** Loads a public key from a cleartext binary Tink Keyset. */
 fun loadPublicKey(binaryKeyset: File): TinkPublicKeyHandle {
-  return TinkPublicKeyHandle(KeysetHandle.readNoSecret(BinaryKeysetReader.withFile(binaryKeyset)))
+  val keysetHandle: KeysetHandle =
+    binaryKeyset.inputStream().use { input ->
+      KeysetHandle.readNoSecret(BinaryKeysetReader.withInputStream(input))
+    }
+  return TinkPublicKeyHandle(keysetHandle)
 }

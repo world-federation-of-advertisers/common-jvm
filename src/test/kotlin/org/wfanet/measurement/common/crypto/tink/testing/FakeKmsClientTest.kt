@@ -20,12 +20,9 @@ import com.google.common.truth.Truth.assertThat
 import com.google.crypto.tink.Aead
 import com.google.crypto.tink.KeyTemplates
 import com.google.crypto.tink.KeysetHandle
-import com.google.crypto.tink.KmsClients
-import com.google.crypto.tink.KmsClientsTestUtil
 import com.google.crypto.tink.aead.AeadConfig
 import java.security.GeneralSecurityException
 import kotlin.test.assertFailsWith
-import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
@@ -33,41 +30,33 @@ import org.junit.runners.JUnit4
 /** Tests for [FakeKmsClient]. */
 @RunWith(JUnit4::class)
 class FakeKmsClientTest {
-  @Before
-  fun resetKmsClients() {
-    KmsClientsTestUtil.reset()
-  }
-
   @Test
-  fun `registers client with AEAD for key URI`() {
+  fun `getAead returns Aead for supported key URI`() {
+    val keyUri = FakeKmsClient.KEY_URI_PREFIX + "key1"
     val keyHandle = KeysetHandle.generateNew(AEAD_KEY_TEMPLATE)
     val aead = keyHandle.getPrimitive(Aead::class.java)
-    val keyUri = FakeKmsClient.KEY_URI_PREFIX + "key1"
+    val kmsClient = FakeKmsClient()
+    kmsClient.setAead(keyUri, aead)
     val plainText = "lorem ipsum".toByteArray(Charsets.UTF_8)
 
-    FakeKmsClient.register(keyUri, aead)
-
-    val registeredAead = KmsClients.get(keyUri).getAead(keyUri)
+    val registeredAead = kmsClient.getAead(keyUri)
     val cipherText: ByteArray = aead.encrypt(plainText, null)
     assertThat(registeredAead.decrypt(cipherText, null)).isEqualTo(plainText)
   }
 
   @Test
-  fun `does not register client for other key URIs`() {
-    val keyHandle = KeysetHandle.generateNew(AEAD_KEY_TEMPLATE)
-    val aead = keyHandle.getPrimitive(Aead::class.java)
-    val keyUri1 = FakeKmsClient.KEY_URI_PREFIX + "key1"
-    val keyUri2 = FakeKmsClient.KEY_URI_PREFIX + "key2"
+  fun `getAead throws GeneralSecurityException for unsupported key URI`() {
+    val keyUri = FakeKmsClient.KEY_URI_PREFIX + "key"
+    val kmsClient = FakeKmsClient()
 
-    FakeKmsClient.register(keyUri1, aead)
-
-    assertFailsWith<GeneralSecurityException> { KmsClients.get(keyUri2) }
+    assertFailsWith<GeneralSecurityException> { kmsClient.getAead(keyUri) }
   }
 
   companion object {
     init {
       AeadConfig.register()
     }
+
     private val AEAD_KEY_TEMPLATE = KeyTemplates.get("AES128_GCM")
   }
 }

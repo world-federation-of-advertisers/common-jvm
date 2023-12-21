@@ -31,7 +31,6 @@ load("//build/rules_multirun:repo.bzl", "rules_multirun")
 load("//build/rules_oci:repo.bzl", "rules_oci")
 load("//build/rules_pkg:repo.bzl", "rules_pkg")
 load("//build/rules_proto:repo.bzl", "rules_proto")
-load("//build/tink:repo.bzl", "tink_java")
 
 def common_jvm_repositories():
     """
@@ -51,5 +50,4 @@ def common_jvm_repositories():
     rules_oci()
     rules_multirun()
     com_google_googleapis()
-    tink_java()
     com_google_highwayhash()
