@@ -17,6 +17,7 @@ package org.wfanet.measurement.common.crypto.tink
 import com.google.crypto.tink.Aead
 import com.google.protobuf.ByteString
 import com.google.protobuf.kotlin.toByteString
+import java.util.logging.Logger
 import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -49,10 +50,13 @@ internal constructor(
    * @return [StorageClient.Blob] with [content] encrypted by [aead]
    */
   override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
+    logger.info("Creating ciphertext")
     val ciphertext: ByteArray =
       withContext(aeadContext) { aead.encrypt(content.toByteArray(), blobKey.encodeToByteArray()) }
+    logger.info("Created ciphertext. Writing ciphertext to storage.")
     val wrappedBlob: StorageClient.Blob =
       storageClient.writeBlob(blobKey, ciphertext.toByteString())
+    logger.info("Wrote ciphertext to storage")
     return AeadBlob(wrappedBlob, blobKey)
   }
 
@@ -83,5 +87,9 @@ internal constructor(
     }
 
     override suspend fun delete() = blob.delete()
+  }
+
+  companion object {
+    internal val logger = Logger.getLogger(this::class.java.name)
   }
 }
