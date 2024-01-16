@@ -25,15 +25,19 @@ import org.wfanet.measurement.common.crypto.PrivateKeyStore as CryptoPrivateKeyS
 import org.wfanet.measurement.storage.StorageClient
 
 class TinkKeyStorageProvider(
-  private val aeadContext: @BlockingExecutor CoroutineContext = Dispatchers.IO
+    private val aeadContext: @BlockingExecutor CoroutineContext = Dispatchers.IO,
+    private val associatedData: String? = null,
 ) : KeyStorageProvider<TinkKeyId, TinkPrivateKeyHandle> {
-  override fun makeKmsStorageClient(storageClient: StorageClient, keyUri: String): StorageClient {
-    return KmsStorageClient(storageClient, getKmsAead(keyUri), aeadContext)
+  override fun makeKmsStorageClient(
+      storageClient: StorageClient,
+      keyUri: String,
+  ): StorageClient {
+    return KmsStorageClient(storageClient, getKmsAead(keyUri), aeadContext, associatedData)
   }
 
   override fun makeKmsPrivateKeyStore(
-    store: KeyBlobStore,
-    keyUri: String
+      store: KeyBlobStore,
+      keyUri: String
   ): CryptoPrivateKeyStore<TinkKeyId, TinkPrivateKeyHandle> {
     return PrivateKeyStore(store, getKmsAead(keyUri), aeadContext)
   }
