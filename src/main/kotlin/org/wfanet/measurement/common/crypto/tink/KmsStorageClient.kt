@@ -37,9 +37,10 @@ import org.wfanet.measurement.storage.StorageClient
  */
 class KmsStorageClient
 internal constructor(
-  private val storageClient: StorageClient,
-  private val aead: Aead,
-  private val aeadContext: @BlockingExecutor CoroutineContext
+    private val storageClient: StorageClient,
+    private val aead: Aead,
+    private val aeadContext: @BlockingExecutor CoroutineContext,
+    private val associatedData: String? = null,
 ) : StorageClient {
 
   /**
@@ -51,11 +52,14 @@ internal constructor(
    */
   override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
     logger.info("Creating ciphertext")
+    val associatedData =
+        if (associatedData !== null) associatedData.encodeToByteArray()
+        else blobKey.encodeToByteArray()
     val ciphertext: ByteArray =
-      withContext(aeadContext) { aead.encrypt(content.toByteArray(), blobKey.encodeToByteArray()) }
+        withContext(aeadContext) { aead.encrypt(content.toByteArray(), associatedData) }
     logger.info("Created ciphertext. Writing ciphertext to storage.")
     val wrappedBlob: StorageClient.Blob =
-      storageClient.writeBlob(blobKey, ciphertext.toByteString())
+        storageClient.writeBlob(blobKey, ciphertext.toByteString())
     logger.info("Wrote ciphertext to storage")
     return AeadBlob(wrappedBlob, blobKey)
   }
@@ -72,17 +76,18 @@ internal constructor(
 
   /** A blob that will decrypt the content when read */
   private inner class AeadBlob(private val blob: StorageClient.Blob, private val blobKey: String) :
-    StorageClient.Blob {
+      StorageClient.Blob {
     override val storageClient = this@KmsStorageClient.storageClient
 
     override val size: Long
       get() = blob.size
 
     override fun read() = flow {
+      val associatedData =
+          if (associatedData !== null) associatedData.encodeToByteArray()
+          else blobKey.encodeToByteArray()
       val plaintext =
-        withContext(aeadContext) {
-          aead.decrypt(blob.read().toByteArray(), blobKey.encodeToByteArray())
-        }
+          withContext(aeadContext) { aead.decrypt(blob.read().toByteArray(), associatedData) }
       emit(plaintext.toByteString())
     }
 
