@@ -1,16 +1,6 @@
-load("@rules_java//java:defs.bzl", "java_library")
-
 package(default_visibility = ["//visibility:public"])
 
-java_library(
-    name = "core",
-    exports = [
-        "@maven//:org_jetbrains_kotlinx_kotlinx_coroutines_core",
-        "@maven//:org_jetbrains_kotlinx_kotlinx_coroutines_core_jvm",
-    ],
-)
-
 alias(
-    name = "jdk8",
-    actual = "@maven//:org_jetbrains_kotlinx_kotlinx_coroutines_jdk8",
+    name = "core",
+    actual = "@wfa_rules_kotlin_jvm//imports/kotlinx/coroutines:core",
 )

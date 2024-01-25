@@ -1,4 +1,4 @@
-load("@io_bazel_rules_kotlin//kotlin:jvm.bzl", "kt_jvm_test")
+load("@wfa_rules_kotlin_jvm//kotlin:defs.bzl", "kt_jvm_test")
 
 kt_jvm_test(
     name = "ChannelShutdownHookTest",
@@ -32,7 +32,7 @@ kt_jvm_test(
         "//imports/java/io/grpc/testing",
         "//imports/java/io/netty/handler",
         "//imports/java/org/junit",
-        "//imports/kotlin/io/grpc/health/v1:health_kt_jvm_grpc",
+        "//imports/kotlin/io/grpc/health/v1:health_kt_jvm_grpc_proto",
         "//imports/kotlin/kotlin/test",
         "//imports/kotlin/kotlinx/coroutines:core",
         "//src/main/kotlin/org/wfanet/measurement/common/crypto:signing_certs",

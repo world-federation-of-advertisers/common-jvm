@@ -4,6 +4,7 @@ package(default_visibility = ["//visibility:public"])
 
 java_library(
     name = "proto",
+    testonly = True,
     exports = [
         "@maven//:com_google_truth_extensions_truth_liteproto_extension",
         "@maven//:com_google_truth_extensions_truth_proto_extension",

@@ -7,7 +7,7 @@ alias(
 
 alias(
     name = "api",
-    actual = "@maven//:io_grpc_grpc_api",
+    actual = "@wfa_rules_kotlin_jvm//imports/io/gprc:api",
 )
 
 alias(

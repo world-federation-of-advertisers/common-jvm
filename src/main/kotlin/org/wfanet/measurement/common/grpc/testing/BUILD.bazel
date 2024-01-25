@@ -1,4 +1,4 @@
-load("//build/rules_kotlin:defs.bzl", "kt_jvm_library")
+load("@wfa_rules_kotlin_jvm//kotlin:defs.bzl", "kt_jvm_library")
 
 package(
     default_testonly = True,
@@ -11,6 +11,7 @@ kt_jvm_library(
     deps = [
         "//imports/java/io/grpc:api",
         "//imports/java/io/grpc:core",
+        "//imports/java/io/grpc/inprocess",
         "//imports/java/io/grpc/testing",
         "//imports/java/org/junit",
         "//imports/kotlin/io/grpc/kotlin:stub",
