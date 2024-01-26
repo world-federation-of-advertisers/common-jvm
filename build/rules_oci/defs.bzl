@@ -20,7 +20,7 @@ load("@rules_oci//oci:defs.bzl", "oci_image", "oci_push_rule")
 load("@rules_pkg//pkg:mappings.bzl", "pkg_files")
 load("@rules_pkg//pkg:providers.bzl", "PackageFilesInfo")
 load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
-load("//build:defs.bzl", "expand_template", "to_label")
+load("//build:defs.bzl", "expand_template")
 
 DEFAULT_JAVA_IMAGE_BASE = Label("@java_image_base")
 DEFAULT_JAVA_DEBUG_IMAGE_BASE = Label("@java_debug_image_base")
@@ -106,7 +106,7 @@ def java_image(
       **kwargs: other args to pass to the resulting target
     """
     env = env or {}
-    binary_label = to_label(binary)
+    binary_label = native.package_relative_label(binary)
     deploy_jar_label = binary_label.relative(binary_label.name + "_deploy.jar")
     cmd_args = cmd_args or []
 

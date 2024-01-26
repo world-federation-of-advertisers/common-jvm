@@ -1,4 +1,4 @@
-load("//build/rules_kotlin:defs.bzl", "kt_jvm_library")
+load("@wfa_rules_kotlin_jvm//kotlin:defs.bzl", "kt_jvm_library")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -10,7 +10,6 @@ kt_jvm_library(
         "//imports/java/software/amazon/awssdk/services/s3",
         "//imports/kotlin/com/google/protobuf/kotlin",
         "//imports/kotlin/kotlinx/coroutines:core",
-        "//imports/kotlin/kotlinx/coroutines:jdk8",
         "//imports/kotlin/kotlinx/coroutines/reactive",
         "//src/main/kotlin/org/wfanet/measurement/aws/common:region_converter",
         "//src/main/kotlin/org/wfanet/measurement/common/crypto:hashing",

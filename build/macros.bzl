@@ -14,116 +14,22 @@
 
 """Common macros."""
 
-load(":defs.bzl", "to_label")
-load("@rules_java//java:defs.bzl", "java_library", "java_proto_library")
 load(
-    "@com_github_grpc_grpc_kotlin//:kt_jvm_grpc.bzl",
-    _kt_jvm_grpc_library = "kt_jvm_grpc_library",
+    "@wfa_rules_kotlin_jvm//kotlin:defs.bzl",
+    _kt_jvm_grpc_proto_library = "kt_jvm_grpc_proto_library",
 )
-load("//build/kt_jvm_proto:defs.bzl", "kt_jvm_proto_library")
 
-def kt_jvm_grpc_library(
-        name,
-        srcs,
-        deps,
-        flavor = None,
-        visibility = None,
-        **kwargs):
-    """Wrapper macro for regular kt_jvm_grpc_library rule from grpc_kotlin.
+def kt_jvm_grpc_proto_library(name, srcs = None, **kwargs):
+    """Forwarding macro for kt_jvm_grpc_proto_library.
 
-    This includes a convenience export for the java_proto_library dep.
-
-    Args:
-      name: Target name.
-      srcs: Exactly one proto_library target.
-      deps: Exactly one java_proto_library target.
-      flavor: "normal" (default) for normal proto runtime, or "lite" for the
-          lite runtime (for Android usage)
-      visibility: List of visibility labels.
-      **kwargs: Keyword arguments.
+    Deprecated:
+        Use kt_jvm_grpc_proto_library from @wfa_rules_kotlin_jvm//kotlin:defs.bzl.
     """
 
-    internal_name = name + "_internal"
-
-    _kt_jvm_grpc_library(
-        name = internal_name,
-        srcs = srcs,
-        deps = deps,
-        flavor = flavor,
-        visibility = ["//visibility:private"],
-        **kwargs
+    # buildifier: disable=print
+    print(
+        "{context}: Use kt_jvm_grpc_proto_library from @wfa_rules_kotlin_jvm//kotlin:defs.bzl".format(
+            context = native.package_name(),
+        ),
     )
-    java_library(
-        name = name,
-        exports = [
-            internal_name,
-        ] + deps,
-        visibility = visibility,
-        **kwargs
-    )
-
-def kt_jvm_grpc_proto_library(
-        name,
-        srcs,
-        flavor = None,
-        visibility = None,
-        **kwargs):
-    """java_library that exports Kotlin JVM gRPC service and proto libraries.
-
-    Given a proto_library named `<prefix>_proto`, this will create additional
-    `<prefix>_java_proto`, `<prefix>_kt_jvm_proto`, and `<prefix>_kt_jvm_grpc`
-    targets.
-
-    Args:
-      name: Target name.
-      srcs: Exactly one proto source file.
-      flavor: "normal" (default) for normal proto runtime, or "lite" for the
-          lite runtime (for Android usage)
-      visibility: List of visibility labels.
-      **kwargs: Keyword arguments.
-    """
-
-    if len(srcs) != 1:
-        fail("Expected exactly one src", "srcs")
-
-    proto_name = to_label(srcs[0]).name
-    if not proto_name.endswith("_proto"):
-        fail("proto_library target names should end with '_proto'")
-    name_prefix = proto_name.rsplit("_", 1)[0]
-    java_proto_name = name_prefix + "_java_proto"
-    kt_jvm_proto_name = name_prefix + "_kt_jvm_proto"
-    kt_jvm_grpc_name = name_prefix + "_kt_jvm_grpc"
-
-    java_proto_library(
-        name = java_proto_name,
-        deps = srcs,
-        visibility = visibility,
-        **kwargs
-    )
-
-    kt_jvm_proto_library(
-        name = kt_jvm_proto_name,
-        srcs = srcs,
-        deps = [java_proto_name],
-        visibility = visibility,
-        **kwargs
-    )
-
-    _kt_jvm_grpc_library(
-        name = kt_jvm_grpc_name,
-        srcs = srcs,
-        deps = [java_proto_name],
-        flavor = flavor,
-        visibility = visibility,
-        **kwargs
-    )
-
-    java_library(
-        name = name,
-        exports = [
-            kt_jvm_grpc_name,
-            kt_jvm_proto_name,
-        ],
-        visibility = visibility,
-        **kwargs
-    )
+    _kt_jvm_grpc_proto_library(name, deps = srcs, **kwargs)
