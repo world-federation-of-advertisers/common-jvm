@@ -1,0 +1,11 @@
+package(default_visibility = ["//visibility:public"])
+
+alias(
+    name = "core",
+    actual = "@maven//:org_jetbrains_kotlinx_multik_core_jvm",
+)
+
+alias(
+    name = "default",
+    actual = "@maven//:org_jetbrains_kotlinx_multik_default_jvm",
+)
