@@ -91,8 +91,8 @@ def common_jvm_maven_artifacts_dict():
         "software.amazon.awssdk:regions": AWS_JAVA_SDK_VERSION,
 
         # PostgreSQL.
-        "com.google.cloud.sql:postgres-socket-factory": "1.15.2",
-        "com.google.cloud.sql:cloud-sql-connector-r2dbc-postgres": "1.15.2",
+        "com.google.cloud.sql:postgres-socket-factory": "1.13.1",
+        "com.google.cloud.sql:cloud-sql-connector-r2dbc-postgres": "1.13.1",
         "org.postgresql:postgresql": "42.7.1",
         "org.postgresql:r2dbc-postgresql": "1.0.4.RELEASE",
         "org.testcontainers:postgresql": "1.19.4",
