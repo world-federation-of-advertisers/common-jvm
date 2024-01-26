@@ -1,4 +1,4 @@
-load("@io_bazel_rules_kotlin//kotlin:jvm.bzl", "kt_jvm_test")
+load("@wfa_rules_kotlin_jvm//kotlin:defs.bzl", "kt_jvm_test")
 
 kt_jvm_test(
     name = "PostgresDatabaseClientTest",
@@ -13,10 +13,10 @@ kt_jvm_test(
     deps = [
         "//imports/java/com/google/common/truth",
         "//imports/java/org/junit",
+        "//imports/kotlin/com/google/type:dayofweek_kt_jvm_proto",
+        "//imports/kotlin/com/google/type:latlng_kt_jvm_proto",
         "//src/main/kotlin/org/wfanet/measurement/common",
         "//src/main/kotlin/org/wfanet/measurement/common/db/r2dbc/postgres",
         "//src/main/kotlin/org/wfanet/measurement/common/db/r2dbc/postgres/testing:database_provider",
-        "//src/main/proto/google/type:dayofweek_kt_jvm_proto",
-        "//src/main/proto/google/type:latlng_kt_jvm_proto",
     ],
 )

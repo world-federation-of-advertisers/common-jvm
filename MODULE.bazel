@@ -1,0 +1,285 @@
+module(
+    name = "common-jvm",
+    bazel_compatibility = [">=7.0.0"],
+    repo_name = "wfa_common_jvm",
+)
+
+KOTLINX_COROUTINES_VERSION = "1.7.3"
+
+PROTOBUF_JAVA_VERSION = "3.23.4"  # Compatible with protobuf module version.
+
+GRPC_JAVA_VERSION = "1.59.1"
+
+AWS_JAVA_SDK_VERSION = "2.17.258"
+
+OPENTELEMETRY_JAVA_VERSION = "1.32.0"
+
+TRUTH_VERSION = "1.1.2"
+
+TINK_VERSION = "1.12.0"
+
+CLOUD_SQL_CONNECTOR_VERSION = "1.12.0"
+
+TESTCONTAINERS_VERSION = "1.19.3"
+
+# Bazel Central Registry deps.
+bazel_dep(
+    name = "platforms",
+    version = "0.0.8",
+)
+bazel_dep(
+    name = "bazel_skylib",
+    version = "1.5.0",
+)
+bazel_dep(
+    name = "rules_proto",
+    version = "6.0.0-rc1",
+)
+bazel_dep(
+    name = "rules_pkg",
+    version = "0.9.1",
+)
+bazel_dep(
+    name = "rules_java",
+    version = "7.3.2",
+)
+bazel_dep(
+    name = "rules_multirun",
+    version = "0.6.1",
+)
+bazel_dep(
+    name = "protobuf",
+    version = "23.1",
+    repo_name = "com_google_protobuf",
+)
+bazel_dep(
+    name = "rules_jvm_external",
+    version = "6.0",
+)
+bazel_dep(
+    name = "rules_oci",
+    version = "1.6.0",
+)
+
+# WFA registry deps.
+bazel_dep(
+    name = "rules_kotlin_jvm",
+    version = "0.2.0",
+    repo_name = "wfa_rules_kotlin_jvm",
+)
+bazel_dep(
+    name = "googleapis",
+    version = "0.0.0-bzlmod.1",
+    repo_name = "com_google_googleapis",
+)
+bazel_dep(
+    name = "cloud-spanner-emulator-bin",
+    version = "1.5.13",
+    repo_name = "cloud_spanner_emulator",
+)
+
+maven = use_extension("@rules_jvm_external//:extensions.bzl", "maven")
+maven.artifact(
+    testonly = True,
+    artifact = "mockito-core",
+    group = "org.mockito",
+    version = "4.11.0",
+)
+maven.artifact(
+    testonly = True,
+    artifact = "mockito-kotlin",
+    group = "org.mockito.kotlin",
+    version = "4.1.0",
+)
+maven.artifact(
+    testonly = True,
+    artifact = "truth",
+    group = "com.google.truth",
+    version = TRUTH_VERSION,
+)
+maven.artifact(
+    testonly = True,
+    artifact = "truth-java8-extension",
+    group = "com.google.truth.extensions",
+    version = TRUTH_VERSION,
+)
+maven.artifact(
+    testonly = True,
+    artifact = "truth-proto-extension",
+    group = "com.google.truth.extensions",
+    version = TRUTH_VERSION,
+)
+maven.artifact(
+    testonly = True,
+    artifact = "truth-liteproto-extension",
+    group = "com.google.truth.extensions",
+    version = TRUTH_VERSION,
+)
+maven.artifact(
+    testonly = True,
+    artifact = "testcontainers",
+    group = "org.testcontainers",
+    version = TESTCONTAINERS_VERSION,
+)
+maven.artifact(
+    testonly = True,
+    artifact = "database-commons",
+    group = "org.testcontainers",
+    version = TESTCONTAINERS_VERSION,
+)
+maven.artifact(
+    testonly = True,
+    artifact = "jdbc",
+    group = "org.testcontainers",
+    version = TESTCONTAINERS_VERSION,
+)
+maven.artifact(
+    testonly = True,
+    artifact = "postgresql",
+    group = "org.testcontainers",
+    version = TESTCONTAINERS_VERSION,
+)
+maven.artifact(
+    testonly = True,
+    artifact = "s3mock-junit4",
+    group = "com.adobe.testing",
+    version = "2.2.3",
+)
+maven.artifact(
+    testonly = True,
+    artifact = "grpc-testing",
+    group = "io.grpc",
+    version = GRPC_JAVA_VERSION,
+)
+maven.artifact(
+    artifact = "grpc-core",
+    # Work around "circular dependency" between grpc-core and grpc-util.
+    # TODO(bazelbuild/rules_jvm_external#966): Remove when fixed.
+    exclusions = ["io.grpc:grpc-util"],
+    group = "io.grpc",
+    version = GRPC_JAVA_VERSION,
+)
+maven.artifact(
+    artifact = "protobuf-java",
+    # Ensure compatibility with protobuf module.
+    force_version = True,
+    group = "com.google.protobuf",
+    version = PROTOBUF_JAVA_VERSION,
+)
+maven.install(
+    artifacts = [
+        "junit:junit:4.13.2",
+        "org.conscrypt:conscrypt-openjdk-uber:2.5.2",
+        "org.jetbrains:annotations:23.0.0",
+        "info.picocli:picocli:4.4.0",
+        "com.google.api:api-common:2.21.0",
+        "com.google.api:gax:2.38.0",
+        "com.google.apis:google-api-services-bigquery:v2-rev20231111-2.0.0",
+        "com.google.cloud:google-cloud-core:2.28.0",
+        "com.google.cloud:google-cloud-core-grpc:2.28.0",
+        "com.google.cloud:google-cloud-storage:2.30.1",
+        "com.google.cloud:google-cloud-nio:0.127.8",
+        "com.google.cloud:google-cloud-spanner:6.55.0",
+        "com.google.cloud:google-cloud-bigquery:2.35.0",
+        "com.google.code.gson:gson:2.10.1",
+        "com.google.protobuf:protobuf-java-util:" + PROTOBUF_JAVA_VERSION,
+        "io.grpc:grpc-census:" + GRPC_JAVA_VERSION,
+        "io.grpc:grpc-context:" + GRPC_JAVA_VERSION,
+        "io.grpc:grpc-netty:" + GRPC_JAVA_VERSION,
+        "io.grpc:grpc-services:" + GRPC_JAVA_VERSION,
+        "io.grpc:grpc-inprocess:" + GRPC_JAVA_VERSION,
+        "io.netty:netty-handler:4.1.79.Final",
+        "org.jetbrains.kotlinx:kotlinx-coroutines-test:" + KOTLINX_COROUTINES_VERSION,
+        "org.jetbrains.kotlinx:kotlinx-coroutines-debug:" + KOTLINX_COROUTINES_VERSION,
+        "org.jetbrains.kotlinx:kotlinx-coroutines-reactive:" + KOTLINX_COROUTINES_VERSION,
+        "org.jetbrains.kotlinx:kotlinx-coroutines-guava:" + KOTLINX_COROUTINES_VERSION,
+        "org.reactivestreams:reactive-streams:1.0.4",
+        "io.projectreactor:reactor-core:3.4.19",
+        "com.google.crypto.tink:tink:" + TINK_VERSION,
+
+        # AWS.
+        "software.amazon.awssdk:auth:" + AWS_JAVA_SDK_VERSION,
+        "software.amazon.awssdk:regions:" + AWS_JAVA_SDK_VERSION,
+        "software.amazon.awssdk:s3:" + AWS_JAVA_SDK_VERSION,
+        "software.amazon.awssdk:secretsmanager:" + AWS_JAVA_SDK_VERSION,
+        "software.amazon.awssdk:sts:" + AWS_JAVA_SDK_VERSION,
+
+        # OpenTelemetry.
+        "io.opentelemetry:opentelemetry-api:" + OPENTELEMETRY_JAVA_VERSION,
+        "io.opentelemetry:opentelemetry-context:" + OPENTELEMETRY_JAVA_VERSION,
+
+        # PostgreSQL.
+        "com.google.cloud.sql:postgres-socket-factory:" + CLOUD_SQL_CONNECTOR_VERSION,
+        "com.google.cloud.sql:cloud-sql-connector-r2dbc-core:" + CLOUD_SQL_CONNECTOR_VERSION,
+        "com.google.cloud.sql:cloud-sql-connector-r2dbc-postgres:" + CLOUD_SQL_CONNECTOR_VERSION,
+        "org.postgresql:postgresql:42.7.0",
+        "org.postgresql:r2dbc-postgresql:1.0.4.RELEASE",
+        "io.r2dbc:r2dbc-spi:1.0.0.RELEASE",
+
+        # Liquibase.
+        "org.yaml:snakeyaml:1.30",
+        "org.liquibase:liquibase-core:4.18.0",
+        "com.google.cloudspannerecosystem:liquibase-spanner:4.17.0",
+        "com.google.cloud:google-cloud-spanner-jdbc:2.9.0",
+        "org.liquibase.ext:liquibase-postgresql:4.11.0",
+
+        # Math library.
+        "org.apache.commons:commons-math3:3.6.1",
+        "org.apache.commons:commons-numbers-gamma:1.1",
+
+        # CSV library.
+        "com.opencsv:opencsv:5.6",
+
+        # Riegeli Decompressor
+        "org.apache.commons:commons-compress:1.22",
+        "org.brotli:dec:0.1.2",
+        "com.github.luben:zstd-jni:1.5.2-5",
+    ],
+    exclusions = [
+        # protobuf-java and protobuf-javalite cannot coexist.
+        "com.google.protobuf:protobuf-javalite",
+    ],
+    fetch_sources = True,
+    repositories = [
+        "https://maven.google.com",
+        "https://repo1.maven.org/maven2",
+    ],
+    strict_visibility = True,
+)
+use_repo(maven, "maven")
+
+oci = use_extension("@rules_oci//oci:extensions.bzl", "oci")
+oci.pull(
+    name = "java_image_base",
+    # Digest of nonroot-amd64 tag.
+    digest = "sha256:781e3acb7934ce0fa5ceeb62ee1369248ab23ae26dce002138b3d0e5338d7486",
+    image = "gcr.io/distroless/java11-debian11",
+)
+oci.pull(
+    name = "java_debug_image_base",
+    # Digest of debug-nonroot-amd64 tag.
+    digest = "sha256:95749ff107e1a1e14a62709f305208973530764cdac02a0f7762295dba2c40d2",
+    image = "gcr.io/distroless/java11-debian11",
+)
+use_repo(
+    oci,
+    "java_debug_image_base",
+    "java_image_base",
+)
+
+http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+
+http_archive(
+    name = "io_grpc_grpc_proto",
+    sha256 = "464e97a24d7d784d9c94c25fa537ba24127af5aae3edd381007b5b98705a0518",
+    strip_prefix = "grpc-proto-08911e9d585cbda3a55eb1dcc4b99c89aebccff8",
+    urls = ["https://github.com/grpc/grpc-proto/archive/08911e9d585cbda3a55eb1dcc4b99c89aebccff8.zip"],
+)
+
+http_archive(
+    name = "com_google_highwayhash",
+    build_file = "//build/com_google_highwayhash:BUILD.external",
+    sha256 = "1e4e32f6198facbac7a35b04fa4c1acb5e6d9bb13f983c60903da9cbbbd9f5b5",
+    strip_prefix = "highwayhash-a7f68e2f95fac08b24327d74747521cf634d5aff",
+    url = "https://github.com/google/highwayhash/archive/a7f68e2f95fac08b24327d74747521cf634d5aff.tar.gz",
+)

@@ -1,7 +1,10 @@
-load("//build/kt_jvm_proto:defs.bzl", "kt_jvm_proto_library")
-load("//build:macros.bzl", "kt_jvm_grpc_proto_library")
 load("@rules_java//java:defs.bzl", "java_proto_library")
 load("@rules_proto//proto:defs.bzl", "proto_library")
+load(
+    "@wfa_rules_kotlin_jvm//kotlin:defs.bzl",
+    "kt_jvm_grpc_proto_library",
+    "kt_jvm_proto_library",
+)
 
 package(
     default_testonly = True,
@@ -21,8 +24,7 @@ java_proto_library(
 
 kt_jvm_proto_library(
     name = "fake_message_kt_jvm_proto",
-    srcs = [":fake_message_proto"],
-    deps = [":fake_message_java_proto"],
+    deps = [":fake_message_proto"],
 )
 
 proto_library(
@@ -33,5 +35,5 @@ proto_library(
 
 kt_jvm_grpc_proto_library(
     name = "fake_service_kt_jvm_grpc_proto",
-    srcs = [":fake_service_proto"],
+    deps = [":fake_service_proto"],
 )
