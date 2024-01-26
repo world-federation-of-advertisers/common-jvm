@@ -91,11 +91,11 @@ def common_jvm_maven_artifacts_dict():
         "software.amazon.awssdk:regions": AWS_JAVA_SDK_VERSION,
 
         # PostgreSQL.
-        "com.google.cloud.sql:postgres-socket-factory": "1.6.2",
-        "com.google.cloud.sql:cloud-sql-connector-r2dbc-postgres": "1.6.2",
-        "org.postgresql:postgresql": "42.4.0",
-        "org.postgresql:r2dbc-postgresql": "0.9.1.RELEASE",
-        "org.testcontainers:postgresql": "1.18.3",
+        "com.google.cloud.sql:postgres-socket-factory": "1.12.0",
+        "com.google.cloud.sql:cloud-sql-connector-r2dbc-postgres": "1.12.0",
+        "org.postgresql:postgresql": "42.7.1",
+        "org.postgresql:r2dbc-postgresql": "1.0.4.RELEASE",
+        "org.testcontainers:postgresql": "1.19.4",
 
         # Liquibase.
         "org.yaml:snakeyaml": "1.30",
