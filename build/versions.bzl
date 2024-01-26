@@ -96,6 +96,15 @@ SPANNER_EMULATOR = VersionedArchiveInfo(
     ],
 )
 
+RULES_GO = VersionedArchiveInfo(
+    version = "0.39.0",
+    sha256 = "6b65cb7917b4d1709f9410ffe00ecf3e160edf674b78c54a894471320862184f",
+    url_templates = [
+        "https://mirror.bazel.build/github.com/bazelbuild/rules_go/releases/download/v0.39.0/rules_go-v0.39.0.zip",
+        "https://github.com/bazelbuild/rules_go/releases/download/v0.39.0/rules_go-v0.39.0.zip",
+    ],
+)
+
 RULES_KOTLIN = VersionedArchiveInfo(
     version = "1.8.1",
     sha256 = "a630cda9fdb4f56cf2dc20a4bf873765c41cf00e9379e8d59cd07b24730f4fde",
