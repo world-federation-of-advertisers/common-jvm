@@ -55,7 +55,7 @@ internal constructor(
       withContext(aeadContext) { aead.encrypt(content.toByteArray(), blobKey.encodeToByteArray()) }
     logger.fine("Created ciphertext. Writing ciphertext to storage $blobKey.")
     val wrappedBlob: StorageClient.Blob =
-        storageClient.writeBlob(blobKey, ciphertext.toByteString())
+      storageClient.writeBlob(blobKey, ciphertext.toByteString())
     logger.fine("Wrote ciphertext to storage $blobKey")
     return AeadBlob(wrappedBlob, blobKey)
   }
