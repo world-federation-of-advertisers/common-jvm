@@ -83,9 +83,7 @@ internal constructor(
     override fun read() = flow {
       logger.fine("Reading plaintext from KmsStorageClient $blobKey")
       val plaintext =
-        withContext(aeadContext) {
-          aead.decrypt(blob.read().toByteArray(), blobKey.encodeToByteArray())
-        }
+        withContext(aeadContext) { aead.decrypt(blob.read().toByteArray(), blobKey.encodeToByteArray()) }
       logger.fine("Finished reading plaintext from KmsStorageClient $blobKey")
       emit(plaintext.toByteString())
     }
