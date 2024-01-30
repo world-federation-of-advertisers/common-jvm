@@ -40,7 +40,6 @@ internal constructor(
     private val storageClient: StorageClient,
     private val aead: Aead,
     private val aeadContext: @BlockingExecutor CoroutineContext,
-    private val associatedData: String? = null,
 ) : StorageClient {
 
   /**
@@ -51,16 +50,15 @@ internal constructor(
    * @return [StorageClient.Blob] with [content] encrypted by [aead]
    */
   override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
-    logger.info("Creating ciphertext")
-    val associatedData =
-        if (associatedData !== null) associatedData.encodeToByteArray()
-        else blobKey.encodeToByteArray()
+    logger.fine("Creating ciphertext for KmsStorageClient")
     val ciphertext: ByteArray =
-        withContext(aeadContext) { aead.encrypt(content.toByteArray(), associatedData) }
-    logger.info("Created ciphertext. Writing ciphertext to storage.")
+        withContext(aeadContext) {
+          aead.encrypt(content.toByteArray(), blobKey.encodeToByteArray())
+        }
+    logger.fine("Created ciphertext. Writing ciphertext to storage $blobKey.")
     val wrappedBlob: StorageClient.Blob =
         storageClient.writeBlob(blobKey, ciphertext.toByteString())
-    logger.info("Wrote ciphertext to storage")
+    logger.fine("Wrote ciphertext to storage $blobKey")
     return AeadBlob(wrappedBlob, blobKey)
   }
 
@@ -83,11 +81,12 @@ internal constructor(
       get() = blob.size
 
     override fun read() = flow {
-      val associatedData =
-          if (associatedData !== null) associatedData.encodeToByteArray()
-          else blobKey.encodeToByteArray()
+      logger.fine("Reading plaintext from KmsStorageClient $blobKey")
       val plaintext =
-          withContext(aeadContext) { aead.decrypt(blob.read().toByteArray(), associatedData) }
+          withContext(aeadContext) {
+            aead.decrypt(blob.read().toByteArray(), blobKey.encodeToByteArray())
+          }
+      logger.fine("Finished reading plaintext from KmsStorageClient $blobKey")
       emit(plaintext.toByteString())
     }
 
