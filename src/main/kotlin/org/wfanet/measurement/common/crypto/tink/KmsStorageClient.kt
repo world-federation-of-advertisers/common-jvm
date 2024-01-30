@@ -53,10 +53,10 @@ internal constructor(
     logger.fine("Creating ciphertext for KmsStorageClient")
     val ciphertext: ByteArray =
       withContext(aeadContext) { aead.encrypt(content.toByteArray(), blobKey.encodeToByteArray()) }
-    logger.fine("Created ciphertext. Writing ciphertext to storage $blobKey.")
+    logger.fine { "Created ciphertext. Writing ciphertext to storage $blobKey." }
     val wrappedBlob: StorageClient.Blob =
       storageClient.writeBlob(blobKey, ciphertext.toByteString())
-    logger.fine("Wrote ciphertext to storage $blobKey")
+    logger.fine { "Wrote ciphertext to storage $blobKey" }
     return AeadBlob(wrappedBlob, blobKey)
   }
 
@@ -79,13 +79,14 @@ internal constructor(
       get() = blob.size
 
     override fun read() = flow {
-      logger.fine("Reading plaintext from KmsStorageClient $blobKey")
+      logger.fine { "Reading ciphertext from KmsStorageClient $blobKey" }
+      val ciphertext = blob.read().toByteArray()
+      logger.fine { "Decrypting KmsStorageClient ciphertext $blobKey" }
       val plaintext =
         withContext(aeadContext) {
-          aead.decrypt(blob.read().toByteArray(), blobKey.encodeToByteArray())
+          aead.decrypt(ciphertext, blobKey.encodeToByteArray())
         }
-      logger.fine("Finished reading plaintext from KmsStorageClient $blobKey")
-      logger.fine("Finished reading plaintext from KmsStorageClient $blobKey")
+      logger.fine { "Finished reading plaintext from KmsStorageClient $blobKey" }
       emit(plaintext.toByteString())
     }
 
