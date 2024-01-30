@@ -50,7 +50,7 @@ internal constructor(
    * @return [StorageClient.Blob] with [content] encrypted by [aead]
    */
   override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
-    logger.fine("Creating ciphertext for KmsStorageClient")
+    logger.fine { "Creating ciphertext for KmsStorageClient" }
     val ciphertext: ByteArray =
       withContext(aeadContext) { aead.encrypt(content.toByteArray(), blobKey.encodeToByteArray()) }
     logger.fine { "Created ciphertext. Writing ciphertext to storage $blobKey." }
@@ -83,9 +83,7 @@ internal constructor(
       val ciphertext = blob.read().toByteArray()
       logger.fine { "Decrypting KmsStorageClient ciphertext $blobKey" }
       val plaintext =
-        withContext(aeadContext) {
-          aead.decrypt(ciphertext, blobKey.encodeToByteArray())
-        }
+        withContext(aeadContext) { aead.decrypt(ciphertext, blobKey.encodeToByteArray()) }
       logger.fine { "Finished reading plaintext from KmsStorageClient $blobKey" }
       emit(plaintext.toByteString())
     }
