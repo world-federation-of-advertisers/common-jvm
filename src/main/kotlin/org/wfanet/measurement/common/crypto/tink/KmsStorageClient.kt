@@ -37,9 +37,9 @@ import org.wfanet.measurement.storage.StorageClient
  */
 class KmsStorageClient
 internal constructor(
-    private val storageClient: StorageClient,
-    private val aead: Aead,
-    private val aeadContext: @BlockingExecutor CoroutineContext,
+  private val storageClient: StorageClient,
+  private val aead: Aead,
+  private val aeadContext: @BlockingExecutor CoroutineContext,
 ) : StorageClient {
 
   /**
@@ -52,12 +52,12 @@ internal constructor(
   override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
     logger.fine("Creating ciphertext for KmsStorageClient")
     val ciphertext: ByteArray =
-        withContext(aeadContext) {
-          aead.encrypt(content.toByteArray(), blobKey.encodeToByteArray())
-        }
+      withContext(aeadContext) {
+        aead.encrypt(content.toByteArray(), blobKey.encodeToByteArray())
+      }
     logger.fine("Created ciphertext. Writing ciphertext to storage $blobKey.")
     val wrappedBlob: StorageClient.Blob =
-        storageClient.writeBlob(blobKey, ciphertext.toByteString())
+      storageClient.writeBlob(blobKey, ciphertext.toByteString())
     logger.fine("Wrote ciphertext to storage $blobKey")
     return AeadBlob(wrappedBlob, blobKey)
   }
@@ -74,7 +74,7 @@ internal constructor(
 
   /** A blob that will decrypt the content when read */
   private inner class AeadBlob(private val blob: StorageClient.Blob, private val blobKey: String) :
-      StorageClient.Blob {
+    StorageClient.Blob {
     override val storageClient = this@KmsStorageClient.storageClient
 
     override val size: Long
@@ -83,9 +83,9 @@ internal constructor(
     override fun read() = flow {
       logger.fine("Reading plaintext from KmsStorageClient $blobKey")
       val plaintext =
-          withContext(aeadContext) {
-            aead.decrypt(blob.read().toByteArray(), blobKey.encodeToByteArray())
-          }
+        withContext(aeadContext) {
+          aead.decrypt(blob.read().toByteArray(), blobKey.encodeToByteArray())
+        }
       logger.fine("Finished reading plaintext from KmsStorageClient $blobKey")
       emit(plaintext.toByteString())
     }
