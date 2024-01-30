@@ -39,7 +39,7 @@ private const val INVALID_HOST_MESSAGE =
  */
 class SpannerEmulator(
   private val port: Int = 0,
-  private val coroutineContext: @BlockingExecutor CoroutineContext = Dispatchers.IO
+  private val coroutineContext: @BlockingExecutor CoroutineContext = Dispatchers.IO,
 ) : AutoCloseable {
   private val startMutex = Mutex()
   @Volatile private lateinit var emulator: Process
@@ -79,21 +79,18 @@ class SpannerEmulator(
 
         val emulatorHost = "$EMULATOR_HOSTNAME:$localPort"
         _emulatorHost = emulatorHost
-        emulator =
-          ProcessBuilder(emulatorPath.toString(), "--host_port=$emulatorHost")
-            .redirectError(ProcessBuilder.Redirect.INHERIT)
-            .start()
+        emulator = ProcessBuilder(emulatorPath.toString(), "--host_port=$emulatorHost").start()
 
-        /** Suffix of line of emulator output that will tell us that it's ready. */
-        val readyLineSuffix = "Server address: $emulatorHost"
+        // Message output by simulator which indicates that it is ready.
+        val readyMessage = "Server address: $emulatorHost"
 
-        emulator.inputStream.use { input ->
+        emulator.errorStream.use { input ->
           input.bufferedReader().use { reader ->
             do {
               yield()
               check(emulator.isAlive) { "Emulator stopped unexpectedly" }
               val line = reader.readLine()
-            } while (!line.endsWith(readyLineSuffix))
+            } while (!line.contains(readyMessage))
           }
         }
 
@@ -113,6 +110,7 @@ class SpannerEmulator(
 
   companion object {
     private val emulatorPath: Path
+
     init {
       val runfilesRelativePath = Paths.get("cloud_spanner_emulator", "emulator")
       val runtimePath = getRuntimePath(runfilesRelativePath)
@@ -138,7 +136,7 @@ class SpannerEmulator(
       emulatorHost: String,
       project: String,
       instance: String,
-      database: String
+      database: String,
     ): String {
       return "jdbc:cloudspanner://$emulatorHost/projects/$project/instances/$instance/databases/" +
         "$database;usePlainText=true;autoConfigEmulator=true"

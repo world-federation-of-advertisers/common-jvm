@@ -53,6 +53,17 @@ object TestData {
   val FIXED_EXPIRED_CERT_PEM_FILE = FIXED_TESTDATA_DIR.resolve("expired.pem")
   val FIXED_EXPIRED_CERT_KEY_FILE = FIXED_TESTDATA_DIR.resolve("expired.key")
 
+  /** PEM file containing a fixed CA certificate with an RSA key and an RSASSA-PSS signature. */
+  val FIXED_CA_CERT_WITH_RSA_PSS_SIG_PEM_FILE = FIXED_TESTDATA_DIR.resolve("ca-rsa.pem")
+  /**
+   * PEM file containing a fixed certificate with an EC key and an RSASSA-PSS signature.
+   *
+   * Issued by [FIXED_CA_CERT_WITH_RSA_PSS_SIG_PEM_FILE].
+   */
+  val FIXED_CERT_WITH_RSA_PSS_SIG_PEM_FILE = FIXED_TESTDATA_DIR.resolve("user-ec-rsa-sig.pem")
+  /** Private key file for [FIXED_CERT_WITH_RSA_PSS_SIG_PEM_FILE] in PEM format. */
+  val FIXED_CERT_WITH_RSA_PSS_SIG_KEY_FILE = FIXED_TESTDATA_DIR.resolve("user-ec-rsa-sig.key")
+
   val FIXED_ENCRYPTION_PRIVATE_KEYSET = FIXED_TESTDATA_DIR.resolve("enc-private.tink")
   val FIXED_ENCRYPTION_PUBLIC_KEYSET = FIXED_TESTDATA_DIR.resolve("enc-public.tink")
 }

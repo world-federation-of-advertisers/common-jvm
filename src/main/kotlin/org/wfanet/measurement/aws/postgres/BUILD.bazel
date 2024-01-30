@@ -1,4 +1,4 @@
-load("@io_bazel_rules_kotlin//kotlin:jvm.bzl", "kt_jvm_library")
+load("@wfa_rules_kotlin_jvm//kotlin:defs.bzl", "kt_jvm_library")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -32,6 +32,7 @@ kt_jvm_library(
     ],
     deps = [
         "//imports/java/com/google/gson",
+        "//imports/java/software/amazon/awssdk/auth",
         "//imports/java/software/amazon/awssdk/services/secretsmanager",
     ],
 )

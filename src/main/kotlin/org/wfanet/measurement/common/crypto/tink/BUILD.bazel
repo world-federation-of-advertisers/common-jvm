@@ -1,4 +1,4 @@
-load("@io_bazel_rules_kotlin//kotlin:jvm.bzl", "kt_jvm_library")
+load("@wfa_rules_kotlin_jvm//kotlin:defs.bzl", "kt_jvm_library")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -6,6 +6,7 @@ kt_jvm_library(
     name = "tink",
     srcs = glob(["*.kt"]),
     deps = [
+        "//imports/java/com/google/crypto/tink",
         "//imports/java/com/google/protobuf",
         "//imports/java/org/jetbrains/annotations",
         "//imports/kotlin/kotlinx/coroutines:core",
@@ -14,17 +15,5 @@ kt_jvm_library(
         "//src/main/kotlin/org/wfanet/measurement/common/crypto:key_storage",
         "//src/main/kotlin/org/wfanet/measurement/storage:client",
         "//src/main/kotlin/org/wfanet/measurement/storage:store",
-        "@tink_java//src/main/java/com/google/crypto/tink:aead",
-        "@tink_java//src/main/java/com/google/crypto/tink:binary_keyset_reader",
-        "@tink_java//src/main/java/com/google/crypto/tink:binary_keyset_writer",
-        "@tink_java//src/main/java/com/google/crypto/tink:cleartext_keyset_handle",
-        "@tink_java//src/main/java/com/google/crypto/tink:hybrid_decrypt",
-        "@tink_java//src/main/java/com/google/crypto/tink:hybrid_encrypt",
-        "@tink_java//src/main/java/com/google/crypto/tink:key_templates",
-        "@tink_java//src/main/java/com/google/crypto/tink:kms_clients",
-        "@tink_java//src/main/java/com/google/crypto/tink:registry_cluster",
-        "@tink_java//src/main/java/com/google/crypto/tink/hybrid:hybrid_config",
-        "@tink_java//src/main/java/com/google/crypto/tink/jwt:jwk_set_converter",
-        "@tink_java//src/main/java/com/google/crypto/tink/jwt:jwt_signature_config",
     ],
 )

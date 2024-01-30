@@ -2,5 +2,5 @@ package(default_visibility = ["//visibility:public"])
 
 alias(
     name = "kotlin",
-    actual = "@maven//:com_google_protobuf_protobuf_kotlin",
+    actual = "@wfa_rules_kotlin_jvm//imports/com/google/protobuf/kotlin",
 )

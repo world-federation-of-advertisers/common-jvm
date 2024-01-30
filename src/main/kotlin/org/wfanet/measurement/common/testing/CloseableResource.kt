@@ -23,8 +23,8 @@ import org.junit.runners.model.Statement
  * evaluation.
  *
  * This can replace [ExternalResource][org.junit.rules.ExternalResource], which does not guarantee
- * that [after][org.junit.rules.ExternalResource.after] is invoked if [before]
- * [org.junit.rules.ExternalResource.before] throws an exception.
+ * that [after][org.junit.rules.ExternalResource.after] is invoked if
+ * [before][org.junit.rules.ExternalResource.before] throws an exception.
  */
 open class CloseableResource<T : AutoCloseable>(private val createResource: () -> T) : TestRule {
   protected lateinit var resource: T

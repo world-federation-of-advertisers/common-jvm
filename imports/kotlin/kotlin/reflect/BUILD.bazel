@@ -1,0 +1,6 @@
+package(default_visibility = ["//visibility:public"])
+
+alias(
+    name = "reflect",
+    actual = "@wfa_rules_kotlin_jvm//imports/kotlin/reflect",
+)

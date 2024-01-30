@@ -1,14 +1,10 @@
-load("@io_bazel_rules_kotlin//kotlin:jvm.bzl", "kt_jvm_library")
+load("@wfa_rules_kotlin_jvm//kotlin:defs.bzl", "kt_jvm_library")
 
 package(default_visibility = ["//visibility:public"])
 
 kt_jvm_library(
     name = "common",
     srcs = glob(["*.kt"]),
-    runtime_deps = [
-        "//imports/kotlin/kotlin:stdlib_jdk7",
-        "//imports/kotlin/kotlin/reflect/jvm",
-    ],
     deps = [
         "//imports/java/com/google/common:guava",
         "//imports/java/com/google/devtools/build/runfiles",
@@ -18,8 +14,8 @@ kt_jvm_library(
         "//imports/java/org/jetbrains/annotations",
         "//imports/java/picocli",
         "//imports/kotlin/com/google/protobuf/kotlin",
+        "//imports/kotlin/com/google/type:date_kt_jvm_proto",
+        "//imports/kotlin/com/google/type:interval_kt_jvm_proto",
         "//imports/kotlin/kotlinx/coroutines:core",
-        "//src/main/proto/google/type:interval_kt_jvm_proto",
-        "@com_google_googleapis//google/type:type_java_proto",
     ],
 )

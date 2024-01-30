@@ -1,6 +1,0 @@
-package(default_visibility = ["//visibility:public"])
-
-alias(
-    name = "type_java_proto",
-    actual = "@com_google_googleapis//google/type:type_java_proto",
-)

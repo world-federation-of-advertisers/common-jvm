@@ -18,7 +18,17 @@ import com.google.devtools.build.runfiles.Runfiles
 import java.nio.file.Path
 import java.nio.file.Paths
 
-private val runfiles: Runfiles by lazy { Runfiles.create() }
+/**
+ * Returns the runtime [Path] for the given runfiles-root-relative [Path], or null if it cannot be
+ * found.
+ *
+ * Note that this may return a non-null value even if the path doesn't exist.
+ *
+ * @param runfilesRelativePath path relative to the Bazel runfiles root
+ */
+fun Runfiles.getRuntimePath(runfilesRelativePath: Path): Path? {
+  return rlocation(runfilesRelativePath.normalize().toString())?.let { Paths.get(it) }
+}
 
 /**
  * Returns the runtime [Path] for the given runfiles-root-relative [Path], or null if it cannot be
@@ -28,8 +38,12 @@ private val runfiles: Runfiles by lazy { Runfiles.create() }
  *
  * @param runfilesRelativePath path relative to the Bazel runfiles root
  */
+@Suppress("DeprecatedCallableAddReplaceWith")
+@Deprecated(
+  "May not work correctly with Bzlmod. Use Runfiles.getRuntimePath with Runfiles.preload()"
+)
 fun getRuntimePath(runfilesRelativePath: Path): Path? {
-  return runfiles.rlocation(runfilesRelativePath.normalize().toString())?.let { Paths.get(it) }
+  return Runfiles.create().getRuntimePath(runfilesRelativePath)
 }
 
 /**
@@ -38,7 +52,14 @@ fun getRuntimePath(runfilesRelativePath: Path): Path? {
  * @param name platform-independent library name
  * @param directoryPath normalized path of the directory the library is in, relative to the Bazel
  *   runfiles root
+ * @deprecated This is not portable. Runfiles should only be used in test code where we can be sure
+ *   of a Bazel context. Note that this is not needed to work around
+ *   https://github.com/bazelbuild/rules_kotlin/issues/1088.
  */
+@Deprecated(
+  "Use System.loadLibrary, ensuring that the java.library.path property includes the path to the " +
+    "native library"
+)
 fun loadLibrary(name: String, directoryPath: Path) {
   val relativePath = directoryPath.resolve(System.mapLibraryName(name))
   val runtimePath = requireNotNull(getRuntimePath(relativePath))

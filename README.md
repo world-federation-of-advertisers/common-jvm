@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Implementation of comnmon JVM dependencies for the wfa repositories. 
+Implementation of common JVM dependencies for the wfa repositories.
 
 ### Technologies
 

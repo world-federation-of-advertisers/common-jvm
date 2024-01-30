@@ -14,8 +14,7 @@
 
 package org.wfanet.measurement.common.crypto.tink
 
-import com.google.crypto.tink.Aead
-import com.google.crypto.tink.KmsClients
+import com.google.crypto.tink.KmsClient
 import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.Dispatchers
 import org.jetbrains.annotations.BlockingExecutor
@@ -25,23 +24,17 @@ import org.wfanet.measurement.common.crypto.PrivateKeyStore as CryptoPrivateKeyS
 import org.wfanet.measurement.storage.StorageClient
 
 class TinkKeyStorageProvider(
-    private val aeadContext: @BlockingExecutor CoroutineContext = Dispatchers.IO,
+  private val kmsClient: KmsClient,
+  private val aeadContext: @BlockingExecutor CoroutineContext = Dispatchers.IO
 ) : KeyStorageProvider<TinkKeyId, TinkPrivateKeyHandle> {
-  override fun makeKmsStorageClient(
-      storageClient: StorageClient,
-      keyUri: String,
-  ): StorageClient {
-    return KmsStorageClient(storageClient, getKmsAead(keyUri), aeadContext)
+  override fun makeKmsStorageClient(storageClient: StorageClient, keyUri: String): StorageClient {
+    return KmsStorageClient(storageClient, kmsClient.getAead(keyUri), aeadContext)
   }
 
   override fun makeKmsPrivateKeyStore(
-      store: KeyBlobStore,
-      keyUri: String
+    store: KeyBlobStore,
+    keyUri: String
   ): CryptoPrivateKeyStore<TinkKeyId, TinkPrivateKeyHandle> {
-    return PrivateKeyStore(store, getKmsAead(keyUri), aeadContext)
+    return PrivateKeyStore(store, kmsClient.getAead(keyUri), aeadContext)
   }
-}
-
-private fun getKmsAead(keyUri: String): Aead {
-  return KmsClients.get(keyUri).getAead(keyUri)
 }
