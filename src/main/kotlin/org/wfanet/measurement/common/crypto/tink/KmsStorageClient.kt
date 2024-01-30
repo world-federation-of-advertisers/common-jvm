@@ -17,6 +17,7 @@ package org.wfanet.measurement.common.crypto.tink
 import com.google.crypto.tink.Aead
 import com.google.protobuf.ByteString
 import com.google.protobuf.kotlin.toByteString
+import java.util.logging.Logger
 import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -38,7 +39,7 @@ class KmsStorageClient
 internal constructor(
   private val storageClient: StorageClient,
   private val aead: Aead,
-  private val aeadContext: @BlockingExecutor CoroutineContext
+  private val aeadContext: @BlockingExecutor CoroutineContext,
 ) : StorageClient {
 
   /**
@@ -49,10 +50,13 @@ internal constructor(
    * @return [StorageClient.Blob] with [content] encrypted by [aead]
    */
   override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
+    logger.fine { "Creating ciphertext for KmsStorageClient" }
     val ciphertext: ByteArray =
       withContext(aeadContext) { aead.encrypt(content.toByteArray(), blobKey.encodeToByteArray()) }
+    logger.fine { "Created ciphertext. Writing ciphertext to storage $blobKey." }
     val wrappedBlob: StorageClient.Blob =
       storageClient.writeBlob(blobKey, ciphertext.toByteString())
+    logger.fine { "Wrote ciphertext to storage $blobKey" }
     return AeadBlob(wrappedBlob, blobKey)
   }
 
@@ -75,13 +79,19 @@ internal constructor(
       get() = blob.size
 
     override fun read() = flow {
+      logger.fine { "Reading ciphertext from KmsStorageClient $blobKey" }
+      val ciphertext = blob.read().toByteArray()
+      logger.fine { "Decrypting KmsStorageClient ciphertext $blobKey" }
       val plaintext =
-        withContext(aeadContext) {
-          aead.decrypt(blob.read().toByteArray(), blobKey.encodeToByteArray())
-        }
+        withContext(aeadContext) { aead.decrypt(ciphertext, blobKey.encodeToByteArray()) }
+      logger.fine { "Finished reading plaintext from KmsStorageClient $blobKey" }
       emit(plaintext.toByteString())
     }
 
     override suspend fun delete() = blob.delete()
+  }
+
+  companion object {
+    internal val logger = Logger.getLogger(this::class.java.name)
   }
 }
