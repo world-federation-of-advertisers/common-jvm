@@ -51,23 +51,47 @@ _java_native_libraries = rule(
     },
 )
 
-def _runfiles_pkg_impl(ctx):
-    default_infos = [dep[DefaultInfo] for dep in ctx.attr.deps]
+def _get_repo_mapping_manifest(default_info):
+    files_to_run = default_info.files_to_run
+    if not files_to_run:
+        return None
+    return files_to_run.repo_mapping_manifest
+
+def _merge_runfiles(ctx, default_infos):
     runfiles_list = [
         default_info.default_runfiles
         for default_info in default_infos
         if default_info.default_runfiles != None
     ]
-    merged_runfiles = ctx.runfiles().merge_all(runfiles_list)
+    return ctx.runfiles().merge_all(runfiles_list)
+
+def _runfiles_pkg_impl(ctx):
+    include_repo_mapping_manifest = ctx.attr.include_repo_mapping_manifest
+    if include_repo_mapping_manifest and len(ctx.attr.deps) != 1:
+        fail("Expected exactly one dep when include_repo_mapping_manifest == True")
+
+    default_infos = [dep[DefaultInfo] for dep in ctx.attr.deps]
+    merged_runfiles = _merge_runfiles(ctx, default_infos)
+    repo_mapping_manifest = (
+        _get_repo_mapping_manifest(default_infos[0]) if include_repo_mapping_manifest else None
+    )
+
     prefix = "/".join([ctx.attr.name, ctx.workspace_name])
+    dest_src_map = {
+        "/".join([prefix, file.short_path]): file
+        for file in merged_runfiles.files.to_list()
+    }
+    if repo_mapping_manifest:
+        dest_src_map["/".join([ctx.attr.name, "_repo_mapping"])] = repo_mapping_manifest
+
+    all_files = depset(
+        direct = [repo_mapping_manifest],
+        transitive = [merged_runfiles.files],
+    ) if repo_mapping_manifest else merged_runfiles.files
+
     return [
-        PackageFilesInfo(
-            dest_src_map = {
-                "/".join([prefix, file.short_path]): file
-                for file in merged_runfiles.files.to_list()
-            },
-        ),
-        DefaultInfo(files = merged_runfiles.files),
+        PackageFilesInfo(dest_src_map = dest_src_map),
+        DefaultInfo(files = all_files),
     ]
 
 _runfiles_pkg = rule(
@@ -77,6 +101,9 @@ _runfiles_pkg = rule(
         "deps": attr.label_list(
             providers = [DefaultInfo],
             mandatory = True,
+        ),
+        "include_repo_mapping_manifest": attr.bool(
+            default = False,
         ),
     },
 )
@@ -143,6 +170,7 @@ def java_image(
     _runfiles_pkg(
         name = runfiles_pkg_name,
         deps = [binary],
+        include_repo_mapping_manifest = True,
         visibility = ["//visibility:private"],
         **kwargs
     )
