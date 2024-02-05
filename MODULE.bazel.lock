@@ -1,6 +1,6 @@
 {
   "lockFileVersion": 3,
-  "moduleFileHash": "caaeeaa3f999b622250e59addd2405d28a8b056a64c46f0f9d2c97686ceec4c1",
+  "moduleFileHash": "e971d97112b9a9340e289f67ece8068b35e09f6f1142e0b1e46b61da954be6ca",
   "flags": {
     "cmdRegistries": [
       "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main",
@@ -283,6 +283,7 @@
                   "org.reactivestreams:reactive-streams:1.0.4",
                   "io.projectreactor:reactor-core:3.4.19",
                   "com.google.crypto.tink:tink:1.12.0",
+                  "com.github.ben-manes.caffeine:caffeine:3.1.8",
                   "software.amazon.awssdk:auth:2.17.258",
                   "software.amazon.awssdk:regions:2.17.258",
                   "software.amazon.awssdk:s3:2.17.258",
@@ -335,7 +336,7 @@
           "usingModule": "<root>",
           "location": {
             "file": "@@//:MODULE.bazel",
-            "line": 251,
+            "line": 252,
             "column": 20
           },
           "imports": {
@@ -354,7 +355,7 @@
               "devDependency": false,
               "location": {
                 "file": "@@//:MODULE.bazel",
-                "line": 252,
+                "line": 253,
                 "column": 9
               }
             },
@@ -368,7 +369,7 @@
               "devDependency": false,
               "location": {
                 "file": "@@//:MODULE.bazel",
-                "line": 258,
+                "line": 259,
                 "column": 9
               }
             }
@@ -404,7 +405,7 @@
               "devDependency": false,
               "location": {
                 "file": "@@//:MODULE.bazel",
-                "line": 272,
+                "line": 273,
                 "column": 13
               }
             },
@@ -420,7 +421,7 @@
               "devDependency": false,
               "location": {
                 "file": "@@//:MODULE.bazel",
-                "line": 279,
+                "line": 280,
                 "column": 13
               }
             }
@@ -4551,6 +4552,7 @@
                 "{ \"group\": \"org.reactivestreams\", \"artifact\": \"reactive-streams\", \"version\": \"1.0.4\" }",
                 "{ \"group\": \"io.projectreactor\", \"artifact\": \"reactor-core\", \"version\": \"3.4.19\" }",
                 "{ \"group\": \"com.google.crypto.tink\", \"artifact\": \"tink\", \"version\": \"1.12.0\" }",
+                "{ \"group\": \"com.github.ben-manes.caffeine\", \"artifact\": \"caffeine\", \"version\": \"3.1.8\" }",
                 "{ \"group\": \"software.amazon.awssdk\", \"artifact\": \"auth\", \"version\": \"2.17.258\" }",
                 "{ \"group\": \"software.amazon.awssdk\", \"artifact\": \"regions\", \"version\": \"2.17.258\" }",
                 "{ \"group\": \"software.amazon.awssdk\", \"artifact\": \"s3\", \"version\": \"2.17.258\" }",

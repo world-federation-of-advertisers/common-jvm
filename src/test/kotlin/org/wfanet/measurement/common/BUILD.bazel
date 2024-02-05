@@ -130,3 +130,17 @@ kt_jvm_test(
         "//src/main/proto/wfa/measurement/common/testing:depends_on_simple_kt_jvm_proto",
     ],
 )
+
+kt_jvm_test(
+    name = "LoadingCacheTest",
+    srcs = ["LoadingCacheTest.kt"],
+    test_class = "org.wfanet.measurement.common.LoadingCacheTest",
+    deps = [
+        "//imports/java/com/github/benmanes/caffeine",
+        "//imports/java/com/google/common/truth",
+        "//imports/java/org/junit",
+        "//imports/kotlin/kotlin/test",
+        "//imports/kotlin/kotlinx/coroutines:core",
+        "//src/main/kotlin/org/wfanet/measurement/common",
+    ],
+)
