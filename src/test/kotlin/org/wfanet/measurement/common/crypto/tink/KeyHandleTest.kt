@@ -34,11 +34,22 @@ class KeyHandleTest {
   }
 
   @Test
-  fun `generated EHKEM private key can decrypt value`() {
-    val privateKey = TinkPrivateKeyHandle.generateDhkem()
+  fun `generated HPKE private key can decrypt value`() {
+    val privateKey = TinkPrivateKeyHandle.generateHpke()
 
     val cipherText = privateKey.publicKey.hybridEncrypt(PLAIN_TEXT_MESSAGE_BINARY)
     assertThat(privateKey.hybridDecrypt(cipherText)).isEqualTo(PLAIN_TEXT_MESSAGE_BINARY)
+  }
+
+  @Test
+  fun `generated HPKE private key can be written and read`() {
+    val originalPrivateKey = TinkPrivateKeyHandle.generateHpke()
+
+    val loadedPrivateKey = loadPrivateKey(originalPrivateKey.privateKey)
+
+    val cipherText = originalPrivateKey.publicKey.hybridEncrypt(PLAIN_TEXT_MESSAGE_BINARY)
+    assertThat(loadedPrivateKey.hybridDecrypt(cipherText)).isEqualTo(PLAIN_TEXT_MESSAGE_BINARY)
+    assertThat(loadedPrivateKey.privateKey).isEqualTo(originalPrivateKey.privateKey)
   }
 
   @Test
