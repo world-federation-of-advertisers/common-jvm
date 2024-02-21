@@ -64,13 +64,6 @@ class TinkPrivateKeyHandle internal constructor(internal val keysetHandle: Keyse
 
   override val publicKey = TinkPublicKeyHandle(keysetHandle.publicKeysetHandle)
 
-  val privateKey: ByteString
-    get() =
-      ByteString.newOutput().use {
-        CleartextKeysetHandle.write(keysetHandle, BinaryKeysetWriter.withOutputStream(it))
-        it.toByteString()
-      }
-
   override fun hybridDecrypt(ciphertext: ByteString, contextInfo: ByteString?): ByteString {
     val hybridDecrypt = keysetHandle.getPrimitive(HybridDecrypt::class.java)
     val plaintext = hybridDecrypt.decrypt(ciphertext.toByteArray(), contextInfo?.toByteArray())
@@ -103,14 +96,6 @@ class TinkPrivateKeyHandle internal constructor(internal val keysetHandle: Keyse
 fun loadPrivateKey(binaryKeyset: File): TinkPrivateKeyHandle {
   val keysetHandle: KeysetHandle =
     binaryKeyset.inputStream().use { input ->
-      CleartextKeysetHandle.read(BinaryKeysetReader.withInputStream(input))
-    }
-  return TinkPrivateKeyHandle(keysetHandle)
-}
-
-fun loadPrivateKey(binaryKeyset: ByteString): TinkPrivateKeyHandle {
-  val keysetHandle: KeysetHandle =
-    binaryKeyset.toByteArray().inputStream().use { input ->
       CleartextKeysetHandle.read(BinaryKeysetReader.withInputStream(input))
     }
   return TinkPrivateKeyHandle(keysetHandle)

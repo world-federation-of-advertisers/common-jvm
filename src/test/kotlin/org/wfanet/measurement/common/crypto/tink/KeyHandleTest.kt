@@ -42,17 +42,6 @@ class KeyHandleTest {
   }
 
   @Test
-  fun `generated HPKE private key can be written and read`() {
-    val originalPrivateKey = TinkPrivateKeyHandle.generateHpke()
-
-    val loadedPrivateKey = loadPrivateKey(originalPrivateKey.privateKey)
-
-    val cipherText = originalPrivateKey.publicKey.hybridEncrypt(PLAIN_TEXT_MESSAGE_BINARY)
-    assertThat(loadedPrivateKey.hybridDecrypt(cipherText)).isEqualTo(PLAIN_TEXT_MESSAGE_BINARY)
-    assertThat(loadedPrivateKey.privateKey).isEqualTo(originalPrivateKey.privateKey)
-  }
-
-  @Test
   fun `loaded private key can decrypt value`() {
     val privateKey = loadPrivateKey(TestData.FIXED_ENCRYPTION_PRIVATE_KEYSET)
 
