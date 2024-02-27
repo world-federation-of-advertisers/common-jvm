@@ -77,9 +77,17 @@ class TinkPrivateKeyHandle internal constructor(internal val keysetHandle: Keyse
 
     private val ECIES_KEY_TEMPLATE = KeyTemplates.get("ECIES_P256_HKDF_HMAC_SHA256_AES128_GCM")
 
+    private val HPKE_KEY_TEMPLATE =
+      KeyTemplates.get("DHKEM_X25519_HKDF_SHA256_HKDF_SHA256_AES_256_GCM")
+
     /** Generates a new ECIES key pair. */
     fun generateEcies(): TinkPrivateKeyHandle {
       return TinkPrivateKeyHandle(KeysetHandle.generateNew(ECIES_KEY_TEMPLATE))
+    }
+
+    /** Generates a new HPKE(Hybrid Public Key Encryption) key pair. */
+    fun generateHpke(): TinkPrivateKeyHandle {
+      return TinkPrivateKeyHandle(KeysetHandle.generateNew(HPKE_KEY_TEMPLATE))
     }
   }
 }

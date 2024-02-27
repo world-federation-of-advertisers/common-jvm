@@ -26,8 +26,16 @@ import org.wfanet.measurement.common.crypto.testing.TestData
 @RunWith(JUnit4::class)
 class KeyHandleTest {
   @Test
-  fun `generated private key can decrypt value`() {
+  fun `generated ECIES private key can decrypt value`() {
     val privateKey = TinkPrivateKeyHandle.generateEcies()
+
+    val cipherText = privateKey.publicKey.hybridEncrypt(PLAIN_TEXT_MESSAGE_BINARY)
+    assertThat(privateKey.hybridDecrypt(cipherText)).isEqualTo(PLAIN_TEXT_MESSAGE_BINARY)
+  }
+
+  @Test
+  fun `generated HPKE private key can decrypt value`() {
+    val privateKey = TinkPrivateKeyHandle.generateHpke()
 
     val cipherText = privateKey.publicKey.hybridEncrypt(PLAIN_TEXT_MESSAGE_BINARY)
     assertThat(privateKey.hybridDecrypt(cipherText)).isEqualTo(PLAIN_TEXT_MESSAGE_BINARY)
