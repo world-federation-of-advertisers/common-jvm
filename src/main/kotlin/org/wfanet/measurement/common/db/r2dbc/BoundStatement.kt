@@ -29,7 +29,7 @@ class BoundStatement
 private constructor(
   private val baseSql: String,
   private val bindings: Collection<Binding>,
-) {
+): StatementBuilder {
   @DslMarker private annotation class DslBuilder
 
   /** Builder for a single statement binding. */
@@ -94,7 +94,7 @@ private constructor(
     abstract fun addBinding(bind: Binder.() -> Unit)
   }
 
-  private class BinderImpl() : Binder() {
+  private class BinderImpl : Binder() {
     private val values = mutableMapOf<String, Any>()
     private val nulls = mutableMapOf<String, Class<out Any?>>()
 
@@ -138,7 +138,7 @@ private constructor(
     }
   }
 
-  internal fun toStatement(connection: Connection): Statement {
+  override fun toStatement(connection: Connection): Statement {
     val statement = connection.createStatement(baseSql)
     if (bindings.isEmpty()) {
       return statement

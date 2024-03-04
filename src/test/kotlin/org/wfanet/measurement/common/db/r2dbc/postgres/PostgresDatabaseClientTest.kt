@@ -134,6 +134,93 @@ class PostgresDatabaseClientTest {
   }
 
   @Test
+  fun `valuesListBoundStatement can be used to execute insert with values list`() = runBlocking {
+    val cars =
+      listOf(
+        Car(carId = InternalId(1), year = 2012, make = "Audi", model = "S4"),
+        Car(carId = InternalId(2), year = 2020, make = "Tesla", model = "Model 3")
+      )
+    val insertStatement =
+      valuesListBoundStatement(valuesStartIndex = 0, paramCount = 4, "INSERT INTO Cars (CarId, Year, Make, Model) VALUES ${ValuesListBoundStatement.VALUES_LIST_PLACEHOLDER}") {
+        for (car in cars) {
+          addValuesBinding {
+            bindValuesParam(0, car.carId)
+            bindValuesParam(1, car.year)
+            bindValuesParam(2, car.make)
+            bindValuesParam(3, car.model)
+          }
+        }
+      }
+
+    val statementResult =
+      with(dbClient.readWriteTransaction()) { executeStatement(insertStatement).also { commit() } }
+    assertThat(statementResult.numRowsUpdated).isEqualTo(2L)
+
+    val query = boundStatement("SELECT * FROM Cars ORDER BY CarId")
+    val result: Flow<Car> =
+      dbClient.singleUse().executeQuery(query).consume { row -> Car.parseFrom(row) }
+
+    assertThat(result.toList()).containsExactlyElementsIn(cars).inOrder()
+  }
+
+  @Test
+  fun `valuesListBoundStatement can be used to execute update with values list`() = runBlocking {
+    val cars =
+      listOf(
+        Car(carId = InternalId(1), year = 2020, make = "Audi", model = "S4"),
+        Car(carId = InternalId(2), year = 2020, make = "Tesla", model = "Model 3")
+      )
+    val insertStatement =
+      boundStatement("INSERT INTO Cars (CarId, Year, Make, Model) VALUES ($1, $2, $3, $4)") {
+        for (car in cars) {
+          addBinding {
+            bind("$1", car.carId)
+            bind("$2", car.year)
+            bind("$3", car.make)
+            bind("$4", car.model)
+          }
+        }
+      }
+
+    val insertStatementResult =
+      with(dbClient.readWriteTransaction()) { executeStatement(insertStatement).also { commit() } }
+    assertThat(insertStatementResult.numRowsUpdated).isEqualTo(2L)
+
+    val updatedCars =
+      listOf(
+        Car(carId = InternalId(1), year = 2020, make = "A", model = "A4"),
+        Car(carId = InternalId(2), year = 2020, make = "T", model = "Model Y")
+      )
+
+    val updateStatement =
+      valuesListBoundStatement(valuesStartIndex = 1, paramCount = 3, """
+        UPDATE Cars as c SET Make = u.Make, Model = u.Model
+        FROM (VALUES ${ValuesListBoundStatement.VALUES_LIST_PLACEHOLDER})
+        AS u(CarId, Make, Model)
+        WHERE Year = $1 and c.CarId = u.CarId
+      """.trimIndent()) {
+        bind("$1", 2020)
+        for (car in updatedCars) {
+          addValuesBinding {
+            bindValuesParam(0, car.carId)
+            bindValuesParam(1, car.make)
+            bindValuesParam(2, car.model)
+          }
+        }
+      }
+
+    val updateStatementResult =
+      with(dbClient.readWriteTransaction()) { executeStatement(updateStatement).also { commit() } }
+    assertThat(updateStatementResult.numRowsUpdated).isEqualTo(2L)
+
+    val query = boundStatement("SELECT * FROM Cars ORDER BY CarId")
+    val result: Flow<Car> =
+      dbClient.singleUse().executeQuery(query).consume { row -> Car.parseFrom(row) }
+
+    assertThat(result.toList()).containsExactlyElementsIn(updatedCars).inOrder()
+  }
+
+  @Test
   fun `rollbackTransaction rolls back the transaction`() = runBlocking {
     val car = Car(carId = InternalId(2), year = 2020, make = "Tesla", model = "Model 3")
     val insertStatement =
