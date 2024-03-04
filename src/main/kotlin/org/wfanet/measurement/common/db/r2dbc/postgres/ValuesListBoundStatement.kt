@@ -27,10 +27,8 @@ import org.wfanet.measurement.common.identity.InternalId
 
 /** A PostgresSQL statement for statements with a values list and bound parameters. */
 class ValuesListBoundStatement
-private constructor(
-  private val baseSql: String,
-  private val bindings: Collection<Binding>,
-): StatementBuilder {
+private constructor(private val baseSql: String, private val bindings: Collection<Binding>) :
+  StatementBuilder {
   @DslMarker private annotation class DslBuilder
 
   /** Builder for a single statement binding. */
@@ -70,7 +68,8 @@ private constructor(
     fun bindValuesParam(index: Int, value: Message?) =
       bindValuesParam(index, value?.toByteString()?.asReadOnlyByteBuffer())
     /** Binds the parameter [index], after adjusting for the number of values, to [value]. */
-    fun bindValuesParam(index: Int, value: ProtocolMessageEnum?) = bindValuesParam(index, value?.number)
+    fun bindValuesParam(index: Int, value: ProtocolMessageEnum?) =
+      bindValuesParam(index, value?.number)
 
     /** Binds the parameter [index], after adjusting for the number of values, to [value]. */
     @JvmName("bindNullableValuesParam")
@@ -85,15 +84,16 @@ private constructor(
     /** Binds the parameter [index], after adjusting for the number of values, to [value]. */
     abstract fun <T : Any> bindValuesParam(index: Int, value: T)
 
-    /** Binds the parameter [index], after adjusting for the number of values, with type [kClass] to `NULL`. */
+    /**
+     * Binds the parameter [index], after adjusting for the number of values, with type [kClass] to
+     * `NULL`.
+     */
     @PublishedApi internal abstract fun bindNullValuesParam(index: Int, kClass: KClass<*>)
   }
 
   /** Builder for a SQL statement, which could be a query. */
   abstract class Builder : Binder() {
-    /**
-     * Binds values to parameters in the values list.
-     */
+    /** Binds values to parameters in the values list. */
     abstract fun addValuesBinding(bind: Binder.() -> Unit)
   }
 
@@ -122,7 +122,11 @@ private constructor(
     fun build() = Binding(stringIndexValues, intIndexValues, stringIndexNulls, intIndexNulls)
   }
 
-  private class BuilderImpl(private val valuesStartIndex: Int, private val paramCount: Int, private val baseSql: String) : Builder() {
+  private class BuilderImpl(
+    private val valuesStartIndex: Int,
+    private val paramCount: Int,
+    private val baseSql: String,
+  ) : Builder() {
     private val binders: MutableList<BinderImpl> = mutableListOf()
     private var numValues = 0
     private var valuesCurIndex = valuesStartIndex
@@ -153,17 +157,17 @@ private constructor(
 
     /** Builds a [ValuesListBoundStatement] from this builder. */
     fun build(): ValuesListBoundStatement {
-      val range = valuesStartIndex + 1 .. valuesCurIndex
+      val range = valuesStartIndex + 1..valuesCurIndex
       val params = range.toList()
       val chunkedParams = params.chunked(paramCount)
       val valuesList =
         chunkedParams.joinToString(separator = ",") { values ->
-          values.map { value ->
-            "$$value"
-          }
-            .joinToString(prefix = "(", postfix = ")")
+          values.map { value -> "$$value" }.joinToString(prefix = "(", postfix = ")")
         }
-      return ValuesListBoundStatement(baseSql = baseSql.replace(VALUES_LIST_PLACEHOLDER, valuesList), binders.map { it.build() })
+      return ValuesListBoundStatement(
+        baseSql = baseSql.replace(VALUES_LIST_PLACEHOLDER, valuesList),
+        binders.map { it.build() },
+      )
     }
   }
 
@@ -185,8 +189,20 @@ private constructor(
 
   companion object {
     const val VALUES_LIST_PLACEHOLDER = "VALUES_LIST"
-    internal fun boundStatement(valuesStartIndex: Int, paramCount: Int, baseSql: String, bind: Builder.() -> Unit): ValuesListBoundStatement {
-      return BuilderImpl(valuesStartIndex = valuesStartIndex, paramCount = paramCount, baseSql = baseSql).apply(bind).build()
+
+    internal fun boundStatement(
+      valuesStartIndex: Int,
+      paramCount: Int,
+      baseSql: String,
+      bind: Builder.() -> Unit,
+    ): ValuesListBoundStatement {
+      return BuilderImpl(
+          valuesStartIndex = valuesStartIndex,
+          paramCount = paramCount,
+          baseSql = baseSql,
+        )
+        .apply(bind)
+        .build()
     }
 
     private fun Statement.apply(binding: Binding) {
@@ -206,8 +222,23 @@ private constructor(
   }
 }
 
-private data class Binding(val stringIndexValues: Map<String, Any>, val intIndexValues: Map<Int, Any>, val stringIndexNulls: Map<String, Class<out Any?>>, val intIndexNulls: Map<Int, Class<out Any?>>)
+private data class Binding(
+  val stringIndexValues: Map<String, Any>,
+  val intIndexValues: Map<Int, Any>,
+  val stringIndexNulls: Map<String, Class<out Any?>>,
+  val intIndexNulls: Map<Int, Class<out Any?>>,
+)
 
 /** Builds a [ValuesListBoundStatement]. */
-fun valuesListBoundStatement(valuesStartIndex: Int, paramCount: Int, baseSql: String, bind: ValuesListBoundStatement.Builder.() -> Unit = {}): ValuesListBoundStatement =
-  ValuesListBoundStatement.boundStatement(valuesStartIndex = valuesStartIndex, paramCount = paramCount, baseSql = baseSql, bind)
+fun valuesListBoundStatement(
+  valuesStartIndex: Int,
+  paramCount: Int,
+  baseSql: String,
+  bind: ValuesListBoundStatement.Builder.() -> Unit = {},
+): ValuesListBoundStatement =
+  ValuesListBoundStatement.boundStatement(
+    valuesStartIndex = valuesStartIndex,
+    paramCount = paramCount,
+    baseSql = baseSql,
+    bind,
+  )

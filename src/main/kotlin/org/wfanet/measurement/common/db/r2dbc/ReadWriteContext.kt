@@ -65,7 +65,7 @@ internal class ReadWriteContextImpl private constructor(connection: Connection) 
   companion object {
     suspend fun create(
       connection: Connection,
-      transactionDefinition: TransactionDefinition
+      transactionDefinition: TransactionDefinition,
     ): ReadWriteContext {
       beginTransaction(connection, transactionDefinition)
       return ReadWriteContextImpl(connection)

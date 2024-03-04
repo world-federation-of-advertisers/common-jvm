@@ -79,7 +79,7 @@ class PostgresDatabaseClientTest {
           latitude = 33.995325
           longitude = -118.477021
         },
-        DayOfWeek.TUESDAY
+        DayOfWeek.TUESDAY,
       )
     val insertStatement =
       boundStatement("INSERT INTO Cars VALUES ($1, $2, $3, $4, $5, $6, $7)") {
@@ -108,7 +108,7 @@ class PostgresDatabaseClientTest {
     val cars =
       listOf(
         Car(carId = InternalId(1), year = 2012, make = "Audi", model = "S4"),
-        Car(carId = InternalId(2), year = 2020, make = "Tesla", model = "Model 3")
+        Car(carId = InternalId(2), year = 2020, make = "Tesla", model = "Model 3"),
       )
     val insertStatement =
       boundStatement("INSERT INTO Cars (CarId, Year, Make, Model) VALUES ($1, $2, $3, $4)") {
@@ -138,10 +138,14 @@ class PostgresDatabaseClientTest {
     val cars =
       listOf(
         Car(carId = InternalId(1), year = 2012, make = "Audi", model = "S4"),
-        Car(carId = InternalId(2), year = 2020, make = "Tesla", model = "Model 3")
+        Car(carId = InternalId(2), year = 2020, make = "Tesla", model = "Model 3"),
       )
     val insertStatement =
-      valuesListBoundStatement(valuesStartIndex = 0, paramCount = 4, "INSERT INTO Cars (CarId, Year, Make, Model) VALUES ${ValuesListBoundStatement.VALUES_LIST_PLACEHOLDER}") {
+      valuesListBoundStatement(
+        valuesStartIndex = 0,
+        paramCount = 4,
+        "INSERT INTO Cars (CarId, Year, Make, Model) VALUES ${ValuesListBoundStatement.VALUES_LIST_PLACEHOLDER}",
+      ) {
         for (car in cars) {
           addValuesBinding {
             bindValuesParam(0, car.carId)
@@ -168,7 +172,7 @@ class PostgresDatabaseClientTest {
     val cars =
       listOf(
         Car(carId = InternalId(1), year = 2020, make = "Audi", model = "S4"),
-        Car(carId = InternalId(2), year = 2020, make = "Tesla", model = "Model 3")
+        Car(carId = InternalId(2), year = 2020, make = "Tesla", model = "Model 3"),
       )
     val insertStatement =
       boundStatement("INSERT INTO Cars (CarId, Year, Make, Model) VALUES ($1, $2, $3, $4)") {
@@ -189,16 +193,21 @@ class PostgresDatabaseClientTest {
     val updatedCars =
       listOf(
         Car(carId = InternalId(1), year = 2020, make = "A", model = "A4"),
-        Car(carId = InternalId(2), year = 2020, make = "T", model = "Model Y")
+        Car(carId = InternalId(2), year = 2020, make = "T", model = "Model Y"),
       )
 
     val updateStatement =
-      valuesListBoundStatement(valuesStartIndex = 1, paramCount = 3, """
+      valuesListBoundStatement(
+        valuesStartIndex = 1,
+        paramCount = 3,
+        """
         UPDATE Cars as c SET Make = u.Make, Model = u.Model
         FROM (VALUES ${ValuesListBoundStatement.VALUES_LIST_PLACEHOLDER})
         AS u(CarId, Make, Model)
         WHERE Year = $1 and c.CarId = u.CarId
-      """.trimIndent()) {
+      """
+          .trimIndent(),
+      ) {
         bind("$1", 2020)
         for (car in updatedCars) {
           addValuesBinding {
@@ -327,7 +336,7 @@ private data class Car(
           get("Model"),
           get("Owner"),
           getProtoMessage("CurrentLocation", LatLng.parser()),
-          getProtoEnum("WeeklyWashDay", DayOfWeek::forNumber)
+          getProtoEnum("WeeklyWashDay", DayOfWeek::forNumber),
         )
       }
     }

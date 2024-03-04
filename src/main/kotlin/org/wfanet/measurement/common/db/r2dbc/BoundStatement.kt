@@ -26,10 +26,8 @@ import org.wfanet.measurement.common.identity.InternalId
 
 /** An SQL statement with bound parameters. */
 class BoundStatement
-private constructor(
-  private val baseSql: String,
-  private val bindings: Collection<Binding>,
-): StatementBuilder {
+private constructor(private val baseSql: String, private val bindings: Collection<Binding>) :
+  StatementBuilder {
   @DslMarker private annotation class DslBuilder
 
   /** Builder for a single statement binding. */
