@@ -1,4 +1,4 @@
-// Copyright 2024 The Cross-Media Measurement Authors
+// Copyright 2022 The Cross-Media Measurement Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,14 +14,12 @@
 
 package org.wfanet.measurement.common.crypto.tink
 
+import com.google.common.hash.Hashing
 import com.google.crypto.tink.KeysetWriter
 import com.google.crypto.tink.proto.EncryptedKeyset
 import com.google.crypto.tink.proto.Keyset
-import com.google.protobuf.ByteString
 import kotlin.properties.Delegates
-import org.wfanet.measurement.common.crypto.Hashing
 import org.wfanet.measurement.common.crypto.PrivateKeyStore
-import org.wfanet.measurement.common.toLong
 
 data class TinkKeyId(private val primaryKeyId: Long) : PrivateKeyStore.KeyId {
   constructor(
@@ -36,20 +34,17 @@ private class KeyIdWriter : KeysetWriter {
   var keyId by Delegates.notNull<Long>()
     private set
 
-  override fun write(keyset: Keyset?) {
-    requireNotNull(keyset) { "Keyset cannot be null." }
+  override fun write(keyset: Keyset) {
     val primaryKey =
-      keyset.keyList.find { it.keyId == keyset.primaryKeyId }
-        ?: error("Primary key cannot be found.")
-    val data =
-      ByteString.newOutput().use {
-        it.write(primaryKey.keyData.value.toByteArray())
-        it.toByteString()
+      requireNotNull(keyset.keyList.find { it.keyId == keyset.primaryKeyId }) {
+        "Primary key cannot be found."
       }
-    keyId = Hashing.hashSha256(data).substring(0, 8).toLong()
+    val data = primaryKey.keyData.value
+    keyId = Hashing.farmHashFingerprint64().hashBytes(data.toByteArray()).asLong()
   }
 
-  override fun write(keyset: EncryptedKeyset?) {
-    // Supposed not to be used.
+  override fun write(keyset: EncryptedKeyset) {
+    // Supposed not to be called.
+    throw UnsupportedOperationException("write EncryptedKeyset should not be called.")
   }
 }
