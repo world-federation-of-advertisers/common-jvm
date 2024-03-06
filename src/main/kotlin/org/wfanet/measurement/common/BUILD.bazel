@@ -15,8 +15,7 @@ kt_jvm_library(
         "//imports/java/org/jetbrains/annotations",
         "//imports/java/picocli",
         "//imports/kotlin/com/google/protobuf/kotlin",
-        "//imports/kotlin/com/google/type:date_kt_jvm_proto",
-        "//imports/kotlin/com/google/type:interval_kt_jvm_proto",
+        "//imports/kotlin/com/google/type:type_kt_jvm_proto",
         "//imports/kotlin/kotlinx/coroutines:core",
     ],
 )
