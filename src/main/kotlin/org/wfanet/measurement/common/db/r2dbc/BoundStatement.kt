@@ -26,10 +26,7 @@ import org.wfanet.measurement.common.identity.InternalId
 
 /** An SQL statement with bound parameters. */
 class BoundStatement
-private constructor(
-  private val baseSql: String,
-  private val bindings: Collection<Binding>,
-) {
+private constructor(private val baseSql: String, private val bindings: Collection<Binding>) {
   @DslMarker private annotation class DslBuilder
 
   /** Builder for a single statement binding. */
@@ -69,8 +66,7 @@ private constructor(
     fun bind(index: Int, value: Message?) =
       bind(index, value?.toByteString()?.asReadOnlyByteBuffer())
     /** Binds the parameter [index] to [value]. */
-    fun bind(index: Int, value: ProtocolMessageEnum?) =
-      bind(index, value?.number)
+    fun bind(index: Int, value: ProtocolMessageEnum?) = bind(index, value?.number)
 
     /** Binds the parameter [index] to [value]. */
     @JvmName("bindNullableIndex")
@@ -85,10 +81,7 @@ private constructor(
     /** Binds the parameter [index] to [value]. */
     abstract fun <T : Any> bind(index: Int, value: T)
 
-    /**
-     * Binds the parameter [index] with type [kClass] to
-     * `NULL`.
-     */
+    /** Binds the parameter [index] with type [kClass] to `NULL`. */
     @PublishedApi internal abstract fun bindNull(index: Int, kClass: KClass<*>)
   }
 
@@ -146,12 +139,7 @@ private constructor(
       intIndexNulls[index] = kClass.javaObjectType
     }
 
-    fun build() = Binding(
-      stringIndexValues,
-      intIndexValues,
-      stringIndexNulls,
-      intIndexNulls
-    )
+    fun build() = Binding(stringIndexValues, intIndexValues, stringIndexNulls, intIndexNulls)
   }
 
   private class BuilderImpl(private val baseSql: String) : Builder() {
@@ -225,10 +213,12 @@ private constructor(
   }
 }
 
-private data class Binding(val stringIndexValues: Map<String, Any>,
-                           val intIndexValues: Map<Int, Any>,
-                           val stringIndexNulls: Map<String, Class<out Any?>>,
-                           val intIndexNulls: Map<Int, Class<out Any?>>,)
+private data class Binding(
+  val stringIndexValues: Map<String, Any>,
+  val intIndexValues: Map<Int, Any>,
+  val stringIndexNulls: Map<String, Class<out Any?>>,
+  val intIndexNulls: Map<Int, Class<out Any?>>,
+)
 
 /** Builds a [BoundStatement]. */
 fun boundStatement(baseSql: String, bind: BoundStatement.Builder.() -> Unit = {}): BoundStatement =

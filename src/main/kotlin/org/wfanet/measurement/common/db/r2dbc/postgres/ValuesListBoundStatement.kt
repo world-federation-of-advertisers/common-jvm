@@ -24,18 +24,14 @@ import org.wfanet.measurement.common.identity.ExternalId
 import org.wfanet.measurement.common.identity.InternalId
 
 /** Contains a Postgres specific builder for [BoundStatement]s with a values list. */
-class ValuesListBoundStatement
-private constructor()
-{
+class ValuesListBoundStatement private constructor() {
   @DslMarker private annotation class DslBuilder
 
   @DslBuilder
-  class ValuesListBoundStatementBuilder (
+  class ValuesListBoundStatementBuilder(
     valuesStartIndex: Int,
-    @PublishedApi
-    internal val paramCount: Int,
-    @PublishedApi
-    internal val binder: BoundStatement.Binder,
+    @PublishedApi internal val paramCount: Int,
+    @PublishedApi internal val binder: BoundStatement.Binder,
   ) {
     @PublishedApi
     internal var valuesCurIndex = valuesStartIndex
@@ -46,9 +42,11 @@ private constructor()
       valuesCurIndex += paramCount
     }
 
-    fun bindValuesParam(index: Int, value: ExternalId?) = binder.bind(index + valuesCurIndex, value?.value)
+    fun bindValuesParam(index: Int, value: ExternalId?) =
+      binder.bind(index + valuesCurIndex, value?.value)
 
-    fun bindValuesParam(index: Int, value: InternalId?) = binder.bind(index + valuesCurIndex, value?.value)
+    fun bindValuesParam(index: Int, value: InternalId?) =
+      binder.bind(index + valuesCurIndex, value?.value)
 
     fun bindValuesParam(index: Int, value: Message?) =
       binder.bind(index + valuesCurIndex, value?.toByteString()?.asReadOnlyByteBuffer())
@@ -66,8 +64,7 @@ private constructor()
     fun bind(name: String, value: Message?) =
       binder.bind(name, value?.toByteString()?.asReadOnlyByteBuffer())
 
-    fun bind(name: String, value: ProtocolMessageEnum?) =
-      binder.bind(name, value?.number)
+    fun bind(name: String, value: ProtocolMessageEnum?) = binder.bind(name, value?.number)
 
     inline fun <reified T : Any> bind(name: String, value: T?) {
       binder.bind(name, value)
@@ -80,8 +77,7 @@ private constructor()
     fun bind(index: Int, value: Message?) =
       binder.bind(index, value?.toByteString()?.asReadOnlyByteBuffer())
 
-    fun bind(index: Int, value: ProtocolMessageEnum?) =
-      binder.bind(index, value?.number)
+    fun bind(index: Int, value: ProtocolMessageEnum?) = binder.bind(index, value?.number)
 
     inline fun <reified T : Any> bind(index: Int, value: T?) {
       binder.bind(index, value)
@@ -121,4 +117,10 @@ fun valuesListBoundStatement(
   baseSql: String,
   bind: ValuesListBoundStatement.ValuesListBoundStatementBuilder.() -> Unit = {},
 ): BoundStatement =
-  ValuesListBoundStatement.valuesListBoundStatement(valuesStartIndex = valuesStartIndex, paramCount = paramCount, numValues = numValues, baseSql = baseSql, bind)
+  ValuesListBoundStatement.valuesListBoundStatement(
+    valuesStartIndex = valuesStartIndex,
+    paramCount = paramCount,
+    numValues = numValues,
+    baseSql = baseSql,
+    bind,
+  )
