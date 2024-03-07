@@ -116,10 +116,7 @@ private constructor(private val baseSql: String, private val bindings: Collectio
      */
     abstract fun addBinding(bind: Binder.() -> Unit)
 
-
-    /**
-     * Creates a [BoundStatement] from this [Builder].
-     */
+    /** Creates a [BoundStatement] from this [Builder]. */
     abstract fun build(baseSql: String): BoundStatement
   }
 

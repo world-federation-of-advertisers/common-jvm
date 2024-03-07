@@ -18,8 +18,8 @@ package org.wfanet.measurement.common.db.r2dbc.postgres
 
 import com.google.protobuf.Message
 import com.google.protobuf.ProtocolMessageEnum
-import org.wfanet.measurement.common.db.r2dbc.builder
 import org.wfanet.measurement.common.db.r2dbc.BoundStatement
+import org.wfanet.measurement.common.db.r2dbc.builder
 import org.wfanet.measurement.common.identity.ExternalId
 import org.wfanet.measurement.common.identity.InternalId
 
@@ -94,12 +94,11 @@ class ValuesListBoundStatement private constructor() {
       bind: ValuesListBoundStatementBuilder.() -> Unit = {},
     ): BoundStatement {
       var valuesEndIndex = 0
-      val builder: BoundStatement.Builder =
-        builder {
-          val builder = ValuesListBoundStatementBuilder(valuesStartIndex, paramCount, this)
-          builder.apply(bind)
-          valuesEndIndex = builder.valuesCurIndex
-        }
+      val builder: BoundStatement.Builder = builder {
+        val builder = ValuesListBoundStatementBuilder(valuesStartIndex, paramCount, this)
+        builder.apply(bind)
+        valuesEndIndex = builder.valuesCurIndex
+      }
 
       val range = valuesStartIndex + 1..valuesEndIndex
       val params = range.toList()
