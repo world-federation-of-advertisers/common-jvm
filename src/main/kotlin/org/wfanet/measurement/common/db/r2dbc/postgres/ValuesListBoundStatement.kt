@@ -94,11 +94,12 @@ class ValuesListBoundStatement private constructor() {
       bind: ValuesListBoundStatementBuilder.() -> Unit = {},
     ): BoundStatement {
       var valuesEndIndex: Int = 0
-      val boundStatement: BoundStatement = boundStatement("") {
-        val builder = ValuesListBoundStatementBuilder(valuesStartIndex, paramCount, this)
-        builder.apply(bind)
-        valuesEndIndex = builder.valuesCurIndex
-      }
+      val boundStatement: BoundStatement =
+        boundStatement("") {
+          val builder = ValuesListBoundStatementBuilder(valuesStartIndex, paramCount, this)
+          builder.apply(bind)
+          valuesEndIndex = builder.valuesCurIndex
+        }
 
       val range = valuesStartIndex + 1..valuesEndIndex
       val params = range.toList()
