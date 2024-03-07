@@ -27,7 +27,7 @@ import kotlinx.coroutines.reactive.awaitFirstOrNull
 /** A transaction context for reading and writing. */
 interface ReadWriteContext : ReadContext {
   /** Executes a DML statement. */
-  suspend fun executeStatement(statementBuilder: StatementBuilder): StatementResult
+  suspend fun executeStatement(statement: BoundStatement): StatementResult
 
   /**
    * Commits the transaction.
@@ -41,9 +41,9 @@ internal class ReadWriteContextImpl private constructor(connection: Connection) 
   ReadWriteContext, ReadContextImpl(connection) {
 
   @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class) // For `flatMapConcat`.
-  override suspend fun executeStatement(statementBuilder: StatementBuilder): StatementResult {
+  override suspend fun executeStatement(statement: BoundStatement): StatementResult {
     val numRowsUpdated =
-      statementBuilder
+      statement
         .toStatement(connection)
         .execute()
         .asFlow()
@@ -65,7 +65,7 @@ internal class ReadWriteContextImpl private constructor(connection: Connection) 
   companion object {
     suspend fun create(
       connection: Connection,
-      transactionDefinition: TransactionDefinition,
+      transactionDefinition: TransactionDefinition
     ): ReadWriteContext {
       beginTransaction(connection, transactionDefinition)
       return ReadWriteContextImpl(connection)

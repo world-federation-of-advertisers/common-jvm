@@ -144,6 +144,7 @@ class PostgresDatabaseClientTest {
       valuesListBoundStatement(
         valuesStartIndex = 0,
         paramCount = 4,
+        numValues = 2,
         "INSERT INTO Cars (CarId, Year, Make, Model) VALUES ${ValuesListBoundStatement.VALUES_LIST_PLACEHOLDER}",
       ) {
         for (car in cars) {
@@ -200,6 +201,7 @@ class PostgresDatabaseClientTest {
       valuesListBoundStatement(
         valuesStartIndex = 1,
         paramCount = 3,
+        numValues = 2,
         """
         UPDATE Cars as c SET Make = u.Make, Model = u.Model
         FROM (VALUES ${ValuesListBoundStatement.VALUES_LIST_PLACEHOLDER})

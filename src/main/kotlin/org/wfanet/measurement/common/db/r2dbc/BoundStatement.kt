@@ -26,8 +26,10 @@ import org.wfanet.measurement.common.identity.InternalId
 
 /** An SQL statement with bound parameters. */
 class BoundStatement
-private constructor(private val baseSql: String, private val bindings: Collection<Binding>) :
-  StatementBuilder {
+private constructor(
+  private val baseSql: String,
+  private val bindings: Collection<Binding>,
+) {
   @DslMarker private annotation class DslBuilder
 
   /** Builder for a single statement binding. */
@@ -58,6 +60,36 @@ private constructor(private val baseSql: String, private val bindings: Collectio
 
     /** Binds the parameter named [name] with type [kClass] to `NULL`. */
     @PublishedApi internal abstract fun bindNull(name: String, kClass: KClass<*>)
+
+    /** Binds the parameter [index] to [value]. */
+    fun bind(index: Int, value: ExternalId?) = bind(index, value?.value)
+    /** Binds the parameter [index] to [value]. */
+    fun bind(index: Int, value: InternalId?) = bind(index, value?.value)
+    /** Binds the parameter [index] to [value]. */
+    fun bind(index: Int, value: Message?) =
+      bind(index, value?.toByteString()?.asReadOnlyByteBuffer())
+    /** Binds the parameter [index] to [value]. */
+    fun bind(index: Int, value: ProtocolMessageEnum?) =
+      bind(index, value?.number)
+
+    /** Binds the parameter [index] to [value]. */
+    @JvmName("bindNullableIndex")
+    inline fun <reified T> bind(index: Int, value: T) {
+      if (value == null) {
+        bindNull(index, T::class)
+      } else {
+        bind(index, value)
+      }
+    }
+
+    /** Binds the parameter [index] to [value]. */
+    abstract fun <T : Any> bind(index: Int, value: T)
+
+    /**
+     * Binds the parameter [index] with type [kClass] to
+     * `NULL`.
+     */
+    @PublishedApi internal abstract fun bindNull(index: Int, kClass: KClass<*>)
   }
 
   /** Builder for a SQL statement, which could be a query. */
@@ -93,18 +125,33 @@ private constructor(private val baseSql: String, private val bindings: Collectio
   }
 
   private class BinderImpl : Binder() {
-    private val values = mutableMapOf<String, Any>()
-    private val nulls = mutableMapOf<String, Class<out Any?>>()
+    private val stringIndexValues = mutableMapOf<String, Any>()
+    private val intIndexValues = mutableMapOf<Int, Any>()
+    private val stringIndexNulls = mutableMapOf<String, Class<out Any?>>()
+    private val intIndexNulls = mutableMapOf<Int, Class<out Any?>>()
 
     override fun <T : Any> bind(name: String, value: T) {
-      values[name] = value
+      stringIndexValues[name] = value
+    }
+
+    override fun <T : Any> bind(index: Int, value: T) {
+      intIndexValues[index] = value
     }
 
     override fun bindNull(name: String, kClass: KClass<*>) {
-      nulls[name] = kClass.javaObjectType
+      stringIndexNulls[name] = kClass.javaObjectType
     }
 
-    fun build() = Binding(values, nulls)
+    override fun bindNull(index: Int, kClass: KClass<*>) {
+      intIndexNulls[index] = kClass.javaObjectType
+    }
+
+    fun build() = Binding(
+      stringIndexValues,
+      intIndexValues,
+      stringIndexNulls,
+      intIndexNulls
+    )
   }
 
   private class BuilderImpl(private val baseSql: String) : Builder() {
@@ -130,13 +177,17 @@ private constructor(private val baseSql: String, private val bindings: Collectio
 
     override fun bindNull(name: String, kClass: KClass<*>) = initialBinder.bindNull(name, kClass)
 
+    override fun <T : Any> bind(index: Int, value: T) = initialBinder.bind(index, value)
+
+    override fun bindNull(index: Int, kClass: KClass<*>) = initialBinder.bindNull(index, kClass)
+
     /** Builds a [BoundStatement] from this builder. */
     fun build(): BoundStatement {
       return BoundStatement(baseSql, binders.map { it.build() })
     }
   }
 
-  override fun toStatement(connection: Connection): Statement {
+  internal fun toStatement(connection: Connection): Statement {
     val statement = connection.createStatement(baseSql)
     if (bindings.isEmpty()) {
       return statement
@@ -158,17 +209,26 @@ private constructor(private val baseSql: String, private val bindings: Collectio
     }
 
     private fun Statement.apply(binding: Binding) {
-      for ((name, value) in binding.values) {
+      for ((name, value) in binding.stringIndexValues) {
         bind(name, value)
       }
-      for ((name, type) in binding.nulls) {
+      for ((index, value) in binding.intIndexValues) {
+        bind(index, value)
+      }
+      for ((name, type) in binding.stringIndexNulls) {
         bindNull(name, type)
+      }
+      for ((index, type) in binding.intIndexNulls) {
+        bindNull(index, type)
       }
     }
   }
 }
 
-private data class Binding(val values: Map<String, Any>, val nulls: Map<String, Class<out Any?>>)
+private data class Binding(val stringIndexValues: Map<String, Any>,
+                           val intIndexValues: Map<Int, Any>,
+                           val stringIndexNulls: Map<String, Class<out Any?>>,
+                           val intIndexNulls: Map<Int, Class<out Any?>>,)
 
 /** Builds a [BoundStatement]. */
 fun boundStatement(baseSql: String, bind: BoundStatement.Builder.() -> Unit = {}): BoundStatement =
