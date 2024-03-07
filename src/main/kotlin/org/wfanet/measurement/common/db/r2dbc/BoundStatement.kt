@@ -26,7 +26,7 @@ import org.wfanet.measurement.common.identity.InternalId
 
 /** An SQL statement with bound parameters. */
 class BoundStatement
-private constructor(var baseSql: String, private val bindings: Collection<Binding>) {
+private constructor(private val baseSql: String, private val bindings: Collection<Binding>) {
   @DslMarker private annotation class DslBuilder
 
   /** Builder for a single statement binding. */
@@ -115,6 +115,12 @@ private constructor(var baseSql: String, private val bindings: Collection<Bindin
      * ```
      */
     abstract fun addBinding(bind: Binder.() -> Unit)
+
+
+    /**
+     * Creates a [BoundStatement] from this [Builder].
+     */
+    abstract fun build(baseSql: String): BoundStatement
   }
 
   private class BinderImpl : Binder() {
@@ -142,7 +148,7 @@ private constructor(var baseSql: String, private val bindings: Collection<Bindin
     fun build() = Binding(stringIndexValues, intIndexValues, stringIndexNulls, intIndexNulls)
   }
 
-  private class BuilderImpl(private val baseSql: String) : Builder() {
+  private class BuilderImpl : Builder() {
     private val binders: MutableList<BinderImpl> = mutableListOf()
     private var bindable = true
     private val initialBinder: BinderImpl
@@ -170,7 +176,7 @@ private constructor(var baseSql: String, private val bindings: Collection<Bindin
     override fun bindNull(index: Int, kClass: KClass<*>) = initialBinder.bindNull(index, kClass)
 
     /** Builds a [BoundStatement] from this builder. */
-    fun build(): BoundStatement {
+    override fun build(baseSql: String): BoundStatement {
       return BoundStatement(baseSql, binders.map { it.build() })
     }
   }
@@ -193,7 +199,11 @@ private constructor(var baseSql: String, private val bindings: Collection<Bindin
 
   companion object {
     internal fun boundStatement(baseSql: String, bind: Builder.() -> Unit): BoundStatement {
-      return BuilderImpl(baseSql).apply(bind).build()
+      return BuilderImpl().apply(bind).build(baseSql)
+    }
+
+    internal fun builder(bind: Builder.() -> Unit): Builder {
+      return BuilderImpl().apply(bind)
     }
 
     private fun Statement.apply(binding: Binding) {
@@ -223,3 +233,7 @@ private data class Binding(
 /** Builds a [BoundStatement]. */
 fun boundStatement(baseSql: String, bind: BoundStatement.Builder.() -> Unit = {}): BoundStatement =
   BoundStatement.boundStatement(baseSql, bind)
+
+/** Creates a [BoundStatement.Builder]. */
+fun builder(bind: BoundStatement.Builder.() -> Unit = {}): BoundStatement.Builder =
+  BoundStatement.builder(bind)

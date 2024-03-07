@@ -18,8 +18,8 @@ package org.wfanet.measurement.common.db.r2dbc.postgres
 
 import com.google.protobuf.Message
 import com.google.protobuf.ProtocolMessageEnum
+import org.wfanet.measurement.common.db.r2dbc.builder
 import org.wfanet.measurement.common.db.r2dbc.BoundStatement
-import org.wfanet.measurement.common.db.r2dbc.boundStatement
 import org.wfanet.measurement.common.identity.ExternalId
 import org.wfanet.measurement.common.identity.InternalId
 
@@ -93,9 +93,9 @@ class ValuesListBoundStatement private constructor() {
       baseSql: String,
       bind: ValuesListBoundStatementBuilder.() -> Unit = {},
     ): BoundStatement {
-      var valuesEndIndex: Int = 0
-      val boundStatement: BoundStatement =
-        boundStatement("") {
+      var valuesEndIndex = 0
+      val builder: BoundStatement.Builder =
+        builder {
           val builder = ValuesListBoundStatementBuilder(valuesStartIndex, paramCount, this)
           builder.apply(bind)
           valuesEndIndex = builder.valuesCurIndex
@@ -109,9 +109,7 @@ class ValuesListBoundStatement private constructor() {
           values.joinToString(prefix = "(", postfix = ")") { value -> "$$value" }
         }
 
-      boundStatement.baseSql = baseSql.replace(VALUES_LIST_PLACEHOLDER, valuesList)
-
-      return boundStatement
+      return builder.build(baseSql.replace(VALUES_LIST_PLACEHOLDER, valuesList))
     }
   }
 }
