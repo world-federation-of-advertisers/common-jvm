@@ -90,11 +90,17 @@ class ValuesListBoundStatement private constructor() {
     internal fun valuesListBoundStatement(
       valuesStartIndex: Int,
       paramCount: Int,
-      numValues: Int,
       baseSql: String,
       bind: ValuesListBoundStatementBuilder.() -> Unit = {},
     ): BoundStatement {
-      val range = valuesStartIndex + 1..numValues * paramCount + valuesStartIndex
+      var valuesEndIndex: Int = 0
+      val boundStatement: BoundStatement = boundStatement("") {
+        val builder = ValuesListBoundStatementBuilder(valuesStartIndex, paramCount, this)
+        builder.apply(bind)
+        valuesEndIndex = builder.valuesCurIndex
+      }
+
+      val range = valuesStartIndex + 1..valuesEndIndex
       val params = range.toList()
       val chunkedParams = params.chunked(paramCount)
       val valuesList =
@@ -102,9 +108,9 @@ class ValuesListBoundStatement private constructor() {
           values.joinToString(prefix = "(", postfix = ")") { value -> "$$value" }
         }
 
-      return boundStatement(baseSql.replace(VALUES_LIST_PLACEHOLDER, valuesList)) {
-        ValuesListBoundStatementBuilder(valuesStartIndex, paramCount, this).apply(bind)
-      }
+      boundStatement.baseSql = baseSql.replace(VALUES_LIST_PLACEHOLDER, valuesList)
+
+      return boundStatement
     }
   }
 }
@@ -113,14 +119,12 @@ class ValuesListBoundStatement private constructor() {
 fun valuesListBoundStatement(
   valuesStartIndex: Int,
   paramCount: Int,
-  numValues: Int,
   baseSql: String,
   bind: ValuesListBoundStatement.ValuesListBoundStatementBuilder.() -> Unit = {},
 ): BoundStatement =
   ValuesListBoundStatement.valuesListBoundStatement(
     valuesStartIndex = valuesStartIndex,
     paramCount = paramCount,
-    numValues = numValues,
     baseSql = baseSql,
     bind,
   )
