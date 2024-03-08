@@ -1,23 +1,37 @@
+load("@rules_java//java:defs.bzl", "java_library")
 load("@wfa_rules_kotlin_jvm//kotlin:defs.bzl", "kt_jvm_proto_library")
 
 package(default_visibility = ["//visibility:public"])
 
-kt_jvm_proto_library(
-    name = "dayofweek_kt_jvm_proto",
-    deps = ["@com_google_googleapis//google/type:dayofweek_proto"],
-)
+COMMON_TYPES = [
+    "calendar_period",
+    "color",
+    "date",
+    "datetime",
+    "dayofweek",
+    "decimal",
+    "expr",
+    "fraction",
+    "interval",
+    "latlng",
+    "localized_text",
+    "money",
+    "month",
+    "phone_number",
+    "postal_address",
+    "quaternion",
+    "timeofday",
+]
 
-kt_jvm_proto_library(
-    name = "date_kt_jvm_proto",
-    deps = ["@com_google_googleapis//google/type:date_proto"],
-)
+[
+    kt_jvm_proto_library(
+        name = "{type}_kt_jvm_proto".format(type = type),
+        deps = ["@com_google_googleapis//google/type:{type}_proto".format(type = type)],
+    )
+    for type in COMMON_TYPES
+]
 
-kt_jvm_proto_library(
-    name = "latlng_kt_jvm_proto",
-    deps = ["@com_google_googleapis//google/type:latlng_proto"],
-)
-
-kt_jvm_proto_library(
-    name = "interval_kt_jvm_proto",
-    deps = ["@com_google_googleapis//google/type:interval_proto"],
+java_library(
+    name = "type_kt_jvm_proto",
+    exports = [":{type}_kt_jvm_proto".format(type = type) for type in COMMON_TYPES],
 )
