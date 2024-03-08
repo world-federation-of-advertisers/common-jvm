@@ -29,6 +29,23 @@ import com.google.protobuf.TimestampProto
 import com.google.protobuf.TypeProto
 import com.google.protobuf.WrappersProto
 import com.google.protobuf.fileDescriptorSet
+import com.google.type.CalendarPeriodProto
+import com.google.type.ColorProto
+import com.google.type.DateProto
+import com.google.type.DateTimeProto
+import com.google.type.DayOfWeekProto
+import com.google.type.DecimalProto
+import com.google.type.ExprProto
+import com.google.type.FractionProto
+import com.google.type.IntervalProto
+import com.google.type.LatLngProto
+import com.google.type.LocalizedTextProto
+import com.google.type.MoneyProto
+import com.google.type.MonthProto
+import com.google.type.PhoneNumberProto
+import com.google.type.PostalAddressProto
+import com.google.type.QuaternionProto
+import com.google.type.TimeOfDayProto
 import kotlin.reflect.KClass
 import kotlin.reflect.full.staticFunctions
 
@@ -39,8 +56,8 @@ object ProtoReflection {
 
   /**
    * [Descriptors.FileDescriptor]s of
-   * [well-known types](https://developers.google.com/protocol-buffers/docs/reference/google.protobuf)
-   * .
+   * [well-known types](https://google.aip.dev/213#existing-global-common-components) in
+   * google.protobuf and google.type packages.
    */
   val WELL_KNOWN_TYPES: List<Descriptors.FileDescriptor> =
     listOf(
@@ -53,6 +70,23 @@ object ProtoReflection {
       EmptyProto.getDescriptor(),
       StructProto.getDescriptor(),
       TimestampProto.getDescriptor(),
+      CalendarPeriodProto.getDescriptor(),
+      ColorProto.getDescriptor(),
+      DateProto.getDescriptor(),
+      DateTimeProto.getDescriptor(),
+      DayOfWeekProto.getDescriptor(),
+      DecimalProto.getDescriptor(),
+      ExprProto.getDescriptor(),
+      FractionProto.getDescriptor(),
+      IntervalProto.getDescriptor(),
+      LatLngProto.getDescriptor(),
+      LocalizedTextProto.getDescriptor(),
+      MoneyProto.getDescriptor(),
+      MonthProto.getDescriptor(),
+      PhoneNumberProto.getDescriptor(),
+      PostalAddressProto.getDescriptor(),
+      QuaternionProto.getDescriptor(),
+      TimeOfDayProto.getDescriptor(),
     )
 
   private val WELL_KNOWN_TYPES_BY_NAME = WELL_KNOWN_TYPES.associateBy { it.name }
@@ -60,7 +94,7 @@ object ProtoReflection {
   /** Returns the type URL for the specified message type. */
   fun getTypeUrl(
     descriptor: Descriptors.Descriptor,
-    typeUrlPrefix: String = DEFAULT_TYPE_URL_PREFIX
+    typeUrlPrefix: String = DEFAULT_TYPE_URL_PREFIX,
   ): String {
     return getTypeUrl(descriptor.fullName, typeUrlPrefix)
   }
@@ -98,11 +132,11 @@ object ProtoReflection {
    * Builds a [DescriptorProtos.FileDescriptorSet] from [descriptor], including direct and
    * transitive dependencies.
    *
-   * [Descriptors.FileDescriptor]s of [WELL_KNOWN_TYPES] are excluded from the output.
+   * [Descriptors.FileDescriptor]s of [knownTypes] are excluded from the output.
    */
   fun buildFileDescriptorSet(
     descriptor: Descriptors.Descriptor,
-    knownTypes: Iterable<Descriptors.FileDescriptor> = WELL_KNOWN_TYPES
+    knownTypes: Iterable<Descriptors.FileDescriptor> = WELL_KNOWN_TYPES,
   ): DescriptorProtos.FileDescriptorSet {
     val fileDescriptors = mutableSetOf<Descriptors.FileDescriptor>()
     val rootFileDescriptor: Descriptors.FileDescriptor = descriptor.file
@@ -139,32 +173,47 @@ object ProtoReflection {
     }
   }
 
-  /** Builds [Descriptors.Descriptor]s from [fileDescriptorSets]. */
+  /**
+   * Builds [Descriptors.FileDescriptor]s from [fileDescriptorSets].
+   *
+   * @param knownTypes [Descriptors.FileDescriptor]s of known types to use instead of or in addition
+   *   to those in [fileDescriptorSets]
+   * @return the [Descriptors.FileDescriptor]s for each item in [fileDescriptorSets]
+   */
+  fun buildFileDescriptors(
+    fileDescriptorSets: Iterable<DescriptorProtos.FileDescriptorSet>,
+    knownTypes: Iterable<Descriptors.FileDescriptor> = WELL_KNOWN_TYPES,
+  ): List<Descriptors.FileDescriptor> {
+    val fileDescriptorsByName: Map<String, Descriptors.FileDescriptor> =
+      FileDescriptorMapBuilder(fileDescriptorSets.flatMap { it.fileList }, knownTypes).build()
+    return fileDescriptorSets
+      .flatMap { it.fileList }
+      .distinct()
+      .map { fileDescriptorsByName.getValue(it.name) }
+  }
+
+  /** Builds [Descriptors.Descriptor]s for the message types in [fileDescriptorSets]. */
   fun buildDescriptors(
     fileDescriptorSets: Iterable<DescriptorProtos.FileDescriptorSet>,
-    knownTypes: Iterable<Descriptors.FileDescriptor> = WELL_KNOWN_TYPES
+    knownTypes: Iterable<Descriptors.FileDescriptor> = WELL_KNOWN_TYPES,
   ): List<Descriptors.Descriptor> {
-    val knownTypesByName: Map<String, Descriptors.FileDescriptor> = knownTypes.byName()
-    val fileDescriptorsByName: Map<String, Descriptors.FileDescriptor> =
-      FileDescriptorMapBuilder(
-          fileDescriptorSets.flatMap { it.fileList }.associateBy { it.name },
-          knownTypesByName
-        )
-        .build()
-    return fileDescriptorsByName.values.flatMap { it.messageTypes }
+    return buildFileDescriptors(fileDescriptorSets, knownTypes).flatMap { it.messageTypes }
   }
 
   private class FileDescriptorMapBuilder(
-    private val fileDescriptorProtos: Map<String, DescriptorProtos.FileDescriptorProto>,
-    private val knownTypesByName: Map<String, Descriptors.FileDescriptor>
+    private val fileDescriptorProtosByName: Map<String, DescriptorProtos.FileDescriptorProto>,
+    private val knownTypesByName: Map<String, Descriptors.FileDescriptor>,
   ) {
+    constructor(
+      fileDescriptorProtos: Iterable<DescriptorProtos.FileDescriptorProto>,
+      knownTypes: Iterable<Descriptors.FileDescriptor>,
+    ) : this(fileDescriptorProtos.associateBy { it.name }, knownTypes.byName())
+
     /** Builds a [Map] of file name to [Descriptors.FileDescriptor]. */
-    fun build(): Map<String, Descriptors.FileDescriptor> {
-      val fileDescriptors = mutableMapOf<String, Descriptors.FileDescriptor>()
-      for (fileDescriptorProto in fileDescriptorProtos.values) {
-        fileDescriptors.add(fileDescriptorProto)
+    fun build(): Map<String, Descriptors.FileDescriptor> = buildMap {
+      for (fileDescriptorProto in fileDescriptorProtosByName.values) {
+        add(fileDescriptorProto)
       }
-      return fileDescriptors
     }
 
     private fun MutableMap<String, Descriptors.FileDescriptor>.add(
@@ -178,8 +227,8 @@ object ProtoReflection {
         fileDescriptorProto.name,
         Descriptors.FileDescriptor.buildFrom(
           fileDescriptorProto,
-          fileDescriptorProto.dependencyList.map { getValue(it) }.toTypedArray()
-        )
+          fileDescriptorProto.dependencyList.map { getValue(it) }.toTypedArray(),
+        ),
       )
     }
 
@@ -187,7 +236,7 @@ object ProtoReflection {
      * Adds all direct and transitive dependencies of [fileDescriptorProto] to this [MutableMap].
      */
     private fun MutableMap<String, Descriptors.FileDescriptor>.addDeps(
-      fileDescriptorProto: DescriptorProtos.FileDescriptorProto,
+      fileDescriptorProto: DescriptorProtos.FileDescriptorProto
     ) {
       for (depName in fileDescriptorProto.dependencyList) {
         if (containsKey(depName)) {
@@ -199,14 +248,15 @@ object ProtoReflection {
           continue
         }
 
-        val depProto: DescriptorProtos.FileDescriptorProto = fileDescriptorProtos.getValue(depName)
+        val depProto: DescriptorProtos.FileDescriptorProto =
+          fileDescriptorProtosByName.getValue(depName)
         addDeps(depProto)
         put(
           depName,
           Descriptors.FileDescriptor.buildFrom(
             depProto,
-            depProto.dependencyList.map { getValue(it) }.toTypedArray()
-          )
+            depProto.dependencyList.map { getValue(it) }.toTypedArray(),
+          ),
         )
       }
     }
