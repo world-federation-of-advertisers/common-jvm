@@ -44,7 +44,6 @@ private class KeyIdWriter : KeysetWriter {
   }
 
   override fun write(keyset: EncryptedKeyset) {
-    // Supposed not to be called.
     throw UnsupportedOperationException("write EncryptedKeyset should not be called.")
   }
 }
