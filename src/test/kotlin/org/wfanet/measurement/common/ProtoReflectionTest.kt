@@ -42,10 +42,7 @@ class ProtoReflectionTest {
       DependsOnSimple.getDescriptor().file.allDependencies
 
     assertThat(dependencies)
-      .containsExactly(
-        TimestampProto.getDescriptor(),
-        Simple.getDescriptor().file,
-      )
+      .containsExactly(TimestampProto.getDescriptor(), Simple.getDescriptor().file)
   }
 
   @Test
@@ -61,17 +58,33 @@ class ProtoReflectionTest {
   }
 
   @Test
-  fun `buildDescriptors builds descriptors from set`() {
+  fun `buildFileDescriptors builds FileDescriptors from set`() {
     val fileDescriptorSet: DescriptorProtos.FileDescriptorSet =
       ProtoReflection.buildFileDescriptorSet(DependsOnSimple.getDescriptor())
 
-    val descriptors = ProtoReflection.buildDescriptors(listOf(fileDescriptorSet))
+    val fileDescriptors: List<Descriptors.FileDescriptor> =
+      ProtoReflection.buildFileDescriptors(listOf(fileDescriptorSet))
+
+    val fileNames = fileDescriptors.map { it.fullName }
+    assertThat(fileNames)
+      .containsExactly(
+        DependsOnSimple.getDescriptor().file.fullName,
+        Simple.getDescriptor().file.fullName,
+      )
+  }
+
+  @Test
+  fun `buildDescriptors builds Descriptors from set`() {
+    val fileDescriptorSet: DescriptorProtos.FileDescriptorSet =
+      ProtoReflection.buildFileDescriptorSet(DependsOnSimple.getDescriptor())
+
+    val descriptors: List<Descriptors.Descriptor> =
+      ProtoReflection.buildDescriptors(listOf(fileDescriptorSet))
 
     val descriptorNames = descriptors.map { it.fullName }
     assertThat(descriptorNames)
       .containsExactly(
         Simple.getDescriptor().fullName,
-        Timestamp.getDescriptor().fullName,
         DependsOnSimple.getDescriptor().fullName,
         Sibling.getDescriptor().fullName,
       )
