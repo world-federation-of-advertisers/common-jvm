@@ -1,6 +1,6 @@
 {
   "lockFileVersion": 3,
-  "moduleFileHash": "e971d97112b9a9340e289f67ece8068b35e09f6f1142e0b1e46b61da954be6ca",
+  "moduleFileHash": "3c7a71a79c6c11bf8f27d8b09e8ab363f61e55a6dbb31b2c8aa8909885c17ba4",
   "flags": {
     "cmdRegistries": [
       "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main",
@@ -297,8 +297,8 @@
                   "org.postgresql:postgresql:42.7.0",
                   "org.postgresql:r2dbc-postgresql:1.0.4.RELEASE",
                   "io.r2dbc:r2dbc-spi:1.0.0.RELEASE",
-                  "org.yaml:snakeyaml:1.30",
-                  "org.liquibase:liquibase-core:4.18.0",
+                  "org.yaml:snakeyaml:2.2",
+                  "org.liquibase:liquibase-core:4.26.0",
                   "com.google.cloudspannerecosystem:liquibase-spanner:4.17.0",
                   "com.google.cloud:google-cloud-spanner-jdbc:2.9.0",
                   "org.liquibase.ext:liquibase-postgresql:4.11.0",
@@ -4566,8 +4566,8 @@
                 "{ \"group\": \"org.postgresql\", \"artifact\": \"postgresql\", \"version\": \"42.7.0\" }",
                 "{ \"group\": \"org.postgresql\", \"artifact\": \"r2dbc-postgresql\", \"version\": \"1.0.4.RELEASE\" }",
                 "{ \"group\": \"io.r2dbc\", \"artifact\": \"r2dbc-spi\", \"version\": \"1.0.0.RELEASE\" }",
-                "{ \"group\": \"org.yaml\", \"artifact\": \"snakeyaml\", \"version\": \"1.30\" }",
-                "{ \"group\": \"org.liquibase\", \"artifact\": \"liquibase-core\", \"version\": \"4.18.0\" }",
+                "{ \"group\": \"org.yaml\", \"artifact\": \"snakeyaml\", \"version\": \"2.2\" }",
+                "{ \"group\": \"org.liquibase\", \"artifact\": \"liquibase-core\", \"version\": \"4.26.0\" }",
                 "{ \"group\": \"com.google.cloudspannerecosystem\", \"artifact\": \"liquibase-spanner\", \"version\": \"4.17.0\" }",
                 "{ \"group\": \"com.google.cloud\", \"artifact\": \"google-cloud-spanner-jdbc\", \"version\": \"2.9.0\" }",
                 "{ \"group\": \"org.liquibase.ext\", \"artifact\": \"liquibase-postgresql\", \"version\": \"4.11.0\" }",

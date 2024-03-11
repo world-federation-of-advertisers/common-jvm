@@ -218,8 +218,8 @@ maven.install(
         "io.r2dbc:r2dbc-spi:1.0.0.RELEASE",
 
         # Liquibase.
-        "org.yaml:snakeyaml:1.30",
-        "org.liquibase:liquibase-core:4.18.0",
+        "org.yaml:snakeyaml:2.2",
+        "org.liquibase:liquibase-core:4.26.0",
         "com.google.cloudspannerecosystem:liquibase-spanner:4.17.0",
         "com.google.cloud:google-cloud-spanner-jdbc:2.9.0",
         "org.liquibase.ext:liquibase-postgresql:4.11.0",
