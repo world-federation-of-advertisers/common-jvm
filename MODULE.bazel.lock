@@ -1,6 +1,6 @@
 {
   "lockFileVersion": 3,
-  "moduleFileHash": "3c7a71a79c6c11bf8f27d8b09e8ab363f61e55a6dbb31b2c8aa8909885c17ba4",
+  "moduleFileHash": "e10cf4ebd0db1924ef450ae157a41c536a85d3d8a1f90465042da083e4b112a9",
   "flags": {
     "cmdRegistries": [
       "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main",
@@ -349,8 +349,8 @@
               "tagName": "pull",
               "attributeValues": {
                 "name": "java_image_base",
-                "digest": "sha256:781e3acb7934ce0fa5ceeb62ee1369248ab23ae26dce002138b3d0e5338d7486",
-                "image": "gcr.io/distroless/java11-debian11"
+                "digest": "sha256:bb37a895f2b7886f5b57660dcb8a59d831c6f8439209364564f8044e08768c51",
+                "image": "gcr.io/distroless/java17-debian12"
               },
               "devDependency": false,
               "location": {
@@ -363,8 +363,8 @@
               "tagName": "pull",
               "attributeValues": {
                 "name": "java_debug_image_base",
-                "digest": "sha256:95749ff107e1a1e14a62709f305208973530764cdac02a0f7762295dba2c40d2",
-                "image": "gcr.io/distroless/java11-debian11"
+                "digest": "sha256:2ce463ec2705fddf68b5d96af302d49719760c841e8000c1eb5bfc5f77160b1c",
+                "image": "gcr.io/distroless/java17-debian12"
               },
               "devDependency": false,
               "location": {
@@ -5092,8 +5092,8 @@
               "name": "rules_oci~1.6.0~oci~java_debug_image_base_single",
               "scheme": "https",
               "registry": "gcr.io",
-              "repository": "distroless/java11-debian11",
-              "identifier": "sha256:95749ff107e1a1e14a62709f305208973530764cdac02a0f7762295dba2c40d2",
+              "repository": "distroless/java17-debian12",
+              "identifier": "sha256:2ce463ec2705fddf68b5d96af302d49719760c841e8000c1eb5bfc5f77160b1c",
               "target_name": "java_debug_image_base_single",
               "config_path": "@@rules_oci~1.6.0~oci~oci_auth_config//:standard_authorization_config_path"
             }
@@ -5294,8 +5294,8 @@
               "target_name": "java_image_base",
               "scheme": "https",
               "registry": "gcr.io",
-              "repository": "distroless/java11-debian11",
-              "identifier": "sha256:781e3acb7934ce0fa5ceeb62ee1369248ab23ae26dce002138b3d0e5338d7486",
+              "repository": "distroless/java17-debian12",
+              "identifier": "sha256:bb37a895f2b7886f5b57660dcb8a59d831c6f8439209364564f8044e08768c51",
               "platforms": {},
               "platform": "@@rules_oci~1.6.0//oci:java_image_base_single",
               "bzlmod_repository": "java_image_base",
@@ -5389,8 +5389,8 @@
               "name": "rules_oci~1.6.0~oci~java_image_base_single",
               "scheme": "https",
               "registry": "gcr.io",
-              "repository": "distroless/java11-debian11",
-              "identifier": "sha256:781e3acb7934ce0fa5ceeb62ee1369248ab23ae26dce002138b3d0e5338d7486",
+              "repository": "distroless/java17-debian12",
+              "identifier": "sha256:bb37a895f2b7886f5b57660dcb8a59d831c6f8439209364564f8044e08768c51",
               "target_name": "java_image_base_single",
               "config_path": "@@rules_oci~1.6.0~oci~oci_auth_config//:standard_authorization_config_path"
             }
@@ -5454,8 +5454,8 @@
               "target_name": "java_debug_image_base",
               "scheme": "https",
               "registry": "gcr.io",
-              "repository": "distroless/java11-debian11",
-              "identifier": "sha256:95749ff107e1a1e14a62709f305208973530764cdac02a0f7762295dba2c40d2",
+              "repository": "distroless/java17-debian12",
+              "identifier": "sha256:2ce463ec2705fddf68b5d96af302d49719760c841e8000c1eb5bfc5f77160b1c",
               "platforms": {},
               "platform": "@@rules_oci~1.6.0//oci:java_debug_image_base_single",
               "bzlmod_repository": "java_debug_image_base",
