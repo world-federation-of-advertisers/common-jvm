@@ -69,10 +69,7 @@ typealias TransactionWork<R> =
  * @param dbClient [DatabaseClient] to wrap
  * @param executor [Executor] for read-write transactions
  */
-class AsyncDatabaseClient(
-  private val dbClient: DatabaseClient,
-  private val executor: Executor,
-) {
+class AsyncDatabaseClient(private val dbClient: DatabaseClient, private val executor: Executor) {
   /** @see DatabaseClient.singleUse */
   fun singleUse(bound: TimestampBound = TimestampBound.strong()): ReadContext {
     return ReadContextImpl(dbClient.singleUse(bound))
@@ -120,7 +117,7 @@ class AsyncDatabaseClient(
       table: String,
       keys: KeySet,
       columns: Iterable<String>,
-      vararg options: ReadOption
+      vararg options: ReadOption,
     ): Flow<Struct>
 
     /** @see com.google.cloud.spanner.ReadContext.readRow */
@@ -131,7 +128,7 @@ class AsyncDatabaseClient(
       table: String,
       index: String,
       key: Key,
-      columns: Iterable<String>
+      columns: Iterable<String>,
     ): Struct?
 
     /** @see com.google.cloud.spanner.ReadContext.readRowUsingIndex */
@@ -139,8 +136,16 @@ class AsyncDatabaseClient(
       table: String,
       index: String,
       key: Key,
-      vararg columns: String
+      vararg columns: String,
     ): Struct?
+
+    /** @see com.google.cloud.spanner.ReadContext.readUsingIndex */
+    suspend fun readUsingIndex(
+      table: String,
+      index: String,
+      keySet: KeySet,
+      columns: Iterable<String>,
+    ): Flow<Struct>
 
     /** @see com.google.cloud.spanner.ReadContext.executeQuery */
     fun executeQuery(statement: Statement, vararg options: QueryOption): Flow<Struct>
@@ -200,7 +205,7 @@ private class ReadContextImpl(private val readContext: ReadContext) :
     table: String,
     keys: KeySet,
     columns: Iterable<String>,
-    vararg options: ReadOption
+    vararg options: ReadOption,
   ): Flow<Struct> = flowFrom { readContext.readAsync(table, keys, columns, *options) }
 
   override suspend fun readRow(table: String, key: Key, columns: Iterable<String>): Struct? {
@@ -211,7 +216,7 @@ private class ReadContextImpl(private val readContext: ReadContext) :
     table: String,
     index: String,
     key: Key,
-    columns: Iterable<String>
+    columns: Iterable<String>,
   ): Struct? {
     return readContext.readRowUsingIndexAsync(table, index, key, columns).await()
   }
@@ -220,10 +225,17 @@ private class ReadContextImpl(private val readContext: ReadContext) :
     table: String,
     index: String,
     key: Key,
-    vararg columns: String
+    vararg columns: String,
   ): Struct? {
     return readRowUsingIndex(table, index, key, columns.asIterable())
   }
+
+  override suspend fun readUsingIndex(
+    table: String,
+    index: String,
+    keySet: KeySet,
+    columns: Iterable<String>,
+  ): Flow<Struct> = flowFrom { readContext.readUsingIndexAsync(table, index, keySet, columns) }
 
   override fun executeQuery(statement: Statement, vararg options: QueryOption): Flow<Struct> =
     flowFrom {
@@ -325,5 +337,5 @@ private fun TransactionContext.asAsyncTransaction(): AsyncDatabaseClient.Transac
 
 fun Spanner.getAsyncDatabaseClient(
   databaseId: DatabaseId,
-  executor: Executor = Executors.newSingleThreadExecutor()
+  executor: Executor = Executors.newSingleThreadExecutor(),
 ) = AsyncDatabaseClient(getDatabaseClient(databaseId), executor)
