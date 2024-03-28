@@ -18,6 +18,7 @@ import com.google.protobuf.ByteString
 import io.grpc.Status
 import io.grpc.StatusException
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
 import org.wfanet.measurement.common.asBufferedFlow
@@ -49,7 +50,12 @@ class ForwardedStorageClient(private val storageStub: ForwardedStorageCoroutineS
         .onStart {
           emit(WriteBlobRequest.newBuilder().apply { headerBuilder.blobKey = blobKey }.build())
         }
-    val metadata = storageStub.writeBlob(requests)
+    val metadata =
+      try {
+        storageStub.writeBlob(requests)
+      } catch (e: StatusException) {
+        throw Exception("Error writing blob $blobKey", e)
+      }
 
     return Blob(blobKey, metadata.size)
   }
@@ -60,10 +66,10 @@ class ForwardedStorageClient(private val storageStub: ForwardedStorageCoroutineS
       try {
         storageStub.getBlobMetadata(getBlobMetadataRequest { this.blobKey = blobKey }).size
       } catch (e: StatusException) {
-        if (e.status.code == Status.NOT_FOUND.code) {
+        if (e.status.code == Status.Code.NOT_FOUND) {
           return null
         } else {
-          throw e
+          throw Exception("Error getting blob $blobKey", e)
         }
       }
 
@@ -76,11 +82,20 @@ class ForwardedStorageClient(private val storageStub: ForwardedStorageCoroutineS
       get() = this@ForwardedStorageClient
 
     override fun read(): Flow<ByteString> {
-      return storageStub.readBlob(readBlobRequest { blobKey = this@Blob.blobKey }).map { it.chunk }
+      return storageStub
+        .readBlob(readBlobRequest { blobKey = this@Blob.blobKey })
+        .catch { cause ->
+          if (cause is StatusException) throw Exception("Error reading blob $blobKey")
+        }
+        .map { it.chunk }
     }
 
     override suspend fun delete() {
-      storageStub.deleteBlob(deleteBlobRequest { blobKey = this@Blob.blobKey })
+      try {
+        storageStub.deleteBlob(deleteBlobRequest { blobKey = this@Blob.blobKey })
+      } catch (e: Exception) {
+        throw Exception("Error deleting blob $blobKey", e)
+      }
     }
   }
 }
