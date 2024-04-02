@@ -8,7 +8,7 @@ KOTLINX_COROUTINES_VERSION = "1.7.3"
 
 PROTOBUF_JAVA_VERSION = "3.23.4"  # Compatible with protobuf module version.
 
-GRPC_JAVA_VERSION = "1.59.1"
+GRPC_JAVA_VERSION = "1.60.2"
 
 AWS_JAVA_SDK_VERSION = "2.17.258"
 
@@ -172,14 +172,14 @@ maven.install(
         "org.conscrypt:conscrypt-openjdk-uber:2.5.2",
         "org.jetbrains:annotations:23.0.0",
         "info.picocli:picocli:4.4.0",
-        "com.google.api:api-common:2.21.0",
-        "com.google.api:gax:2.38.0",
+        "com.google.api:api-common:2.22.0",
+        "com.google.api:gax:2.39.0",
         "com.google.apis:google-api-services-bigquery:v2-rev20231111-2.0.0",
-        "com.google.cloud:google-cloud-core:2.28.0",
-        "com.google.cloud:google-cloud-core-grpc:2.28.0",
+        "com.google.cloud:google-cloud-core:2.29.0",
+        "com.google.cloud:google-cloud-core-grpc:2.29.0",
         "com.google.cloud:google-cloud-storage:2.30.1",
         "com.google.cloud:google-cloud-nio:0.127.8",
-        "com.google.cloud:google-cloud-spanner:6.55.0",
+        "com.google.cloud:google-cloud-spanner:6.56.0",
         "com.google.cloud:google-cloud-bigquery:2.35.0",
         "com.google.code.gson:gson:2.10.1",
         "com.google.protobuf:protobuf-java-util:" + PROTOBUF_JAVA_VERSION,
@@ -188,7 +188,7 @@ maven.install(
         "io.grpc:grpc-netty:" + GRPC_JAVA_VERSION,
         "io.grpc:grpc-services:" + GRPC_JAVA_VERSION,
         "io.grpc:grpc-inprocess:" + GRPC_JAVA_VERSION,
-        "io.netty:netty-handler:4.1.79.Final",
+        "io.netty:netty-handler:4.1.108.Final",
         "org.jetbrains.kotlinx:kotlinx-coroutines-test:" + KOTLINX_COROUTINES_VERSION,
         "org.jetbrains.kotlinx:kotlinx-coroutines-debug:" + KOTLINX_COROUTINES_VERSION,
         "org.jetbrains.kotlinx:kotlinx-coroutines-reactive:" + KOTLINX_COROUTINES_VERSION,
@@ -220,8 +220,8 @@ maven.install(
         # Liquibase.
         "org.yaml:snakeyaml:2.2",
         "org.liquibase:liquibase-core:4.26.0",
-        "com.google.cloudspannerecosystem:liquibase-spanner:4.17.0",
-        "com.google.cloud:google-cloud-spanner-jdbc:2.9.0",
+        "com.google.cloudspannerecosystem:liquibase-spanner:4.25.1",
+        "com.google.cloud:google-cloud-spanner-jdbc:2.15.1",
         "org.liquibase.ext:liquibase-postgresql:4.11.0",
 
         # Math library.
