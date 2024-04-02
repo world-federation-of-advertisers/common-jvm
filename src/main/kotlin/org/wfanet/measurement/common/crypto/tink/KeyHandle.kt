@@ -14,6 +14,7 @@
 
 package org.wfanet.measurement.common.crypto.tink
 
+import com.google.crypto.tink.Aead
 import com.google.crypto.tink.BinaryKeysetReader
 import com.google.crypto.tink.BinaryKeysetWriter
 import com.google.crypto.tink.CleartextKeysetHandle
@@ -68,6 +69,10 @@ class TinkPrivateKeyHandle internal constructor(internal val keysetHandle: Keyse
     val hybridDecrypt = keysetHandle.getPrimitive(HybridDecrypt::class.java)
     val plaintext = hybridDecrypt.decrypt(ciphertext.toByteArray(), contextInfo?.toByteArray())
     return plaintext.toByteString()
+  }
+
+  fun getAead(): Aead {
+    return keysetHandle.getPrimitive(Aead::class.java)
   }
 
   companion object {
