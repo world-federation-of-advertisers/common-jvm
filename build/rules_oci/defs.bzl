@@ -57,21 +57,30 @@ def _get_repo_mapping_manifest(default_info):
         return None
     return files_to_run.repo_mapping_manifest
 
-def _merge_runfiles(ctx, default_infos):
-    runfiles_list = [
-        default_info.default_runfiles
+def _merge_runfiles(default_infos):
+    """Returns a depset of runfiles from the specified DefaultInfo objects."""
+    files = [
+        default_info.default_runfiles.files
         for default_info in default_infos
         if default_info.default_runfiles != None
     ]
-    return ctx.runfiles().merge_all(runfiles_list)
+
+    return depset(transitive = files)
 
 def _runfiles_pkg_impl(ctx):
     include_repo_mapping_manifest = ctx.attr.include_repo_mapping_manifest
     if include_repo_mapping_manifest and len(ctx.attr.deps) != 1:
         fail("Expected exactly one dep when include_repo_mapping_manifest == True")
+    excluded_file_extensions = ctx.attr.excluded_file_extensions
 
     default_infos = [dep[DefaultInfo] for dep in ctx.attr.deps]
-    merged_runfiles = _merge_runfiles(ctx, default_infos)
+    unfiltered_runfiles_depset = _merge_runfiles(default_infos)
+
+    runfiles_depset = depset([
+        file
+        for file in unfiltered_runfiles_depset.to_list()
+        if file not in ctx.files.excluded_files and file.extension not in excluded_file_extensions
+    ])
     repo_mapping_manifest = (
         _get_repo_mapping_manifest(default_infos[0]) if include_repo_mapping_manifest else None
     )
@@ -79,15 +88,15 @@ def _runfiles_pkg_impl(ctx):
     prefix = "/".join([ctx.attr.name, ctx.workspace_name])
     dest_src_map = {
         "/".join([prefix, file.short_path]): file
-        for file in merged_runfiles.files.to_list()
+        for file in runfiles_depset.to_list()
     }
     if repo_mapping_manifest:
         dest_src_map["/".join([ctx.attr.name, "_repo_mapping"])] = repo_mapping_manifest
 
     all_files = depset(
         direct = [repo_mapping_manifest],
-        transitive = [merged_runfiles.files],
-    ) if repo_mapping_manifest else merged_runfiles.files
+        transitive = [runfiles_depset],
+    ) if repo_mapping_manifest else runfiles_depset
 
     return [
         PackageFilesInfo(dest_src_map = dest_src_map),
@@ -105,6 +114,8 @@ _runfiles_pkg = rule(
         "include_repo_mapping_manifest": attr.bool(
             default = False,
         ),
+        "excluded_files": attr.label_list(),
+        "excluded_file_extensions": attr.string_list(),
     },
 )
 
@@ -134,7 +145,8 @@ def java_image(
     """
     env = env or {}
     binary_label = native.package_relative_label(binary)
-    deploy_jar_label = binary_label.relative(binary_label.name + "_deploy.jar")
+    deploy_jar_file_name = binary_label.name + "_deploy.jar"
+    deploy_jar_label = binary_label.relative(deploy_jar_file_name)
     cmd_args = cmd_args or []
 
     jar_files_name = "{name}_jar_files".format(name = name)
@@ -142,7 +154,7 @@ def java_image(
         name = jar_files_name,
         srcs = [deploy_jar_label],
         renames = {
-            deploy_jar_label: "app_deploy.jar",
+            deploy_jar_label: deploy_jar_file_name,
         },
         visibility = ["//visibility:private"],
         **kwargs
@@ -165,12 +177,13 @@ def java_image(
         **kwargs
     )
 
-    # TODO(bazelbuild/rules_pkg#754): Use rules_pkg runfiles support when available.
     runfiles_pkg_name = "{name}_runfiles_pkg".format(name = name)
     _runfiles_pkg(
         name = runfiles_pkg_name,
         deps = [binary],
         include_repo_mapping_manifest = True,
+        excluded_files = ["@bazel_tools//tools/jdk:current_java_runtime"],
+        excluded_file_extensions = ["jar"],
         visibility = ["//visibility:private"],
         **kwargs
     )
@@ -195,7 +208,7 @@ def java_image(
             "java",
             "-Djava.library.path=/native",
             "-jar",
-            "/app_deploy.jar",
+            "/" + deploy_jar_file_name,
         ] + cmd_args,
         labels = labels,
         env = dicts.add(env, RUNFILES_DIR = "/" + runfiles_pkg_name),
