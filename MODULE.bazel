@@ -58,7 +58,7 @@ bazel_dep(
 )
 bazel_dep(
     name = "rules_oci",
-    version = "1.6.0",
+    version = "1.7.5",
 )
 
 # WFA registry deps.
@@ -252,15 +252,17 @@ use_repo(maven, "maven")
 oci = use_extension("@rules_oci//oci:extensions.bzl", "oci")
 oci.pull(
     name = "java_image_base",
-    # Digest of nonroot-amd64 tag.
-    digest = "sha256:bb37a895f2b7886f5b57660dcb8a59d831c6f8439209364564f8044e08768c51",
+    # Digest of nonroot tag.
+    digest = "sha256:e81f237525bc7c496c0b19df9a0b66022a6882e53d4818d8b7f1d26566539860",
     image = "gcr.io/distroless/java17-debian12",
+    platforms = ["linux/amd64"],
 )
 oci.pull(
     name = "java_debug_image_base",
-    # Digest of debug-nonroot-amd64 tag.
-    digest = "sha256:2ce463ec2705fddf68b5d96af302d49719760c841e8000c1eb5bfc5f77160b1c",
+    # Digest of debug-nonroot tag.
+    digest = "sha256:5b2bf92d1b31a334c270a7310ca752c46d6a76f9fd84602b18bdee252fa25f08",
     image = "gcr.io/distroless/java17-debian12",
+    platforms = ["linux/amd64"],
 )
 use_repo(
     oci,
