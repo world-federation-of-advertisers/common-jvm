@@ -32,17 +32,21 @@ import org.wfanet.measurement.common.crypto.SigningCerts
 fun buildMutualTlsChannel(
   target: String,
   clientCerts: SigningCerts,
-  hostName: String? = null
+  hostName: String? = null,
+  defaultServiceConfig: Map<String, *>? = null,
 ): ManagedChannel {
-  val channelBuilder =
-    NettyChannelBuilder.forTarget(target)
-      .directExecutor() // See https://github.com/grpc/grpc-kotlin/issues/263
-      .sslContext(clientCerts.toClientTlsContext())
-  return if (hostName == null) {
-    channelBuilder.build()
-  } else {
-    channelBuilder.overrideAuthority(hostName).build()
-  }
+  return NettyChannelBuilder.forTarget(target)
+    .apply {
+      directExecutor() // See https://github.com/grpc/grpc-kotlin/issues/263
+      sslContext(clientCerts.toClientTlsContext())
+      if (hostName != null) {
+        overrideAuthority(hostName)
+      }
+      if (defaultServiceConfig != null) {
+        defaultServiceConfig(defaultServiceConfig)
+      }
+    }
+    .build()
 }
 
 /**
@@ -56,7 +60,7 @@ fun buildMutualTlsChannel(
 fun buildTlsChannel(
   target: String,
   trustedServerCerts: Collection<X509Certificate>,
-  hostName: String? = null
+  hostName: String? = null,
 ): ManagedChannel {
   val channelBuilder =
     NettyChannelBuilder.forTarget(target)
