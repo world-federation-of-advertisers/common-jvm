@@ -20,24 +20,50 @@ import java.nio.file.Path
 import java.sql.Connection
 import java.util.logging.Level
 import java.util.logging.Logger
-import liquibase.Liquibase
 import liquibase.Scope
+import liquibase.UpdateSummaryOutputEnum
+import liquibase.changelog.ChangeLogParameters
+import liquibase.command.CommandScope
+import liquibase.command.core.UpdateCommandStep
+import liquibase.command.core.helpers.DatabaseChangelogCommandStep
+import liquibase.command.core.helpers.DbUrlConnectionArgumentsCommandStep
+import liquibase.command.core.helpers.ShowSummaryArgument
 import liquibase.database.DatabaseFactory
 import liquibase.database.jvm.JdbcConnection
 import liquibase.logging.core.JavaLogService
 import liquibase.resource.DirectoryResourceAccessor
 
 object Liquibase {
-  fun fromPath(connection: Connection, changelogPath: Path): Liquibase {
-    return Liquibase(
-      changelogPath.toString(),
-      DirectoryResourceAccessor(changelogPath.fileSystem.rootDirectories.first()),
+  fun update(connection: Connection, changelogPath: Path) {
+    val database =
       DatabaseFactory.getInstance().findCorrectDatabaseImplementation(JdbcConnection(connection))
-    )
+    val resourceAccessor =
+      DirectoryResourceAccessor(changelogPath.fileSystem.rootDirectories.first())
+    val scopeObjects =
+      mapOf(
+        Scope.Attr.database.name to database,
+        Scope.Attr.resourceAccessor.name to resourceAccessor,
+      )
+
+    Scope.child(scopeObjects) {
+      Scope.getCurrentScope().setLogLevel(Level.INFO)
+
+      CommandScope(*UpdateCommandStep.COMMAND_NAME)
+        .apply {
+          addArgumentValue(DbUrlConnectionArgumentsCommandStep.DATABASE_ARG, database)
+          addArgumentValue(UpdateCommandStep.CHANGELOG_FILE_ARG, changelogPath.toString())
+          addArgumentValue(
+            DatabaseChangelogCommandStep.CHANGELOG_PARAMETERS,
+            ChangeLogParameters(database),
+          )
+          addArgumentValue(ShowSummaryArgument.SHOW_SUMMARY_OUTPUT, UpdateSummaryOutputEnum.LOG)
+        }
+        .execute()
+    }
   }
 }
 
-fun Scope.setLogLevel(level: Level) {
+private fun Scope.setLogLevel(level: Level) {
   val logService = get(Scope.Attr.logService, JavaLogService::class.java)
   if (logService.parent == null) {
     logService.parent = Logger.getLogger(this::class.java.name)
