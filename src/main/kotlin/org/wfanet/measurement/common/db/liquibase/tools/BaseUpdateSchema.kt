@@ -17,12 +17,8 @@
 package org.wfanet.measurement.common.db.liquibase.tools
 
 import java.sql.Connection
-import java.util.logging.Level
 import java.util.logging.Logger
-import liquibase.Contexts
-import liquibase.Scope
 import org.wfanet.measurement.common.db.liquibase.Liquibase
-import org.wfanet.measurement.common.db.liquibase.setLogLevel
 import org.wfanet.measurement.common.getJarResourcePath
 import picocli.CommandLine.Command
 import picocli.CommandLine.Option
@@ -42,12 +38,8 @@ abstract class BaseUpdateSchema : Runnable {
         "JAR resource $changelog not found"
       }
 
-    logger.info("Loading changelog from $changelogPath")
-    Liquibase.fromPath(connection, changelogPath).use { liquibase ->
-      logger.info("Updating...")
-      Scope.getCurrentScope().setLogLevel(Level.FINE)
-      liquibase.update(Contexts())
-    }
+    logger.info("Updating database with Liquibase changelog from $changelogPath")
+    Liquibase.update(connection, changelogPath)
   }
 
   companion object {

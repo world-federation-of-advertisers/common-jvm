@@ -20,16 +20,12 @@ import io.r2dbc.spi.ConnectionFactories
 import io.r2dbc.spi.ConnectionFactoryOptions
 import java.nio.file.Path
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.logging.Level
 import kotlinx.coroutines.reactive.awaitFirst
-import liquibase.Contexts
-import liquibase.Scope
 import org.junit.rules.TestRule
 import org.junit.runner.Description
 import org.junit.runners.model.Statement
 import org.testcontainers.containers.PostgreSQLContainer
 import org.wfanet.measurement.common.db.liquibase.Liquibase
-import org.wfanet.measurement.common.db.liquibase.setLogLevel
 import org.wfanet.measurement.common.db.r2dbc.postgres.PostgresDatabaseClient
 
 /** Provider of PostgreSQL databases. */
@@ -70,10 +66,7 @@ class PostgresDatabaseProviderRule(private val changelogPath: Path) :
 
     private fun KPostgresContainer.updateTemplateDatabase(changelogPath: Path) {
       withDatabaseName(TEMPLATE_DATABASE_NAME).createConnection("").use { connection ->
-        Liquibase.fromPath(connection, changelogPath).use { liquibase ->
-          Scope.getCurrentScope().setLogLevel(Level.FINE)
-          liquibase.update(Contexts())
-        }
+        Liquibase.update(connection, changelogPath)
       }
     }
 
@@ -91,7 +84,7 @@ class PostgresDatabaseProviderRule(private val changelogPath: Path) :
             .option(ConnectionFactoryOptions.HOST, host)
             .option(
               ConnectionFactoryOptions.PORT,
-              getMappedPort(PostgreSQLContainer.POSTGRESQL_PORT)
+              getMappedPort(PostgreSQLContainer.POSTGRESQL_PORT),
             )
             .option(ConnectionFactoryOptions.USER, username)
             .option(ConnectionFactoryOptions.PASSWORD, password)

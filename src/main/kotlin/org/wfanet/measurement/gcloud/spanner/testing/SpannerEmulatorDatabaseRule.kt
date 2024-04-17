@@ -19,15 +19,11 @@ import com.google.cloud.spanner.Spanner
 import com.google.cloud.spanner.connection.SpannerPool
 import java.nio.file.Path
 import java.sql.DriverManager
-import java.util.logging.Level
 import kotlinx.coroutines.runBlocking
-import liquibase.Contexts
-import liquibase.Scope
 import org.junit.rules.TestRule
 import org.junit.runner.Description
 import org.junit.runners.model.Statement
 import org.wfanet.measurement.common.db.liquibase.Liquibase
-import org.wfanet.measurement.common.db.liquibase.setLogLevel
 import org.wfanet.measurement.gcloud.spanner.AsyncDatabaseClient
 import org.wfanet.measurement.gcloud.spanner.buildSpanner
 import org.wfanet.measurement.gcloud.spanner.getAsyncDatabaseClient
@@ -39,7 +35,7 @@ import org.wfanet.measurement.gcloud.spanner.getAsyncDatabaseClient
  */
 class SpannerEmulatorDatabaseRule(
   private val changelogPath: Path,
-  private val databaseName: String = "test-db"
+  private val databaseName: String = "test-db",
 ) : TestRule {
   lateinit var databaseClient: AsyncDatabaseClient
     private set
@@ -71,10 +67,7 @@ class SpannerEmulatorDatabaseRule(
     val connectionString =
       SpannerEmulator.buildJdbcConnectionString(emulatorHost, PROJECT, INSTANCE, databaseName)
     DriverManager.getConnection(connectionString).use { connection ->
-      Liquibase.fromPath(connection, changelogPath).use { liquibase ->
-        Scope.getCurrentScope().setLogLevel(Level.FINE)
-        liquibase.update(Contexts())
-      }
+      Liquibase.update(connection, changelogPath)
     }
 
     return buildSpanner(PROJECT, emulatorHost)
