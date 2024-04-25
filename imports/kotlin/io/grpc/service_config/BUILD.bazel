@@ -1,0 +1,11 @@
+load(
+    "@wfa_rules_kotlin_jvm//kotlin:defs.bzl",
+    "kt_jvm_proto_library",
+)
+
+package(default_visibility = ["//visibility:public"])
+
+kt_jvm_proto_library(
+    name = "service_config_kt_jvm_grpc_proto",
+    deps = ["@io_grpc_grpc_proto//:service_config_proto"],
+)
