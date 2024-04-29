@@ -35,31 +35,33 @@ import liquibase.resource.DirectoryResourceAccessor
 
 object Liquibase {
   fun update(connection: Connection, changelogPath: Path) {
-    val database =
-      DatabaseFactory.getInstance().findCorrectDatabaseImplementation(JdbcConnection(connection))
-    val resourceAccessor =
-      DirectoryResourceAccessor(changelogPath.fileSystem.rootDirectories.first())
-    val scopeObjects =
-      mapOf(
-        Scope.Attr.database.name to database,
-        Scope.Attr.resourceAccessor.name to resourceAccessor,
-      )
-
-    Scope.child(scopeObjects) {
-      Scope.getCurrentScope().setLogLevel(Level.INFO)
-
-      CommandScope(*UpdateCommandStep.COMMAND_NAME)
-        .apply {
-          addArgumentValue(DbUrlConnectionArgumentsCommandStep.DATABASE_ARG, database)
-          addArgumentValue(UpdateCommandStep.CHANGELOG_FILE_ARG, changelogPath.toString())
-          addArgumentValue(
-            DatabaseChangelogCommandStep.CHANGELOG_PARAMETERS,
-            ChangeLogParameters(database),
+    DatabaseFactory.getInstance()
+      .findCorrectDatabaseImplementation(JdbcConnection(connection))
+      .use { database ->
+        val resourceAccessor =
+          DirectoryResourceAccessor(changelogPath.fileSystem.rootDirectories.first())
+        val scopeObjects =
+          mapOf(
+            Scope.Attr.database.name to database,
+            Scope.Attr.resourceAccessor.name to resourceAccessor,
           )
-          addArgumentValue(ShowSummaryArgument.SHOW_SUMMARY_OUTPUT, UpdateSummaryOutputEnum.LOG)
+
+        Scope.child(scopeObjects) {
+          Scope.getCurrentScope().setLogLevel(Level.INFO)
+
+          CommandScope(*UpdateCommandStep.COMMAND_NAME)
+            .apply {
+              addArgumentValue(DbUrlConnectionArgumentsCommandStep.DATABASE_ARG, database)
+              addArgumentValue(UpdateCommandStep.CHANGELOG_FILE_ARG, changelogPath.toString())
+              addArgumentValue(
+                DatabaseChangelogCommandStep.CHANGELOG_PARAMETERS,
+                ChangeLogParameters(database),
+              )
+              addArgumentValue(ShowSummaryArgument.SHOW_SUMMARY_OUTPUT, UpdateSummaryOutputEnum.LOG)
+            }
+            .execute()
         }
-        .execute()
-    }
+      }
   }
 }
 
