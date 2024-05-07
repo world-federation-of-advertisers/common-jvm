@@ -32,12 +32,14 @@ class GrpcTestServerRule(
   customServerName: String? = null,
   private val logAllRequests: Boolean = false,
   private val executor: Executor? = null,
+  defaultServiceConfig: Map<String, *>? = null,
   private val addServices: Builder.() -> Unit,
 ) : TestRule {
   class Builder(val channel: Channel, private val serverBuilder: InProcessServerBuilder) {
     fun addService(service: BindableService) {
       serverBuilder.addService(service)
     }
+
     fun addService(service: ServerServiceDefinition) {
       serverBuilder.addService(service)
     }
@@ -47,7 +49,16 @@ class GrpcTestServerRule(
   private val serverName = customServerName ?: InProcessServerBuilder.generateName()
 
   val channel: Channel =
-    grpcCleanupRule.register(InProcessChannelBuilder.forName(serverName).directExecutor().build())
+    grpcCleanupRule.register(
+      InProcessChannelBuilder.forName(serverName)
+        .apply {
+          directExecutor()
+          if (defaultServiceConfig != null) {
+            defaultServiceConfig(defaultServiceConfig)
+          }
+        }
+        .build()
+    )
 
   override fun apply(base: Statement, description: Description): Statement {
     val newStatement =
