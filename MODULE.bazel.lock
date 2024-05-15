@@ -1,6 +1,6 @@
 {
   "lockFileVersion": 3,
-  "moduleFileHash": "0ccaf9b83764e2b22be0aab0f03ef50ef2876585504c7f6f9230b451969556ac",
+  "moduleFileHash": "0983da7e35f590805356593a6bca428415a44122ecc402af3c9b42b60863631a",
   "flags": {
     "cmdRegistries": [
       "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main",
@@ -289,8 +289,8 @@
                   "software.amazon.awssdk:s3:2.17.258",
                   "software.amazon.awssdk:secretsmanager:2.17.258",
                   "software.amazon.awssdk:sts:2.17.258",
-                  "io.opentelemetry:opentelemetry-api:1.32.0",
-                  "io.opentelemetry:opentelemetry-context:1.32.0",
+                  "io.opentelemetry:opentelemetry-api:1.37.0",
+                  "io.opentelemetry:opentelemetry-context:1.37.0",
                   "com.google.cloud.sql:postgres-socket-factory:1.12.0",
                   "com.google.cloud.sql:cloud-sql-connector-r2dbc-core:1.12.0",
                   "com.google.cloud.sql:cloud-sql-connector-r2dbc-postgres:1.12.0",
@@ -4728,8 +4728,8 @@
                 "{ \"group\": \"software.amazon.awssdk\", \"artifact\": \"s3\", \"version\": \"2.17.258\" }",
                 "{ \"group\": \"software.amazon.awssdk\", \"artifact\": \"secretsmanager\", \"version\": \"2.17.258\" }",
                 "{ \"group\": \"software.amazon.awssdk\", \"artifact\": \"sts\", \"version\": \"2.17.258\" }",
-                "{ \"group\": \"io.opentelemetry\", \"artifact\": \"opentelemetry-api\", \"version\": \"1.32.0\" }",
-                "{ \"group\": \"io.opentelemetry\", \"artifact\": \"opentelemetry-context\", \"version\": \"1.32.0\" }",
+                "{ \"group\": \"io.opentelemetry\", \"artifact\": \"opentelemetry-api\", \"version\": \"1.37.0\" }",
+                "{ \"group\": \"io.opentelemetry\", \"artifact\": \"opentelemetry-context\", \"version\": \"1.37.0\" }",
                 "{ \"group\": \"com.google.cloud.sql\", \"artifact\": \"postgres-socket-factory\", \"version\": \"1.12.0\" }",
                 "{ \"group\": \"com.google.cloud.sql\", \"artifact\": \"cloud-sql-connector-r2dbc-core\", \"version\": \"1.12.0\" }",
                 "{ \"group\": \"com.google.cloud.sql\", \"artifact\": \"cloud-sql-connector-r2dbc-postgres\", \"version\": \"1.12.0\" }",
