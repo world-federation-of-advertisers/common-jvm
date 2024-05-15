@@ -1,6 +1,6 @@
 {
   "lockFileVersion": 3,
-  "moduleFileHash": "226b382315d6d87086f30bf36f9c2e793af593c14399290dfb9f6b9317d9f458",
+  "moduleFileHash": "0ccaf9b83764e2b22be0aab0f03ef50ef2876585504c7f6f9230b451969556ac",
   "flags": {
     "cmdRegistries": [
       "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main",
@@ -349,7 +349,7 @@
               "tagName": "pull",
               "attributeValues": {
                 "name": "java_image_base",
-                "digest": "sha256:e81f237525bc7c496c0b19df9a0b66022a6882e53d4818d8b7f1d26566539860",
+                "digest": "sha256:e65fdcb1133728b71cfb6ab006429d4a723f4da4598cf6c697687fff78cf3957",
                 "image": "gcr.io/distroless/java17-debian12",
                 "platforms": [
                   "linux/amd64"
@@ -366,7 +366,7 @@
               "tagName": "pull",
               "attributeValues": {
                 "name": "java_debug_image_base",
-                "digest": "sha256:5b2bf92d1b31a334c270a7310ca752c46d6a76f9fd84602b18bdee252fa25f08",
+                "digest": "sha256:b349a96c203935a65aa54bd11692a28a44a8e67c8507bd9f4d3d302b44091b6d",
                 "image": "gcr.io/distroless/java17-debian12",
                 "platforms": [
                   "linux/amd64"
@@ -5305,7 +5305,7 @@
               "scheme": "https",
               "registry": "gcr.io",
               "repository": "distroless/java17-debian12",
-              "identifier": "sha256:e81f237525bc7c496c0b19df9a0b66022a6882e53d4818d8b7f1d26566539860",
+              "identifier": "sha256:e65fdcb1133728b71cfb6ab006429d4a723f4da4598cf6c697687fff78cf3957",
               "platform": "linux/amd64",
               "target_name": "java_image_base_linux_amd64"
             }
@@ -5465,7 +5465,7 @@
               "scheme": "https",
               "registry": "gcr.io",
               "repository": "distroless/java17-debian12",
-              "identifier": "sha256:e81f237525bc7c496c0b19df9a0b66022a6882e53d4818d8b7f1d26566539860",
+              "identifier": "sha256:e65fdcb1133728b71cfb6ab006429d4a723f4da4598cf6c697687fff78cf3957",
               "platforms": {
                 "@@platforms//cpu:x86_64": "@java_image_base_linux_amd64"
               },
@@ -5481,7 +5481,7 @@
               "scheme": "https",
               "registry": "gcr.io",
               "repository": "distroless/java17-debian12",
-              "identifier": "sha256:5b2bf92d1b31a334c270a7310ca752c46d6a76f9fd84602b18bdee252fa25f08",
+              "identifier": "sha256:b349a96c203935a65aa54bd11692a28a44a8e67c8507bd9f4d3d302b44091b6d",
               "platform": "linux/amd64",
               "target_name": "java_debug_image_base_linux_amd64"
             }
@@ -5626,7 +5626,7 @@
               "scheme": "https",
               "registry": "gcr.io",
               "repository": "distroless/java17-debian12",
-              "identifier": "sha256:5b2bf92d1b31a334c270a7310ca752c46d6a76f9fd84602b18bdee252fa25f08",
+              "identifier": "sha256:b349a96c203935a65aa54bd11692a28a44a8e67c8507bd9f4d3d302b44091b6d",
               "platforms": {
                 "@@platforms//cpu:x86_64": "@java_debug_image_base_linux_amd64"
               },
