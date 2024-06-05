@@ -19,6 +19,7 @@ import com.google.protobuf.kotlin.toByteString
 import java.security.MessageDigest
 import java.util.Base64
 import java.util.concurrent.CompletableFuture
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
@@ -28,10 +29,14 @@ import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.flow.withIndex
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.reactive.asFlow
+import org.reactivestreams.Publisher
 import org.wfanet.measurement.common.BYTES_PER_MIB
 import org.wfanet.measurement.common.asBufferedFlow
+import org.wfanet.measurement.common.asFlow
 import org.wfanet.measurement.common.crypto.update
 import org.wfanet.measurement.storage.StorageClient
+import software.amazon.awssdk.core.ResponseBytes
+import software.amazon.awssdk.core.ResponseInputStream
 import software.amazon.awssdk.core.async.AsyncRequestBody
 import software.amazon.awssdk.core.async.AsyncResponseTransformer
 import software.amazon.awssdk.core.async.ResponsePublisher
@@ -49,6 +54,7 @@ import software.amazon.awssdk.services.s3.model.UploadPartResponse
 
 /** S3 requires each part of a multipart upload (except the last) is at least 5 MB. */
 private const val WRITE_BUFFER_SIZE = BYTES_PER_MIB * 5
+private const val READ_BUFFER_SIZE = BYTES_PER_MIB * 5
 
 /** Amazon Web Services (AWS) S3 implementation of [StorageClient] for a single bucket. */
 class S3StorageClient(private val s3: S3AsyncClient, private val bucketName: String) :
@@ -160,16 +166,16 @@ class S3StorageClient(private val s3: S3AsyncClient, private val bucketName: Str
     override val size: Long = head.contentLength()
 
     override fun read(): Flow<ByteString> {
-      val responseFuture: CompletableFuture<ResponsePublisher<GetObjectResponse>> =
+      val responseFuture: CompletableFuture<ResponseInputStream<GetObjectResponse>> =
         s3.getObject(
           {
             it.bucket(bucketName)
             it.key(blobKey)
           },
-          AsyncResponseTransformer.toPublisher()
+          AsyncResponseTransformer.toBlockingInputStream()
         )
 
-      return flow { emitAll(responseFuture.await().asFlow().map { it.toByteString() }) }
+      return flow { emitAll(responseFuture.await().asFlow(READ_BUFFER_SIZE, Dispatchers.IO)) }
     }
 
     override suspend fun delete() {

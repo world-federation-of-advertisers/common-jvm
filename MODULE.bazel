@@ -143,7 +143,7 @@ maven.artifact(
     testonly = True,
     artifact = "s3mock-junit4",
     group = "com.adobe.testing",
-    version = "2.2.3",
+    version = "3.3.0",
 )
 maven.artifact(
     testonly = True,

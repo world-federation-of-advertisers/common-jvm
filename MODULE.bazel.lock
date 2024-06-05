@@ -1,6 +1,6 @@
 {
   "lockFileVersion": 3,
-  "moduleFileHash": "377b8dd9a0cf58144e510beba9edd3f829ea0d70f30083268b7c6b8b48fefce0",
+  "moduleFileHash": "9197883237a1e058a1f65a8b906eaae12243a0da1f6260c5b33bb63d9bf0db36",
   "flags": {
     "cmdRegistries": [
       "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main",
@@ -195,7 +195,7 @@
                 "testonly": true,
                 "artifact": "s3mock-junit4",
                 "group": "com.adobe.testing",
-                "version": "2.2.3"
+                "version": "3.3.0"
               },
               "devDependency": false,
               "location": {
@@ -4690,7 +4690,7 @@
                 "{ \"group\": \"org.testcontainers\", \"artifact\": \"database-commons\", \"version\": \"1.19.3\", \"testonly\": true }",
                 "{ \"group\": \"org.testcontainers\", \"artifact\": \"jdbc\", \"version\": \"1.19.3\", \"testonly\": true }",
                 "{ \"group\": \"org.testcontainers\", \"artifact\": \"postgresql\", \"version\": \"1.19.3\", \"testonly\": true }",
-                "{ \"group\": \"com.adobe.testing\", \"artifact\": \"s3mock-junit4\", \"version\": \"2.2.3\", \"testonly\": true }",
+                "{ \"group\": \"com.adobe.testing\", \"artifact\": \"s3mock-junit4\", \"version\": \"3.3.0\", \"testonly\": true }",
                 "{ \"group\": \"io.grpc\", \"artifact\": \"grpc-testing\", \"version\": \"1.60.2\", \"testonly\": true }",
                 "{ \"group\": \"io.grpc\", \"artifact\": \"grpc-core\", \"version\": \"1.60.2\", \"exclusions\": [{ \"group\": \"io.grpc\", \"artifact\": \"grpc-util\" }] }",
                 "{ \"group\": \"com.google.protobuf\", \"artifact\": \"protobuf-java\", \"version\": \"3.23.4\", \"force_version\": true }",
