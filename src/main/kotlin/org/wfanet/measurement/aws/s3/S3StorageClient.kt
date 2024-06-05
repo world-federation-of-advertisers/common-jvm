@@ -15,7 +15,6 @@
 package org.wfanet.measurement.aws.s3
 
 import com.google.protobuf.ByteString
-import com.google.protobuf.kotlin.toByteString
 import java.security.MessageDigest
 import java.util.Base64
 import java.util.concurrent.CompletableFuture
@@ -28,18 +27,14 @@ import kotlinx.coroutines.flow.onEmpty
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.flow.withIndex
 import kotlinx.coroutines.future.await
-import kotlinx.coroutines.reactive.asFlow
-import org.reactivestreams.Publisher
 import org.wfanet.measurement.common.BYTES_PER_MIB
 import org.wfanet.measurement.common.asBufferedFlow
 import org.wfanet.measurement.common.asFlow
 import org.wfanet.measurement.common.crypto.update
 import org.wfanet.measurement.storage.StorageClient
-import software.amazon.awssdk.core.ResponseBytes
 import software.amazon.awssdk.core.ResponseInputStream
 import software.amazon.awssdk.core.async.AsyncRequestBody
 import software.amazon.awssdk.core.async.AsyncResponseTransformer
-import software.amazon.awssdk.core.async.ResponsePublisher
 import software.amazon.awssdk.services.s3.S3AsyncClient
 import software.amazon.awssdk.services.s3.model.AbortMultipartUploadResponse
 import software.amazon.awssdk.services.s3.model.CompleteMultipartUploadResponse
@@ -81,7 +76,7 @@ class S3StorageClient(private val s3: S3AsyncClient, private val bucketName: Str
   private fun uploadParts(
     blobKey: String,
     content: Flow<ByteString>,
-    uploadId: String
+    uploadId: String,
   ): Flow<CompletedPart> {
     val digest = MessageDigest.getInstance("MD5")
     val requestBuilder =
@@ -114,7 +109,7 @@ class S3StorageClient(private val s3: S3AsyncClient, private val bucketName: Str
   private suspend fun completeUpload(
     blobKey: String,
     uploadId: String,
-    completedParts: Flow<CompletedPart>
+    completedParts: Flow<CompletedPart>,
   ): CompleteMultipartUploadResponse {
     val completedPartsList = completedParts.toList()
     return s3
@@ -129,7 +124,7 @@ class S3StorageClient(private val s3: S3AsyncClient, private val bucketName: Str
 
   private suspend fun cancelUpload(
     blobKey: String,
-    uploadId: String
+    uploadId: String,
   ): AbortMultipartUploadResponse {
     return s3
       .abortMultipartUpload {
@@ -172,7 +167,7 @@ class S3StorageClient(private val s3: S3AsyncClient, private val bucketName: Str
             it.bucket(bucketName)
             it.key(blobKey)
           },
-          AsyncResponseTransformer.toBlockingInputStream()
+          AsyncResponseTransformer.toBlockingInputStream(),
         )
 
       return flow { emitAll(responseFuture.await().asFlow(READ_BUFFER_SIZE, Dispatchers.IO)) }
