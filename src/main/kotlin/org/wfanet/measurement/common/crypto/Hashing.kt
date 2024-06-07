@@ -16,10 +16,11 @@ package org.wfanet.measurement.common.crypto
 
 import com.google.protobuf.ByteString
 import com.google.protobuf.kotlin.toByteString
-import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.security.MessageDigest
+import java.time.Instant
 import kotlinx.coroutines.flow.Flow
+import org.wfanet.measurement.common.toReadOnlyByteBuffer
 
 private const val SHA_256 = "SHA-256"
 
@@ -35,8 +36,18 @@ object Hashing {
    * @param byteOrder the byte order to use when converting [data] to bytes
    */
   fun hashSha256(data: Long, byteOrder: ByteOrder = ByteOrder.BIG_ENDIAN): ByteString {
-    val buffer = ByteBuffer.allocate(8).order(byteOrder).putLong(data).asReadOnlyBuffer()
-    buffer.flip()
+    val buffer = data.toReadOnlyByteBuffer(byteOrder)
+    return newSha256Hasher().apply { update(buffer) }.digest().toByteString()
+  }
+
+  /**
+   * Computes the SHA-256 hash of the concatenation of [Instant.getEpochSecond] and
+   * [Instant.getNano].
+   *
+   * @param byteOrder the byte order to use when converting [data] to bytes
+   */
+  fun hashSha256(data: Instant, byteOrder: ByteOrder = ByteOrder.BIG_ENDIAN): ByteString {
+    val buffer = data.toReadOnlyByteBuffer(byteOrder)
     return newSha256Hasher().apply { update(buffer) }.digest().toByteString()
   }
 
