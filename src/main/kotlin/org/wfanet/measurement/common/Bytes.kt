@@ -21,6 +21,7 @@ import java.io.InputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.channels.ReadableByteChannel
+import java.time.Instant
 import java.util.Stack
 import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.Dispatchers
@@ -40,7 +41,7 @@ const val BYTES_PER_MIB = 1024 * 1024
 
 @Deprecated(
   "Use com.google.protobuf.kotlin.toByteString",
-  ReplaceWith("toByteString()", "com.google.protobuf.kotlin.toByteString")
+  ReplaceWith("toByteString()", "com.google.protobuf.kotlin.toByteString"),
 )
 fun ByteArray.toByteString(): ByteString = toByteString()
 
@@ -95,6 +96,25 @@ fun Long.toReadOnlyByteBuffer(byteOrder: ByteOrder = ByteOrder.BIG_ENDIAN): Byte
   val buffer = ByteBuffer.allocate(8).order(byteOrder).putLong(this)
   buffer.flip()
   return buffer.asReadOnlyBuffer()
+}
+
+/**
+ * Converts this [Instant] to a [ByteBuffer] containing the concatenation of
+ * [Instant.getEpochSecond] and [Instant.getNano].
+ *
+ * @param byteOrder the byte order to use when converting the [Instant] to bytes. Note that this
+ *   does not affect the [order][ByteBuffer.order] of the returned [ByteBuffer], which is always
+ *   [ByteOrder.BIG_ENDIAN].
+ */
+fun Instant.toReadOnlyByteBuffer(byteOrder: ByteOrder = ByteOrder.BIG_ENDIAN): ByteBuffer {
+  return ByteBuffer.allocate(8 + 4)
+    .apply {
+      order(byteOrder)
+      putLong(epochSecond)
+      putInt(nano)
+      flip()
+    }
+    .asReadOnlyBuffer()
 }
 
 /**
@@ -238,7 +258,7 @@ fun Flow<ByteString>.asBufferedFlow(bufferSize: Int): Flow<ByteString> = flow {
  */
 private suspend fun ByteStringOutputBuffer.putEmittingFull(
   source: Iterable<ByteBuffer>,
-  collector: FlowCollector<ByteString>
+  collector: FlowCollector<ByteString>,
 ) {
   for (buffer in source) {
     while (buffer.hasRemaining()) {
@@ -258,7 +278,7 @@ private suspend fun ByteStringOutputBuffer.putEmittingFull(
  */
 fun ReadableByteChannel.asFlow(
   bufferSize: Int,
-  coroutineContext: @BlockingExecutor CoroutineContext = Dispatchers.IO
+  coroutineContext: @BlockingExecutor CoroutineContext = Dispatchers.IO,
 ): Flow<ByteString> {
   require(bufferSize > 0)
 
@@ -304,7 +324,7 @@ private suspend fun FlowCollector<ByteString>.emitFrom(buffer: ByteBuffer) {
  */
 fun InputStream.asFlow(
   bufferSize: Int,
-  coroutineContext: @BlockingExecutor CoroutineContext = Dispatchers.IO
+  coroutineContext: @BlockingExecutor CoroutineContext = Dispatchers.IO,
 ): Flow<ByteString> {
   require(bufferSize > 0)
 
@@ -332,7 +352,7 @@ fun Byte.toStringHex(): String {
 /** Converts a hex string to its equivalent [ByteString]. */
 @Deprecated(
   "Use HexString for stronger typing",
-  ReplaceWith("HexString(this).bytes", "org.wfanet.measurement.common.HexString")
+  ReplaceWith("HexString(this).bytes", "org.wfanet.measurement.common.HexString"),
 )
 fun String.hexAsByteString(): ByteString {
   return HexString(this).bytes
