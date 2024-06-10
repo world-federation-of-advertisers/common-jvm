@@ -33,6 +33,7 @@ import software.amazon.awssdk.utils.AttributeMap
 private const val BUCKET = "test-bucket"
 
 class S3StorageClientTest : AbstractStorageClientTest<S3StorageClient>() {
+  // TODO: Replace the s3MockRule with @ExtendWith(S3MockExtension.class) after junit 4->5 update
   @get:Rule val s3MockRule: S3MockRule = S3MockRule.builder().silent().build()
 
   @Before
