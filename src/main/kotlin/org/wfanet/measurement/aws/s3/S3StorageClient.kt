@@ -49,7 +49,6 @@ import software.amazon.awssdk.services.s3.model.UploadPartResponse
 
 /** S3 requires each part of a multipart upload (except the last) is at least 5 MB. */
 private const val WRITE_BUFFER_SIZE = BYTES_PER_MIB * 5
-private const val READ_BUFFER_SIZE = BYTES_PER_MIB * 5
 
 /** Amazon Web Services (AWS) S3 implementation of [StorageClient] for a single bucket. */
 class S3StorageClient(private val s3: S3AsyncClient, private val bucketName: String) :
