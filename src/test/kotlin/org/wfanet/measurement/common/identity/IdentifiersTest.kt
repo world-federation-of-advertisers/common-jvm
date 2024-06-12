@@ -34,6 +34,8 @@ class IdentifiersTest {
 
       assertThat(apiId1.value).isEqualTo(apiId2.value)
       assertThat(externalId1.value).isEqualTo(externalId2.value)
+
+      assertThat(ExternalId(6980526195429881048).apiId.value).isEqualTo("0")
     }
   }
 

@@ -8,6 +8,7 @@ kt_jvm_library(
     name = "gcs",
     srcs = glob(["*.kt"]),
     deps = [
+        "//imports/java/com/google/api/client",
         "//imports/java/com/google/cloud/storage",
         "//imports/java/picocli",
         "//imports/kotlin/kotlinx/coroutines:core",
