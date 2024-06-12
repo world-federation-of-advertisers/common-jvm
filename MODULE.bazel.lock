@@ -1,6 +1,6 @@
 {
   "lockFileVersion": 3,
-  "moduleFileHash": "08281ebae2ef147b4dcb642729e7a4bd859f6a9f150c599976beeca345aca3eb",
+  "moduleFileHash": "0983da7e35f590805356593a6bca428415a44122ecc402af3c9b42b60863631a",
   "flags": {
     "cmdRegistries": [
       "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main",
@@ -260,7 +260,6 @@
                   "org.jetbrains:annotations:23.0.0",
                   "info.picocli:picocli:4.4.0",
                   "com.google.api:api-common:2.22.0",
-                  "com.google.api-client:google-api-client:2.6.0",
                   "com.google.api:gax:2.39.0",
                   "com.google.apis:google-api-services-bigquery:v2-rev20231111-2.0.0",
                   "com.google.cloud:google-cloud-core:2.29.0",
@@ -337,7 +336,7 @@
           "usingModule": "<root>",
           "location": {
             "file": "@@//:MODULE.bazel",
-            "line": 253,
+            "line": 252,
             "column": 20
           },
           "imports": {
@@ -359,7 +358,7 @@
               "devDependency": false,
               "location": {
                 "file": "@@//:MODULE.bazel",
-                "line": 254,
+                "line": 253,
                 "column": 9
               }
             },
@@ -376,7 +375,7 @@
               "devDependency": false,
               "location": {
                 "file": "@@//:MODULE.bazel",
-                "line": 261,
+                "line": 260,
                 "column": 9
               }
             }
@@ -412,7 +411,7 @@
               "devDependency": false,
               "location": {
                 "file": "@@//:MODULE.bazel",
-                "line": 276,
+                "line": 275,
                 "column": 13
               }
             },
@@ -428,7 +427,7 @@
               "devDependency": false,
               "location": {
                 "file": "@@//:MODULE.bazel",
-                "line": 283,
+                "line": 282,
                 "column": 13
               }
             }
@@ -4700,7 +4699,6 @@
                 "{ \"group\": \"org.jetbrains\", \"artifact\": \"annotations\", \"version\": \"23.0.0\" }",
                 "{ \"group\": \"info.picocli\", \"artifact\": \"picocli\", \"version\": \"4.4.0\" }",
                 "{ \"group\": \"com.google.api\", \"artifact\": \"api-common\", \"version\": \"2.22.0\" }",
-                "{ \"group\": \"com.google.api-client\", \"artifact\": \"google-api-client\", \"version\": \"2.6.0\" }",
                 "{ \"group\": \"com.google.api\", \"artifact\": \"gax\", \"version\": \"2.39.0\" }",
                 "{ \"group\": \"com.google.apis\", \"artifact\": \"google-api-services-bigquery\", \"version\": \"v2-rev20231111-2.0.0\" }",
                 "{ \"group\": \"com.google.cloud\", \"artifact\": \"google-cloud-core\", \"version\": \"2.29.0\" }",

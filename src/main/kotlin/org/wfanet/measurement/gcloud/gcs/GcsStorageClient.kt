@@ -40,8 +40,6 @@ import org.wfanet.measurement.storage.StorageClient
  */
 private const val READ_BUFFER_SIZE = BYTES_PER_MIB * 2
 
-private val RETRIABLE_HTTP_CODES = listOf(502, 503, 504)
-
 /**
  * Google Cloud Storage (GCS) implementation of [StorageClient] for a single bucket.
  *

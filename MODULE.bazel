@@ -173,7 +173,6 @@ maven.install(
         "org.jetbrains:annotations:23.0.0",
         "info.picocli:picocli:4.4.0",
         "com.google.api:api-common:2.22.0",
-        "com.google.api-client:google-api-client:2.6.0",
         "com.google.api:gax:2.39.0",
         "com.google.apis:google-api-services-bigquery:v2-rev20231111-2.0.0",
         "com.google.cloud:google-cloud-core:2.29.0",
