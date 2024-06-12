@@ -26,13 +26,21 @@ import kotlinx.coroutines.flow.flowOf
  * existing blob.
  */
 interface StorageClient {
-  /** Writes [content] to a blob with [blobKey]. */
+  /**
+   * Writes [content] to a blob with [blobKey].
+   *
+   * @throws MaxAttemptsReachedWritingException when running out of retries.
+   * @throws PermanentWritingException when encountering permanent error.
+   */
   suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): Blob
 
   /**
    * Writes [content] to a blob with [blobKey].
    *
    * Prefer the [Flow] overload if your content is not already a [ByteString] and not all in memory.
+   *
+   * @throws MaxAttemptsReachedWritingException when running out of retries.
+   * @throws PermanentWritingException when encountering permanent error.
    */
   suspend fun writeBlob(blobKey: String, content: ByteString) = writeBlob(blobKey, flowOf(content))
 
@@ -54,3 +62,16 @@ interface StorageClient {
     suspend fun delete()
   }
 }
+
+open class StorageException(message: String?, cause: Throwable? = null) : Exception(message, cause)
+
+/**
+ * [Exception] which indicates the max attempts has been reached. [message] and [cause] reflect the
+ * transient error of the last attempt.
+ */
+class MaxAttemptsReachedWritingException(message: String? = null, cause: Throwable? = null) :
+  StorageException(message, cause)
+
+/** [Exception] which indicates a permanent writing error. */
+class PermanentWritingException(message: String? = null, cause: Throwable? = null) :
+  StorageException(message, cause)
