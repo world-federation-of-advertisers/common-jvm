@@ -19,17 +19,18 @@ import com.google.cloud.storage.BlobInfo
 import com.google.cloud.storage.Storage
 import com.google.cloud.storage.StorageException
 import com.google.protobuf.ByteString
-import io.grpc.Status
 import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.time.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.yield
 import org.jetbrains.annotations.BlockingExecutor
 import org.wfanet.measurement.common.BYTES_PER_MIB
+import org.wfanet.measurement.common.ExponentialBackoff
 import org.wfanet.measurement.common.asFlow
 import org.wfanet.measurement.storage.StorageClient
 
@@ -51,42 +52,55 @@ class GcsStorageClient(
   private val storage: Storage,
   private val bucketName: String,
   private val blockingContext: @BlockingExecutor CoroutineContext = Dispatchers.IO,
+  private val maxAttempts: Int = 5,
+  private val retryBackoff: ExponentialBackoff = ExponentialBackoff(),
 ) : StorageClient {
 
   /**
    * Write [content] into a blob in storage.
    *
-   * @throws StorageException when running out of retries or error is permanent.
+   * @throws MaxAttemptsReachedWritingError when running out of retries.
+   * @throws PermanentWritingError when encountering permanent error.
    */
-  override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob =
-    withContext(blockingContext + CoroutineName("writeBlob")) {
+  override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
+    var attempt = 1
+    while (true) {
       try {
-        val blob = storage.create(BlobInfo.newBuilder(bucketName, blobKey).build())
+        return writeBlobHelper(blobKey, content)
+      } catch (e: StorageException) {
+        if (!e.isRetryable) {
+          throw PermanentWritingError("Fail to write blob due to permanent error", e)
+        }
 
-        blob.writer().use { byteChannel ->
-          content.collect { bytes ->
-            for (buffer in bytes.asReadOnlyByteBufferList()) {
-              while (buffer.hasRemaining() && currentCoroutineContext().isActive) {
-                // Writer has its own internal buffering, so we can just use whatever buffers we
-                // already have.
-                if (byteChannel.write(buffer) == 0) {
-                  // Nothing was written, so we may have a non-blocking channel that nothing can be
-                  // written to right now. Suspend this coroutine to avoid monopolizing the thread.
-                  yield()
-                }
+        attempt += 1
+        if (attempt > maxAttempts) {
+          throw MaxAttemptsReachedWritingError("Reach max attempts.", e)
+        }
+        delay(retryBackoff.durationForAttempt(attempt))
+      }
+    }
+  }
+
+  private suspend fun writeBlobHelper(blobKey: String, content: Flow<ByteString>) =
+    withContext(blockingContext + CoroutineName("writeBlob")) {
+      val blob = storage.create(BlobInfo.newBuilder(bucketName, blobKey).build())
+
+      blob.writer().use { byteChannel ->
+        content.collect { bytes ->
+          for (buffer in bytes.asReadOnlyByteBufferList()) {
+            while (buffer.hasRemaining() && currentCoroutineContext().isActive) {
+              // Writer has its own internal buffering, so we can just use whatever buffers we
+              // already have.
+              if (byteChannel.write(buffer) == 0) {
+                // Nothing was written, so we may have a non-blocking channel that nothing can be
+                // written to right now. Suspend this coroutine to avoid monopolizing the thread.
+                yield()
               }
             }
           }
         }
-        ClientBlob(blob.reload())
-      } catch (e: StorageException) {
-        val message = "Fail to write blob."
-        if (e.isRetryable) {
-          throw Status.UNAVAILABLE.withDescription(message).withCause(e).asRuntimeException()
-        } else {
-          throw Status.UNKNOWN.withDescription(message).withCause(e).asRuntimeException()
-        }
       }
+      ClientBlob(blob.reload())
     }
 
   override suspend fun getBlob(blobKey: String): StorageClient.Blob? {
@@ -113,6 +127,17 @@ class GcsStorageClient(
       }
     }
   }
+
+  /**
+   * [Exception] which indicates the max attempts has been reached. [message] and [cause] reflect
+   * the transient error of the last attempt.
+   */
+  class MaxAttemptsReachedWritingError(message: String? = null, cause: Throwable? = null) :
+    Exception(message, cause)
+
+  /** [Exception] which indicates a permanent writing error. */
+  class PermanentWritingError(message: String? = null, cause: Throwable? = null) :
+    Exception(message, cause)
 
   companion object {
     /** Constructs a [GcsStorageClient] from command-line flags. */
