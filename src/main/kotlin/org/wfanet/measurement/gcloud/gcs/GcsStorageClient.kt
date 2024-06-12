@@ -53,6 +53,11 @@ class GcsStorageClient(
   private val blockingContext: @BlockingExecutor CoroutineContext = Dispatchers.IO,
 ) : StorageClient {
 
+  /**
+   * Write [content] into a blob in storage.
+   *
+   * @throws StorageException when running out of retries or error is permanent.
+   */
   override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob =
     withContext(blockingContext + CoroutineName("writeBlob")) {
       try {
@@ -81,8 +86,6 @@ class GcsStorageClient(
         } else {
           throw Status.UNKNOWN.withDescription(message).withCause(e).asRuntimeException()
         }
-      } catch (e: Exception) {
-        throw e
       }
     }
 
