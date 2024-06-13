@@ -17,7 +17,7 @@ package org.wfanet.measurement.gcloud.gcs
 import com.google.cloud.storage.Blob
 import com.google.cloud.storage.BlobInfo
 import com.google.cloud.storage.Storage
-import com.google.cloud.storage.StorageException
+import com.google.cloud.storage.StorageException as GcsStorageException
 import com.google.protobuf.ByteString
 import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.CoroutineName
@@ -33,8 +33,8 @@ import org.wfanet.measurement.common.BYTES_PER_MIB
 import org.wfanet.measurement.common.ExponentialBackoff
 import org.wfanet.measurement.common.asFlow
 import org.wfanet.measurement.storage.MaxAttemptsReachedWritingException
-import org.wfanet.measurement.storage.PermanentWritingException
 import org.wfanet.measurement.storage.StorageClient
+import org.wfanet.measurement.storage.StorageException
 
 /**
  * Size of byte buffer used to read blobs.
@@ -60,26 +60,23 @@ class GcsStorageClient(
 
   /** Write [content] into a blob in storage. */
   override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
-    withContext(blockingContext + CoroutineName("writeBlob")) {
-      var attempt = 1
-      while (isActive) {
-        try {
-          return@withContext writeBlobInternal(blobKey, content)
-        } catch (e: StorageException) {
-          if (!e.isRetryable) {
-            throw PermanentWritingException("Fail to write blob due to permanent error", e)
-          }
+    var attempt = 1
+    while (true) {
+      try {
+        return writeBlobInternal(blobKey, content)
+      } catch (e: GcsStorageException) {
+        if (!e.isRetryable) {
+          throw StorageException("Fail to write blob due to non-retriable error", e)
+        }
 
-          attempt += 1
-          if (attempt > maxAttempts) {
-            throw MaxAttemptsReachedWritingException("Reach max attempts.", e)
-          } else {
-            delay(retryBackoff.durationForAttempt(attempt))
-          }
+        attempt += 1
+        if (attempt > maxAttempts) {
+          throw MaxAttemptsReachedWritingException("Reach max attempts.", e)
+        } else {
+          delay(retryBackoff.durationForAttempt(attempt))
         }
       }
     }
-    throw PermanentWritingException("writing blob canceled.")
   }
 
   /**
@@ -90,26 +87,27 @@ class GcsStorageClient(
   private suspend fun writeBlobInternal(
     blobKey: String,
     content: Flow<ByteString>,
-  ): StorageClient.Blob {
-    val blob = storage.create(BlobInfo.newBuilder(bucketName, blobKey).build())
+  ): StorageClient.Blob =
+    withContext(blockingContext + CoroutineName("writeBlob")) {
+      val blob = storage.create(BlobInfo.newBuilder(bucketName, blobKey).build())
 
-    blob.writer().use { byteChannel ->
-      content.collect { bytes ->
-        for (buffer in bytes.asReadOnlyByteBufferList()) {
-          while (buffer.hasRemaining() && currentCoroutineContext().isActive) {
-            // Writer has its own internal buffering, so we can just use whatever buffers we
-            // already have.
-            if (byteChannel.write(buffer) == 0) {
-              // Nothing was written, so we may have a non-blocking channel that nothing can be
-              // written to right now. Suspend this coroutine to avoid monopolizing the thread.
-              yield()
+      blob.writer().use { byteChannel ->
+        content.collect { bytes ->
+          for (buffer in bytes.asReadOnlyByteBufferList()) {
+            while (buffer.hasRemaining() && currentCoroutineContext().isActive) {
+              // Writer has its own internal buffering, so we can just use whatever buffers we
+              // already have.
+              if (byteChannel.write(buffer) == 0) {
+                // Nothing was written, so we may have a non-blocking channel that nothing can be
+                // written to right now. Suspend this coroutine to avoid monopolizing the thread.
+                yield()
+              }
             }
           }
         }
       }
+      ClientBlob(blob.reload())
     }
-    return ClientBlob(blob.reload())
-  }
 
   override suspend fun getBlob(blobKey: String): StorageClient.Blob? {
     val blob: Blob? =

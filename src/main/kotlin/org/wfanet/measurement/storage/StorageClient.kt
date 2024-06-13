@@ -66,12 +66,8 @@ interface StorageClient {
 open class StorageException(message: String?, cause: Throwable? = null) : Exception(message, cause)
 
 /**
- * [Exception] which indicates the max attempts has been reached. [message] and [cause] reflect the
+ * [StorageException] which indicates the max attempts has been reached. [cause] reflects the
  * transient error of the last attempt.
  */
 class MaxAttemptsReachedWritingException(message: String? = null, cause: Throwable? = null) :
-  StorageException(message, cause)
-
-/** [Exception] which indicates a permanent writing error. */
-class PermanentWritingException(message: String? = null, cause: Throwable? = null) :
   StorageException(message, cause)
