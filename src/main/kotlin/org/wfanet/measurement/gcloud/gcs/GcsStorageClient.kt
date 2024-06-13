@@ -17,6 +17,7 @@ package org.wfanet.measurement.gcloud.gcs
 import com.google.cloud.storage.Blob
 import com.google.cloud.storage.BlobInfo
 import com.google.cloud.storage.Storage
+import com.google.cloud.storage.StorageException as GcsStorageException
 import com.google.protobuf.ByteString
 import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.CoroutineName
@@ -24,12 +25,16 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.time.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.yield
 import org.jetbrains.annotations.BlockingExecutor
 import org.wfanet.measurement.common.BYTES_PER_MIB
+import org.wfanet.measurement.common.ExponentialBackoff
 import org.wfanet.measurement.common.asFlow
+import org.wfanet.measurement.storage.MaxAttemptsReachedWritingException
 import org.wfanet.measurement.storage.StorageClient
+import org.wfanet.measurement.storage.StorageException
 
 /**
  * Size of byte buffer used to read blobs.
@@ -48,10 +53,41 @@ private const val READ_BUFFER_SIZE = BYTES_PER_MIB * 2
 class GcsStorageClient(
   private val storage: Storage,
   private val bucketName: String,
-  private val blockingContext: @BlockingExecutor CoroutineContext = Dispatchers.IO
+  private val blockingContext: @BlockingExecutor CoroutineContext = Dispatchers.IO,
+  private val maxAttempts: Int = 5,
+  private val retryBackoff: ExponentialBackoff = ExponentialBackoff(),
 ) : StorageClient {
 
-  override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob =
+  /** Write [content] into a blob in storage. */
+  override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
+    var attempt = 1
+    while (true) {
+      try {
+        return writeBlobInternal(blobKey, content)
+      } catch (e: GcsStorageException) {
+        if (!e.isRetryable) {
+          throw StorageException("Fail to write blob due to non-retryable error", e)
+        }
+
+        attempt += 1
+        if (attempt > maxAttempts) {
+          throw MaxAttemptsReachedWritingException("Reach max attempts.", e)
+        } else {
+          delay(retryBackoff.durationForAttempt(attempt))
+        }
+      }
+    }
+  }
+
+  /**
+   * Write blob into storage.
+   *
+   * @throws [StorageException] if writing is not fully complete.
+   */
+  private suspend fun writeBlobInternal(
+    blobKey: String,
+    content: Flow<ByteString>,
+  ): StorageClient.Blob =
     withContext(blockingContext + CoroutineName("writeBlob")) {
       val blob = storage.create(BlobInfo.newBuilder(bucketName, blobKey).build())
 
