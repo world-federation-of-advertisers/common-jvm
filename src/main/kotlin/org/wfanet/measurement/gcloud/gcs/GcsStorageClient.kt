@@ -66,7 +66,7 @@ class GcsStorageClient(
         return writeBlobInternal(blobKey, content)
       } catch (e: GcsStorageException) {
         if (!e.isRetryable) {
-          throw StorageException("Fail to write blob due to non-retriable error", e)
+          throw StorageException("Fail to write blob due to non-retryable error", e)
         }
 
         attempt += 1
