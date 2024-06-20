@@ -95,3 +95,14 @@ kt_jvm_test(
         "//src/main/kotlin/org/wfanet/measurement/common/crypto/testing",
     ],
 )
+
+kt_jvm_test(
+    name = "SignedStoreTest",
+    srcs = ["SignedStoreTest.kt"],
+    test_class = "org.wfanet.measurement.common.crypto.SignedStoreTest",
+    deps = [
+        "//src/main/kotlin/org/wfanet/measurement/common/crypto:signed_store",
+        "//src/main/kotlin/org/wfanet/measurement/common/crypto/testing",
+        "//src/main/kotlin/org/wfanet/measurement/storage/testing",
+    ],
+)
