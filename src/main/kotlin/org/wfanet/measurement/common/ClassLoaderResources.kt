@@ -16,12 +16,17 @@
 
 package org.wfanet.measurement.common
 
+import java.io.File
 import java.net.URI
 import java.nio.file.FileSystems
+import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
+import java.nio.file.StandardCopyOption
+import kotlin.io.path.name
 
 private val ZIP_FS_PROPERTIES: Map<String, Any> = mapOf("create" to "true")
+private const val NATIVE_LIBRARY_PREFIX = "native"
 
 /**
  * Returns a [Path] to the resource with the specified [name] within a JAR.
@@ -37,4 +42,23 @@ fun ClassLoader.getJarResourcePath(name: String): Path? {
   FileSystems.newFileSystem(resourceUri, ZIP_FS_PROPERTIES)
 
   return Paths.get(resourceUri)
+}
+
+/** Loads a native library from the specified [path], regardless of filesystem. */
+fun Runtime.load(path: Path) {
+  if (path.fileSystem == FileSystems.getDefault()) {
+    load(path.toString())
+    return
+  }
+
+  // Need to copy to the default filesystem first.
+  val file: File = File.createTempFile(NATIVE_LIBRARY_PREFIX, path.name).apply { deleteOnExit() }
+  Files.copy(path, file.toPath(), StandardCopyOption.REPLACE_EXISTING)
+
+  try {
+    System.load(file.path)
+  } finally {
+    // It is safe to delete the file at this point.
+    file.delete()
+  }
 }

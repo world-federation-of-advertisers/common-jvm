@@ -20,36 +20,10 @@ load("@rules_oci//oci:defs.bzl", "oci_image", "oci_push_rule")
 load("@rules_pkg//pkg:mappings.bzl", "pkg_files")
 load("@rules_pkg//pkg:providers.bzl", "PackageFilesInfo")
 load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
-load("//build:defs.bzl", "expand_template")
+load("//build:defs.bzl", "expand_template", "java_native_libraries")
 
 DEFAULT_JAVA_IMAGE_BASE = Label("@java_image_base")
 DEFAULT_JAVA_DEBUG_IMAGE_BASE = Label("@java_debug_image_base")
-
-def _get_dynamic_libraries_for_linking(libraries):
-    libraries_for_linking = []
-    for library in libraries:
-        if library.interface_library != None:
-            libraries_for_linking.append(library.interface_library)
-        elif library.dynamic_library != None:
-            libraries_for_linking.append(library.dynamic_library)
-    return libraries_for_linking
-
-def _java_native_libraries_impl(ctx):
-    java_info = ctx.attr.binary[JavaInfo]
-    library_files = _get_dynamic_libraries_for_linking(
-        java_info.transitive_native_libraries.to_list(),
-    )
-    return DefaultInfo(files = depset(library_files))
-
-_java_native_libraries = rule(
-    implementation = _java_native_libraries_impl,
-    attrs = {
-        "binary": attr.label(
-            mandatory = True,
-            providers = [JavaInfo],
-        ),
-    },
-)
 
 def _get_repo_mapping_manifest(default_info):
     files_to_run = default_info.files_to_run
@@ -161,9 +135,9 @@ def java_image(
     )
 
     native_libraries_name = "{name}_native_libraries".format(name = name)
-    _java_native_libraries(
+    java_native_libraries(
         name = native_libraries_name,
-        binary = binary,
+        java_target = binary,
         visibility = ["//visibility:private"],
         **kwargs
     )
@@ -326,3 +300,5 @@ def container_push_all(
         visibility = visibility,
         **kwargs
     )
+
+java_native_libraries = _java_native_libraries
