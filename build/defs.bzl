@@ -89,3 +89,31 @@ expand_template = rule(
     },
     output_to_genfiles = True,
 )
+
+def _get_dynamic_libraries_for_linking(libraries):
+    libraries_for_linking = []
+    for library in libraries:
+        if library.interface_library != None:
+            libraries_for_linking.append(library.interface_library)
+        elif library.dynamic_library != None:
+            libraries_for_linking.append(library.dynamic_library)
+    return libraries_for_linking
+
+def _java_native_libraries_impl(ctx):
+    java_info = ctx.attr.java_target[JavaInfo]
+    library_files = _get_dynamic_libraries_for_linking(
+        java_info.transitive_native_libraries.to_list(),
+    )
+    return DefaultInfo(files = depset(library_files))
+
+java_native_libraries = rule(
+    doc = "Outputs the native library files for a Java target",
+    implementation = _java_native_libraries_impl,
+    attrs = {
+        "java_target": attr.label(
+            doc = "Label of target which provides JavaInfo",
+            mandatory = True,
+            providers = [JavaInfo],
+        ),
+    },
+)
