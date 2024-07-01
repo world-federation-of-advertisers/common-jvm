@@ -1,10 +1,15 @@
+load("@rules_jvm_external//:defs.bzl", "maven_export")
 load("@wfa_rules_kotlin_jvm//kotlin:defs.bzl", "kt_jvm_library")
+load("//build/maven:defs.bzl", "artifact_version")
 
 package(default_visibility = ["//visibility:public"])
+
+MAVEN_COORDINATES = "org.wfanet.measurement:common:" + artifact_version()
 
 kt_jvm_library(
     name = "common",
     srcs = glob(["*.kt"]),
+    tags = ["maven_coordinates=" + MAVEN_COORDINATES],
     deps = [
         "//imports/java/com/github/benmanes/caffeine",
         "//imports/java/com/google/common:guava",
@@ -18,4 +23,12 @@ kt_jvm_library(
         "//imports/kotlin/com/google/type:type_kt_jvm_proto",
         "//imports/kotlin/kotlinx/coroutines:core",
     ],
+)
+
+maven_export(
+    name = "common_maven",
+    lib_name = "common",
+    maven_coordinates = MAVEN_COORDINATES,
+    tags = ["no-javadocs"],
+    visibility = ["//visibility:private"],
 )
