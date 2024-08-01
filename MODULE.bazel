@@ -181,6 +181,7 @@ maven.install(
         "com.google.cloud:google-cloud-nio:0.127.8",
         "com.google.cloud:google-cloud-spanner:6.56.0",
         "com.google.cloud:google-cloud-bigquery:2.35.0",
+        "com.google.cloud:google-cloud-bigquerystorage:2.47.0",
         "com.google.code.gson:gson:2.10.1",
         "com.google.protobuf:protobuf-java-util:" + PROTOBUF_JAVA_VERSION,
         "io.grpc:grpc-census:" + GRPC_JAVA_VERSION,

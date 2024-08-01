@@ -1,6 +1,6 @@
 {
   "lockFileVersion": 3,
-  "moduleFileHash": "0983da7e35f590805356593a6bca428415a44122ecc402af3c9b42b60863631a",
+  "moduleFileHash": "7bc74c8c9eb0ab2a87e349b32c5d44fc814499c553714c9d2f79867e5165cc10",
   "flags": {
     "cmdRegistries": [
       "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main",
@@ -268,6 +268,7 @@
                   "com.google.cloud:google-cloud-nio:0.127.8",
                   "com.google.cloud:google-cloud-spanner:6.56.0",
                   "com.google.cloud:google-cloud-bigquery:2.35.0",
+                  "com.google.cloud:google-cloud-bigquerystorage:2.47.0",
                   "com.google.code.gson:gson:2.10.1",
                   "com.google.protobuf:protobuf-java-util:3.23.4",
                   "io.grpc:grpc-census:1.60.2",
@@ -336,7 +337,7 @@
           "usingModule": "<root>",
           "location": {
             "file": "@@//:MODULE.bazel",
-            "line": 252,
+            "line": 253,
             "column": 20
           },
           "imports": {
@@ -358,7 +359,7 @@
               "devDependency": false,
               "location": {
                 "file": "@@//:MODULE.bazel",
-                "line": 253,
+                "line": 254,
                 "column": 9
               }
             },
@@ -375,7 +376,7 @@
               "devDependency": false,
               "location": {
                 "file": "@@//:MODULE.bazel",
-                "line": 260,
+                "line": 261,
                 "column": 9
               }
             }
@@ -411,7 +412,7 @@
               "devDependency": false,
               "location": {
                 "file": "@@//:MODULE.bazel",
-                "line": 275,
+                "line": 276,
                 "column": 13
               }
             },
@@ -427,7 +428,7 @@
               "devDependency": false,
               "location": {
                 "file": "@@//:MODULE.bazel",
-                "line": 282,
+                "line": 283,
                 "column": 13
               }
             }
@@ -4707,6 +4708,7 @@
                 "{ \"group\": \"com.google.cloud\", \"artifact\": \"google-cloud-nio\", \"version\": \"0.127.8\" }",
                 "{ \"group\": \"com.google.cloud\", \"artifact\": \"google-cloud-spanner\", \"version\": \"6.56.0\" }",
                 "{ \"group\": \"com.google.cloud\", \"artifact\": \"google-cloud-bigquery\", \"version\": \"2.35.0\" }",
+                "{ \"group\": \"com.google.cloud\", \"artifact\": \"google-cloud-bigquerystorage\", \"version\": \"2.47.0\" }",
                 "{ \"group\": \"com.google.code.gson\", \"artifact\": \"gson\", \"version\": \"2.10.1\" }",
                 "{ \"group\": \"com.google.protobuf\", \"artifact\": \"protobuf-java-util\", \"version\": \"3.23.4\" }",
                 "{ \"group\": \"io.grpc\", \"artifact\": \"grpc-census\", \"version\": \"1.60.2\" }",
