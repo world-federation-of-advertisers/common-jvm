@@ -1,6 +1,6 @@
 {
   "lockFileVersion": 3,
-  "moduleFileHash": "0983da7e35f590805356593a6bca428415a44122ecc402af3c9b42b60863631a",
+  "moduleFileHash": "77e04fe8fd99e41bcdae19ac61cda914d7f22360b57fc5fd8187892ceea1859c",
   "flags": {
     "cmdRegistries": [
       "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main",
@@ -45,7 +45,7 @@
                 "testonly": true,
                 "artifact": "mockito-core",
                 "group": "org.mockito",
-                "version": "4.11.0"
+                "version": "5.12.0"
               },
               "devDependency": false,
               "location": {
@@ -60,7 +60,7 @@
                 "testonly": true,
                 "artifact": "mockito-kotlin",
                 "group": "org.mockito.kotlin",
-                "version": "4.1.0"
+                "version": "5.4.0"
               },
               "devDependency": false,
               "location": {
@@ -4680,8 +4680,8 @@
                 "{ \"repo_url\": \"https://repo1.maven.org/maven2\" }"
               ],
               "artifacts": [
-                "{ \"group\": \"org.mockito\", \"artifact\": \"mockito-core\", \"version\": \"4.11.0\", \"testonly\": true }",
-                "{ \"group\": \"org.mockito.kotlin\", \"artifact\": \"mockito-kotlin\", \"version\": \"4.1.0\", \"testonly\": true }",
+                "{ \"group\": \"org.mockito\", \"artifact\": \"mockito-core\", \"version\": \"5.12.0\", \"testonly\": true }",
+                "{ \"group\": \"org.mockito.kotlin\", \"artifact\": \"mockito-kotlin\", \"version\": \"5.4.0\", \"testonly\": true }",
                 "{ \"group\": \"com.google.truth\", \"artifact\": \"truth\", \"version\": \"1.1.2\", \"testonly\": true }",
                 "{ \"group\": \"com.google.truth.extensions\", \"artifact\": \"truth-java8-extension\", \"version\": \"1.1.2\", \"testonly\": true }",
                 "{ \"group\": \"com.google.truth.extensions\", \"artifact\": \"truth-proto-extension\", \"version\": \"1.1.2\", \"testonly\": true }",
