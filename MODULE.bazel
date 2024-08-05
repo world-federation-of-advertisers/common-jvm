@@ -83,13 +83,13 @@ maven.artifact(
     testonly = True,
     artifact = "mockito-core",
     group = "org.mockito",
-    version = "4.11.0",
+    version = "5.12.0",
 )
 maven.artifact(
     testonly = True,
     artifact = "mockito-kotlin",
     group = "org.mockito.kotlin",
-    version = "4.1.0",
+    version = "5.4.0",
 )
 maven.artifact(
     testonly = True,
