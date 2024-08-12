@@ -253,7 +253,7 @@ maven.install(
 )
 use_repo(maven, "maven")
 
-register_toolchains("//:kotlin_toolchain")
+register_toolchains("//build/rules_kotlin:kotlin_toolchain")
 
 oci = use_extension("@rules_oci//oci:extensions.bzl", "oci")
 oci.pull(
