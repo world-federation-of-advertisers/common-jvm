@@ -1,6 +1,6 @@
 {
   "lockFileVersion": 3,
-  "moduleFileHash": "462135bad6f47e52257f6ef83c0e0bc199099f89a2e59a1f0bc53909ed49b680",
+  "moduleFileHash": "f778b516e34449a50022155e6249764b2195b86a708529d1a35c07aa3ad00710",
   "flags": {
     "cmdRegistries": [
       "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main",
@@ -24,7 +24,7 @@
       "repoName": "wfa_common_jvm",
       "executionPlatformsToRegister": [],
       "toolchainsToRegister": [
-        "//:kotlin_toolchain"
+        "//build/rules_kotlin:kotlin_toolchain"
       ],
       "extensionUsages": [
         {
