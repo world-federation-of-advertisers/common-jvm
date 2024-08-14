@@ -27,9 +27,13 @@ inline fun <reified T : AbstractCoroutineServerImpl> mockService(
 ): T =
   mock(useConstructor = UseConstructor.parameterless()) { mock ->
     on { context }.thenCallRealMethod()
+    on { bindService() }.thenCallRealMethod()
     stubbing(mock)
   }
 
 /** Creates a mock for a gRPC coroutine service [T]. */
 inline fun <reified T : AbstractCoroutineServerImpl> mockService(): T =
-  mock(useConstructor = UseConstructor.parameterless()) { on { context }.thenCallRealMethod() }
+  mock(useConstructor = UseConstructor.parameterless()) {
+    on { context }.thenCallRealMethod()
+    on { bindService() }.thenCallRealMethod()
+  }
