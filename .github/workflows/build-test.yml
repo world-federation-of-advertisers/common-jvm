@@ -30,6 +30,9 @@ jobs:
     - name: Check out revision
       uses: actions/checkout@v3
 
+    - name: Set up Bazel
+      uses: world-federation-of-advertisers/actions/setup-bazel@v2
+
     - name: Write ~/.bazelrc
       run: |
         echo 'common --config=ci' >> ~/.bazelrc
@@ -48,17 +51,20 @@ jobs:
         restore-keys: |-
           ${{ steps.get-cache-params.outputs.restore-key }}
 
+    - name: Check lockfile
+      run: bazel mod deps
+
     - name: Build
-      run: bazelisk build //...
+      run: bazel build //...
 
     - name: Run tests
       id: run-tests
-      run: bazelisk test //...
+      run: bazel test //...
 
     # Delete large files that are relatively cheap to re-create.
     - name: Trim Bazel cache
       run: |
-        bazel_out="$(bazelisk info output_path)"
+        bazel_out="$(bazel info output_path)"
         find "${bazel_out}" -type f \( -iname '*.tar' -o -iname '*.tar.gz' \) -delete
         find "${bazel_out}" -type d -name sha256 -exec chmod -R +w "{}" \;
         find "${bazel_out}" -type f -path '*/sha256/*' -delete
