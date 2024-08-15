@@ -28,7 +28,7 @@ jobs:
     runs-on: ubuntu-20.04
     steps:
     - name: Check out revision
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Set up Bazel
       uses: world-federation-of-advertisers/actions/setup-bazel@v2
@@ -44,7 +44,7 @@ jobs:
         cache-version: 1
 
     - name: Restore Bazel cache
-      uses: actions/cache/restore@v3
+      uses: actions/cache/restore@v4
       with:
         path: ${{ steps.get-cache-params.outputs.cache-path }}
         key: ${{ steps.get-cache-params.outputs.cache-key }}
@@ -70,7 +70,7 @@ jobs:
         find "${bazel_out}" -type f -path '*/sha256/*' -delete
 
     - name: Save Bazel cache
-      uses: actions/cache/save@v3
+      uses: actions/cache/save@v4
       continue-on-error: true
       with:
         path: ${{ steps.get-cache-params.outputs.cache-path }}
