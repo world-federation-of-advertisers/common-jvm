@@ -15,9 +15,7 @@
 package org.wfanet.measurement.common.crypto.tink
 
 import com.google.crypto.tink.Aead
-import com.google.crypto.tink.BinaryKeysetReader
-import com.google.crypto.tink.BinaryKeysetWriter
-import com.google.crypto.tink.KeysetHandle
+import com.google.crypto.tink.TinkProtoKeysetFormat
 import com.google.protobuf.ByteString
 import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.withContext
@@ -29,25 +27,26 @@ import org.wfanet.measurement.common.flatten
 internal class PrivateKeyStore(
   private val store: KeyBlobStore,
   private val aead: Aead,
-  private val aeadContext: @BlockingExecutor CoroutineContext
+  private val aeadContext: @BlockingExecutor CoroutineContext,
 ) : CryptoPrivateKeyStore<TinkKeyId, TinkPrivateKeyHandle> {
 
   override suspend fun read(keyId: TinkKeyId): TinkPrivateKeyHandle? {
     val privateKeyBlob = store.get(keyId) ?: return null
-    return privateKeyBlob.read().flatten().newInput().use {
-      val keysetHandle =
-        withContext(aeadContext) { KeysetHandle.read(BinaryKeysetReader.withInputStream(it), aead) }
-      TinkPrivateKeyHandle(keysetHandle)
-    }
+    val privateKeyBlobFlat = privateKeyBlob.read().flatten().toByteArray()
+    val keysetHandle =
+      withContext(aeadContext) {
+        TinkProtoKeysetFormat.parseEncryptedKeyset(privateKeyBlobFlat, aead, byteArrayOf())
+      }
+    return TinkPrivateKeyHandle(keysetHandle)
   }
 
   override suspend fun write(privateKey: TinkPrivateKeyHandle): String {
-    return ByteString.newOutput().use {
+    val serializedKeyset =
       withContext(aeadContext) {
-        privateKey.keysetHandle.write(BinaryKeysetWriter.withOutputStream(it), aead)
+        TinkProtoKeysetFormat.serializeEncryptedKeyset(privateKey.keysetHandle, aead, byteArrayOf())
       }
-      val privateKeyBlob = store.write(TinkKeyId(privateKey.publicKey), it.toByteString())
-      privateKeyBlob.blobKey
-    }
+    val privateKeyBlob =
+      store.write(TinkKeyId(privateKey.publicKey), ByteString.copyFrom(serializedKeyset))
+    return privateKeyBlob.blobKey
   }
 }

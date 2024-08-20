@@ -14,13 +14,12 @@
 
 package org.wfanet.measurement.common.crypto.tink
 
-import com.google.crypto.tink.BinaryKeysetReader
-import com.google.crypto.tink.BinaryKeysetWriter
-import com.google.crypto.tink.CleartextKeysetHandle
 import com.google.crypto.tink.HybridDecrypt
 import com.google.crypto.tink.HybridEncrypt
+import com.google.crypto.tink.InsecureSecretKeyAccess
 import com.google.crypto.tink.KeyTemplates
 import com.google.crypto.tink.KeysetHandle
+import com.google.crypto.tink.TinkProtoKeysetFormat
 import com.google.crypto.tink.hybrid.HybridConfig
 import com.google.protobuf.ByteString
 import com.google.protobuf.kotlin.toByteString
@@ -34,10 +33,7 @@ class TinkPublicKeyHandle internal constructor(internal val keysetHandle: Keyset
   constructor(serializedKeyset: ByteString) : this(parseKeyset(serializedKeyset))
 
   fun toByteString(): ByteString {
-    return ByteString.newOutput().use {
-      keysetHandle.writeNoSecret(BinaryKeysetWriter.withOutputStream(it))
-      it.toByteString()
-    }
+    return ByteString.copyFrom(TinkProtoKeysetFormat.serializeKeysetWithoutSecret(keysetHandle))
   }
 
   override fun hybridEncrypt(plaintext: ByteString, contextInfo: ByteString?): ByteString {
@@ -52,9 +48,7 @@ class TinkPublicKeyHandle internal constructor(internal val keysetHandle: Keyset
     }
 
     private fun parseKeyset(serialized: ByteString): KeysetHandle {
-      return serialized.newInput().use {
-        KeysetHandle.readNoSecret(BinaryKeysetReader.withInputStream(it))
-      }
+      return TinkProtoKeysetFormat.parseKeysetWithoutSecret(serialized.toByteArray())
     }
   }
 }
@@ -94,18 +88,14 @@ class TinkPrivateKeyHandle internal constructor(internal val keysetHandle: Keyse
 
 /** Loads a private key from a cleartext binary Tink Keyset. */
 fun loadPrivateKey(binaryKeyset: File): TinkPrivateKeyHandle {
-  val keysetHandle: KeysetHandle =
-    binaryKeyset.inputStream().use { input ->
-      CleartextKeysetHandle.read(BinaryKeysetReader.withInputStream(input))
-    }
-  return TinkPrivateKeyHandle(keysetHandle)
+  return TinkPrivateKeyHandle(
+    TinkProtoKeysetFormat.parseKeyset(binaryKeyset.readBytes(), InsecureSecretKeyAccess.get())
+  )
 }
 
 /** Loads a public key from a cleartext binary Tink Keyset. */
 fun loadPublicKey(binaryKeyset: File): TinkPublicKeyHandle {
-  val keysetHandle: KeysetHandle =
-    binaryKeyset.inputStream().use { input ->
-      KeysetHandle.readNoSecret(BinaryKeysetReader.withInputStream(input))
-    }
-  return TinkPublicKeyHandle(keysetHandle)
+  return TinkPublicKeyHandle(
+    TinkProtoKeysetFormat.parseKeysetWithoutSecret(binaryKeyset.readBytes())
+  )
 }
