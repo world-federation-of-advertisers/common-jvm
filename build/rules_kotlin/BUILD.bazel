@@ -1,0 +1,8 @@
+load("@rules_kotlin//kotlin:core.bzl", "define_kt_toolchain")
+
+package(default_visibility = ["//visibility:public"])
+
+define_kt_toolchain(
+    name = "kotlin_toolchain",
+    jvm_target = "11",
+)
