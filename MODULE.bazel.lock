@@ -1,6 +1,6 @@
 {
   "lockFileVersion": 3,
-  "moduleFileHash": "42515b81571ae66134e02514183baa0ca2070bbca2d953760eec0b241417ee74",
+  "moduleFileHash": "44777e921a870e8747c79ebdc1e12d23aee3933aa66dd4a6b0b3123d24741bc1",
   "flags": {
     "cmdRegistries": [
       "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main",
@@ -33,7 +33,7 @@
           "usingModule": "<root>",
           "location": {
             "file": "@@//:MODULE.bazel",
-            "line": 85,
+            "line": 88,
             "column": 22
           },
           "imports": {
@@ -52,7 +52,7 @@
               "devDependency": false,
               "location": {
                 "file": "@@//:MODULE.bazel",
-                "line": 86,
+                "line": 89,
                 "column": 15
               }
             },
@@ -67,7 +67,7 @@
               "devDependency": false,
               "location": {
                 "file": "@@//:MODULE.bazel",
-                "line": 92,
+                "line": 95,
                 "column": 15
               }
             },
@@ -82,7 +82,7 @@
               "devDependency": false,
               "location": {
                 "file": "@@//:MODULE.bazel",
-                "line": 98,
+                "line": 101,
                 "column": 15
               }
             },
@@ -97,7 +97,7 @@
               "devDependency": false,
               "location": {
                 "file": "@@//:MODULE.bazel",
-                "line": 104,
+                "line": 107,
                 "column": 15
               }
             },
@@ -112,7 +112,7 @@
               "devDependency": false,
               "location": {
                 "file": "@@//:MODULE.bazel",
-                "line": 110,
+                "line": 113,
                 "column": 15
               }
             },
@@ -127,7 +127,7 @@
               "devDependency": false,
               "location": {
                 "file": "@@//:MODULE.bazel",
-                "line": 116,
+                "line": 119,
                 "column": 15
               }
             },
@@ -142,7 +142,7 @@
               "devDependency": false,
               "location": {
                 "file": "@@//:MODULE.bazel",
-                "line": 122,
+                "line": 125,
                 "column": 15
               }
             },
@@ -157,7 +157,7 @@
               "devDependency": false,
               "location": {
                 "file": "@@//:MODULE.bazel",
-                "line": 128,
+                "line": 131,
                 "column": 15
               }
             },
@@ -172,7 +172,7 @@
               "devDependency": false,
               "location": {
                 "file": "@@//:MODULE.bazel",
-                "line": 134,
+                "line": 137,
                 "column": 15
               }
             },
@@ -187,7 +187,7 @@
               "devDependency": false,
               "location": {
                 "file": "@@//:MODULE.bazel",
-                "line": 140,
+                "line": 143,
                 "column": 15
               }
             },
@@ -197,12 +197,12 @@
                 "testonly": true,
                 "artifact": "s3mock-junit4",
                 "group": "com.adobe.testing",
-                "version": "2.2.3"
+                "version": "3.3.0"
               },
               "devDependency": false,
               "location": {
                 "file": "@@//:MODULE.bazel",
-                "line": 146,
+                "line": 149,
                 "column": 15
               }
             },
@@ -217,7 +217,7 @@
               "devDependency": false,
               "location": {
                 "file": "@@//:MODULE.bazel",
-                "line": 152,
+                "line": 155,
                 "column": 15
               }
             },
@@ -234,7 +234,7 @@
               "devDependency": false,
               "location": {
                 "file": "@@//:MODULE.bazel",
-                "line": 158,
+                "line": 161,
                 "column": 15
               }
             },
@@ -249,7 +249,7 @@
               "devDependency": false,
               "location": {
                 "file": "@@//:MODULE.bazel",
-                "line": 166,
+                "line": 169,
                 "column": 15
               }
             },
@@ -286,11 +286,11 @@
                   "io.projectreactor:reactor-core:3.4.19",
                   "com.google.crypto.tink:tink:1.12.0",
                   "com.github.ben-manes.caffeine:caffeine:3.1.8",
-                  "software.amazon.awssdk:auth:2.17.258",
-                  "software.amazon.awssdk:regions:2.17.258",
-                  "software.amazon.awssdk:s3:2.17.258",
-                  "software.amazon.awssdk:secretsmanager:2.17.258",
-                  "software.amazon.awssdk:sts:2.17.258",
+                  "software.amazon.awssdk:auth:2.23.18",
+                  "software.amazon.awssdk:regions:2.23.18",
+                  "software.amazon.awssdk:s3:2.23.18",
+                  "software.amazon.awssdk:secretsmanager:2.23.18",
+                  "software.amazon.awssdk:sts:2.23.18",
                   "io.opentelemetry:opentelemetry-api:1.37.0",
                   "io.opentelemetry:opentelemetry-context:1.37.0",
                   "com.google.cloud.sql:postgres-socket-factory:1.12.0",
@@ -324,7 +324,7 @@
               "devDependency": false,
               "location": {
                 "file": "@@//:MODULE.bazel",
-                "line": 173,
+                "line": 176,
                 "column": 14
               }
             }
@@ -338,7 +338,7 @@
           "usingModule": "<root>",
           "location": {
             "file": "@@//:MODULE.bazel",
-            "line": 258,
+            "line": 261,
             "column": 20
           },
           "imports": {
@@ -360,7 +360,7 @@
               "devDependency": false,
               "location": {
                 "file": "@@//:MODULE.bazel",
-                "line": 259,
+                "line": 262,
                 "column": 9
               }
             },
@@ -377,7 +377,7 @@
               "devDependency": false,
               "location": {
                 "file": "@@//:MODULE.bazel",
-                "line": 266,
+                "line": 269,
                 "column": 9
               }
             }
@@ -413,7 +413,7 @@
               "devDependency": false,
               "location": {
                 "file": "@@//:MODULE.bazel",
-                "line": 281,
+                "line": 284,
                 "column": 13
               }
             },
@@ -429,7 +429,7 @@
               "devDependency": false,
               "location": {
                 "file": "@@//:MODULE.bazel",
-                "line": 288,
+                "line": 291,
                 "column": 13
               }
             }
@@ -4693,7 +4693,7 @@
                 "{ \"group\": \"org.testcontainers\", \"artifact\": \"database-commons\", \"version\": \"1.19.3\", \"testonly\": true }",
                 "{ \"group\": \"org.testcontainers\", \"artifact\": \"jdbc\", \"version\": \"1.19.3\", \"testonly\": true }",
                 "{ \"group\": \"org.testcontainers\", \"artifact\": \"postgresql\", \"version\": \"1.19.3\", \"testonly\": true }",
-                "{ \"group\": \"com.adobe.testing\", \"artifact\": \"s3mock-junit4\", \"version\": \"2.2.3\", \"testonly\": true }",
+                "{ \"group\": \"com.adobe.testing\", \"artifact\": \"s3mock-junit4\", \"version\": \"3.3.0\", \"testonly\": true }",
                 "{ \"group\": \"io.grpc\", \"artifact\": \"grpc-testing\", \"version\": \"1.60.2\", \"testonly\": true }",
                 "{ \"group\": \"io.grpc\", \"artifact\": \"grpc-core\", \"version\": \"1.60.2\", \"exclusions\": [{ \"group\": \"io.grpc\", \"artifact\": \"grpc-util\" }] }",
                 "{ \"group\": \"com.google.protobuf\", \"artifact\": \"protobuf-java\", \"version\": \"3.23.4\", \"force_version\": true }",
@@ -4726,11 +4726,11 @@
                 "{ \"group\": \"io.projectreactor\", \"artifact\": \"reactor-core\", \"version\": \"3.4.19\" }",
                 "{ \"group\": \"com.google.crypto.tink\", \"artifact\": \"tink\", \"version\": \"1.12.0\" }",
                 "{ \"group\": \"com.github.ben-manes.caffeine\", \"artifact\": \"caffeine\", \"version\": \"3.1.8\" }",
-                "{ \"group\": \"software.amazon.awssdk\", \"artifact\": \"auth\", \"version\": \"2.17.258\" }",
-                "{ \"group\": \"software.amazon.awssdk\", \"artifact\": \"regions\", \"version\": \"2.17.258\" }",
-                "{ \"group\": \"software.amazon.awssdk\", \"artifact\": \"s3\", \"version\": \"2.17.258\" }",
-                "{ \"group\": \"software.amazon.awssdk\", \"artifact\": \"secretsmanager\", \"version\": \"2.17.258\" }",
-                "{ \"group\": \"software.amazon.awssdk\", \"artifact\": \"sts\", \"version\": \"2.17.258\" }",
+                "{ \"group\": \"software.amazon.awssdk\", \"artifact\": \"auth\", \"version\": \"2.23.18\" }",
+                "{ \"group\": \"software.amazon.awssdk\", \"artifact\": \"regions\", \"version\": \"2.23.18\" }",
+                "{ \"group\": \"software.amazon.awssdk\", \"artifact\": \"s3\", \"version\": \"2.23.18\" }",
+                "{ \"group\": \"software.amazon.awssdk\", \"artifact\": \"secretsmanager\", \"version\": \"2.23.18\" }",
+                "{ \"group\": \"software.amazon.awssdk\", \"artifact\": \"sts\", \"version\": \"2.23.18\" }",
                 "{ \"group\": \"io.opentelemetry\", \"artifact\": \"opentelemetry-api\", \"version\": \"1.37.0\" }",
                 "{ \"group\": \"io.opentelemetry\", \"artifact\": \"opentelemetry-context\", \"version\": \"1.37.0\" }",
                 "{ \"group\": \"com.google.cloud.sql\", \"artifact\": \"postgres-socket-factory\", \"version\": \"1.12.0\" }",
