@@ -33,7 +33,7 @@ class TinkPublicKeyHandle internal constructor(internal val keysetHandle: Keyset
   constructor(serializedKeyset: ByteString) : this(parseKeyset(serializedKeyset))
 
   fun toByteString(): ByteString {
-    return ByteString.copyFrom(TinkProtoKeysetFormat.serializeKeysetWithoutSecret(keysetHandle));
+    return ByteString.copyFrom(TinkProtoKeysetFormat.serializeKeysetWithoutSecret(keysetHandle))
   }
 
   override fun hybridEncrypt(plaintext: ByteString, contextInfo: ByteString?): ByteString {
@@ -48,7 +48,7 @@ class TinkPublicKeyHandle internal constructor(internal val keysetHandle: Keyset
     }
 
     private fun parseKeyset(serialized: ByteString): KeysetHandle {
-      return TinkProtoKeysetFormat.parseKeysetWithoutSecret(serialized.toByteArray());
+      return TinkProtoKeysetFormat.parseKeysetWithoutSecret(serialized.toByteArray())
     }
   }
 }
@@ -88,13 +88,14 @@ class TinkPrivateKeyHandle internal constructor(internal val keysetHandle: Keyse
 
 /** Loads a private key from a cleartext binary Tink Keyset. */
 fun loadPrivateKey(binaryKeyset: File): TinkPrivateKeyHandle {
-	return TinkPrivateKeyHandle(
-			TinkProtoKeysetFormat.parseKeyset(binaryKeyset.readBytes(),
-				InsecureSecretKeyAccess.get()))
+  return TinkPrivateKeyHandle(
+    TinkProtoKeysetFormat.parseKeyset(binaryKeyset.readBytes(),	InsecureSecretKeyAccess.get())
+  )
 }
 
 /** Loads a public key from a cleartext binary Tink Keyset. */
 fun loadPublicKey(binaryKeyset: File): TinkPublicKeyHandle {
-	return TinkPublicKeyHandle(
-			TinkProtoKeysetFormat.parseKeysetWithoutSecret(binaryKeyset.readBytes()))
+  return TinkPublicKeyHandle(
+    TinkProtoKeysetFormat.parseKeysetWithoutSecret(binaryKeyset.readBytes())
+  )
 }
