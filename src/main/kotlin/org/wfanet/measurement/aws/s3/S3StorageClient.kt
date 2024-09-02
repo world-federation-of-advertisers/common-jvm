@@ -75,7 +75,7 @@ class S3StorageClient(private val s3: S3AsyncClient, private val bucketName: Str
   private fun uploadParts(
     blobKey: String,
     content: Flow<ByteString>,
-    uploadId: String
+    uploadId: String,
   ): Flow<CompletedPart> {
     val digest = MessageDigest.getInstance("MD5")
     val requestBuilder =
@@ -108,7 +108,7 @@ class S3StorageClient(private val s3: S3AsyncClient, private val bucketName: Str
   private suspend fun completeUpload(
     blobKey: String,
     uploadId: String,
-    completedParts: Flow<CompletedPart>
+    completedParts: Flow<CompletedPart>,
   ): CompleteMultipartUploadResponse {
     val completedPartsList = completedParts.toList()
     return s3
@@ -123,7 +123,7 @@ class S3StorageClient(private val s3: S3AsyncClient, private val bucketName: Str
 
   private suspend fun cancelUpload(
     blobKey: String,
-    uploadId: String
+    uploadId: String,
   ): AbortMultipartUploadResponse {
     return s3
       .abortMultipartUpload {
@@ -166,7 +166,7 @@ class S3StorageClient(private val s3: S3AsyncClient, private val bucketName: Str
             it.bucket(bucketName)
             it.key(blobKey)
           },
-          AsyncResponseTransformer.toPublisher()
+          AsyncResponseTransformer.toPublisher(),
         )
 
       return flow { emitAll(responseFuture.await().asFlow().map { it.toByteString() }) }
