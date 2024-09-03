@@ -35,7 +35,7 @@ readonly CERT_PATH="${TESTDATA_DIR}/test_root.pem"
 readonly KEY_PATH="${TESTDATA_DIR}/test_root.key"
 readonly ORG='Some Organization'
 readonly COMMON_NAME='Some CA'
-readonly SUBJECT="subject=O = ${ORG}, CN = ${COMMON_NAME}"
+readonly SUBJECT_HASH='e65a7621'
 readonly HOSTNAME='ca.someorg.example.com'
 
 err() {
@@ -61,10 +61,10 @@ main() {
   fi
 
   # Check the certificate details
-  local subject
-  subject="$(openssl x509 -in "${cert_file}" -noout -subject)"
-  if [[ "${subject}" != "${SUBJECT}" ]]; then
-    err "Not true that ${subject} is equal to ${SUBJECT}"
+  local subject_hash
+  subject_hash="$(openssl x509 -in "${cert_file}" -noout -subject_hash)"
+  if [[ "${subject_hash}" != "${SUBJECT_HASH}" ]]; then
+    err "Not true that subject hash ${subject_hash} is equal to ${SUBJECT_HASH}"
     exit 1
   fi
 }
