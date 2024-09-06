@@ -1,6 +1,22 @@
 load("@wfa_rules_kotlin_jvm//kotlin:defs.bzl", "kt_jvm_test")
 
 kt_jvm_test(
+    name = "AsyncDatabaseClientTest",
+    srcs = ["AsyncDatabaseClientTest.kt"],
+    resources = ["//src/test/resources/db/spanner"],
+    test_class = "org.wfanet.measurement.gcloud.spanner.AsyncDatabaseClientTest",
+    deps = [
+        "//imports/java/com/google/cloud/spanner",
+        "//imports/java/com/google/common/truth",
+        "//imports/java/org/junit",
+        "//imports/kotlin/kotlinx/coroutines:core",
+        "//src/main/kotlin/org/wfanet/measurement/common",
+        "//src/main/kotlin/org/wfanet/measurement/gcloud/spanner",
+        "//src/main/kotlin/org/wfanet/measurement/gcloud/spanner/testing",
+    ],
+)
+
+kt_jvm_test(
     name = "SpannerStructsTest",
     srcs = ["SpannerStructsTest.kt"],
     test_class = "org.wfanet.measurement.gcloud.spanner.SpannerStructsTest",
