@@ -4,74 +4,31 @@ module(
     repo_name = "wfa_common_jvm",
 )
 
-KOTLINX_COROUTINES_VERSION = "1.7.3"
+KOTLINX_COROUTINES_VERSION = "1.8.1"  # Compatible with rules_kotlin_jvm version.
 
-PROTOBUF_JAVA_VERSION = "3.23.4"  # Compatible with protobuf module version.
+PROTOBUF_JAVA_VERSION = "4.27.4"  # Compatible with rules_kotlin_jvm version.
 
-GRPC_JAVA_VERSION = "1.60.2"
+GRPC_JAVA_VERSION = "1.66.0"  # Compatible with rules_kotlin_jvm version.
+
+GRPC_KOTLIN_VERSION = "1.4.1"  # Compatible with rules_kotlin_jvm version.
 
 # Note: The AWS SDK version needs to match with the EMR image version to avoid class conflicts at runtime.
 # Current version matches with the SDK version in EMR image 7.1.0
 # (https://docs.aws.amazon.com/emr/latest/ReleaseGuide/emr-710-release.html).
 AWS_JAVA_SDK_VERSION = "2.23.18"
 
-OPENTELEMETRY_JAVA_VERSION = "1.37.0"
-
-TRUTH_VERSION = "1.1.2"
+TRUTH_VERSION = "1.4.4"
 
 TINK_VERSION = "1.12.0"
 
 CLOUD_SQL_CONNECTOR_VERSION = "1.12.0"
 
-TESTCONTAINERS_VERSION = "1.19.3"
-
-# Bazel Central Registry deps.
-bazel_dep(
-    name = "platforms",
-    version = "0.0.8",
-)
-bazel_dep(
-    name = "bazel_skylib",
-    version = "1.5.0",
-)
-bazel_dep(
-    name = "rules_proto",
-    version = "6.0.0-rc1",
-)
-bazel_dep(
-    name = "rules_pkg",
-    version = "0.9.1",
-)
-bazel_dep(
-    name = "rules_java",
-    version = "7.3.2",
-)
-bazel_dep(
-    name = "rules_kotlin",
-    version = "1.9.0",
-)
-bazel_dep(
-    name = "rules_multirun",
-    version = "0.6.1",
-)
-bazel_dep(
-    name = "protobuf",
-    version = "23.1",
-    repo_name = "com_google_protobuf",
-)
-bazel_dep(
-    name = "rules_jvm_external",
-    version = "6.0",
-)
-bazel_dep(
-    name = "rules_oci",
-    version = "1.7.5",
-)
-
 # WFA registry deps.
+
+# Must come before rules_kotlin due to toolchain resolution precedence.
+# See https://github.com/bazelbuild/bazel/discussions/23075.
 bazel_dep(
     name = "rules_kotlin_jvm",
-    version = "0.2.0",
     repo_name = "wfa_rules_kotlin_jvm",
 )
 bazel_dep(
@@ -81,8 +38,52 @@ bazel_dep(
 )
 bazel_dep(
     name = "cloud-spanner-emulator-bin",
-    version = "1.5.13",
+    version = "1.5.23",
     repo_name = "cloud_spanner_emulator",
+)
+
+# Bazel Central Registry deps.
+
+bazel_dep(
+    name = "platforms",
+    version = "0.0.10",
+)
+bazel_dep(
+    name = "bazel_skylib",
+    version = "1.7.1",
+)
+bazel_dep(
+    name = "rules_proto",
+    version = "6.0.2",
+)
+bazel_dep(
+    name = "rules_pkg",
+    version = "0.9.1",
+)
+bazel_dep(
+    name = "rules_java",
+    version = "7.9.1",
+)
+bazel_dep(
+    name = "rules_kotlin",
+    version = "1.9.6",
+)
+bazel_dep(
+    name = "rules_multirun",
+    version = "0.6.1",
+)
+bazel_dep(
+    name = "protobuf",
+    version = "27.3",
+    repo_name = "com_google_protobuf",
+)
+bazel_dep(
+    name = "rules_jvm_external",
+    version = "6.2.bzlmod.1",
+)
+bazel_dep(
+    name = "rules_oci",
+    version = "1.7.5",
 )
 
 maven = use_extension("@rules_jvm_external//:extensions.bzl", "maven")
@@ -126,29 +127,29 @@ maven.artifact(
     testonly = True,
     artifact = "testcontainers",
     group = "org.testcontainers",
-    version = TESTCONTAINERS_VERSION,
 )
 maven.artifact(
     testonly = True,
     artifact = "database-commons",
     group = "org.testcontainers",
-    version = TESTCONTAINERS_VERSION,
 )
 maven.artifact(
     testonly = True,
     artifact = "jdbc",
     group = "org.testcontainers",
-    version = TESTCONTAINERS_VERSION,
 )
 maven.artifact(
     testonly = True,
     artifact = "postgresql",
     group = "org.testcontainers",
-    version = TESTCONTAINERS_VERSION,
 )
 maven.artifact(
     testonly = True,
     artifact = "s3mock-junit4",
+    exclusions = [
+        # See https://github.com/adobe/S3Mock/issues/141
+        "org.springframework.boot:spring-boot-starter-logging",
+    ],
     group = "com.adobe.testing",
     version = "3.3.0",
 )
@@ -156,65 +157,62 @@ maven.artifact(
     testonly = True,
     artifact = "grpc-testing",
     group = "io.grpc",
-    version = GRPC_JAVA_VERSION,
-)
-maven.artifact(
-    artifact = "grpc-core",
-    # Work around "circular dependency" between grpc-core and grpc-util.
-    # TODO(bazelbuild/rules_jvm_external#966): Remove when fixed.
-    exclusions = ["io.grpc:grpc-util"],
-    group = "io.grpc",
-    version = GRPC_JAVA_VERSION,
-)
-maven.artifact(
-    artifact = "protobuf-java",
-    # Ensure compatibility with protobuf module.
-    force_version = True,
-    group = "com.google.protobuf",
-    version = PROTOBUF_JAVA_VERSION,
 )
 maven.install(
+    name = "maven",
     artifacts = [
         "junit:junit:4.13.2",
         "org.conscrypt:conscrypt-openjdk-uber:2.5.2",
         "org.jetbrains:annotations:23.0.0",
         "info.picocli:picocli:4.4.0",
-        "com.google.api:api-common:2.22.0",
-        "com.google.api:gax:2.39.0",
-        "com.google.apis:google-api-services-bigquery:v2-rev20231111-2.0.0",
-        "com.google.cloud:google-cloud-core:2.29.0",
-        "com.google.cloud:google-cloud-core-grpc:2.29.0",
-        "com.google.cloud:google-cloud-storage:2.30.1",
-        "com.google.cloud:google-cloud-nio:0.127.8",
-        "com.google.cloud:google-cloud-spanner:6.56.0",
-        "com.google.cloud:google-cloud-bigquery:2.35.0",
         "com.google.code.gson:gson:2.10.1",
-        "com.google.protobuf:protobuf-java-util:" + PROTOBUF_JAVA_VERSION,
-        "io.grpc:grpc-census:" + GRPC_JAVA_VERSION,
-        "io.grpc:grpc-context:" + GRPC_JAVA_VERSION,
-        "io.grpc:grpc-netty:" + GRPC_JAVA_VERSION,
-        "io.grpc:grpc-services:" + GRPC_JAVA_VERSION,
-        "io.grpc:grpc-inprocess:" + GRPC_JAVA_VERSION,
         "io.netty:netty-handler:4.1.108.Final",
-        "org.jetbrains.kotlinx:kotlinx-coroutines-test:" + KOTLINX_COROUTINES_VERSION,
-        "org.jetbrains.kotlinx:kotlinx-coroutines-debug:" + KOTLINX_COROUTINES_VERSION,
-        "org.jetbrains.kotlinx:kotlinx-coroutines-reactive:" + KOTLINX_COROUTINES_VERSION,
-        "org.jetbrains.kotlinx:kotlinx-coroutines-guava:" + KOTLINX_COROUTINES_VERSION,
-        "org.reactivestreams:reactive-streams:1.0.4",
-        "io.projectreactor:reactor-core:3.4.19",
         "com.google.crypto.tink:tink:" + TINK_VERSION,
         "com.github.ben-manes.caffeine:caffeine:3.1.8",
 
+        # kotlinx-coroutines
+        "org.jetbrains.kotlinx:kotlinx-coroutines-test",
+        "org.jetbrains.kotlinx:kotlinx-coroutines-debug",
+        "org.jetbrains.kotlinx:kotlinx-coroutines-reactive",
+        "org.jetbrains.kotlinx:kotlinx-coroutines-guava",
+
+        # Protobuf.
+        "com.google.protobuf:protobuf-java",
+        "com.google.protobuf:protobuf-java-util",
+
+        # gRPC.
+        "io.grpc:grpc-census",
+        "io.grpc:grpc-core",
+        "io.grpc:grpc-context",
+        "io.grpc:grpc-netty",
+        "io.grpc:grpc-services",
+        "io.grpc:grpc-inprocess",
+
+        # Google Cloud.
+        "com.google.guava:guava",
+        "com.google.api:api-common",
+        "com.google.api:gax",
+        "com.google.apis:google-api-services-bigquery:v2-rev20240815-2.0.0",
+        "com.google.cloud:google-cloud-core",
+        "com.google.cloud:google-cloud-core-grpc",
+        "com.google.cloud:google-cloud-storage",
+        "com.google.cloud:google-cloud-nio",
+        "com.google.cloud:google-cloud-spanner",
+        "com.google.cloud:google-cloud-bigquery",
+
         # AWS.
-        "software.amazon.awssdk:auth:" + AWS_JAVA_SDK_VERSION,
-        "software.amazon.awssdk:regions:" + AWS_JAVA_SDK_VERSION,
-        "software.amazon.awssdk:s3:" + AWS_JAVA_SDK_VERSION,
-        "software.amazon.awssdk:secretsmanager:" + AWS_JAVA_SDK_VERSION,
-        "software.amazon.awssdk:sts:" + AWS_JAVA_SDK_VERSION,
+        "software.amazon.awssdk:auth",
+        "software.amazon.awssdk:regions",
+        "software.amazon.awssdk:s3",
+        "software.amazon.awssdk:secretsmanager",
+        "software.amazon.awssdk:sts",
 
         # OpenTelemetry.
-        "io.opentelemetry:opentelemetry-api:" + OPENTELEMETRY_JAVA_VERSION,
-        "io.opentelemetry:opentelemetry-context:" + OPENTELEMETRY_JAVA_VERSION,
+        "io.opentelemetry:opentelemetry-api",
+        "io.opentelemetry:opentelemetry-context",
+
+        # Reactor.
+        "org.reactivestreams:reactive-streams",
 
         # PostgreSQL.
         "com.google.cloud.sql:postgres-socket-factory:" + CLOUD_SQL_CONNECTOR_VERSION,
@@ -243,20 +241,29 @@ maven.install(
         "org.brotli:dec:0.1.2",
         "com.github.luben:zstd-jni:1.5.2-5",
     ],
-    exclusions = [
-        # protobuf-java and protobuf-javalite cannot coexist.
-        "com.google.protobuf:protobuf-javalite",
+    # Note that order matters here, where earlier BOMs "win".
+    boms = [
+        # TODO(bazelbuild/rules_jvm_external#1227): Drop BOMs that are included by other modules once fixed.
+        "org.jetbrains.kotlinx:kotlinx-coroutines-bom:" + KOTLINX_COROUTINES_VERSION,
+        "com.google.protobuf:protobuf-bom:" + PROTOBUF_JAVA_VERSION,
+        "io.grpc:grpc-bom:" + GRPC_JAVA_VERSION,
+        "com.google.cloud:libraries-bom:26.45.0",
+        "software.amazon.awssdk:bom:" + AWS_JAVA_SDK_VERSION,
+        "io.opentelemetry:opentelemetry-bom:1.37.0",
+        "org.testcontainers:testcontainers-bom:1.19.3",
+        "io.projectreactor:reactor-bom:2023.0.9",
     ],
+    fail_if_repin_required = True,
     fetch_sources = True,
+    lock_file = "//:maven_install.json",
     repositories = [
         "https://maven.google.com",
         "https://repo1.maven.org/maven2",
     ],
+    resolver = "maven",
     strict_visibility = True,
 )
 use_repo(maven, "maven")
-
-register_toolchains("//build/rules_kotlin:kotlin_toolchain")
 
 oci = use_extension("@rules_oci//oci:extensions.bzl", "oci")
 oci.pull(
@@ -294,4 +301,14 @@ http_archive(
     sha256 = "1e4e32f6198facbac7a35b04fa4c1acb5e6d9bb13f983c60903da9cbbbd9f5b5",
     strip_prefix = "highwayhash-a7f68e2f95fac08b24327d74747521cf634d5aff",
     url = "https://github.com/google/highwayhash/archive/a7f68e2f95fac08b24327d74747521cf634d5aff.tar.gz",
+)
+
+# DO_NOT_SUBMIT(world-federation-of-advertisers/rules_kotlin_jvm#8): Use version.
+archive_override(
+    module_name = "rules_kotlin_jvm",
+    integrity = "sha256-fjUowz13cTGxxkDEoR0N5BDcuUykx0n2MdMKsvCCMkQ=",
+    strip_prefix = "rules_kotlin_jvm-da1319f9040a0e09028271e58b87bd2890f160c5",
+    urls = [
+        "https://github.com/world-federation-of-advertisers/rules_kotlin_jvm/archive/da1319f9040a0e09028271e58b87bd2890f160c5.tar.gz",
+    ],
 )

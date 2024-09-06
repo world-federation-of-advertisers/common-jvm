@@ -29,7 +29,7 @@ import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 
 @RunWith(JUnit4::class)
-@OptIn(ExperimentalCoroutinesApi::class) // For `runTest`.
+@OptIn(ExperimentalCoroutinesApi::class) // For `UnconfinedTestDispatcher`.
 class AdaptiveThrottlerTest {
   @Test
   fun onReady() =
@@ -37,7 +37,9 @@ class AdaptiveThrottlerTest {
       val clock =
         object : Clock() {
           override fun instant(): Instant = Instant.ofEpochMilli(currentTime)
+
           override fun withZone(zone: ZoneId?): Clock = error("Unimplemented")
+
           override fun getZone(): ZoneId = error("Unimplemented")
         }
       val throttler =
@@ -45,7 +47,7 @@ class AdaptiveThrottlerTest {
           overloadFactor = 2.0,
           clock = clock,
           timeHorizon = Duration.ofSeconds(1L),
-          pollDelay = Duration.ofMillis(1L)
+          pollDelay = Duration.ofMillis(1L),
         )
 
       val events = mutableListOf<Int>()

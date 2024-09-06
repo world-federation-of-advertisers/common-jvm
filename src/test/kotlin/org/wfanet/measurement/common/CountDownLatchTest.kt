@@ -26,7 +26,7 @@ import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 
 @RunWith(JUnit4::class)
-@OptIn(ExperimentalCoroutinesApi::class) // For `runTest`.
+@OptIn(ExperimentalCoroutinesApi::class) // For `UnconfinedTestDispatcher`.
 class CountDownLatchTest {
   @Test
   fun `latch count is equal to initial count`() {
