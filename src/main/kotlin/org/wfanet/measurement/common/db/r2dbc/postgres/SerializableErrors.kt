@@ -16,7 +16,6 @@ package org.wfanet.measurement.common.db.r2dbc.postgres
 
 import io.r2dbc.postgresql.api.PostgresqlException
 import kotlin.time.Duration.Companion.seconds
-import kotlin.time.ExperimentalTime
 import kotlin.time.TimeMark
 import kotlin.time.TimeSource
 import kotlinx.coroutines.flow.Flow
@@ -32,7 +31,6 @@ object SerializableErrors {
     return flow { emit(block()) }.withSerializableErrorRetries().single()
   }
 
-  @OptIn(ExperimentalTime::class)
   fun <T> Flow<T>.withSerializableErrorRetries(): Flow<T> {
     val retryLimit: TimeMark = TimeSource.Monotonic.markNow().plus(SERIALIZABLE_RETRY_DURATION)
     return this.retry { e ->
