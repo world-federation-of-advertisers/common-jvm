@@ -46,7 +46,7 @@ class MutationsTest {
         set("StringColumn" to stringValue)
         set("TimestampColumn" to timestamp)
         set("EnumColumn" to cardinality)
-        set("ProtoBytesColumn" to field)
+        set("ProtoBytesColumn").to(field)
         setJson("ProtoJsonColumn" to field)
       }
 
@@ -69,7 +69,7 @@ class MutationsTest {
         "ProtoBytesColumn",
         Value.bytes(field.toGcloudByteArray()),
         "ProtoJsonColumn",
-        Value.string(field.toJson())
+        Value.string(field.toJson()),
       )
   }
 

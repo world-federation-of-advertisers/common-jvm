@@ -19,8 +19,14 @@ import com.google.cloud.Date
 import com.google.cloud.Timestamp
 import com.google.cloud.spanner.Struct
 import com.google.cloud.spanner.StructReader
+import com.google.cloud.spanner.Type
+import com.google.cloud.spanner.ValueBinder
+import com.google.protobuf.AbstractMessage
+import com.google.protobuf.ByteString
 import com.google.protobuf.Message
+import com.google.protobuf.Parser
 import com.google.protobuf.ProtocolMessageEnum
+import org.wfanet.measurement.common.ProtoReflection
 import org.wfanet.measurement.common.identity.ExternalId
 import org.wfanet.measurement.common.identity.InternalId
 
@@ -98,14 +104,22 @@ fun Struct.Builder.set(columnValuePair: Pair<String, ByteArray?>): Struct.Builde
 @JvmName("setProtoEnum")
 fun Struct.Builder.set(columnValuePair: Pair<String, ProtocolMessageEnum>): Struct.Builder {
   val (columnName, value) = columnValuePair
-  return set(columnName).toProtoEnum(value)
+  return set(columnName).to(value)
 }
 
 /** Sets the value that should be bound to the specified column. */
+@Deprecated(message = "Use ValueBinder directly")
 @JvmName("setProtoMessageBytes")
-fun Struct.Builder.set(columnValuePair: Pair<String, Message?>): Struct.Builder {
+inline fun <reified T : AbstractMessage> Struct.Builder.set(
+  columnValuePair: Pair<String, T?>
+): Struct.Builder {
   val (columnName, value) = columnValuePair
-  return set(columnName).toProtoBytes(value)
+  val binder: ValueBinder<Struct.Builder> = set(columnName)
+  return if (value == null) {
+    binder.to(null, ProtoReflection.getDescriptorForType(T::class))
+  } else {
+    binder.to(value)
+  }
 }
 
 /** Sets the JSON value that should be bound to the specified string column. */
@@ -125,6 +139,48 @@ fun StructReader.getInternalId(columnName: String) = InternalId(getLong(columnNa
  * [com.google.cloud.spanner.Type.int64].
  */
 fun StructReader.getExternalId(columnName: String) = ExternalId(getLong(columnName))
+
+private fun <T> StructReader.nullOrValue(
+  column: String,
+  typeCode: Type.Code,
+  getter: StructReader.(String) -> T,
+): T? {
+  val columnType = getColumnType(column).code
+  check(columnType == typeCode) { "Cannot read $typeCode from $column, it has type $columnType" }
+  return if (isNull(column)) null else getter(column)
+}
+
+/** Returns the value of a String column even if it is null. */
+fun StructReader.getNullableString(column: String): String? =
+  nullOrValue(column, Type.Code.STRING, StructReader::getString)
+
+/** Returns the value of an Array of Structs column even if it is null. */
+fun StructReader.getNullableStructList(column: String): MutableList<Struct>? =
+  nullOrValue(column, Type.Code.ARRAY, StructReader::getStructList)
+
+/** Returns the value of a Timestamp column even if it is null. */
+fun StructReader.getNullableTimestamp(column: String): Timestamp? =
+  nullOrValue(column, Type.Code.TIMESTAMP, StructReader::getTimestamp)
+
+/** Returns the value of a INT64 column even if it is null. */
+fun StructReader.getNullableLong(column: String): Long? =
+  nullOrValue(column, Type.Code.INT64, StructReader::getLong)
+
+/** Returns a bytes column as a Kotlin native ByteArray. This is useful for deserializing protos. */
+fun StructReader.getBytesAsByteArray(column: String): kotlin.ByteArray =
+  getBytes(column).toByteArray()
+
+/** Returns a bytes column as a protobuf ByteString. */
+fun StructReader.getBytesAsByteString(column: String): ByteString =
+  ByteString.copyFrom(getBytes(column).asReadOnlyByteBuffer())
+
+/** Parses a protobuf [Message] from a BYTES column. */
+@Suppress("DeprecatedCallableAddReplaceWith") // Should use manual replacement to avoid reflection.
+@Deprecated(message = "Use `getProtoMessage` overload which takes in a default message instance")
+inline fun <reified T : AbstractMessage> StructReader.getProtoMessage(
+  column: String,
+  parser: Parser<T>,
+): T = getProtoMessage(column, ProtoReflection.getDefaultInstance(T::class))
 
 /** Builds a [Struct]. */
 inline fun struct(bind: Struct.Builder.() -> Unit): Struct = Struct.newBuilder().apply(bind).build()
