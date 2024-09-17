@@ -24,7 +24,7 @@ import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 
 @RunWith(JUnit4::class)
-class SpannerStructsTest {
+class StructsTest {
   private val timestamp = Timestamp.now()
   private val str = "abcdefg"
   private val int64 = 405060708090100L
