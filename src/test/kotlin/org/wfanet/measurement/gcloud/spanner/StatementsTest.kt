@@ -44,8 +44,8 @@ class StatementsTest {
         bind("DoubleColumn" to doubleValue)
         bind("StringColumn" to stringValue)
         bind("TimestampColumn" to timestamp)
-        bind("EnumColumn" to cardinality)
-        bind("ProtoBytesColumn" to field)
+        bind("EnumColumn").to(cardinality)
+        bind("ProtoBytesColumn").to(field)
         bindJson("ProtoJsonColumn" to field)
       }
 
@@ -58,7 +58,7 @@ class StatementsTest {
         "TimestampColumn" to timestamp.toSqlTimestamp(),
         "EnumColumn" to cardinality.number,
         "ProtoBytesColumn" to field.toGcloudByteArray(),
-        "ProtoJsonColumn" to field.toJson()
+        "ProtoJsonColumn" to field.toJson(),
       )
 
     assertThat(statement.parameters.size).isEqualTo(map.size)

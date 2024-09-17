@@ -18,8 +18,11 @@ import com.google.cloud.ByteArray
 import com.google.cloud.Date
 import com.google.cloud.Timestamp
 import com.google.cloud.spanner.Mutation
+import com.google.cloud.spanner.ValueBinder
+import com.google.protobuf.AbstractMessage
 import com.google.protobuf.Message
 import com.google.protobuf.ProtocolMessageEnum
+import org.wfanet.measurement.common.ProtoReflection
 import org.wfanet.measurement.common.identity.ExternalId
 import org.wfanet.measurement.common.identity.InternalId
 
@@ -97,30 +100,39 @@ fun Mutation.WriteBuilder.set(columnValuePair: Pair<String, ByteArray?>): Mutati
 @JvmName("setInternalId")
 fun Mutation.WriteBuilder.set(columnValuePair: Pair<String, InternalId>): Mutation.WriteBuilder {
   val (columnName, value) = columnValuePair
-  return set(columnName).to(value.value)
+  return set(columnName).to(value)
 }
 
 /** Sets the value that should be bound to the specified column. */
 @JvmName("setExternalId")
 fun Mutation.WriteBuilder.set(columnValuePair: Pair<String, ExternalId>): Mutation.WriteBuilder {
   val (columnName, value) = columnValuePair
-  return set(columnName).to(value.value)
+  return set(columnName).to(value)
 }
 
 /** Sets the value that should be bound to the specified column. */
+@Deprecated(message = "Use ValueBinder directly to avoid type ambiguity")
 @JvmName("setProtoEnum")
 fun Mutation.WriteBuilder.set(
   columnValuePair: Pair<String, ProtocolMessageEnum>
 ): Mutation.WriteBuilder {
   val (columnName, value) = columnValuePair
-  return set(columnName).toProtoEnum(value)
+  return set(columnName).toInt64(value)
 }
 
 /** Sets the value that should be bound to the specified column. */
+@Deprecated(message = "Use ValueBinder directly")
 @JvmName("setProtoMessageBytes")
-fun Mutation.WriteBuilder.set(columnValuePair: Pair<String, Message?>): Mutation.WriteBuilder {
+inline fun <reified T : AbstractMessage> Mutation.WriteBuilder.set(
+  columnValuePair: Pair<String, T?>
+): Mutation.WriteBuilder {
   val (columnName, value) = columnValuePair
-  return set(columnName).toProtoBytes(value)
+  val binder: ValueBinder<Mutation.WriteBuilder> = set(columnName)
+  return if (value == null) {
+    binder.to(null, ProtoReflection.getDescriptorForType(T::class))
+  } else {
+    binder.to(value)
+  }
 }
 
 /** Sets the JSON value that should be bound to the specified string column. */
@@ -144,7 +156,7 @@ inline fun insertOrUpdateMutation(table: String, bind: Mutation.WriteBuilder.() 
 /** Builds and buffers an [INSERT][Mutation.Op.INSERT] [Mutation]. */
 inline fun AsyncDatabaseClient.TransactionContext.bufferInsertMutation(
   table: String,
-  bind: Mutation.WriteBuilder.() -> Unit
+  bind: Mutation.WriteBuilder.() -> Unit,
 ) {
   insertMutation(table, bind).bufferTo(this)
 }
@@ -152,7 +164,7 @@ inline fun AsyncDatabaseClient.TransactionContext.bufferInsertMutation(
 /** Builds and buffers an [UPDATE][Mutation.Op.UPDATE] [Mutation]. */
 inline fun AsyncDatabaseClient.TransactionContext.bufferUpdateMutation(
   table: String,
-  bind: Mutation.WriteBuilder.() -> Unit
+  bind: Mutation.WriteBuilder.() -> Unit,
 ) {
   updateMutation(table, bind).bufferTo(this)
 }
@@ -160,7 +172,7 @@ inline fun AsyncDatabaseClient.TransactionContext.bufferUpdateMutation(
 /** Builds and buffers an [INSERT_OR_UPDATE][Mutation.Op.INSERT_OR_UPDATE] [Mutation]. */
 inline fun AsyncDatabaseClient.TransactionContext.bufferInsertOrUpdateMutation(
   table: String,
-  bind: Mutation.WriteBuilder.() -> Unit
+  bind: Mutation.WriteBuilder.() -> Unit,
 ) {
   insertOrUpdateMutation(table, bind).bufferTo(this)
 }
