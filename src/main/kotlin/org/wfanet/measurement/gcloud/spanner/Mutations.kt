@@ -18,11 +18,9 @@ import com.google.cloud.ByteArray
 import com.google.cloud.Date
 import com.google.cloud.Timestamp
 import com.google.cloud.spanner.Mutation
-import com.google.cloud.spanner.ValueBinder
 import com.google.protobuf.AbstractMessage
 import com.google.protobuf.Message
 import com.google.protobuf.ProtocolMessageEnum
-import org.wfanet.measurement.common.ProtoReflection
 import org.wfanet.measurement.common.identity.ExternalId
 import org.wfanet.measurement.common.identity.InternalId
 
@@ -121,18 +119,13 @@ fun Mutation.WriteBuilder.set(
 }
 
 /** Sets the value that should be bound to the specified column. */
-@Deprecated(message = "Use ValueBinder directly")
+@Deprecated(message = "Use ValueBinder directly to avoid type ambiguity")
 @JvmName("setProtoMessageBytes")
 inline fun <reified T : AbstractMessage> Mutation.WriteBuilder.set(
   columnValuePair: Pair<String, T?>
 ): Mutation.WriteBuilder {
   val (columnName, value) = columnValuePair
-  val binder: ValueBinder<Mutation.WriteBuilder> = set(columnName)
-  return if (value == null) {
-    binder.to(null, ProtoReflection.getDescriptorForType(T::class))
-  } else {
-    binder.to(value)
-  }
+  return set(columnName).toProtoBytes(value)
 }
 
 /** Sets the JSON value that should be bound to the specified string column. */

@@ -24,6 +24,7 @@ import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 import org.wfanet.measurement.common.numberAsLong
 import org.wfanet.measurement.common.toJson
+import org.wfanet.measurement.gcloud.common.toGcloudByteArray
 
 @RunWith(JUnit4::class)
 class MutationsTest {
@@ -46,7 +47,8 @@ class MutationsTest {
         set("TimestampColumn" to timestamp)
         set("EnumColumn").to(cardinality)
         set("EnumInt64Column").toInt64(cardinality)
-        set("ProtoBytesColumn").to(field)
+        set("ProtoColumn").to(field)
+        set("ProtoBytesColumn").toProtoBytes(field)
         setJson("ProtoJsonColumn" to field)
       }
 
@@ -68,8 +70,10 @@ class MutationsTest {
         Value.protoEnum(cardinality),
         "EnumInt64Column",
         Value.int64(cardinality.numberAsLong),
-        "ProtoBytesColumn",
+        "ProtoColumn",
         Value.protoMessage(field),
+        "ProtoBytesColumn",
+        Value.bytes(field.toGcloudByteArray()),
         "ProtoJsonColumn",
         Value.string(field.toJson()),
       )

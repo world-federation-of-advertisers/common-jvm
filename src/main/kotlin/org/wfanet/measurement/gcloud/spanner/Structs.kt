@@ -179,6 +179,7 @@ fun StructReader.getBytesAsByteString(column: String): ByteString =
 @Deprecated(message = "Use `getProtoMessage` overload which takes in a default message instance")
 inline fun <reified T : AbstractMessage> StructReader.getProtoMessage(
   column: String,
+  @Suppress("UNUSED_PARAMETER") // For backwards-compatibility.
   parser: Parser<T>,
 ): T = getProtoMessage(column, ProtoReflection.getDefaultInstance(T::class))
 
