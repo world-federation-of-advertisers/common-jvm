@@ -17,9 +17,9 @@ kt_jvm_test(
 )
 
 kt_jvm_test(
-    name = "SpannerStructsTest",
-    srcs = ["SpannerStructsTest.kt"],
-    test_class = "org.wfanet.measurement.gcloud.spanner.SpannerStructsTest",
+    name = "StructsTest",
+    srcs = ["StructsTest.kt"],
+    test_class = "org.wfanet.measurement.gcloud.spanner.StructsTest",
     deps = [
         "//imports/java/com/google/cloud/spanner",
         "//imports/java/org/junit",

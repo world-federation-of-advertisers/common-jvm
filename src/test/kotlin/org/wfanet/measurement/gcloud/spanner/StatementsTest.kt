@@ -16,13 +16,13 @@ package org.wfanet.measurement.gcloud.spanner
 
 import com.google.cloud.Timestamp
 import com.google.cloud.spanner.Statement
+import com.google.cloud.spanner.Value
 import com.google.common.truth.Truth.assertThat
 import com.google.protobuf.Field
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 import org.wfanet.measurement.common.toJson
-import org.wfanet.measurement.gcloud.common.toGcloudByteArray
 
 @RunWith(JUnit4::class)
 class StatementsTest {
@@ -44,27 +44,30 @@ class StatementsTest {
         bind("DoubleColumn" to doubleValue)
         bind("StringColumn" to stringValue)
         bind("TimestampColumn" to timestamp)
-        bind("EnumColumn" to cardinality)
-        bind("ProtoBytesColumn" to field)
+        bind("EnumColumn").to(cardinality)
+        bind("ProtoBytesColumn").to(field)
         bindJson("ProtoJsonColumn" to field)
       }
 
-    val map =
-      mapOf(
-        "BoolColumn" to boolValue,
-        "LongColumn" to longValue,
-        "DoubleColumn" to doubleValue,
-        "StringColumn" to stringValue,
-        "TimestampColumn" to timestamp.toSqlTimestamp(),
-        "EnumColumn" to cardinality.number,
-        "ProtoBytesColumn" to field.toGcloudByteArray(),
-        "ProtoJsonColumn" to field.toJson()
-      )
-
-    assertThat(statement.parameters.size).isEqualTo(map.size)
     assertThat(statement.sql).isEqualTo(table)
-    for (entry in map.entries) {
-      assertThat(statement.hasBinding(entry.key)).isTrue()
-    }
+    assertThat(statement.parameters)
+      .containsExactly(
+        "BoolColumn",
+        Value.bool(boolValue),
+        "LongColumn",
+        Value.int64(longValue),
+        "DoubleColumn",
+        Value.float64(doubleValue),
+        "StringColumn",
+        Value.string(stringValue),
+        "TimestampColumn",
+        Value.timestamp(timestamp),
+        "EnumColumn",
+        Value.protoEnum(cardinality),
+        "ProtoBytesColumn",
+        Value.protoMessage(field),
+        "ProtoJsonColumn",
+        Value.string(field.toJson()),
+      )
   }
 }
