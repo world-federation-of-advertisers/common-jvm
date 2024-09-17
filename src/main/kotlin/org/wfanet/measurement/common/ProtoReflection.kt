@@ -16,6 +16,7 @@
 
 package org.wfanet.measurement.common
 
+import com.google.protobuf.AbstractMessage
 import com.google.protobuf.Any as ProtoAny
 import com.google.protobuf.AnyProto
 import com.google.protobuf.ApiProto
@@ -24,6 +25,7 @@ import com.google.protobuf.Descriptors
 import com.google.protobuf.DurationProto
 import com.google.protobuf.EmptyProto
 import com.google.protobuf.Message
+import com.google.protobuf.ProtocolMessageEnum
 import com.google.protobuf.StructProto
 import com.google.protobuf.TimestampProto
 import com.google.protobuf.TypeProto
@@ -118,13 +120,33 @@ object ProtoReflection {
   }
 
   /** Reflectively calls the `getDefaultInstance` static function for [T]. */
-  fun <T : Message> getDefaultInstance(kclass: KClass<T>): T {
+  fun <T : Message> getDefaultInstance(kClass: KClass<T>): T {
     // Every Message type should have a static getDefaultInstance function.
     @Suppress("UNCHECKED_CAST") // Guaranteed by predicate.
     val function =
-      kclass.staticFunctions.single { it.name == "getDefaultInstance" && it.parameters.isEmpty() }
+      kClass.staticFunctions.single { it.name == "getDefaultInstance" && it.parameters.isEmpty() }
         as kotlin.reflect.KFunction0<T>
 
+    return function.call()
+  }
+
+  /** Reflectively calls the `getDescriptorForType` static function for [T]. */
+  fun <T : ProtocolMessageEnum> getDescriptorForType(
+    kClass: KClass<T>
+  ): Descriptors.EnumDescriptor {
+    @Suppress("UNCHECKED_CAST") // Guaranteed by predicate.
+    val function =
+      kClass.staticFunctions.single { it.name == "getDescriptorForType" && it.parameters.isEmpty() }
+        as kotlin.reflect.KFunction0<Descriptors.EnumDescriptor>
+    return function.call()
+  }
+
+  /** Reflectively calls the `getDescriptorForType` static function for [T]. */
+  fun <T : AbstractMessage> getDescriptorForType(kClass: KClass<T>): Descriptors.Descriptor {
+    @Suppress("UNCHECKED_CAST") // Guaranteed by predicate.
+    val function =
+      kClass.staticFunctions.single { it.name == "getDescriptorForType" && it.parameters.isEmpty() }
+        as kotlin.reflect.KFunction0<Descriptors.Descriptor>
     return function.call()
   }
 

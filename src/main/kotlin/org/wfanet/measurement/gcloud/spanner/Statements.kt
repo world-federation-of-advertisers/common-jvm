@@ -18,8 +18,10 @@ import com.google.cloud.ByteArray
 import com.google.cloud.Date
 import com.google.cloud.Timestamp
 import com.google.cloud.spanner.Statement
-import com.google.protobuf.Message
+import com.google.cloud.spanner.ValueBinder
+import com.google.protobuf.AbstractMessage
 import com.google.protobuf.ProtocolMessageEnum
+import org.wfanet.measurement.common.ProtoReflection
 import org.wfanet.measurement.common.identity.ExternalId
 import org.wfanet.measurement.common.identity.InternalId
 
@@ -97,32 +99,40 @@ fun Statement.Builder.bind(paramValuePair: Pair<String, ByteArray?>): Statement.
 @JvmName("bindInternalId")
 fun Statement.Builder.bind(paramValuePair: Pair<String, InternalId>): Statement.Builder {
   val (paramName, value) = paramValuePair
-  return bind(paramName).to(value.value)
+  return bind(paramName).to(value)
 }
 
 /** Binds the value that should be bound to the specified param. */
 @JvmName("bindExternalId")
 fun Statement.Builder.bind(paramValuePair: Pair<String, ExternalId>): Statement.Builder {
   val (paramName, value) = paramValuePair
-  return bind(paramName).to(value.value)
+  return bind(paramName).to(value)
 }
 
 /** Binds the value that should be bound to the specified param. */
 @JvmName("bindProtoEnum")
 fun Statement.Builder.bind(paramValuePair: Pair<String, ProtocolMessageEnum>): Statement.Builder {
   val (paramName, value) = paramValuePair
-  return bind(paramName).toProtoEnum(value)
+  return bind(paramName).to(value)
 }
 
 /** Binds the value that should be bound to the specified param. */
+@Deprecated(message = "Use ValueBinder directly")
 @JvmName("bindProtoMessageBytes")
-fun Statement.Builder.bind(paramValuePair: Pair<String, Message?>): Statement.Builder {
+inline fun <reified T : AbstractMessage> Statement.Builder.bind(
+  paramValuePair: Pair<String, T?>
+): Statement.Builder {
   val (paramName, value) = paramValuePair
-  return bind(paramName).toProtoBytes(value)
+  val binder: ValueBinder<Statement.Builder> = bind(paramName)
+  return if (value == null) {
+    binder.to(null, ProtoReflection.getDescriptorForType(T::class))
+  } else {
+    binder.to(value)
+  }
 }
 
 /** Binds the JSON value that should be bound to the specified string param. */
-fun Statement.Builder.bindJson(paramValuePair: Pair<String, Message?>): Statement.Builder {
+fun Statement.Builder.bindJson(paramValuePair: Pair<String, AbstractMessage?>): Statement.Builder {
   val (paramName, value) = paramValuePair
   return bind(paramName).toProtoJson(value)
 }
