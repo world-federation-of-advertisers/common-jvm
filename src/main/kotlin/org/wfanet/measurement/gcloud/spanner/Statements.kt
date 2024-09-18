@@ -18,10 +18,8 @@ import com.google.cloud.ByteArray
 import com.google.cloud.Date
 import com.google.cloud.Timestamp
 import com.google.cloud.spanner.Statement
-import com.google.cloud.spanner.ValueBinder
 import com.google.protobuf.AbstractMessage
 import com.google.protobuf.ProtocolMessageEnum
-import org.wfanet.measurement.common.ProtoReflection
 import org.wfanet.measurement.common.identity.ExternalId
 import org.wfanet.measurement.common.identity.InternalId
 
@@ -118,18 +116,13 @@ fun Statement.Builder.bind(paramValuePair: Pair<String, ProtocolMessageEnum>): S
 }
 
 /** Binds the value that should be bound to the specified param. */
-@Deprecated(message = "Use ValueBinder directly")
+@Deprecated(message = "Use ValueBinder directly to avoid type ambiguity")
 @JvmName("bindProtoMessageBytes")
 inline fun <reified T : AbstractMessage> Statement.Builder.bind(
   paramValuePair: Pair<String, T?>
 ): Statement.Builder {
   val (paramName, value) = paramValuePair
-  val binder: ValueBinder<Statement.Builder> = bind(paramName)
-  return if (value == null) {
-    binder.to(null, ProtoReflection.getDescriptorForType(T::class))
-  } else {
-    binder.to(value)
-  }
+  return bind(paramName).toProtoBytes(value)
 }
 
 /** Binds the JSON value that should be bound to the specified string param. */
