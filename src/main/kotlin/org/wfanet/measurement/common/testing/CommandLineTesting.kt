@@ -67,25 +67,25 @@ object CommandLineTesting {
     assertAbout(CapturedOutputSubject.capturedOutputs()).that(actual)
 
   class CapturedOutputSubject
-  private constructor(
-    metadata: FailureMetadata,
-    private val actual: CapturedOutput,
-  ) : Subject(metadata, actual) {
+  private constructor(metadata: FailureMetadata, private val actual: CapturedOutput?) :
+    Subject(metadata, actual) {
     fun status(): IntegerSubject {
-      return check("status").that(actual.status)
+      return check("status").that(actual?.status)
     }
 
     fun out(): StringSubject {
-      return check("out").that(actual.out)
+      return check("out").that(actual?.out)
     }
 
     fun err(): StringSubject {
-      return check("err").that(actual.err)
+      return check("err").that(actual?.err)
     }
 
     companion object {
-      fun capturedOutputs(): (FailureMetadata, CapturedOutput) -> CapturedOutputSubject =
-        ::CapturedOutputSubject
+      fun capturedOutputs() =
+        Factory<CapturedOutputSubject, CapturedOutput> { metadata, actual ->
+          CapturedOutputSubject(metadata, actual)
+        }
     }
   }
 }
@@ -103,6 +103,7 @@ object ExitInterceptingSecurityManager : SecurityManager() {
   override fun checkPermission(perm: Permission?) {
     // Allow everything.
   }
+
   override fun checkExit(status: Int) {
     super.checkExit(status)
 
