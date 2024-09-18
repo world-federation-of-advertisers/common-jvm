@@ -29,7 +29,6 @@ CLOUD_SQL_CONNECTOR_VERSION = "1.12.0"
 # See https://github.com/bazelbuild/bazel/discussions/23075.
 bazel_dep(
     name = "rules_kotlin_jvm",
-    version = "0.3.0",
     repo_name = "wfa_rules_kotlin_jvm",
 )
 bazel_dep(
@@ -63,7 +62,7 @@ bazel_dep(
 )
 bazel_dep(
     name = "rules_java",
-    version = "7.9.1",
+    version = "7.11.1",
 )
 bazel_dep(
     name = "rules_kotlin",
@@ -80,7 +79,7 @@ bazel_dep(
 )
 bazel_dep(
     name = "rules_jvm_external",
-    version = "6.2.bzlmod.1",
+    version = "6.4",
 )
 bazel_dep(
     name = "rules_oci",
@@ -302,4 +301,14 @@ http_archive(
     sha256 = "1e4e32f6198facbac7a35b04fa4c1acb5e6d9bb13f983c60903da9cbbbd9f5b5",
     strip_prefix = "highwayhash-a7f68e2f95fac08b24327d74747521cf634d5aff",
     url = "https://github.com/google/highwayhash/archive/a7f68e2f95fac08b24327d74747521cf634d5aff.tar.gz",
+)
+
+# DO_NOT_SUBMIT(world-federation-of-advertisers/rules_kotlin_jvm#9): Use version
+archive_override(
+    module_name = "rules_kotlin_jvm",
+    urls = [
+        "https://github.com/world-federation-of-advertisers/rules_kotlin_jvm/archive/12bffd8d17da9e1b0e0997322c43cdd21dd04a91.tar.gz",
+    ],
+    strip_prefix = "rules_kotlin_jvm-12bffd8d17da9e1b0e0997322c43cdd21dd04a91",
+    integrity = "sha256-xS5dSwpXoc8yNRP0rdUEU1YpqItJ+BRCic1gps98Ekc=",
 )
