@@ -26,17 +26,21 @@ import org.wfanet.measurement.common.crypto.SignatureAlgorithm
 import org.wfanet.measurement.common.crypto.subjectKeyIdentifier
 import org.wfanet.measurement.common.crypto.verifySignature
 
-class SignatureSubject private constructor(failureMetadata: FailureMetadata, subject: ByteString) :
-  Subject(failureMetadata, subject) {
-
-  private val actual = subject
+class SignatureSubject
+private constructor(failureMetadata: FailureMetadata, private val actual: ByteString?) :
+  Subject(failureMetadata, actual) {
 
   fun isValidFor(certificate: X509Certificate, algorithm: SignatureAlgorithm, data: ByteString) {
+    if (actual == null) {
+      failWithActual(Fact.simpleFact("expected not to be null"))
+      return
+    }
+
     if (!certificate.verifySignature(algorithm, data, actual)) {
       failWithActual(
         Fact.simpleFact("cannot be verified"),
         Fact.fact("certificate SKID", certificate.subjectKeyIdentifier),
-        Fact.fact("data", data)
+        Fact.fact("data", data),
       )
     }
   }
@@ -45,7 +49,9 @@ class SignatureSubject private constructor(failureMetadata: FailureMetadata, sub
     fun assertThat(actual: ByteString): SignatureSubject =
       Truth.assertAbout(signatures()).that(actual)
 
-    fun signatures(): (failureMetadata: FailureMetadata, subject: ByteString) -> SignatureSubject =
-      ::SignatureSubject
+    fun signatures() =
+      Factory<SignatureSubject, ByteString> { metadata, actual ->
+        SignatureSubject(metadata, actual)
+      }
   }
 }
