@@ -23,7 +23,6 @@ import io.grpc.protobuf.services.HealthStatusManager
 import io.netty.handler.ssl.ClientAuth
 import io.netty.handler.ssl.SslContext
 import java.io.IOException
-import java.util.concurrent.ExecutorService
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
@@ -32,6 +31,8 @@ import java.util.logging.Level
 import java.util.logging.Logger
 import kotlin.properties.Delegates
 import org.jetbrains.annotations.VisibleForTesting
+import org.wfanet.measurement.common.Instrumentation
+import org.wfanet.measurement.common.ThreadPoolInstrumentation
 import org.wfanet.measurement.common.crypto.SigningCerts
 import picocli.CommandLine
 
@@ -48,7 +49,8 @@ private constructor(
   init {
     require(threadPoolSize > 1)
   }
-  private val executor: ExecutorService =
+
+  private val executor =
     ThreadPoolExecutor(1, threadPoolSize, 60L, TimeUnit.SECONDS, LinkedBlockingQueue())
   private val healthStatusManager = HealthStatusManager()
   private val started = AtomicBoolean(false)
@@ -98,6 +100,7 @@ private constructor(
   @Synchronized
   fun start(): CommonServer {
     check(!started.get()) { "$nameForLogging already started" }
+    threadPoolInstrumentation.registerThreadPool(nameForLogging, executor)
     server.start()
     server.services.forEach {
       healthStatusManager.setStatus(it.serviceDescriptor.name, ServingStatus.SERVING)
@@ -129,6 +132,7 @@ private constructor(
     healthServer.shutdown()
     server.shutdown()
     executor.shutdown()
+    threadPoolInstrumentation.unregisterThreadPool(nameForLogging)
   }
 
   @Throws(InterruptedException::class)
@@ -158,7 +162,7 @@ private constructor(
     @set:CommandLine.Option(
       names = ["--require-client-auth"],
       description = ["Require client auth"],
-      defaultValue = "true"
+      defaultValue = "true",
     )
     var clientAuthRequired by Delegates.notNull<Boolean>()
       private set
@@ -181,7 +185,7 @@ private constructor(
     @set:CommandLine.Option(
       names = ["--debug-verbose-grpc-server-logging"],
       description = ["Debug mode: log ALL gRPC requests and responses"],
-      defaultValue = "false"
+      defaultValue = "false",
     )
     var debugVerboseGrpcLogging by Delegates.notNull<Boolean>()
       private set
@@ -189,6 +193,9 @@ private constructor(
 
   companion object {
     private val logger = Logger.getLogger(this::class.java.name)
+    private val meter = Instrumentation.getMeter(this::class.java.name)
+    private val threadPoolInstrumentation =
+      ThreadPoolInstrumentation(meter, "${Instrumentation.ROOT_NAMESPACE}.grpc_server.thread_pool")
 
     val DEFAULT_THREAD_POOL_SIZE = Runtime.getRuntime().availableProcessors() * 2
 
@@ -201,7 +208,7 @@ private constructor(
       services: Iterable<ServerServiceDefinition>,
       port: Int = 0,
       healthPort: Int = 0,
-      threadPoolSize: Int = DEFAULT_THREAD_POOL_SIZE
+      threadPoolSize: Int = DEFAULT_THREAD_POOL_SIZE,
     ): CommonServer {
       return CommonServer(
         nameForLogging,
@@ -218,7 +225,7 @@ private constructor(
     fun fromFlags(
       flags: Flags,
       nameForLogging: String,
-      services: Iterable<ServerServiceDefinition>
+      services: Iterable<ServerServiceDefinition>,
     ): CommonServer {
       return fromParameters(
         flags.debugVerboseGrpcLogging,
@@ -228,7 +235,7 @@ private constructor(
         services,
         flags.port,
         flags.healthPort,
-        flags.threadPoolSize
+        flags.threadPoolSize,
       )
     }
 
@@ -236,21 +243,21 @@ private constructor(
     fun fromFlags(
       flags: Flags,
       nameForLogging: String,
-      vararg services: ServerServiceDefinition
+      vararg services: ServerServiceDefinition,
     ): CommonServer = fromFlags(flags, nameForLogging, services.asIterable())
 
     /** Constructs a [CommonServer] from command-line flags. */
     fun fromFlags(
       flags: Flags,
       nameForLogging: String,
-      services: Iterable<BindableService>
+      services: Iterable<BindableService>,
     ): CommonServer = fromFlags(flags, nameForLogging, services.map { it.bindService() })
 
     /** Constructs a [CommonServer] from command-line flags. */
     fun fromFlags(
       flags: Flags,
       nameForLogging: String,
-      vararg services: BindableService
+      vararg services: BindableService,
     ): CommonServer = fromFlags(flags, nameForLogging, services.map { it.bindService() })
   }
 }

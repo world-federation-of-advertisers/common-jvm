@@ -17,6 +17,7 @@ kt_jvm_library(
         "//imports/java/com/google/gson",
         "//imports/java/com/google/protobuf",
         "//imports/java/com/google/protobuf/util",
+        "//imports/java/io/opentelemetry/api",
         "//imports/java/org/jetbrains/annotations",
         "//imports/java/picocli",
         "//imports/kotlin/com/google/protobuf/kotlin",
