@@ -22,27 +22,27 @@ import org.wfanet.measurement.common.flatten
 import org.wfanet.measurement.common.size
 import org.wfanet.measurement.storage.StorageClient.Blob
 
-class BlobSubject private constructor(failureMetadata: FailureMetadata, subject: Blob) :
+class BlobSubject private constructor(failureMetadata: FailureMetadata, subject: Blob?) :
   Subject(failureMetadata, subject) {
 
-  private val actual = subject
+  private val actual: Blob? = subject
 
   fun hasSize(size: Int) {
-    check("size").that(actual.size).isEqualTo(size)
+    check("size").that(actual?.size).isEqualTo(size)
   }
 
   suspend fun contentEqualTo(content: ByteString) {
-    val actualContent = actual.read().flatten()
+    val actualContent: ByteString? = actual?.read()?.flatten()
 
     // First check size to avoid outputting potentially large number of bytes.
-    check("read().toByteString().size").that(actualContent.size).isEqualTo(content.size)
+    check("read().flatten().size").that(actualContent?.size).isEqualTo(content.size)
 
-    check("read().toByteString()").that(actualContent).isEqualTo(content)
+    check("read().flatten()").that(actualContent).isEqualTo(content)
   }
 
   companion object {
     fun assertThat(actual: Blob): BlobSubject = assertAbout(blobs()).that(actual)
 
-    fun blobs(): (failureMetadata: FailureMetadata, subject: Blob) -> BlobSubject = ::BlobSubject
+    fun blobs() = Factory<BlobSubject, Blob> { metadata, actual -> BlobSubject(metadata, actual) }
   }
 }
