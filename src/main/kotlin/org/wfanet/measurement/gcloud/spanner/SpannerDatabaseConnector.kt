@@ -16,6 +16,7 @@ package org.wfanet.measurement.gcloud.spanner
 
 import com.google.cloud.spanner.DatabaseId
 import com.google.cloud.spanner.Spanner
+import io.opentelemetry.api.metrics.Meter
 import java.time.Duration
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -24,6 +25,8 @@ import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import java.util.logging.Logger
 import kotlinx.coroutines.TimeoutCancellationException
+import org.wfanet.measurement.common.Instrumentation
+import org.wfanet.measurement.common.ThreadPoolInstrumentation
 
 /**
  * Wraps a connection to a Spanner database for convenient access to an [AsyncDatabaseClient], the
@@ -57,6 +60,7 @@ class SpannerDatabaseConnector(
   private val transactionExecutor: Lazy<ExecutorService> = lazy {
     if (emulatorHost == null) {
       ThreadPoolExecutor(1, maxTransactionThreads, 60L, TimeUnit.SECONDS, LinkedBlockingQueue())
+        .also { threadPoolInstrumentation.registerThreadPool(databaseId.name, it) }
     } else {
       // Spanner emulator only supports a single read-write transaction at a time.
       Executors.newSingleThreadExecutor()
@@ -79,6 +83,7 @@ class SpannerDatabaseConnector(
   override fun close() {
     spanner.close()
     if (transactionExecutor.isInitialized()) {
+      threadPoolInstrumentation.unregisterThreadPool(databaseId.name)
       transactionExecutor.value.shutdown()
     }
   }
@@ -105,6 +110,12 @@ class SpannerDatabaseConnector(
 
   companion object {
     private val logger = Logger.getLogger(this::class.java.name)
+    private val meter: Meter = Instrumentation.getMeter(this::class.java.name)
+    private val threadPoolInstrumentation =
+      ThreadPoolInstrumentation(
+        meter,
+        "${Instrumentation.ROOT_NAMESPACE}.spanner.transaction.thread_pool"
+      )
   }
 }
 
