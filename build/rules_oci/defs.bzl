@@ -170,6 +170,7 @@ def java_image(
             ":" + native_library_files_name,
             ":" + runfiles_pkg_name,
         ],
+        extension = "tar.gz",
         visibility = ["//visibility:private"],
         **kwargs
     )
