@@ -156,3 +156,17 @@ kt_jvm_test(
         "//src/main/kotlin/org/wfanet/measurement/common",
     ],
 )
+
+kt_jvm_test(
+    name = "InstrumentationTest",
+    srcs = ["InstrumentationTest.kt"],
+    test_class = "org.wfanet.measurement.common.InstrumentationTest",
+    deps = [
+        "//imports/java/com/google/common/truth",
+        "//imports/java/io/opentelemetry/sdk",
+        "//imports/java/io/opentelemetry/sdk/testing",
+        "//imports/java/org/junit",
+        "//imports/kotlin/kotlin/test",
+        "//src/main/kotlin/org/wfanet/measurement/common",
+    ],
+)
