@@ -159,6 +159,11 @@ maven.artifact(
     artifact = "grpc-testing",
     group = "io.grpc",
 )
+maven.artifact(
+    testonly = True,
+    artifact = "opentelemetry-sdk-testing",
+    group = "io.opentelemetry",
+)
 maven.install(
     name = "maven",
     artifacts = [
@@ -211,6 +216,7 @@ maven.install(
         # OpenTelemetry.
         "io.opentelemetry:opentelemetry-api",
         "io.opentelemetry:opentelemetry-context",
+        "io.opentelemetry:opentelemetry-sdk",
 
         # Reactor.
         "org.reactivestreams:reactive-streams",
@@ -227,7 +233,6 @@ maven.install(
         "org.yaml:snakeyaml:2.2",
         "org.liquibase:liquibase-core:4.26.0",
         "com.google.cloudspannerecosystem:liquibase-spanner:4.25.1",
-        "com.google.cloud:google-cloud-spanner-jdbc:2.15.1",
         "org.liquibase.ext:liquibase-postgresql:4.11.0",
 
         # Math library.
@@ -250,7 +255,7 @@ maven.install(
         "io.grpc:grpc-bom:" + GRPC_JAVA_VERSION,
         "com.google.cloud:libraries-bom:26.45.0",
         "software.amazon.awssdk:bom:" + AWS_JAVA_SDK_VERSION,
-        "io.opentelemetry:opentelemetry-bom:1.37.0",
+        "io.opentelemetry:opentelemetry-bom:1.42.1",
         "org.testcontainers:testcontainers-bom:1.19.3",
         "io.projectreactor:reactor-bom:2023.0.9",
     ],
