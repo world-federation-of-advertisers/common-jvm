@@ -33,6 +33,7 @@ import java.util.logging.Logger
 import kotlin.properties.Delegates
 import org.jetbrains.annotations.VisibleForTesting
 import org.wfanet.measurement.common.crypto.SigningCerts
+import org.wfanet.measurement.common.instrumented
 import picocli.CommandLine
 
 class CommonServer
@@ -48,8 +49,10 @@ private constructor(
   init {
     require(threadPoolSize > 1)
   }
+
   private val executor: ExecutorService =
     ThreadPoolExecutor(1, threadPoolSize, 60L, TimeUnit.SECONDS, LinkedBlockingQueue())
+      .instrumented(nameForLogging)
   private val healthStatusManager = HealthStatusManager()
   private val started = AtomicBoolean(false)
 
@@ -158,7 +161,7 @@ private constructor(
     @set:CommandLine.Option(
       names = ["--require-client-auth"],
       description = ["Require client auth"],
-      defaultValue = "true"
+      defaultValue = "true",
     )
     var clientAuthRequired by Delegates.notNull<Boolean>()
       private set
@@ -181,7 +184,7 @@ private constructor(
     @set:CommandLine.Option(
       names = ["--debug-verbose-grpc-server-logging"],
       description = ["Debug mode: log ALL gRPC requests and responses"],
-      defaultValue = "false"
+      defaultValue = "false",
     )
     var debugVerboseGrpcLogging by Delegates.notNull<Boolean>()
       private set
@@ -201,7 +204,7 @@ private constructor(
       services: Iterable<ServerServiceDefinition>,
       port: Int = 0,
       healthPort: Int = 0,
-      threadPoolSize: Int = DEFAULT_THREAD_POOL_SIZE
+      threadPoolSize: Int = DEFAULT_THREAD_POOL_SIZE,
     ): CommonServer {
       return CommonServer(
         nameForLogging,
@@ -218,7 +221,7 @@ private constructor(
     fun fromFlags(
       flags: Flags,
       nameForLogging: String,
-      services: Iterable<ServerServiceDefinition>
+      services: Iterable<ServerServiceDefinition>,
     ): CommonServer {
       return fromParameters(
         flags.debugVerboseGrpcLogging,
@@ -228,7 +231,7 @@ private constructor(
         services,
         flags.port,
         flags.healthPort,
-        flags.threadPoolSize
+        flags.threadPoolSize,
       )
     }
 
@@ -236,21 +239,21 @@ private constructor(
     fun fromFlags(
       flags: Flags,
       nameForLogging: String,
-      vararg services: ServerServiceDefinition
+      vararg services: ServerServiceDefinition,
     ): CommonServer = fromFlags(flags, nameForLogging, services.asIterable())
 
     /** Constructs a [CommonServer] from command-line flags. */
     fun fromFlags(
       flags: Flags,
       nameForLogging: String,
-      services: Iterable<BindableService>
+      services: Iterable<BindableService>,
     ): CommonServer = fromFlags(flags, nameForLogging, services.map { it.bindService() })
 
     /** Constructs a [CommonServer] from command-line flags. */
     fun fromFlags(
       flags: Flags,
       nameForLogging: String,
-      vararg services: BindableService
+      vararg services: BindableService,
     ): CommonServer = fromFlags(flags, nameForLogging, services.map { it.bindService() })
   }
 }

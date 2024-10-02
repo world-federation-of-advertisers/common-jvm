@@ -15,7 +15,6 @@
 package org.wfanet.measurement.common.grpc
 
 import com.google.common.truth.Truth.assertThat
-import io.grpc.Server
 import io.grpc.health.v1.HealthCheckRequest
 import io.grpc.health.v1.HealthCheckResponse
 import io.grpc.health.v1.HealthGrpcKt.HealthCoroutineStub
@@ -24,9 +23,9 @@ import io.grpc.testing.GrpcCleanupRule
 import io.netty.handler.ssl.ClientAuth
 import java.io.File
 import java.util.logging.Logger
-import kotlin.properties.Delegates
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.runInterruptible
+import org.junit.After
 import org.junit.BeforeClass
 import org.junit.ClassRule
 import org.junit.Rule
@@ -51,22 +50,26 @@ class TransportSecurityTest {
     SigningCerts.fromPemFiles(
       certificateFile = tempDir.resolve("server.pem"),
       privateKeyFile = tempDir.resolve("server.key"),
-      trustedCertCollectionFile = tempDir.resolve("client-root.pem")
+      trustedCertCollectionFile = tempDir.resolve("client-root.pem"),
     )
 
   private val clientCerts =
     SigningCerts.fromPemFiles(
       certificateFile = tempDir.resolve("client.pem"),
       privateKeyFile = tempDir.resolve("client.key"),
-      trustedCertCollectionFile = tempDir.resolve("server-root.pem")
+      trustedCertCollectionFile = tempDir.resolve("server-root.pem"),
     )
 
   @get:Rule val grpcCleanup = GrpcCleanupRule()
 
-  private var port by Delegates.notNull<Int>()
+  private lateinit var server: CommonServer
 
-  private fun startCommonServer(clientAuth: ClientAuth): Server {
-    val server =
+  private val port: Int
+    get() = server.server.port
+
+  private fun startCommonServer(clientAuth: ClientAuth) {
+    check(!this::server.isInitialized) { "Server already started" }
+    server =
       CommonServer.fromParameters(
           port = 0, // Bind to an unused port.
           healthPort = 0, // Bind to an unused port.
@@ -80,9 +83,14 @@ class TransportSecurityTest {
     healthStatusManager.setStatus(SERVICE, HealthCheckResponse.ServingStatus.SERVING)
 
     grpcCleanup.register(server.server)
-    port = server.port
+  }
 
-    return server.server
+  @After
+  fun shutDownCommonServer() {
+    if (this::server.isInitialized) {
+      server.shutdown()
+      server.blockUntilShutdown()
+    }
   }
 
   @Test
@@ -101,7 +109,7 @@ class TransportSecurityTest {
         "server-root.pem",
         "-tls1_3",
         "-verify_hostname",
-        HOSTNAME
+        HOSTNAME,
       )
     }
   }
@@ -126,7 +134,7 @@ class TransportSecurityTest {
         "server-root.pem",
         "-verify_hostname",
         HOSTNAME,
-        "-tls1_3"
+        "-tls1_3",
       )
     }
   }
@@ -207,7 +215,7 @@ class TransportSecurityTest {
         "-days",
         "3650",
         "-subj",
-        subject
+        subject,
       )
     }
 
@@ -228,7 +236,7 @@ class TransportSecurityTest {
         "-addext",
         SUBJECT_ALT_NAME_EXT,
         "-subj",
-        subject
+        subject,
       )
     }
 
@@ -247,7 +255,7 @@ class TransportSecurityTest {
         "$rootCertName.key",
         "-CAcreateserial",
         "-extfile",
-        "san.ext"
+        "san.ext",
       )
     }
 

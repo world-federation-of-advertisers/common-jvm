@@ -24,6 +24,7 @@ import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import java.util.logging.Logger
 import kotlinx.coroutines.TimeoutCancellationException
+import org.wfanet.measurement.common.instrumented
 
 /**
  * Wraps a connection to a Spanner database for convenient access to an [AsyncDatabaseClient], the
@@ -57,6 +58,7 @@ class SpannerDatabaseConnector(
   private val transactionExecutor: Lazy<ExecutorService> = lazy {
     if (emulatorHost == null) {
       ThreadPoolExecutor(1, maxTransactionThreads, 60L, TimeUnit.SECONDS, LinkedBlockingQueue())
+        .instrumented(databaseId.name)
     } else {
       // Spanner emulator only supports a single read-write transaction at a time.
       Executors.newSingleThreadExecutor()
