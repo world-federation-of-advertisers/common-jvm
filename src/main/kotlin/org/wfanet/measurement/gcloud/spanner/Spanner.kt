@@ -16,10 +16,12 @@ package org.wfanet.measurement.gcloud.spanner
 
 import com.google.cloud.spanner.ErrorCode
 import com.google.cloud.spanner.Mutation
+import com.google.cloud.spanner.SessionPoolOptions
 import com.google.cloud.spanner.Spanner
 import com.google.cloud.spanner.SpannerException
 import com.google.cloud.spanner.SpannerOptions
 import com.google.cloud.spanner.Statement
+import org.wfanet.measurement.common.Instrumentation
 
 /**
  * Convenience function for appending without worrying about whether the last [append] had
@@ -34,12 +36,16 @@ fun Mutation.bufferTo(transactionContext: AsyncDatabaseClient.TransactionContext
 
 /** Constructs a [Spanner]. */
 fun buildSpanner(projectName: String, spannerEmulatorHost: String? = null): Spanner {
+  SpannerOptions.enableOpenTelemetryMetrics()
+  SpannerOptions.enableOpenTelemetryTraces()
   return SpannerOptions.newBuilder()
     .apply {
       setProjectId(projectName)
       if (!spannerEmulatorHost.isNullOrBlank()) {
         setEmulatorHost(spannerEmulatorHost)
       }
+      setSessionPoolOption(SessionPoolOptions.newBuilder().setWarnIfInactiveTransactions().build())
+      setOpenTelemetry(Instrumentation.openTelemetry)
     }
     .build()
     .service

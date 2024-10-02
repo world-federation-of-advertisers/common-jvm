@@ -43,14 +43,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asExecutor
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ProducerScope
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.singleOrNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
@@ -256,29 +254,21 @@ private class TransactionContextImpl(private val txn: TransactionContext) :
 }
 
 @OptIn(ExperimentalStdlibApi::class) // For CoroutineDispatcher
-private fun flowFrom(executeQuery: () -> AsyncResultSet): Flow<Struct> {
-  return callbackFlow {
-      // Defer executing the query until we're in the producer scope.
-      val resultSet: AsyncResultSet = executeQuery()
+private fun flowFrom(executeQuery: () -> AsyncResultSet): Flow<Struct> = callbackFlow {
+  // Defer executing the query until we're in the producer scope.
+  val resultSet: AsyncResultSet = executeQuery()
 
-      val dispatcher = coroutineContext[CoroutineDispatcher] ?: Dispatchers.Default
-      resultSet.setCallback(dispatcher.asExecutor()) { cursor ->
-        try {
-          cursorReady(cursor)
-        } catch (t: Throwable) {
-          close(t)
-          resultSet.cancel()
-          AsyncResultSet.CallbackResponse.DONE
-        }
-      }
-      awaitClose { resultSet.close() }
+  val dispatcher = coroutineContext[CoroutineDispatcher] ?: Dispatchers.Default
+  resultSet.setCallback(dispatcher.asExecutor()) { cursor ->
+    try {
+      cursorReady(cursor)
+    } catch (t: Throwable) {
+      close(t)
+      resultSet.cancel()
+      AsyncResultSet.CallbackResponse.DONE
     }
-    .onCompletion {
-      // For some reason, having an onCompletion specified here is significant. Without it,
-      // sometimes the collector will hang. See
-      // https://github.com/Kotlin/kotlinx.coroutines/issues/3459
-    }
-    .buffer(Channel.RENDEZVOUS)
+  }
+  awaitClose { resultSet.close() }
 }
 
 private fun ProducerScope<Struct>.cursorReady(
