@@ -19,6 +19,7 @@ package org.wfanet.measurement.gcloud.spanner
 import com.google.cloud.spanner.Struct
 import com.google.common.truth.Truth.assertThat
 import java.nio.file.Path
+import kotlin.test.assertFailsWith
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import org.junit.Before
@@ -31,7 +32,7 @@ import org.wfanet.measurement.gcloud.spanner.testing.SpannerEmulatorDatabaseRule
 
 @RunWith(JUnit4::class)
 class AsyncDatabaseClientTest {
-  @JvmField @Rule val spannerEmulatorDb = SpannerEmulatorDatabaseRule(CHANGELOG_PATH)
+  @get:Rule val spannerEmulatorDb = SpannerEmulatorDatabaseRule(CHANGELOG_PATH)
 
   private lateinit var databaseClient: AsyncDatabaseClient
 
@@ -41,12 +42,110 @@ class AsyncDatabaseClientTest {
   }
 
   @Test
-  fun `executes simple query`() {
+  fun `executeQuery returns result`() {
     val results: List<Struct> = runBlocking {
-      databaseClient.singleUse().executeQuery(statement("SELECT TRUE") {}).toList()
+      databaseClient.singleUse().executeQuery(statement("SELECT TRUE")).toList()
     }
 
     assertThat(results.single().getBoolean(0)).isTrue()
+  }
+
+  @Test
+  fun `run applies buffered mutations`() {
+    runBlocking {
+      databaseClient.readWriteTransaction().run { txn ->
+        txn.bufferInsertMutation("Cars") {
+          set("CarId").to(1)
+          set("Year").to(1990)
+          set("Make").to("Nissan")
+          set("Model").to("Stanza")
+        }
+        txn.bufferInsertMutation("Cars") {
+          set("CarId").to(2)
+          set("Year").to(1997)
+          set("Make").to("Honda")
+          set("Model").to("CR-V")
+        }
+      }
+    }
+
+    val results: List<Struct> = runBlocking {
+      databaseClient.singleUse().use { txn ->
+        txn
+          .executeQuery(statement("SELECT CarId, Year, Make, Model FROM Cars ORDER BY CarId"))
+          .toList()
+      }
+    }
+    assertThat(results)
+      .containsExactly(
+        struct {
+          set("CarId").to(1)
+          set("Year").to(1990)
+          set("Make").to("Nissan")
+          set("Model").to("Stanza")
+        },
+        struct {
+          set("CarId").to(2)
+          set("Year").to(1997)
+          set("Make").to("Honda")
+          set("Model").to("CR-V")
+        },
+      )
+      .inOrder()
+  }
+
+  @Test
+  fun `run executes statement`() {
+    val statementSql =
+      """
+      INSERT INTO Cars(CarId, Year, Make, Model)
+      VALUES
+        (1, 1990, 'Nissan', 'Stanza'),
+        (2, 1997, 'Honda', 'CR-V')
+      """
+        .trimIndent()
+
+    runBlocking {
+      databaseClient.readWriteTransaction().run { txn ->
+        txn.executeUpdate(statement(statementSql))
+      }
+    }
+
+    val results: List<Struct> = runBlocking {
+      databaseClient.singleUse().use { txn ->
+        txn
+          .executeQuery(statement("SELECT CarId, Year, Make, Model FROM Cars ORDER BY CarId"))
+          .toList()
+      }
+    }
+    assertThat(results)
+      .containsExactly(
+        struct {
+          set("CarId").to(1)
+          set("Year").to(1990)
+          set("Make").to("Nissan")
+          set("Model").to("Stanza")
+        },
+        struct {
+          set("CarId").to(2)
+          set("Year").to(1997)
+          set("Make").to("Honda")
+          set("Model").to("CR-V")
+        },
+      )
+      .inOrder()
+  }
+
+  @Test
+  fun `run bubbles exceptions from transaction work`() = runBlocking {
+    val message = "Error inside transaction work"
+
+    val exception =
+      assertFailsWith<Exception> {
+        databaseClient.readWriteTransaction().run { _ -> throw Exception(message) }
+      }
+
+    assertThat(exception).hasMessageThat().isEqualTo(message)
   }
 
   companion object {
