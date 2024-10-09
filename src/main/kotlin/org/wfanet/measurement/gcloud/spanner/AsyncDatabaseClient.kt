@@ -15,26 +15,30 @@
 package org.wfanet.measurement.gcloud.spanner
 
 import com.google.cloud.Timestamp
+import com.google.cloud.spanner.AbortedException
 import com.google.cloud.spanner.AsyncResultSet
-import com.google.cloud.spanner.AsyncRunner
+import com.google.cloud.spanner.AsyncTransactionManager
+import com.google.cloud.spanner.CommitResponse
 import com.google.cloud.spanner.DatabaseClient
 import com.google.cloud.spanner.DatabaseId
 import com.google.cloud.spanner.Key
 import com.google.cloud.spanner.KeySet
 import com.google.cloud.spanner.Mutation
+import com.google.cloud.spanner.Options
 import com.google.cloud.spanner.Options.QueryOption
 import com.google.cloud.spanner.Options.ReadOption
 import com.google.cloud.spanner.ReadContext
+import com.google.cloud.spanner.ReadOnlyTransaction
 import com.google.cloud.spanner.Spanner
-import com.google.cloud.spanner.SpannerException
 import com.google.cloud.spanner.Statement
 import com.google.cloud.spanner.Struct
 import com.google.cloud.spanner.TimestampBound
 import com.google.cloud.spanner.TransactionContext
+import com.google.common.util.concurrent.MoreExecutors
 import java.time.Duration
 import java.util.concurrent.Executor
-import java.util.concurrent.Executors
 import java.util.logging.Logger
+import kotlin.coroutines.ContinuationInterceptor
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineName
@@ -43,9 +47,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asExecutor
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ProducerScope
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.callbackFlow
@@ -65,27 +72,33 @@ typealias TransactionWork<R> =
  * This class only exposes the methods used by this project and not the complete API.
  *
  * @param dbClient [DatabaseClient] to wrap
- * @param executor [Executor] for read-write transactions
  */
-class AsyncDatabaseClient(private val dbClient: DatabaseClient, private val executor: Executor) {
+class AsyncDatabaseClient(private val dbClient: DatabaseClient) {
   /** @see DatabaseClient.singleUse */
   fun singleUse(bound: TimestampBound = TimestampBound.strong()): ReadContext {
     return ReadContextImpl(dbClient.singleUse(bound))
   }
 
+  /** @see DatabaseClient.singleUseReadOnlyTransaction */
+  fun singleUseReadOnlyTransaction(
+    bound: TimestampBound = TimestampBound.strong()
+  ): ReadOnlyTransaction {
+    return ReadOnlyTransactionImpl(dbClient.singleUseReadOnlyTransaction(bound))
+  }
+
   /** @see DatabaseClient.readOnlyTransaction */
-  fun readOnlyTransaction(bound: TimestampBound = TimestampBound.strong()): ReadContext {
-    return ReadContextImpl(dbClient.readOnlyTransaction(bound))
+  fun readOnlyTransaction(bound: TimestampBound = TimestampBound.strong()): ReadOnlyTransaction {
+    return ReadOnlyTransactionImpl(dbClient.readOnlyTransaction(bound))
   }
 
   /** @see DatabaseClient.readWriteTransaction */
-  fun readWriteTransaction(): TransactionRunner {
-    return TransactionRunnerImpl(dbClient.runAsync())
+  fun readWriteTransaction(vararg options: Options.TransactionOption): TransactionRunner {
+    return TransactionRunnerImpl(dbClient.transactionManagerAsync(*options))
   }
 
   /** @see DatabaseClient.write */
   suspend fun write(mutations: Iterable<Mutation>) {
-    readWriteTransaction().execute { txn -> txn.buffer(mutations) }
+    readWriteTransaction().run { txn -> txn.buffer(mutations) }
   }
 
   /** @see DatabaseClient.write */
@@ -149,20 +162,37 @@ class AsyncDatabaseClient(private val dbClient: DatabaseClient, private val exec
     fun executeQuery(statement: Statement, vararg options: QueryOption): Flow<Struct>
   }
 
-  /** Coroutine version of [AsyncRunner]. */
-  interface TransactionRunner {
+  /** Async coroutine version of [com.google.cloud.spanner.ReadOnlyTransaction]. */
+  interface ReadOnlyTransaction : ReadContext {
+    /** @see com.google.cloud.spanner.ReadOnlyTransaction.getReadTimestamp */
+    val readTimestamp: Timestamp
+  }
+
+  /** Async coroutine version of [com.google.cloud.spanner.TransactionRunner]. */
+  interface TransactionRunner : AutoCloseable {
     /**
-     * Executes a read/write transaction asynchronously, suspending until it is complete.
+     * Executes a read/write transaction with retries as necessary.
      *
      * @param doWork function that does work inside a transaction
-     * @see com.google.cloud.spanner.AsyncRunner.runAsync
      *
      * This acts as a coroutine builder. [doWork] has a [CoroutineScope] receiver to ensure that
      * coroutine builders called from it run in the [CoroutineScope] defined by this function.
+     *
+     * This will close the [TransactionRunner].
+     *
+     * @see com.google.cloud.spanner.TransactionRunner.run
      */
-    suspend fun <R> execute(doWork: TransactionWork<R>): R
+    suspend fun <R> run(doWork: TransactionWork<R>): R
 
+    /** Alias for [run]. */
+    @Deprecated(message = "Use run", replaceWith = ReplaceWith("run(doWork)"))
+    suspend fun <R> execute(doWork: TransactionWork<R>): R = run(doWork)
+
+    /** @see com.google.cloud.spanner.TransactionRunner.getCommitTimestamp */
     suspend fun getCommitTimestamp(): Timestamp
+
+    /** @see com.google.cloud.spanner.TransactionRunner.getCommitTimestamp */
+    suspend fun getCommitResponse(): CommitResponse
   }
 
   /** Async coroutine version of [com.google.cloud.spanner.TransactionContext]. */
@@ -175,20 +205,6 @@ class AsyncDatabaseClient(private val dbClient: DatabaseClient, private val exec
 
     /** @see com.google.cloud.spanner.TransactionContext.executeUpdate */
     suspend fun executeUpdate(statement: Statement): Long
-  }
-
-  private inner class TransactionRunnerImpl(private val runner: AsyncRunner) : TransactionRunner {
-    override suspend fun <R> execute(doWork: TransactionWork<R>): R {
-      try {
-        return runner.run(executor, doWork)
-      } catch (e: SpannerException) {
-        throw e.wrappedException ?: e
-      }
-    }
-
-    override suspend fun getCommitTimestamp(): Timestamp {
-      return runner.commitTimestamp.await()
-    }
   }
 
   companion object {
@@ -241,34 +257,103 @@ private class ReadContextImpl(private val readContext: ReadContext) :
     }
 }
 
-private class TransactionContextImpl(private val txn: TransactionContext) :
-  AsyncDatabaseClient.TransactionContext, AsyncDatabaseClient.ReadContext by ReadContextImpl(txn) {
+private class ReadOnlyTransactionImpl(private val delegate: ReadOnlyTransaction) :
+  AsyncDatabaseClient.ReadOnlyTransaction,
+  AsyncDatabaseClient.ReadContext by ReadContextImpl(delegate) {
+  override val readTimestamp: Timestamp
+    get() = delegate.readTimestamp
+}
 
-  override fun buffer(mutation: Mutation) = txn.buffer(mutation)
+/**
+ * [AsyncDatabaseClient.TransactionRunner] implementation.
+ *
+ * This wraps [AsyncTransactionManager] rather than [com.google.cloud.spanner.AsyncRunner] as the
+ * latter makes blocking calls.
+ *
+ * TODO(googleapis/java-spanner#2698): Consider switching to AsyncRunner when fixed.
+ */
+private class TransactionRunnerImpl(private val manager: AsyncTransactionManager) :
+  AsyncDatabaseClient.TransactionRunner {
 
-  override fun buffer(mutations: Iterable<Mutation>) = txn.buffer(mutations)
+  override suspend fun <R> run(doWork: TransactionWork<R>): R {
+    return manager.use { manager ->
+      manager.runTransaction(doWork).also { manager.closeAsync().await() }
+    }
+  }
 
-  override suspend fun executeUpdate(statement: Statement): Long {
-    return txn.executeUpdateAsync(statement).await()
+  override suspend fun getCommitTimestamp(): Timestamp = getCommitResponse().commitTimestamp
+
+  override suspend fun getCommitResponse(): CommitResponse = manager.commitResponse.await()
+
+  override fun close() {
+    manager.close()
+  }
+
+  private class TransactionContextImpl(private val delegate: TransactionContext) :
+    AsyncDatabaseClient.TransactionContext,
+    AsyncDatabaseClient.ReadContext by ReadContextImpl(delegate) {
+    override fun buffer(mutation: Mutation) = delegate.buffer(mutation)
+
+    override fun buffer(mutations: Iterable<Mutation>) = delegate.buffer(mutations)
+
+    override suspend fun executeUpdate(statement: Statement): Long =
+      delegate.executeUpdateAsync(statement).await()
+  }
+
+  companion object {
+    private suspend fun <R> AsyncTransactionManager.runTransaction(doWork: TransactionWork<R>): R =
+      supervisorScope {
+        // This uses a supervisor scope so exceptions thrown by `doWork` do not cancel the coroutine
+        // prematurely.
+        var result: R? = null
+        var transactionFuture: AsyncTransactionManager.TransactionContextFuture = beginAsync()
+        while (true) {
+          coroutineContext.ensureActive()
+          try {
+            val committableFuture: AsyncTransactionManager.AsyncTransactionStep<Void, R> =
+              transactionFuture.then(
+                { txn, _ ->
+                  async {
+                      // Create a separate coroutine scope so that we have normal (non-supervisor)
+                      // structured concurrency semantics for the actual work.
+                      coroutineScope { doWork(TransactionContextImpl(txn)) }
+                    }
+                    .asApiFuture()
+                },
+                MoreExecutors.directExecutor(),
+              )
+
+            // Await before committing so that any exception gets thrown here.
+            result = committableFuture.await()
+            committableFuture.commitAsync().await()
+            break
+          } catch (e: AbortedException) {
+            delay(e.retryDelayInMillis)
+            transactionFuture = resetForRetryAsync()
+          }
+        }
+        result!!
+      }
   }
 }
 
-@OptIn(ExperimentalStdlibApi::class) // For CoroutineDispatcher
-private fun flowFrom(executeQuery: () -> AsyncResultSet): Flow<Struct> = callbackFlow {
-  // Defer executing the query until we're in the producer scope.
-  val resultSet: AsyncResultSet = executeQuery()
+private fun flowFrom(executeQuery: () -> AsyncResultSet): Flow<Struct> {
+  return callbackFlow {
+      // Defer executing the query until we're in the producer scope.
+      val resultSet: AsyncResultSet = executeQuery()
 
-  val dispatcher = coroutineContext[CoroutineDispatcher] ?: Dispatchers.Default
-  resultSet.setCallback(dispatcher.asExecutor()) { cursor ->
-    try {
-      cursorReady(cursor)
-    } catch (t: Throwable) {
-      close(t)
-      resultSet.cancel()
-      AsyncResultSet.CallbackResponse.DONE
+      resultSet.setCallback(underlyingExecutor) { cursor ->
+        try {
+          cursorReady(cursor)
+        } catch (t: Throwable) {
+          close(t)
+          resultSet.cancel()
+          AsyncResultSet.CallbackResponse.DONE
+        }
+      }
+      awaitClose { resultSet.close() }
     }
-  }
-  awaitClose { resultSet.close() }
+    .buffer(Channel.RENDEZVOUS)
 }
 
 private fun ProducerScope<Struct>.cursorReady(
@@ -301,31 +386,15 @@ private fun ProducerScope<Struct>.cursorReady(
   }
 }
 
-private suspend fun <T> AsyncRunner.run(executor: Executor, doWork: TransactionWork<T>): T {
-  // The Spanner client library may call the async callback multiple times as it performs retries on
-  // certain exceptions. Therefore, we use supervisorScope to prevent these exceptions from
-  // cancelling the parent job.
-  return supervisorScope {
-    val asyncWork =
-      AsyncRunner.AsyncWork { txn ->
-        async {
-            // Create a separate coroutine scope so that we have normal (non-supervisor) structured
-            // concurrency semantics for the actual work.
-            coroutineScope { doWork(txn.asAsyncTransaction()) }
-          }
-          .asApiFuture()
-      }
-
-    // Wait inside the supervisor scope to ensure any callback futures are created before the scope
-    // completes, and also propagate cancellation to child coroutines.
-    runAsync(asyncWork, executor).await()
+private val CoroutineScope.underlyingExecutor: Executor
+  get() {
+    val dispatcher: ContinuationInterceptor? = coroutineContext[ContinuationInterceptor]
+    // Dispatchers.Unconfined throws when used as an executor.
+    if (dispatcher is CoroutineDispatcher && dispatcher !== Dispatchers.Unconfined) {
+      return dispatcher.asExecutor()
+    }
+    return Dispatchers.Default.asExecutor()
   }
-}
 
-private fun TransactionContext.asAsyncTransaction(): AsyncDatabaseClient.TransactionContext =
-  TransactionContextImpl(this)
-
-fun Spanner.getAsyncDatabaseClient(
-  databaseId: DatabaseId,
-  executor: Executor = Executors.newSingleThreadExecutor(),
-) = AsyncDatabaseClient(getDatabaseClient(databaseId), executor)
+fun Spanner.getAsyncDatabaseClient(databaseId: DatabaseId) =
+  AsyncDatabaseClient(getDatabaseClient(databaseId))

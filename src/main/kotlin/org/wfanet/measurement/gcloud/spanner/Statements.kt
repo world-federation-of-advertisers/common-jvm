@@ -132,5 +132,8 @@ fun Statement.Builder.bindJson(paramValuePair: Pair<String, AbstractMessage?>): 
 }
 
 /** Builds a [Statement]. */
+fun statement(sql: String): Statement = Statement.newBuilder(sql).build()
+
+/** Builds a [Statement]. */
 inline fun statement(sql: String, bind: Statement.Builder.() -> Unit): Statement =
   Statement.newBuilder(sql).apply(bind).build()

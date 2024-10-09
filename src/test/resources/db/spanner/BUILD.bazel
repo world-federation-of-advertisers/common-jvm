@@ -1,3 +1,5 @@
+load("@rules_proto//proto:defs.bzl", "proto_descriptor_set")
+
 package(
     default_testonly = True,
     default_visibility = ["//visibility:public"],
@@ -7,5 +9,15 @@ filegroup(
     name = "spanner",
     srcs = glob([
         "*.yaml",
+        "*.sql",
     ]),
+)
+
+proto_descriptor_set(
+    name = "proto_descriptor_set",
+    visibility = ["//visibility:private"],
+    deps = [
+        "@com_google_googleapis//google/type:dayofweek_proto",
+        "@com_google_googleapis//google/type:latlng_proto",
+    ],
 )
