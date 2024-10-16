@@ -15,6 +15,7 @@
 package org.wfanet.measurement.gcloud.spanner.testing
 
 import java.nio.file.Path
+import org.junit.ClassRule
 import org.junit.Rule
 import org.wfanet.measurement.gcloud.spanner.AsyncDatabaseClient
 
@@ -40,8 +41,13 @@ import org.wfanet.measurement.gcloud.spanner.AsyncDatabaseClient
  * ```
  */
 abstract class UsingSpannerEmulator(changeLogResourcePath: Path) {
-  @get:Rule val spannerDatabase = SpannerEmulatorDatabaseRule(changeLogResourcePath)
+  @get:Rule
+  val spannerDatabase = SpannerEmulatorDatabaseRule(spannerEmulator, changeLogResourcePath)
 
   val databaseClient: AsyncDatabaseClient
     get() = spannerDatabase.databaseClient
+
+  companion object {
+    @get:ClassRule @JvmStatic val spannerEmulator = SpannerEmulatorRule()
+  }
 }

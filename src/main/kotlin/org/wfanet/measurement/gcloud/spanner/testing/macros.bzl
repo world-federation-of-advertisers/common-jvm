@@ -16,9 +16,15 @@
 
 load("@wfa_rules_kotlin_jvm//kotlin:defs.bzl", "kt_jvm_test")
 
-def spanner_emulator_test(name, data = [], **kwargs):
+def spanner_emulator_test(name, data = None, tags = None, **kwargs):
+    data = data or []
+    tags = tags or []
     kt_jvm_test(
         name = name,
         data = data + ["@cloud_spanner_emulator//:emulator"],
+        tags = tags + [
+            # Only one Spanner emulator process should be running at a time.
+            "exclusive",
+        ],
         **kwargs
     )

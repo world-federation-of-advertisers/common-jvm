@@ -4,6 +4,10 @@ kt_jvm_test(
     name = "AsyncDatabaseClientTest",
     srcs = ["AsyncDatabaseClientTest.kt"],
     resources = ["//src/test/resources/db/spanner"],
+    tags = [
+        # There should only be one Spanner emulator process running.
+        "exclusive",
+    ],
     test_class = "org.wfanet.measurement.gcloud.spanner.AsyncDatabaseClientTest",
     deps = [
         "//imports/java/com/google/cloud/spanner",

@@ -21,24 +21,21 @@ import com.google.common.truth.Truth.assertThat
 import java.nio.file.Path
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
-import org.junit.Before
+import org.junit.ClassRule
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 import org.wfanet.measurement.common.getJarResourcePath
 import org.wfanet.measurement.gcloud.spanner.testing.SpannerEmulatorDatabaseRule
+import org.wfanet.measurement.gcloud.spanner.testing.SpannerEmulatorRule
 
 @RunWith(JUnit4::class)
 class AsyncDatabaseClientTest {
-  @JvmField @Rule val spannerEmulatorDb = SpannerEmulatorDatabaseRule(CHANGELOG_PATH)
+  @get:Rule val database = SpannerEmulatorDatabaseRule(spannerEmulator, CHANGELOG_PATH)
 
-  private lateinit var databaseClient: AsyncDatabaseClient
-
-  @Before
-  fun initDatabaseClient() {
-    databaseClient = spannerEmulatorDb.databaseClient
-  }
+  private val databaseClient: AsyncDatabaseClient
+    get() = database.databaseClient
 
   @Test
   fun `executes simple query`() {
@@ -55,5 +52,7 @@ class AsyncDatabaseClientTest {
       requireNotNull(this::class.java.classLoader.getJarResourcePath(CHANGELOG_RESOURCE_NAME)) {
         "Resource $CHANGELOG_RESOURCE_NAME not found"
       }
+
+    @get:ClassRule @JvmStatic val spannerEmulator = SpannerEmulatorRule()
   }
 }
