@@ -14,19 +14,12 @@
 
 package org.wfanet.measurement.gcloud.spanner.testing
 
-import com.google.cloud.spanner.DatabaseId
-import com.google.cloud.spanner.Spanner
-import com.google.cloud.spanner.connection.SpannerPool
 import java.nio.file.Path
-import java.sql.DriverManager
-import kotlinx.coroutines.runBlocking
+import java.util.concurrent.atomic.AtomicInteger
 import org.junit.rules.TestRule
 import org.junit.runner.Description
 import org.junit.runners.model.Statement
-import org.wfanet.measurement.common.db.liquibase.Liquibase
 import org.wfanet.measurement.gcloud.spanner.AsyncDatabaseClient
-import org.wfanet.measurement.gcloud.spanner.buildSpanner
-import org.wfanet.measurement.gcloud.spanner.getAsyncDatabaseClient
 
 /**
  * JUnit rule exposing a temporary Google Cloud Spanner database via Spanner Emulator.
@@ -34,8 +27,9 @@ import org.wfanet.measurement.gcloud.spanner.getAsyncDatabaseClient
  * @param changelogPath [Path] to a Liquibase changelog.
  */
 class SpannerEmulatorDatabaseRule(
+  private val emulatorDatabaseAdmin: SpannerDatabaseAdmin,
   private val changelogPath: Path,
-  private val databaseName: String = "test-db",
+  private val databaseId: String = "test-db-" + dbCounter.incrementAndGet(),
 ) : TestRule {
   lateinit var databaseClient: AsyncDatabaseClient
     private set
@@ -43,38 +37,17 @@ class SpannerEmulatorDatabaseRule(
   override fun apply(base: Statement, description: Description): Statement {
     return object : Statement() {
       override fun evaluate() {
-        check(!::databaseClient.isInitialized)
-
-        SpannerEmulator().use { emulator ->
-          val emulatorHost = runBlocking { emulator.start() }
-          try {
-            createDatabase(emulatorHost).use { spanner ->
-              databaseClient =
-                spanner.getAsyncDatabaseClient(DatabaseId.of(PROJECT, INSTANCE, databaseName))
-              base.evaluate()
-            }
-          } finally {
-            // Make sure these Spanner instances from JDBC are closed before the emulator is shut
-            // down, otherwise it will block JVM shutdown.
-            SpannerPool.closeSpannerPool()
-          }
+        databaseClient = emulatorDatabaseAdmin.createDatabase(changelogPath, databaseId)
+        try {
+          base.evaluate()
+        } finally {
+          emulatorDatabaseAdmin.deleteDatabase(databaseId)
         }
       }
     }
   }
 
-  private fun createDatabase(emulatorHost: String): Spanner {
-    val connectionString =
-      SpannerEmulator.buildJdbcConnectionString(emulatorHost, PROJECT, INSTANCE, databaseName)
-    DriverManager.getConnection(connectionString).use { connection ->
-      Liquibase.update(connection, changelogPath)
-    }
-
-    return buildSpanner(PROJECT, emulatorHost)
-  }
-
   companion object {
-    private const val PROJECT = "test-project"
-    private const val INSTANCE = "test-instance"
+    private val dbCounter = AtomicInteger(0)
   }
 }
