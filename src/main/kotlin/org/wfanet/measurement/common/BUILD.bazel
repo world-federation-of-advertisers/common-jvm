@@ -12,7 +12,6 @@ kt_jvm_library(
     tags = ["maven_coordinates=" + MAVEN_COORDINATES],
     deps = [
         "//imports/java/com/github/benmanes/caffeine",
-        "//imports/java/com/google/common:guava",
         "//imports/java/com/google/devtools/build/runfiles",
         "//imports/java/com/google/gson",
         "//imports/java/com/google/protobuf",

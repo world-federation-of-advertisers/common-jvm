@@ -14,17 +14,16 @@
 
 package org.wfanet.measurement.common
 
-import com.google.common.io.BaseEncoding
 import com.google.protobuf.ByteString
-
-private val base16 = BaseEncoding.base16()
 
 /** Representation of an uppercase hexidecimal [String]. */
 data class HexString(val bytes: ByteString) {
+  @OptIn(ExperimentalStdlibApi::class)
   val value: String
-    get() = base16.encode(bytes.toByteArray())
+    get() = bytes.toByteArray().toHexString(HexFormat.UpperCase)
 
-  constructor(value: String) : this(ByteString.copyFrom(base16.decode(value)))
+  @OptIn(ExperimentalStdlibApi::class)
+  constructor(value: String) : this(ByteString.copyFrom(value.hexToByteArray()))
 
   override fun toString(): String = value
 }
