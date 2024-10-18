@@ -14,5 +14,6 @@ kt_jvm_library(
         "//imports/kotlin/com/google/type:date_kt_jvm_proto",
         "//imports/kotlin/kotlinx/coroutines:core",
         "//imports/kotlin/kotlinx/coroutines/guava",
+        "//src/main/kotlin/org/wfanet/measurement/common/guava",
     ],
 )
