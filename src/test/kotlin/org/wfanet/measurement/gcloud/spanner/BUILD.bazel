@@ -2,6 +2,7 @@ load("@wfa_rules_kotlin_jvm//kotlin:defs.bzl", "kt_jvm_test")
 
 kt_jvm_test(
     name = "AsyncDatabaseClientTest",
+    timeout = "short",
     srcs = ["AsyncDatabaseClientTest.kt"],
     resources = ["//src/test/resources/db/spanner"],
     tags = [
@@ -13,7 +14,9 @@ kt_jvm_test(
         "//imports/java/com/google/cloud/spanner",
         "//imports/java/com/google/common/truth",
         "//imports/java/org/junit",
+        "//imports/kotlin/kotlin/test",
         "//imports/kotlin/kotlinx/coroutines:core",
+        "//imports/kotlin/kotlinx/coroutines/debug",
         "//src/main/kotlin/org/wfanet/measurement/common",
         "//src/main/kotlin/org/wfanet/measurement/gcloud/spanner",
         "//src/main/kotlin/org/wfanet/measurement/gcloud/spanner/testing",

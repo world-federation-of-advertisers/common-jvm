@@ -17,6 +17,7 @@ package org.wfanet.measurement.gcloud.spanner
 import com.google.cloud.Timestamp
 import com.google.cloud.spanner.AsyncResultSet
 import com.google.cloud.spanner.AsyncRunner
+import com.google.cloud.spanner.CommitResponse
 import com.google.cloud.spanner.DatabaseClient
 import com.google.cloud.spanner.DatabaseId
 import com.google.cloud.spanner.Key
@@ -25,6 +26,7 @@ import com.google.cloud.spanner.Mutation
 import com.google.cloud.spanner.Options.QueryOption
 import com.google.cloud.spanner.Options.ReadOption
 import com.google.cloud.spanner.ReadContext
+import com.google.cloud.spanner.ReadOnlyTransaction
 import com.google.cloud.spanner.Spanner
 import com.google.cloud.spanner.SpannerException
 import com.google.cloud.spanner.Statement
@@ -47,7 +49,6 @@ import kotlinx.coroutines.channels.ProducerScope
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.singleOrNull
 import kotlinx.coroutines.launch
@@ -73,9 +74,16 @@ class AsyncDatabaseClient(private val dbClient: DatabaseClient, private val exec
     return ReadContextImpl(dbClient.singleUse(bound))
   }
 
+  /** @see DatabaseClient.singleUseReadOnlyTransaction */
+  fun singleUseReadOnlyTransaction(
+    bound: TimestampBound = TimestampBound.strong()
+  ): ReadOnlyTransaction {
+    return ReadOnlyTransactionImpl(dbClient.singleUseReadOnlyTransaction(bound))
+  }
+
   /** @see DatabaseClient.readOnlyTransaction */
-  fun readOnlyTransaction(bound: TimestampBound = TimestampBound.strong()): ReadContext {
-    return ReadContextImpl(dbClient.readOnlyTransaction(bound))
+  fun readOnlyTransaction(bound: TimestampBound = TimestampBound.strong()): ReadOnlyTransaction {
+    return ReadOnlyTransactionImpl(dbClient.readOnlyTransaction(bound))
   }
 
   /** @see DatabaseClient.readWriteTransaction */
@@ -85,7 +93,7 @@ class AsyncDatabaseClient(private val dbClient: DatabaseClient, private val exec
 
   /** @see DatabaseClient.write */
   suspend fun write(mutations: Iterable<Mutation>) {
-    readWriteTransaction().execute { txn -> txn.buffer(mutations) }
+    readWriteTransaction().run { txn -> txn.buffer(mutations) }
   }
 
   /** @see DatabaseClient.write */
@@ -149,20 +157,35 @@ class AsyncDatabaseClient(private val dbClient: DatabaseClient, private val exec
     fun executeQuery(statement: Statement, vararg options: QueryOption): Flow<Struct>
   }
 
-  /** Coroutine version of [AsyncRunner]. */
+  /** Async coroutine version of [com.google.cloud.spanner.ReadOnlyTransaction]. */
+  interface ReadOnlyTransaction : ReadContext {
+    /** @see com.google.cloud.spanner.ReadOnlyTransaction.getReadTimestamp */
+    val readTimestamp: Timestamp
+  }
+
+  /** Async coroutine version of [com.google.cloud.spanner.TransactionRunner]. */
   interface TransactionRunner {
     /**
-     * Executes a read/write transaction asynchronously, suspending until it is complete.
+     * Executes a read/write transaction with retries as necessary.
      *
      * @param doWork function that does work inside a transaction
-     * @see com.google.cloud.spanner.AsyncRunner.runAsync
      *
      * This acts as a coroutine builder. [doWork] has a [CoroutineScope] receiver to ensure that
      * coroutine builders called from it run in the [CoroutineScope] defined by this function.
+     *
+     * @see com.google.cloud.spanner.TransactionRunner.run
      */
-    suspend fun <R> execute(doWork: TransactionWork<R>): R
+    suspend fun <R> run(doWork: TransactionWork<R>): R
 
+    /** Alias for [run]. */
+    @Deprecated(message = "Use run", replaceWith = ReplaceWith("run(doWork)"))
+    suspend fun <R> execute(doWork: TransactionWork<R>): R = run(doWork)
+
+    /** @see com.google.cloud.spanner.TransactionRunner.getCommitTimestamp */
     suspend fun getCommitTimestamp(): Timestamp
+
+    /** @see com.google.cloud.spanner.TransactionRunner.getCommitTimestamp */
+    suspend fun getCommitResponse(): CommitResponse
   }
 
   /** Async coroutine version of [com.google.cloud.spanner.TransactionContext]. */
@@ -177,18 +200,18 @@ class AsyncDatabaseClient(private val dbClient: DatabaseClient, private val exec
     suspend fun executeUpdate(statement: Statement): Long
   }
 
-  private inner class TransactionRunnerImpl(private val runner: AsyncRunner) : TransactionRunner {
-    override suspend fun <R> execute(doWork: TransactionWork<R>): R {
+  private inner class TransactionRunnerImpl(private val delegate: AsyncRunner) : TransactionRunner {
+    override suspend fun <R> run(doWork: TransactionWork<R>): R {
       try {
-        return runner.run(executor, doWork)
+        return delegate.run(executor, doWork)
       } catch (e: SpannerException) {
         throw e.wrappedException ?: e
       }
     }
 
-    override suspend fun getCommitTimestamp(): Timestamp {
-      return runner.commitTimestamp.await()
-    }
+    override suspend fun getCommitTimestamp(): Timestamp = delegate.commitTimestamp.await()
+
+    override suspend fun getCommitResponse(): CommitResponse = delegate.commitResponse.await()
   }
 
   companion object {
@@ -239,6 +262,13 @@ private class ReadContextImpl(private val readContext: ReadContext) :
     flowFrom {
       readContext.executeQueryAsync(statement, *options)
     }
+}
+
+private class ReadOnlyTransactionImpl(private val delegate: ReadOnlyTransaction) :
+  AsyncDatabaseClient.ReadOnlyTransaction,
+  AsyncDatabaseClient.ReadContext by ReadContextImpl(delegate) {
+  override val readTimestamp: Timestamp
+    get() = delegate.readTimestamp
 }
 
 private class TransactionContextImpl(private val txn: TransactionContext) :
