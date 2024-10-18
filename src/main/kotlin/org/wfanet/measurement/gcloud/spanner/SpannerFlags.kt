@@ -22,7 +22,7 @@ class SpannerFlags {
   @CommandLine.Option(
     names = ["--spanner-project"],
     description = ["Name of the Spanner project."],
-    required = true
+    required = true,
   )
   lateinit var projectName: String
     private set
@@ -30,7 +30,7 @@ class SpannerFlags {
   @CommandLine.Option(
     names = ["--spanner-instance"],
     description = ["Name of the Spanner instance."],
-    required = true
+    required = true,
   )
   lateinit var instanceName: String
     private set
@@ -38,7 +38,7 @@ class SpannerFlags {
   @CommandLine.Option(
     names = ["--spanner-database"],
     description = ["Name of the Spanner database."],
-    required = true
+    required = true,
   )
   lateinit var databaseName: String
     private set
@@ -46,7 +46,7 @@ class SpannerFlags {
   @CommandLine.Option(
     names = ["--spanner-ready-timeout"],
     description = ["How long to wait for Spanner to be ready."],
-    defaultValue = "10s"
+    defaultValue = "10s",
   )
   lateinit var readyTimeout: Duration
     private set
@@ -54,29 +54,9 @@ class SpannerFlags {
   @CommandLine.Option(
     names = ["--spanner-emulator-host"],
     description = ["Host name and port of the spanner emulator."],
-    required = false
+    required = false,
   )
   var emulatorHost: String? = null
-    private set
-
-  @CommandLine.Option(
-    names = ["--spanner-transaction-timeout"],
-    description = ["Timeout duration for read-write transactions"],
-    defaultValue = "1m"
-  )
-  lateinit var transactionTimeout: Duration
-    private set
-
-  @CommandLine.Option(
-    names = ["--spanner-transaction-max-threads"],
-    description =
-      [
-        "Maximum number of threads to use for read-write transactions.",
-        "Defaults to number of processors * 2.",
-        "Ignored when --spanner-emulator-host is specified."
-      ],
-  )
-  var maxTransactionThreads: Int = DEFAULT_THREAD_POOL_SIZE
     private set
 
   val jdbcConnectionString: String
@@ -88,8 +68,4 @@ class SpannerFlags {
         "jdbc:cloudspanner://$emulatorHost/$databasePath;usePlainText=true;autoConfigEmulator=true"
       }
     }
-
-  companion object {
-    private val DEFAULT_THREAD_POOL_SIZE = Runtime.getRuntime().availableProcessors() * 2
-  }
 }
