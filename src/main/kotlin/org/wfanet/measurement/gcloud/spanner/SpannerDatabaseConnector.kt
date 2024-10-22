@@ -17,14 +17,8 @@ package org.wfanet.measurement.gcloud.spanner
 import com.google.cloud.spanner.DatabaseId
 import com.google.cloud.spanner.Spanner
 import java.time.Duration
-import java.util.concurrent.ExecutorService
-import java.util.concurrent.Executors
-import java.util.concurrent.LinkedBlockingQueue
-import java.util.concurrent.ThreadPoolExecutor
-import java.util.concurrent.TimeUnit
 import java.util.logging.Logger
 import kotlinx.coroutines.TimeoutCancellationException
-import org.wfanet.measurement.common.instrumented
 
 /**
  * Wraps a connection to a Spanner database for convenient access to an [AsyncDatabaseClient], the
@@ -35,13 +29,8 @@ class SpannerDatabaseConnector(
   instanceName: String,
   databaseName: String,
   private val readyTimeout: Duration,
-  maxTransactionThreads: Int,
   emulatorHost: String?,
 ) : AutoCloseable {
-  init {
-    require(maxTransactionThreads > 0)
-  }
-
   private val spanner: Spanner =
     buildSpanner(projectName, emulatorHost).also {
       Runtime.getRuntime()
@@ -55,20 +44,9 @@ class SpannerDatabaseConnector(
           }
         )
     }
-  private val transactionExecutor: Lazy<ExecutorService> = lazy {
-    if (emulatorHost == null) {
-      ThreadPoolExecutor(1, maxTransactionThreads, 60L, TimeUnit.SECONDS, LinkedBlockingQueue())
-        .instrumented(databaseId.name)
-    } else {
-      // Spanner emulator only supports a single read-write transaction at a time.
-      Executors.newSingleThreadExecutor()
-    }
-  }
 
   val databaseId: DatabaseId = DatabaseId.of(projectName, instanceName, databaseName)
-  val databaseClient: AsyncDatabaseClient by lazy {
-    spanner.getAsyncDatabaseClient(databaseId, transactionExecutor.value)
-  }
+  val databaseClient: AsyncDatabaseClient by lazy { spanner.getAsyncDatabaseClient(databaseId) }
 
   /**
    * Suspends until [databaseClient] is ready, throwing a
@@ -80,9 +58,6 @@ class SpannerDatabaseConnector(
 
   override fun close() {
     spanner.close()
-    if (transactionExecutor.isInitialized()) {
-      transactionExecutor.value.shutdown()
-    }
   }
 
   /**
@@ -117,7 +92,6 @@ private fun SpannerFlags.toSpannerDatabaseConnector(): SpannerDatabaseConnector 
     instanceName = instanceName,
     databaseName = databaseName,
     readyTimeout = readyTimeout,
-    maxTransactionThreads = maxTransactionThreads,
     emulatorHost = emulatorHost,
   )
 }
