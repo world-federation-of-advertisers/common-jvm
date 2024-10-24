@@ -30,7 +30,7 @@ import org.wfanet.measurement.storage.testing.BlobSubject.Companion.assertThat
 
 /** Abstract base class for testing implementations of [StorageClient]. */
 abstract class AbstractStorageClientTest<T : StorageClient> {
-  protected val testBlobContent: ByteString
+  protected open val testBlobContent: ByteString
     get() = Companion.testBlobContent
 
   open fun computeStoredBlobSize(content: ByteString, blobKey: String): Int {
