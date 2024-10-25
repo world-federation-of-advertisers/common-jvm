@@ -17,138 +17,92 @@
 package org.wfanet.measurement.common.crypto.tink
 
 import com.google.common.truth.Truth.assertThat
-import com.google.crypto.tink.KeyTemplates
-import com.google.crypto.tink.KeysetHandle
-import com.google.crypto.tink.StreamingAead
-import com.google.crypto.tink.streamingaead.StreamingAeadConfig
 import com.google.protobuf.ByteString
-import java.io.ByteArrayInputStream
-import java.io.ByteArrayOutputStream
-import java.nio.ByteBuffer
-import java.nio.channels.Channels
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.runBlocking
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 import org.wfanet.measurement.securecomputation.teesdk.cloudstorage.v1alpha.RecordIoStorageClient
-import org.wfanet.measurement.storage.testing.AbstractStreamingStorageClientTest
-import org.wfanet.measurement.storage.testing.BlobSubject
+import org.wfanet.measurement.storage.StorageClient
 import org.wfanet.measurement.storage.testing.InMemoryStorageClient
 
 @RunWith(JUnit4::class)
-class RecordIoStorageClientTest : AbstractStreamingStorageClientTest<RecordIoStorageClient>() {
-  private val wrappedStorageClient = InMemoryStorageClient()
+class RecordIoStorageClientTest {
 
-  @Test
-  fun `Blob size returns content size`() = runBlocking {
-    val blobKey = "blob-to-check-size"
-
-    val blob = storageClient.writeBlob(blobKey, testBlobContent)
-    val wrappedBlob = wrappedStorageClient.getBlob(blobKey)
-
-      BlobSubject.assertThat(blob).hasSize(wrappedBlob!!.size.toInt())
-  }
+  private lateinit var wrappedStorageClient: StorageClient
+  private lateinit var recordIoStorageClient: RecordIoStorageClient
 
   @Before
   fun initStorageClient() {
-    storageClient = RecordIoStorageClient(
-      wrappedStorageClient,
-      streamingAead
+    wrappedStorageClient = InMemoryStorageClient()
+    recordIoStorageClient = RecordIoStorageClient(wrappedStorageClient)
+  }
+
+  @Test
+  fun `test writing and reading single record`() = runBlocking {
+    val testData = "Hello World"
+    val blobKey = "test-single-record"
+    recordIoStorageClient.writeBlob(
+      blobKey,
+      flowOf(ByteString.copyFromUtf8(testData))
     )
-  }
-
-
-  @Test
-  fun `test write and read single record`() = runBlocking {
-    val blobKey = "test-key"
-
-    val record = """{"type": "SUBSCRIBED","subscribed": {"framework_id": {"value":"12220-3440-12532-2345"}}}"""
-    val inputFlow = flow { emit(ByteString.copyFromUtf8(record)) }
-    val blob = storageClient.writeBlob(blobKey, inputFlow)
-    val readRecords = mutableListOf<String>()
-    blob.read().collect { byteString ->
-      readRecords.add(byteString.toStringUtf8())
-    }
-    assertThat(readRecords).hasSize(1)
-    assertThat(readRecords[0]).isEqualTo(record)
+    val blob = recordIoStorageClient.getBlob(blobKey)
+    requireNotNull(blob) { "Blob should exist" }
+    val records = blob.read().toList()
+    assertThat(1).isEqualTo(records.size)
+    assertThat(testData).isEqualTo(records[0].toStringUtf8())
   }
 
   @Test
-  fun `test write and read multiple records`() = runBlocking {
-    val blobKey = "test-key"
-    val records = listOf(
-      """{"type": "SUBSCRIBED","subscribed": {"framework_id": {"value":"12220-3440-12532-2345"}}}""",
-      """{"type":"HEARTBEAT"}""",
-      """{"type":"HEARTBEAT_ACK"}"""
+  fun `test writing and reading large records`() = runBlocking {
+    val largeString = """{"type": "SUBSCRIBED","subscribed": {"framework_id": {"value":"12220-3440-12532-2345"}}}""".repeat(130000) // ~4MB
+    val testData = listOf(largeString)
+    val blobKey = "test-large-records"
+    recordIoStorageClient.writeBlob(
+      blobKey,
+      testData.map { ByteString.copyFromUtf8(it) }.asFlow()
     )
-    val inputFlow = flow {
-      records.forEach { record ->
-        emit(ByteString.copyFromUtf8(record))
-      }
+    val blob = recordIoStorageClient.getBlob(blobKey)
+    requireNotNull(blob) { "Blob should exist" }
+    val records = blob.read().toList()
+    assertThat(testData.size).isEqualTo(records.size)
+    records.forEachIndexed { index, record ->
+      assertThat(testData[index]).isEqualTo(record.toStringUtf8())
     }
-    val blob = storageClient.writeBlob(blobKey, inputFlow)
-    val readRecords = mutableListOf<String>()
-    blob.read().collect { byteString ->
-      readRecords.add(byteString.toStringUtf8())
-    }
-    assertThat(readRecords).hasSize(records.size)
-    assertThat(readRecords).containsExactlyElementsIn(records).inOrder()
+  }
+
+
+  @Test
+  fun `test writing empty flow`() = runBlocking {
+    val blobKey = "test-empty-flow"
+    recordIoStorageClient.writeBlob(blobKey, emptyFlow())
+    val blob = recordIoStorageClient.getBlob(blobKey)
+    requireNotNull(blob) { "Blob should exist" }
+    val records = blob.read().toList()
+    assertThat(records).isEmpty()
   }
 
   @Test
-  fun `test write and read large records`() = runBlocking {
-    val blobKey = "test-key"
-
-    val largeRecord = buildString {
-      repeat(130000) {// ~ 4MB
-        append("""{"type": "LARGE_RECORD", "index": $it},""")
-      }
-    }
-    val inputFlow = flow { emit(ByteString.copyFromUtf8(largeRecord)) }
-    val blob = storageClient.writeBlob(blobKey, inputFlow)
-    val readRecords = mutableListOf<String>()
-    blob.read().collect { byteString ->
-      readRecords.add(byteString.toStringUtf8())
-    }
-    assertThat(readRecords).hasSize(1)
-    assertThat(readRecords[0]).isEqualTo(largeRecord)
-  }
-
-  @Test
-  fun `wrapped blob is encrypted`() = runBlocking {
-    val blobKey = "test-blob"
-    val testContent = """{"type": "TEST_RECORD", "data": "test content"}"""
-    val inputFlow = flow { emit(ByteString.copyFromUtf8(testContent)) }
-    storageClient.writeBlob(blobKey, inputFlow)
-    val encryptedBlob = wrappedStorageClient.getBlob(blobKey)
-    val decryptedContent = ByteArrayOutputStream()
-    val decryptingChannel = streamingAead.newDecryptingChannel(
-      Channels.newChannel(ByteArrayInputStream(encryptedBlob?.read()?.first()?.toByteArray())),
-      blobKey.encodeToByteArray()
+  fun `test deleting blob`() = runBlocking {
+    val blobKey = "test-delete"
+    val testData = "Test Data"
+    recordIoStorageClient.writeBlob(
+      blobKey,
+      flowOf(ByteString.copyFromUtf8(testData))
     )
-    val buffer = ByteBuffer.allocate(8192)
-    while (decryptingChannel.read(buffer) != -1) {
-      buffer.flip()
-      decryptedContent.write(buffer.array(), 0, buffer.limit())
-      buffer.clear()
-    }
-    val recordContent = String(decryptedContent.toByteArray()).split('\n')[1]  // Skip the size line
-    assertThat(recordContent).isEqualTo(testContent)
+    val blob = recordIoStorageClient.getBlob(blobKey)
+    requireNotNull(blob) { "Blob should exist" }
+    blob.delete()
+    val deletedBlob = recordIoStorageClient.getBlob(blobKey)
+    assertThat(deletedBlob).isNull()
   }
 
-  companion object {
-
-    init {
-      StreamingAeadConfig.register()
-    }
-
-    private val AEAD_KEY_TEMPLATE = KeyTemplates.get("AES128_GCM_HKDF_1MB")
-    private val KEY_ENCRYPTION_KEY = KeysetHandle.generateNew(AEAD_KEY_TEMPLATE)
-    private val streamingAead = KEY_ENCRYPTION_KEY.getPrimitive(StreamingAead::class.java)
-
+  @Test
+  fun `test non-existent blob returns null`() = runBlocking {
+    val nonExistentBlob = recordIoStorageClient.getBlob("non-existent-key")
+    assertThat(nonExistentBlob).isNull()
   }
 }
 

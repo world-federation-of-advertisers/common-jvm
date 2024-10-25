@@ -23,7 +23,6 @@ import java.io.ByteArrayOutputStream
 import java.nio.channels.ReadableByteChannel
 import java.nio.ByteBuffer
 import java.nio.channels.Channels
-import java.nio.charset.StandardCharsets
 import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
@@ -31,50 +30,41 @@ import org.jetbrains.annotations.BlockingExecutor
 
 /**
  * A wrapper class for the [StorageClient] interface that leverages Tink AEAD encryption/decryption
- * for blob/object storage operations on files formatted using Apache Mesos RecordIO.
+ * for blob/object storage operations.
  *
- * This class supports row-based encryption and decryption, enabling the processing of individual
- * rows at the client’s pace. Unlike [KmsStorageClient],
- * which encrypts entire blobs, this class focuses on handling encryption and decryption at the
- * record level inside RecordIO files.
+ * This class provides streaming encryption and decryption of data using StreamingAead,
+ * enabling secure storage of large files by processing them in chunks.
  *
  * @param storageClient underlying client for accessing blob/object storage
- * @param dataKey a base64-encoded symmetric data key
+ * @param streamingAead the StreamingAead instance used for encryption/decryption
+ * @param streamingAeadContext coroutine context for encryption/decryption operations
  */
-class RecordIoStorageClient(
+class StreamingAeadStorageClient(
   private val storageClient: StorageClient,
   private val streamingAead: StreamingAead,
   private val streamingAeadContext: @BlockingExecutor CoroutineContext = Dispatchers.IO,
 ) : StorageClient {
 
-/**
- * Encrypts and writes RecordIO rows to Google Cloud Storage using StreamingAead.
- *
- * This function takes a flow of RecordIO rows (represented as a Flow<ByteString>), formats each row
- * by prepending the record size and a newline character (`\n`), and encrypts the entire formatted row
- * using StreamingAead before writing the encrypted content to Google Cloud Storage.
- *
- * The function handles rows emitted at any pace, meaning it can process rows that are emitted asynchronously
- * with delays in between.
- *
- * @param blobKey The key (or name) of the blob where the encrypted content will be stored.
- * @param content A Flow<ByteString> representing the source of RecordIO rows that will be encrypted and stored.
- *
- * @return A Blob object representing the encrypted RecordIO data that was written to Google Cloud Storage.
- */
+  /**
+   * Encrypts and writes data to storage using StreamingAead.
+   *
+   * This function takes a flow of data chunks, encrypts them using StreamingAead,
+   * and writes the encrypted content to storage.
+   *
+   * @param blobKey The key (or name) of the blob where the encrypted content will be stored.
+   * @param content A Flow<ByteString> representing the source data that will be encrypted and stored.
+   *
+   * @return A Blob object representing the encrypted data that was written to storage.
+   */
   override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
     val encryptedContent = flow {
       val outputStream = ByteArrayOutputStream()
-      val ciphertextChannel = this@RecordIoStorageClient.streamingAead.newEncryptingChannel(
+      val ciphertextChannel = this@StreamingAeadStorageClient.streamingAead.newEncryptingChannel(
         Channels.newChannel(outputStream), blobKey.encodeToByteArray()
       )
 
       content.collect { byteString ->
-        val rawBytes = byteString.toByteArray()
-        val recordSize = rawBytes.size.toString()
-        val fullRecord = recordSize + "\n" + String(rawBytes, Charsets.UTF_8)
-        val fullRecordBytes = fullRecord.toByteArray(Charsets.UTF_8)
-        val buffer = ByteBuffer.wrap(fullRecordBytes)
+        val buffer = ByteBuffer.wrap(byteString.toByteArray())
         while (buffer.hasRemaining()) {
           ciphertextChannel.write(buffer)
         }
@@ -92,36 +82,34 @@ class RecordIoStorageClient(
     }
     val wrappedBlob: StorageClient.Blob = storageClient.writeBlob(blobKey, encryptedContent)
     logger.fine { "Wrote encrypted content to storage with blobKey: $blobKey" }
-    return RecordioBlob(wrappedBlob, blobKey)
+    return EncryptedBlob(wrappedBlob, blobKey)
   }
 
   /**
    * Returns a [StorageClient.Blob] with specified blob key, or `null` if not found.
    *
-   * Blob content is not decrypted until [RecordioBlob.read]
+   * Blob content is not decrypted until [EncryptedBlob.read]
    */
   override suspend fun getBlob(blobKey: String): StorageClient.Blob? {
     val blob = storageClient.getBlob(blobKey)
-    return blob?.let { RecordioBlob(it, blobKey) }
+    return blob?.let { EncryptedBlob(it, blobKey) }
   }
 
   /** A blob that will decrypt the content when read */
-  private inner class RecordioBlob(private val blob: StorageClient.Blob, private val blobKey: String) :
+  private inner class EncryptedBlob(private val blob: StorageClient.Blob, private val blobKey: String) :
     StorageClient.Blob {
-    override val storageClient = this@RecordIoStorageClient.storageClient
+    override val storageClient = this@StreamingAeadStorageClient.storageClient
 
     override val size: Long
       get() = blob.size
 
     /**
-     * This method handles the decryption of data, streaming chunks
-     * of encrypted data and decrypting them on-the-fly using a StreamingAead instance.
+     * Reads and decrypts the blob's content.
      *
-     * The function then reads each row from an Apache Mesos RecordIO file and emits each one individually.
+     * This method handles the decryption of data by collecting all encrypted data first,
+     * then decrypting it as a single operation.
      *
-     * @return The number of bytes read from the encrypted stream and written into the buffer.
-     *         Returns -1 when the end of the stream is reached.
-     *
+     * @return A Flow of ByteString containing the decrypted data.
      * @throws java.io.IOException If there is an issue reading from the stream or during decryption.
      */
     override fun read(): Flow<ByteString> = flow {
@@ -134,7 +122,7 @@ class RecordIoStorageClient(
         chunkChannel.close()
       }
 
-      val plaintextChannel = this@RecordIoStorageClient.streamingAead.newDecryptingChannel(
+      val plaintextChannel = this@StreamingAeadStorageClient.streamingAead.newDecryptingChannel(
         object : ReadableByteChannel {
           private var currentChunk: ByteString? = null
           private var bufferOffset = 0
@@ -164,42 +152,13 @@ class RecordIoStorageClient(
         blobKey.encodeToByteArray()
       )
 
-      val byteBuffer = ByteBuffer.allocate(4096)
-      val sizeBuffer = ByteArrayOutputStream()
-
+      val buffer = ByteBuffer.allocate(8192)
       while (true) {
-        byteBuffer.clear()
-        if (plaintextChannel.read(byteBuffer) <= 0) break
-        byteBuffer.flip()
-
-        while (byteBuffer.hasRemaining()) {
-          val b = byteBuffer.get()
-
-          if (b.toInt().toChar() == '\n') {
-            val recordSize = sizeBuffer.toString(StandardCharsets.UTF_8).trim().toInt()
-            sizeBuffer.reset()
-            val recordData = ByteBuffer.allocate(recordSize)
-            var totalBytesRead = 0
-            if (byteBuffer.hasRemaining()) {
-              val bytesToRead = minOf(recordSize, byteBuffer.remaining())
-              val oldLimit = byteBuffer.limit()
-              byteBuffer.limit(byteBuffer.position() + bytesToRead)
-              recordData.put(byteBuffer)
-              byteBuffer.limit(oldLimit)
-              totalBytesRead += bytesToRead
-            }
-            while (recordData.hasRemaining()) {
-              val bytesRead = plaintextChannel.read(recordData)
-              if (bytesRead <= 0) break
-              totalBytesRead += bytesRead
-            }
-
-            recordData.flip()
-            emit(ByteString.copyFrom(recordData.array()))
-          } else {
-            sizeBuffer.write(b.toInt())
-          }
-        }
+        buffer.clear()
+        val bytesRead = plaintextChannel.read(buffer)
+        if (bytesRead <= 0) break
+        buffer.flip()
+        emit(ByteString.copyFrom(buffer.array(), 0, buffer.limit()))
       }
     }
 
