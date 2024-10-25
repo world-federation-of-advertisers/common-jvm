@@ -114,7 +114,7 @@ class RecordIoStorageClient(
       get() = blob.size
 
     /**
-     * This method handles the decryption of data from Google Cloud Storage in real-time, streaming chunks
+     * This method handles the decryption of data, streaming chunks
      * of encrypted data and decrypting them on-the-fly using a StreamingAead instance.
      *
      * The function then reads each row from an Apache Mesos RecordIO file and emits each one individually.
