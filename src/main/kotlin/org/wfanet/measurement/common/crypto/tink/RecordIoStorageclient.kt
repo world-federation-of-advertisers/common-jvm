@@ -16,20 +16,17 @@ package org.wfanet.measurement.securecomputation.teesdk.cloudstorage.v1alpha
 
 import com.google.crypto.tink.StreamingAead
 import com.google.protobuf.ByteString
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.flow.flow
 import java.util.logging.Logger
 import org.wfanet.measurement.storage.StorageClient
 import java.io.ByteArrayOutputStream
 import java.nio.channels.ReadableByteChannel
 import java.nio.ByteBuffer
 import java.nio.channels.Channels
+import java.nio.charset.StandardCharsets
 import kotlin.coroutines.CoroutineContext
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.*
 import org.jetbrains.annotations.BlockingExecutor
 
 /**
@@ -78,16 +75,22 @@ class RecordIoStorageClient(
         val fullRecord = recordSize + "\n" + String(rawBytes, Charsets.UTF_8)
         val fullRecordBytes = fullRecord.toByteArray(Charsets.UTF_8)
         val buffer = ByteBuffer.wrap(fullRecordBytes)
-
         while (buffer.hasRemaining()) {
           ciphertextChannel.write(buffer)
         }
-        emit(ByteString.copyFrom(outputStream.toByteArray()))
-        outputStream.reset()
+        val encryptedBytes = outputStream.toByteArray()
+        if (encryptedBytes.isNotEmpty()) {
+          emit(ByteString.copyFrom(encryptedBytes))
+          outputStream.reset()
+        }
       }
       ciphertextChannel.close()
+      val remainingEncryptedBytes = outputStream.toByteArray()
+      if (remainingEncryptedBytes.isNotEmpty()) {
+        emit(ByteString.copyFrom(remainingEncryptedBytes))
+      }
     }
-   val wrappedBlob: StorageClient.Blob = storageClient.writeBlob(blobKey, encryptedContent)
+    val wrappedBlob: StorageClient.Blob = storageClient.writeBlob(blobKey, encryptedContent)
     logger.fine { "Wrote encrypted content to storage with blobKey: $blobKey" }
     return RecordioBlob(wrappedBlob, blobKey)
   }
@@ -168,20 +171,33 @@ class RecordIoStorageClient(
         byteBuffer.clear()
         if (plaintextChannel.read(byteBuffer) <= 0) break
         byteBuffer.flip()
-        while (byteBuffer.hasRemaining()) {
-          val b = byteBuffer.get().toInt().toChar()
 
-          if (b == '\n') {
-            val recordSize = sizeBuffer.toString().trim().toInt()
+        while (byteBuffer.hasRemaining()) {
+          val b = byteBuffer.get()
+
+          if (b.toInt().toChar() == '\n') {
+            val recordSize = sizeBuffer.toString(StandardCharsets.UTF_8).trim().toInt()
             sizeBuffer.reset()
             val recordData = ByteBuffer.allocate(recordSize)
-            while (recordData.hasRemaining()) {
-              if (plaintextChannel.read(recordData) <= 0) break
+            var totalBytesRead = 0
+            if (byteBuffer.hasRemaining()) {
+              val bytesToRead = minOf(recordSize, byteBuffer.remaining())
+              val oldLimit = byteBuffer.limit()
+              byteBuffer.limit(byteBuffer.position() + bytesToRead)
+              recordData.put(byteBuffer)
+              byteBuffer.limit(oldLimit)
+              totalBytesRead += bytesToRead
             }
+            while (recordData.hasRemaining()) {
+              val bytesRead = plaintextChannel.read(recordData)
+              if (bytesRead <= 0) break
+              totalBytesRead += bytesRead
+            }
+
             recordData.flip()
             emit(ByteString.copyFrom(recordData.array()))
           } else {
-            sizeBuffer.write(b.code)
+            sizeBuffer.write(b.toInt())
           }
         }
       }

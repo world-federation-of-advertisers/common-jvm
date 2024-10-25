@@ -34,6 +34,7 @@ abstract class AbstractStorageClientTest<T : StorageClient> {
     get() = Companion.testBlobContent
 
   open fun computeStoredBlobSize(content: ByteString, blobKey: String): Int {
+    println("CIAO CIAO")
     return content.size
   }
 
