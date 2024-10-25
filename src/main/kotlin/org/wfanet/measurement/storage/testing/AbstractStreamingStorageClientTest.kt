@@ -39,18 +39,12 @@ abstract class AbstractStreamingStorageClientTest<T : StorageClient> {
   protected open val testBlobContent: Flow<ByteString>
     get() = createTestBlobContentFlow()
 
-  open fun computeStoredBlobSize(content: ByteString, blobKey: String): Int {
-    println("CIAO CIAO: ${content.size}")
-    return content.size
-  }
-
   protected lateinit var storageClient: T
 
   suspend fun collectFlowIntoByteString(flow: Flow<ByteString>): ByteString {
     val outputStream = ByteArrayOutputStream()
     flow.collect { byteString ->
       val resultString = byteString.toString(StandardCharsets.UTF_8)
-      println("~~~~~ INSIDE COLLECT FLOW INTO BYTES: ${resultString}")
       outputStream.write(byteString.toByteArray())
     }
     return ByteString.copyFrom(outputStream.toByteArray())
@@ -75,63 +69,7 @@ abstract class AbstractStreamingStorageClientTest<T : StorageClient> {
     assertThat(blob).contentEqualTo(ByteString.EMPTY)
   }
 
-//  @Test
-//  fun `writeBlob returns new readable blob`() = runBlocking {
-//    val blobKey = "new-blob"
-//
-//    val expectedBlobContent = collectFlowIntoByteString(testBlobContent)
-//    val blob = storageClient.writeBlob(blobKey, testBlobContent)
-//    assertThat(blob).isEqualTo(expectedBlobContent)
-//  }
-
-//  @Test
-//  fun `writeBlob overwrites existing blob`() = runBlocking {
-//    val blobKey = "new-blob"
-//    storageClient.writeBlob(blobKey, "initial content".toByteStringUtf8())
-//
-//    val blob = storageClient.writeBlob(blobKey, testBlobContent)
-//
-//    assertThat(blob).contentEqualTo(testBlobContent)
-//  }
-
-//  @Test
-//  fun `getBlob returns null for non-existant blob`() = runBlocking {
-//    val blobKey = "non-existant-blob"
-//    assertThat(storageClient.getBlob(blobKey)).isNull()
-//  }
-
-//  @Test
-//  fun `getBlob returns readable Blob`() = runBlocking {
-//    val blobKey = "blob-to-get"
-//    storageClient.writeBlob(blobKey, testBlobContent)
-//
-//    val blob = assertNotNull(storageClient.getBlob(blobKey))
-//
-//    assertThat(blob).contentEqualTo(testBlobContent)
-//  }
-
-
-//  @Test
-//  fun `Blob delete deletes blob`() = runBlocking {
-//    val blobKey = "blob-to-delete"
-//    val blob = storageClient.writeBlob(blobKey, testBlobContent)
-//
-//    blob.delete()
-//
-//    assertThat(storageClient.getBlob(blobKey)).isNull()
-//  }
-//
-//  @Test
-//  fun `Write and read empty blob`() = runBlocking {
-//    val blobKey = "empty-blob"
-//    storageClient.writeBlob(blobKey, emptyFlow())
-//    val blob = assertNotNull(storageClient.getBlob(blobKey))
-//
-//    assertThat(blob).contentEqualTo(ByteString.EMPTY)
-//  }
-
   companion object {
-    private val random = Random.Default
     fun createTestBlobContentFlow(): Flow<ByteString> = flow {
       val record1 = """{"type": "SUBSCRIBED","subscribed": {"framework_id": {"value":"12220-3440-12532-2345"},"heartbeat_interval_seconds":15.0}}"""
       val record2 = """{"type":"HEARTBEAT"}"""
@@ -142,13 +80,10 @@ abstract class AbstractStreamingStorageClientTest<T : StorageClient> {
       while (currentSize < TARGET_SIZE) {
         records.forEach { record ->
           val recordBytes = record.toByteArray(Charsets.UTF_8)
-//          println("Emitting record: ${record}, Size: ${recordBytes.size}, CurrentSize: $currentSize")
           emit(ByteString.copyFrom(recordBytes)) // Emit each record as ByteString
           currentSize += recordBytes.size
 
-          // Check if we've reached or exceeded the target size
           if (currentSize >= TARGET_SIZE) {
-            println("TARGET_SIZE reached, stopping flow")
             return@flow
           }
         }

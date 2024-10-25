@@ -43,10 +43,6 @@ import org.wfanet.measurement.storage.testing.InMemoryStorageClient
 class RecordIoStorageClientTest : AbstractStreamingStorageClientTest<RecordIoStorageClient>() {
   private val wrappedStorageClient = InMemoryStorageClient()
 
-  override fun computeStoredBlobSize(content: ByteString, blobKey: String): Int {
-    return content.size
-  }
-
   @Test
   fun `Blob size returns content size`() = runBlocking {
     val blobKey = "blob-to-check-size"
