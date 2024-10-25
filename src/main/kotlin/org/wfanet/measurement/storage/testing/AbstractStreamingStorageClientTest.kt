@@ -44,7 +44,6 @@ abstract class AbstractStreamingStorageClientTest<T : StorageClient> {
   suspend fun collectFlowIntoByteString(flow: Flow<ByteString>): ByteString {
     val outputStream = ByteArrayOutputStream()
     flow.collect { byteString ->
-      val resultString = byteString.toString(StandardCharsets.UTF_8)
       outputStream.write(byteString.toByteArray())
     }
     return ByteString.copyFrom(outputStream.toByteArray())

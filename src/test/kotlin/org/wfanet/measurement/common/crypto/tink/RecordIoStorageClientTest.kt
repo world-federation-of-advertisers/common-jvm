@@ -33,7 +33,6 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
-import org.wfanet.measurement.common.size
 import org.wfanet.measurement.securecomputation.teesdk.cloudstorage.v1alpha.RecordIoStorageClient
 import org.wfanet.measurement.storage.testing.AbstractStreamingStorageClientTest
 import org.wfanet.measurement.storage.testing.BlobSubject
