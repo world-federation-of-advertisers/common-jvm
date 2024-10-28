@@ -1,0 +1,17 @@
+load("@wfa_rules_kotlin_jvm//kotlin:defs.bzl", "kt_jvm_test")
+
+kt_jvm_test(
+    name = "RabbitMqClientTest",
+    srcs = ["RabbitMqClientTest.kt"],
+    test_class = "org.wfanet.measurement.common.rabbitmq.RabbitMQClientTest",
+    deps = [
+        "//imports/java/com/google/common/truth",
+        "//imports/java/com/google/crypto/tink",
+        "//imports/java/org/junit",
+        "//src/main/kotlin/org/wfanet/measurement/common/rabbitmq:rabbit_mq_client",
+    ],
+    jvm_flags = [
+        "-Dtest-broker.A.nodename=rabbit@localhost",
+        "-Drabbitmqctl.bin=/usr/sbin/rabbitmqctl",
+    ],
+)
