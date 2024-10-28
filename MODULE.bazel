@@ -251,6 +251,9 @@ maven.install(
         "org.apache.commons:commons-compress:1.22",
         "org.brotli:dec:0.1.2",
         "com.github.luben:zstd-jni:1.5.2-5",
+
+        # RabbitMQ
+        "com.rabbitmq:amqp-client:5.22.0"
     ],
     # Note that order matters here, where earlier BOMs "win".
     boms = [
