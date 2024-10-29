@@ -86,10 +86,8 @@ class MesosRecordIoStorageClient(private val storageClient: StorageClient) : Sto
   }
 
   /** A blob that will read the content in RecordIO format */
-  private inner class Blob(
-    private val blob: StorageClient.Blob,
-    private val blobKey: String,
-  ) : StorageClient.Blob {
+  private inner class Blob(private val blob: StorageClient.Blob, private val blobKey: String) :
+    StorageClient.Blob {
     override val storageClient = this@MesosRecordIoStorageClient.storageClient
 
     override val size: Long

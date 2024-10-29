@@ -62,15 +62,8 @@ class MesosRecordIoStorageClientTest {
       """{"type": "SUBSCRIBED","subscribed": {"framework_id": {"value":"12220-3440-12532-2345"}}}"""
     val testData = List(130000) { singleRecord } // ~4MB
     val blobKey = "test-large-records"
-    val recordFlow = flow {
-      testData.forEach { record ->
-        emit(ByteString.copyFromUtf8(record))
-      }
-    }
-    mesosRecordIoStorageClient.writeBlob(
-      blobKey,
-      recordFlow,
-    )
+    val recordFlow = flow { testData.forEach { record -> emit(ByteString.copyFromUtf8(record)) } }
+    mesosRecordIoStorageClient.writeBlob(blobKey, recordFlow)
     val blob = mesosRecordIoStorageClient.getBlob(blobKey)
     requireNotNull(blob) { "Blob should exist" }
     val records = blob.read().toList()
@@ -173,18 +166,18 @@ class MesosRecordIoStorageClientTest {
           assertFailsWith<IllegalArgumentException>(
             "Expected IllegalArgumentException for content: $invalidContent"
           ) {
-            blob.read().collect{ }
+            blob.read().collect {}
           }
         }
         !invalidContent.startsWith("100") -> {
           assertFailsWith<NumberFormatException>(
             "Expected NumberFormatException for content: $invalidContent"
           ) {
-            blob.read().collect{ }
+            blob.read().collect {}
           }
         }
         else -> {
-          blob.read().collect{ }
+          blob.read().collect {}
         }
       }
     }

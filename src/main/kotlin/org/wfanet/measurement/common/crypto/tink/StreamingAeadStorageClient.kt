@@ -61,9 +61,11 @@ class StreamingAeadStorageClient(
   override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
     val encryptedContent = flow {
       val outputStream = ByteArrayOutputStream()
-      val ciphertextChannel = streamingAead.newEncryptingChannel(
-        Channels.newChannel(outputStream), blobKey.encodeToByteArray()
-      )
+      val ciphertextChannel =
+        streamingAead.newEncryptingChannel(
+          Channels.newChannel(outputStream),
+          blobKey.encodeToByteArray(),
+        )
       content.collect { byteString ->
         byteString.asReadOnlyByteBufferList().forEach { buffer ->
           while (buffer.hasRemaining()) {
