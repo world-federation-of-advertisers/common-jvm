@@ -35,7 +35,6 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
-import org.wfanet.measurement.securecomputation.teesdk.cloudstorage.v1alpha.StreamingAeadStorageClient
 import org.wfanet.measurement.storage.StorageClient
 import org.wfanet.measurement.storage.testing.BlobSubject
 import org.wfanet.measurement.storage.testing.InMemoryStorageClient

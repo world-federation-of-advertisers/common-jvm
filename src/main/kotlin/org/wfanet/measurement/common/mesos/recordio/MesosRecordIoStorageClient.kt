@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package org.wfanet.measurement.securecomputation.teesdk.cloudstorage.v1alpha
+package org.wfanet.measurement.common.mesos.recordio
 
 import com.google.protobuf.ByteString
 import java.util.logging.Logger
@@ -31,7 +31,7 @@ import kotlinx.coroutines.flow.flow
  *
  * @param storageClient underlying client for accessing blob/object storage
  */
-class RecordIoStorageClient(private val storageClient: StorageClient) : StorageClient {
+class MesosRecordIoStorageClient(private val storageClient: StorageClient) : StorageClient {
 
   /**
   * Writes RecordIO rows to storage using the RecordIO format.
@@ -86,7 +86,7 @@ class RecordIoStorageClient(private val storageClient: StorageClient) : StorageC
   /** A blob that will read the content in RecordIO format */
   private inner class RecordioBlob(private val blob: StorageClient.Blob, private val blobKey: String) :
     StorageClient.Blob {
-    override val storageClient = this@RecordIoStorageClient.storageClient
+    override val storageClient = this@MesosRecordIoStorageClient.storageClient
 
     override val size: Long
       get() = blob.size

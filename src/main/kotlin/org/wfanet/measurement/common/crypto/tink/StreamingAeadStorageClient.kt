@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package org.wfanet.measurement.securecomputation.teesdk.cloudstorage.v1alpha
+package org.wfanet.measurement.common.crypto.tink
 
 import com.google.crypto.tink.StreamingAead
 import com.google.protobuf.ByteString
@@ -24,9 +24,15 @@ import java.nio.channels.ReadableByteChannel
 import java.nio.ByteBuffer
 import java.nio.channels.Channels
 import kotlin.coroutines.CoroutineContext
-import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import org.jetbrains.annotations.BlockingExecutor
+import org.wfanet.measurement.common.BYTES_PER_MIB
+import org.wfanet.measurement.common.ByteStringOutputBuffer
 
 /**
  * A wrapper class for the [StorageClient] interface that leverages Tink AEAD encryption/decryption
@@ -58,26 +64,29 @@ class StreamingAeadStorageClient(
    */
   override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
     val encryptedContent = flow {
-      val outputStream = ByteArrayOutputStream()
-      val ciphertextChannel = this@StreamingAeadStorageClient.streamingAead.newEncryptingChannel(
-        Channels.newChannel(outputStream), blobKey.encodeToByteArray()
-      )
-
-      content.collect { byteString ->
-        val buffer = ByteBuffer.wrap(byteString.toByteArray())
-        while (buffer.hasRemaining()) {
-          ciphertextChannel.write(buffer)
+      ByteStringOutputBuffer(BYTES_PER_MIB).use { outputBuffer ->
+        val outputStream = ByteArrayOutputStream()
+        val ciphertextChannel = streamingAead.newEncryptingChannel(
+          Channels.newChannel(outputStream),
+          blobKey.encodeToByteArray()
+        )
+        content.collect { byteString ->
+          byteString.asReadOnlyByteBufferList().forEach { buffer ->
+            while (buffer.hasRemaining()) {
+              ciphertextChannel.write(buffer)
+            }
+            val encryptedBytes = outputStream.toByteArray()
+            if (encryptedBytes.isNotEmpty()) {
+              emit(ByteString.copyFrom(encryptedBytes))
+              outputStream.reset()
+            }
+          }
         }
-        val encryptedBytes = outputStream.toByteArray()
-        if (encryptedBytes.isNotEmpty()) {
-          emit(ByteString.copyFrom(encryptedBytes))
-          outputStream.reset()
+        ciphertextChannel.close()
+        val remainingBytes = outputStream.toByteArray()
+        if (remainingBytes.isNotEmpty()) {
+          emit(ByteString.copyFrom(remainingBytes))
         }
-      }
-      ciphertextChannel.close()
-      val remainingEncryptedBytes = outputStream.toByteArray()
-      if (remainingEncryptedBytes.isNotEmpty()) {
-        emit(ByteString.copyFrom(remainingEncryptedBytes))
       }
     }
     val wrappedBlob: StorageClient.Blob = storageClient.writeBlob(blobKey, encryptedContent)
@@ -115,12 +124,16 @@ class StreamingAeadStorageClient(
     override fun read(): Flow<ByteString> = flow {
       val chunkChannel = Channel<ByteString>(capacity = Channel.UNLIMITED)
 
-      CoroutineScope(streamingAeadContext).launch {
-        blob.read().collect { chunk ->
-          chunkChannel.send(chunk)
-        }
-        chunkChannel.close()
+      blob.read().collect { chunk ->
+        chunkChannel.send(chunk)
       }
+      chunkChannel.close()
+//      CoroutineScope(streamingAeadContext).launch {
+//        blob.read().collect { chunk ->
+//          chunkChannel.send(chunk)
+//        }
+//        chunkChannel.close()
+//      }
 
       val plaintextChannel = this@StreamingAeadStorageClient.streamingAead.newDecryptingChannel(
         object : ReadableByteChannel {
