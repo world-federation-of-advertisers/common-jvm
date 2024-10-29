@@ -14,76 +14,57 @@
 
 package org.wfanet.measurement.common.rabbitmq
 
+import com.google.common.truth.Truth.assertThat
+import com.rabbitmq.client.AMQP.Queue.DeclareOk
+import com.rabbitmq.client.Channel
 import com.rabbitmq.client.ConnectionFactory
 import java.nio.charset.Charset
+import kotlin.time.Duration.Companion.seconds
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.channels.consumeEach
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
-import com.google.common.truth.Truth.assertThat
-import java.util.*
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
-import kotlinx.coroutines.delay
-import picocli.CommandLine
 
-private class TestRabbitMQClient : RabbitMQClient() {
-  private val processedMessages = Collections.synchronizedList(mutableListOf<String>())
-  private var messageProcessedLatch = CountDownLatch(1)
-
-  override suspend fun runWork(message: ByteArray) {
-    processedMessages.add(message.toString(Charset.defaultCharset()))
-    messageProcessedLatch.countDown()
-  }
-
-  fun getProcessedMessages(): List<String> = processedMessages.toList()
-
-  fun waitForMessageProcessing(): Boolean {
-    val result = messageProcessedLatch.await(5, TimeUnit.SECONDS)
-    if (result && !rabbitMqFlags.consumeSingleMessage) {
-      messageProcessedLatch = CountDownLatch(1)
-    }
-    return result
-  }
-
-  override fun run() = runBlocking {
-    try {
-      super.run()
-    } catch (e: SecurityException) {
-      if (!e.message!!.contains("System.exit")) {
-        throw e
-      }
-    }
-  }
-}
-
-class RabbitMQClientTest {
-  private var testClient: TestRabbitMQClient? = null
-  private var connectionFactory: ConnectionFactory? = null
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+class RabbitMqClientTest {
+  private lateinit var connectionFactory: ConnectionFactory
+  private lateinit var monitorChannel: Channel
   private val queueName = "test-queue-${System.currentTimeMillis()}"
-  private val testMessage = "Hello, RabbitMQ!"
 
   @Before
   fun setup() {
-    connectionFactory = ConnectionFactory().apply {
-      host = "localhost"
-      port = 5672
-      username = "guest"
-      password = "guest"
-    }
+    connectionFactory =
+      ConnectionFactory().apply {
+        host = "localhost"
+        port = 5672
+        username = "guest"
+        password = "guest"
+      }
 
-    // Test connection and create queue
-    connectionFactory?.newConnection()?.use { connection ->
+    connectionFactory.newConnection().use { connection ->
       connection.createChannel().use { channel ->
-        channel.queueDeclare(queueName, false, false, true, null)
+        channel.queueDeclare(queueName, true, false, false, null)
       }
     }
 
+    val monitorConnection = connectionFactory.newConnection()
+    monitorChannel = monitorConnection.createChannel()
   }
 
   @After
   fun cleanup() {
-    connectionFactory?.newConnection()?.use { connection ->
+    try {
+      monitorChannel.close()
+    } catch (e: Exception) {
+      println("Failed to close monitor channel: ${e.message}")
+    }
+
+    connectionFactory.newConnection().use { connection ->
       connection.createChannel().use { channel ->
         try {
           channel.queueDelete(queueName)
@@ -94,109 +75,200 @@ class RabbitMQClientTest {
     }
   }
 
+  private fun getQueueInfo(): DeclareOk {
+    return monitorChannel.queueDeclarePassive(queueName)
+  }
+
   @Test
-  fun `test single message consumption`() = runBlocking {
-    // Publish test message
-    testClient = TestRabbitMQClient()
-    val cmd = CommandLine(testClient)
-    cmd.parseArgs(
-      "--rabbitmq-host=localhost",
-      "--rabbitmq-port=5672",
-      "--rabbitmq-username=guest",
-      "--rabbitmq-password=guest",
-      "--rabbitmq-queue-name=$queueName",
-      "--consume-single-message=true"
-    )
-    connectionFactory?.newConnection()?.use { connection ->
+  fun testMessagesConsumption() = runBlocking {
+    val client =
+      RabbitMqClient(
+        host = "localhost",
+        port = 5672,
+        username = "guest",
+        password = "guest",
+        queueName = queueName,
+        blockingContext = UnconfinedTestDispatcher(),
+      )
+
+    val messages = listOf("Message1", "Message2", "Message3")
+    val receivedMessages = mutableListOf<String>()
+    connectionFactory.newConnection().use { connection ->
       connection.createChannel().use { channel ->
-        channel.basicPublish(
-          "",
-          queueName,
-          null,
-          testMessage.toByteArray()
-        )
+        messages.forEach { msg -> channel.basicPublish("", queueName, null, msg.toByteArray()) }
       }
     }
-
-    val clientThread = Thread {
-      testClient?.run()
-    }
-    clientThread.start()
-
-    assertThat(testClient?.waitForMessageProcessing())
-      .isTrue()
-
-    assertThat(testClient?.getProcessedMessages()?.size).isEqualTo(1)
-    assertThat(testClient?.getProcessedMessages()?.first()).isEqualTo(testMessage)
-  }
-
-  @Test
-  fun testMultipleMessagesWhenConsumeSingleMessageIsFalse() {
-    val multiMessageClient = TestRabbitMQClient()
-    val cmd = CommandLine(multiMessageClient)
-    cmd.parseArgs(
-      "--rabbitmq-host=localhost",
-      "--rabbitmq-port=5672",
-      "--rabbitmq-username=guest",
-      "--rabbitmq-password=guest",
-      "--rabbitmq-queue-name=$queueName",
-      "--consume-single-message=false"
-    )
-
-    val messages = listOf("Message1", "Message2", "Message3")
-
-    runBlocking {
-      connectionFactory?.newConnection()?.use { connection ->
-        connection.createChannel().use { channel ->
-          messages.forEach { msg ->
-            channel.basicPublish("", queueName, null, msg.toByteArray())
+    assertThat(getQueueInfo().messageCount).isEqualTo(3)
+    client.use { rabbitmq ->
+      withTimeout(5.seconds) {
+        val messageChannel = rabbitmq.subscribe<ByteArray>()
+        for (message in messageChannel) {
+          receivedMessages.add(message.body.toString(Charset.defaultCharset()))
+          message.ack()
+          if (receivedMessages.size == messages.size) {
+            break
           }
         }
       }
-
-      val clientThread = Thread {
-        multiMessageClient.run()
-      }
-      clientThread.start()
-      repeat(messages.size) {
-        assertThat(multiMessageClient.waitForMessageProcessing()).isTrue()
-      }
-      assertThat(multiMessageClient.getProcessedMessages()).containsExactlyElementsIn(messages)
     }
+
+    assertThat(receivedMessages).containsExactlyElementsIn(messages)
+    assertThat(getQueueInfo().messageCount).isEqualTo(0)
   }
 
   @Test
-  fun testMultipleMessagesWhenConsumeSingleMessageIsTrue() {
-    val singleMessageClient = TestRabbitMQClient()
-    val cmd = CommandLine(singleMessageClient)
-    cmd.parseArgs(
-      "--rabbitmq-host=localhost",
-      "--rabbitmq-port=5672",
-      "--rabbitmq-username=guest",
-      "--rabbitmq-password=guest",
-      "--rabbitmq-queue-name=$queueName",
-      "--consume-single-message=true"
-    )
+  fun testMessageAcknowledgement() = runBlocking {
+    val client =
+      RabbitMqClient(
+        host = "localhost",
+        port = 5672,
+        username = "guest",
+        password = "guest",
+        queueName = queueName,
+        blockingContext = UnconfinedTestDispatcher(),
+      )
+    assertThat(getQueueInfo().messageCount).isEqualTo(0)
+    connectionFactory.newConnection().use { connection ->
+      connection.createChannel().use { channel ->
+        repeat(2) { i ->
+          val message = "Message$i"
+          channel.basicPublish("", queueName, null, message.toByteArray())
+        }
+      }
+    }
 
-    val messages = listOf("Message1", "Message2", "Message3")
+    assertThat(getQueueInfo().messageCount).isEqualTo(2)
+    assertThat(getQueueInfo().consumerCount).isEqualTo(0)
 
-    runBlocking {
-      connectionFactory?.newConnection()?.use { connection ->
-        connection.createChannel().use { channel ->
-          messages.forEach { msg ->
-            channel.basicPublish("", queueName, null, msg.toByteArray())
+    var messageCount = 0
+
+    val receivedMessages = mutableListOf<String>()
+    client.use { rabbitmq ->
+      withTimeout(5.seconds) {
+        val messageChannel = rabbitmq.subscribe<ByteArray>()
+        for (message in messageChannel) {
+          val content = message.body.toString(Charset.defaultCharset())
+          messageCount++
+
+          when (content) {
+            "Message0" -> {
+              message.ack()
+              receivedMessages.add(message.body.toString(Charset.defaultCharset()))
+            }
+
+            "Message1" -> {
+              message.nack(requeue = true)
+              receivedMessages.add(message.body.toString(Charset.defaultCharset()))
+              break
+            }
           }
         }
       }
-      val clientThread = Thread {
-        singleMessageClient.run()
-      }
-      clientThread.start()
-      repeat(messages.size) {
-        assertThat(singleMessageClient.waitForMessageProcessing()).isTrue()
-      }
-      assertThat(singleMessageClient.getProcessedMessages()).containsExactly("Message1")
     }
+
+    val finalQueueInfo = getQueueInfo()
+    assertThat(finalQueueInfo.messageCount).isEqualTo(1)
+    assertThat(messageCount).isEqualTo(2)
   }
 
+  @Test
+  fun `test nack re-enqueue the message`() = runBlocking {
+    val client =
+      RabbitMqClient(
+        host = "localhost",
+        port = 5672,
+        username = "guest",
+        password = "guest",
+        queueName = queueName,
+        blockingContext = UnconfinedTestDispatcher(),
+      )
+    assertThat(getQueueInfo().messageCount).isEqualTo(0)
+    connectionFactory.newConnection().use { connection ->
+      connection.createChannel().use { channel ->
+        channel.basicPublish("", queueName, null, "Message1".toByteArray())
+      }
+    }
+
+    assertThat(getQueueInfo().messageCount).isEqualTo(1)
+    assertThat(getQueueInfo().consumerCount).isEqualTo(0)
+
+    var messageCount = 0
+
+    client.use { rabbitmq ->
+      withTimeout(5.seconds) {
+        val messageChannel = rabbitmq.subscribe<ByteArray>()
+        for (message in messageChannel) {
+          val content = message.body.toString(Charset.defaultCharset())
+          when {
+            messageCount == 0 -> {
+              messageCount++
+              assertThat("Message1").isEqualTo(content)
+              message.nack(requeue = true)
+            }
+            messageCount == 1 -> {
+              messageCount++
+              assertThat("Message1").isEqualTo(content)
+              message.ack()
+              break
+            }
+          }
+        }
+      }
+    }
+
+    val finalQueueInfo = getQueueInfo()
+    assertThat(finalQueueInfo.messageCount).isEqualTo(0)
+    assertThat(messageCount).isEqualTo(2)
+  }
+
+  @Test
+  fun testConnectionReuse() = runBlocking {
+    val client1 =
+      RabbitMqClient(
+        host = "localhost",
+        port = 5672,
+        username = "guest",
+        password = "guest",
+        queueName = queueName,
+        blockingContext = UnconfinedTestDispatcher(),
+      )
+
+    val client2 =
+      RabbitMqClient(
+        host = "localhost",
+        port = 5672,
+        username = "guest",
+        password = "guest",
+        queueName = queueName,
+        blockingContext = UnconfinedTestDispatcher(),
+      )
+
+    assertThat(client1.getActiveConnectionCount()).isEqualTo(1)
+    client1.close()
+    assertThat(client2.getActiveConnectionCount()).isEqualTo(1)
+    client2.close()
+    assertThat(client2.getActiveConnectionCount()).isEqualTo(0)
+  }
+
+  @Test
+  fun testConnectionCleanup() = runBlocking {
+    val client =
+      RabbitMqClient(
+        host = "localhost",
+        port = 5672,
+        username = "guest",
+        password = "guest",
+        queueName = queueName,
+        blockingContext = UnconfinedTestDispatcher(),
+      )
+
+    assertThat(client.getActiveConnectionCount()).isEqualTo(1)
+
+    client.use { rabbitmq ->
+      val job = launch { rabbitmq.subscribe<ByteArray>().consumeEach { message -> message.ack() } }
+      job.cancelAndJoin()
+    }
+
+    assertThat(client.getActiveConnectionCount()).isEqualTo(0)
+  }
 }
