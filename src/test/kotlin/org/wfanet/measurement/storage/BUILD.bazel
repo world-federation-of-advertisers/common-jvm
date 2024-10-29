@@ -6,7 +6,7 @@ kt_jvm_test(
     deps = [
         "//imports/java/com/google/common/truth",
         "//imports/java/org/junit",
-        "//src/main/kotlin/org/wfanet/measurement/common/mesos/recordio:mesos_recordio_storage_client",
+        "//src/main/kotlin/org/wfanet/measurement/storage:mesos_recordio_storage_client",
         "//src/main/kotlin/org/wfanet/measurement/storage/testing",
     ],
 )

@@ -14,19 +14,22 @@
  * limitations under the License.
  */
 
-package org.wfanet.measurement.common.mesos.recordio
+package org.wfanet.measurement.storage
 
 import com.google.common.truth.Truth.assertThat
 import com.google.protobuf.ByteString
 import java.lang.NumberFormatException
 import kotlin.test.assertFailsWith
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
-import org.wfanet.measurement.storage.StorageClient
 import org.wfanet.measurement.storage.testing.InMemoryStorageClient
 
 @RunWith(JUnit4::class)
@@ -55,14 +58,18 @@ class MesosRecordIoStorageClientTest {
 
   @Test
   fun `test writing and reading large records`() = runBlocking {
-    val largeString =
+    val singleRecord =
       """{"type": "SUBSCRIBED","subscribed": {"framework_id": {"value":"12220-3440-12532-2345"}}}"""
-        .repeat(130000) // ~4MB
-    val testData = listOf(largeString)
+    val testData = List(130000) { singleRecord } // ~4MB
     val blobKey = "test-large-records"
+    val recordFlow = flow {
+      testData.forEach { record ->
+        emit(ByteString.copyFromUtf8(record))
+      }
+    }
     mesosRecordIoStorageClient.writeBlob(
       blobKey,
-      testData.map { ByteString.copyFromUtf8(it) }.asFlow(),
+      recordFlow,
     )
     val blob = mesosRecordIoStorageClient.getBlob(blobKey)
     requireNotNull(blob) { "Blob should exist" }
@@ -166,18 +173,18 @@ class MesosRecordIoStorageClientTest {
           assertFailsWith<IllegalArgumentException>(
             "Expected IllegalArgumentException for content: $invalidContent"
           ) {
-            blob.read().collect()
+            blob.read().collect{ }
           }
         }
         !invalidContent.startsWith("100") -> {
           assertFailsWith<NumberFormatException>(
             "Expected NumberFormatException for content: $invalidContent"
           ) {
-            blob.read().collect()
+            blob.read().collect{ }
           }
         }
         else -> {
-          blob.read().collect()
+          blob.read().collect{ }
         }
       }
     }
