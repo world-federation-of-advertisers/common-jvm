@@ -15,39 +15,38 @@
 package org.wfanet.measurement.common.mesos.recordio
 
 import com.google.protobuf.ByteString
-import java.util.logging.Logger
-import org.wfanet.measurement.storage.StorageClient
 import java.io.ByteArrayOutputStream
+import java.util.logging.Logger
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import org.wfanet.measurement.storage.StorageClient
 
 /**
- * A wrapper class for the [StorageClient] interface that handles Apache Mesos RecordIO formatted files
- * for blob/object storage operations.
+ * A wrapper class for the [StorageClient] interface that handles Apache Mesos RecordIO formatted
+ * files for blob/object storage operations.
  *
- * This class supports row-based reading and writing, enabling the processing of individual rows
- * at the client's pace. The implementation focuses on handling record-level operations for
- * RecordIO files.
+ * This class supports row-based reading and writing, enabling the processing of individual rows at
+ * the client's pace. The implementation focuses on handling record-level operations for RecordIO
+ * files.
  *
  * @param storageClient underlying client for accessing blob/object storage
  */
 class MesosRecordIoStorageClient(private val storageClient: StorageClient) : StorageClient {
 
   /**
-  * Writes RecordIO rows to storage using the RecordIO format.
-  *
-  * This function takes a flow of RecordIO rows (represented as a Flow<ByteString>), formats each row
-  * by prepending the record size and a newline character (`\n`), and writes the formatted content
-  * to storage.
-  *
-  * The function handles rows emitted at any pace, meaning it can process rows that are emitted asynchronously
-  * with delays in between.
-  *
-  * @param blobKey The key (or name) of the blob where the content will be stored.
-  * @param content A Flow<ByteString> representing the source of RecordIO rows that will be stored.
-  *
-  * @return A Blob object representing the RecordIO data that was written to storage.
-  */
+   * Writes RecordIO rows to storage using the RecordIO format.
+   *
+   * This function takes a flow of RecordIO rows (represented as a Flow<ByteString>), formats each
+   * row by prepending the record size and a newline character (`\n`), and writes the formatted
+   * content to storage.
+   *
+   * The function handles rows emitted at any pace, meaning it can process rows that are emitted
+   * asynchronously with delays in between.
+   *
+   * @param blobKey The key (or name) of the blob where the content will be stored.
+   * @param content A Flow<ByteString> representing the source of RecordIO rows that will be stored.
+   * @return A Blob object representing the RecordIO data that was written to storage.
+   */
   override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
     val processedContent = flow {
       val outputStream = ByteArrayOutputStream()
@@ -84,8 +83,10 @@ class MesosRecordIoStorageClient(private val storageClient: StorageClient) : Sto
   }
 
   /** A blob that will read the content in RecordIO format */
-  private inner class RecordioBlob(private val blob: StorageClient.Blob, private val blobKey: String) :
-    StorageClient.Blob {
+  private inner class RecordioBlob(
+    private val blob: StorageClient.Blob,
+    private val blobKey: String,
+  ) : StorageClient.Blob {
     override val storageClient = this@MesosRecordIoStorageClient.storageClient
 
     override val size: Long
@@ -96,12 +97,11 @@ class MesosRecordIoStorageClient(private val storageClient: StorageClient) : Sto
      * on-the-fly to extract individual records.
      *
      * The function reads each row from an Apache Mesos RecordIO file and emits them individually.
-     * Each record in the RecordIO format begins with its size followed by a newline character,
-     * then the actual record data.
+     * Each record in the RecordIO format begins with its size followed by a newline character, then
+     * the actual record data.
      *
      * @return A Flow of ByteString, where each emission represents a complete record from the
-     *         RecordIO formatted data.
-     *
+     *   RecordIO formatted data.
      * @throws java.io.IOException If there is an issue reading from the stream.
      */
     override fun read(): Flow<ByteString> = flow {
@@ -132,8 +132,7 @@ class MesosRecordIoStorageClient(private val storageClient: StorageClient) : Sto
 
             if (bytesToRead > 0) {
               recordBuffer.write(
-                chunkString.substring(position, position + bytesToRead)
-                  .toByteArray(Charsets.UTF_8)
+                chunkString.substring(position, position + bytesToRead).toByteArray(Charsets.UTF_8)
               )
               position += bytesToRead
             }
@@ -148,7 +147,6 @@ class MesosRecordIoStorageClient(private val storageClient: StorageClient) : Sto
     }
 
     override suspend fun delete() = blob.delete()
-
   }
 
   companion object {

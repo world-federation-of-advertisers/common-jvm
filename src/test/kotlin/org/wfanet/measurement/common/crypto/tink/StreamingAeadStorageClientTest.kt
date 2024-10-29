@@ -48,22 +48,18 @@ class StreamingAeadStorageClientTest {
   @Before
   fun initStorageClient() {
     wrappedStorageClient = InMemoryStorageClient()
-    streamingAeadStorageClient = StreamingAeadStorageClient(
-      wrappedStorageClient,
-      streamingAead
-    )
+    streamingAeadStorageClient = StreamingAeadStorageClient(wrappedStorageClient, streamingAead)
   }
 
   @Test
   fun `test write and read single record`() = runBlocking {
     val blobKey = "test-key"
-    val record = """{"type": "SUBSCRIBED","subscribed": {"framework_id": {"value":"12220-3440-12532-2345"}}}"""
+    val record =
+      """{"type": "SUBSCRIBED","subscribed": {"framework_id": {"value":"12220-3440-12532-2345"}}}"""
     val inputFlow = flow { emit(ByteString.copyFromUtf8(record)) }
     val blob = streamingAeadStorageClient.writeBlob(blobKey, inputFlow)
     val readRecords = mutableListOf<String>()
-    blob.read().collect { byteString ->
-      readRecords.add(byteString.toStringUtf8())
-    }
+    blob.read().collect { byteString -> readRecords.add(byteString.toStringUtf8()) }
     assertThat(readRecords).hasSize(1)
     assertThat(readRecords[0]).isEqualTo(record)
   }
@@ -71,22 +67,17 @@ class StreamingAeadStorageClientTest {
   @Test
   fun `test write and read multiple records`() = runBlocking {
     val blobKey = "test-key"
-    val records = listOf(
-      """{"type": "SUBSCRIBED","subscribed": {"framework_id": {"value":"12220-3440-12532-2345"}}}""",
-      """{"type":"HEARTBEAT"}""",
-      """{"type":"HEARTBEAT_ACK"}"""
-    )
+    val records =
+      listOf(
+        """{"type": "SUBSCRIBED","subscribed": {"framework_id": {"value":"12220-3440-12532-2345"}}}""",
+        """{"type":"HEARTBEAT"}""",
+        """{"type":"HEARTBEAT_ACK"}""",
+      )
     val combinedRecords = records.joinToString("")
-    val inputFlow = flow {
-      records.forEach { record ->
-        emit(ByteString.copyFromUtf8(record))
-      }
-    }
+    val inputFlow = flow { records.forEach { record -> emit(ByteString.copyFromUtf8(record)) } }
     val blob = streamingAeadStorageClient.writeBlob(blobKey, inputFlow)
     val combinedContent = ByteArrayOutputStream()
-    blob.read().collect { byteString ->
-      combinedContent.write(byteString.toByteArray())
-    }
+    blob.read().collect { byteString -> combinedContent.write(byteString.toByteArray()) }
     val readContent = combinedContent.toString(Charsets.UTF_8)
     assertThat(readContent).isEqualTo(combinedRecords)
   }
@@ -96,16 +87,14 @@ class StreamingAeadStorageClientTest {
     val blobKey = "test-key"
 
     val largeRecord = buildString {
-      repeat(130000) {// ~ 4MB
+      repeat(130000) { // ~ 4MB
         append("""{"type": "LARGE_RECORD", "index": $it},""")
       }
     }
     val inputFlow = flow { emit(ByteString.copyFromUtf8(largeRecord)) }
     val blob = streamingAeadStorageClient.writeBlob(blobKey, inputFlow)
     val combinedContent = ByteArrayOutputStream()
-    blob.read().collect { byteString ->
-      combinedContent.write(byteString.toByteArray())
-    }
+    blob.read().collect { byteString -> combinedContent.write(byteString.toByteArray()) }
     val readContent = combinedContent.toString(Charsets.UTF_8)
     assertThat(readContent).isEqualTo(largeRecord)
   }
@@ -118,10 +107,11 @@ class StreamingAeadStorageClientTest {
     streamingAeadStorageClient.writeBlob(blobKey, inputFlow)
     val encryptedBlob = wrappedStorageClient.getBlob(blobKey)
     val decryptedContent = ByteArrayOutputStream()
-    val decryptingChannel = streamingAead.newDecryptingChannel(
-      Channels.newChannel(ByteArrayInputStream(encryptedBlob?.read()?.first()?.toByteArray())),
-      blobKey.encodeToByteArray()
-    )
+    val decryptingChannel =
+      streamingAead.newDecryptingChannel(
+        Channels.newChannel(ByteArrayInputStream(encryptedBlob?.read()?.first()?.toByteArray())),
+        blobKey.encodeToByteArray(),
+      )
     val buffer = ByteBuffer.allocate(8192)
     while (decryptingChannel.read(buffer) != -1) {
       buffer.flip()
@@ -134,7 +124,8 @@ class StreamingAeadStorageClientTest {
   @Test
   fun `Blob delete deletes blob`() = runBlocking {
     val blobKey = "blob-to-delete"
-    val record = """{"type": "SUBSCRIBED","subscribed": {"framework_id": {"value":"12220-3440-12532-2345"}}}"""
+    val record =
+      """{"type": "SUBSCRIBED","subscribed": {"framework_id": {"value":"12220-3440-12532-2345"}}}"""
     val inputFlow = flow { emit(ByteString.copyFromUtf8(record)) }
     val blob = streamingAeadStorageClient.writeBlob(blobKey, inputFlow)
     blob.delete()
@@ -158,7 +149,5 @@ class StreamingAeadStorageClientTest {
     private val AEAD_KEY_TEMPLATE = KeyTemplates.get("AES128_GCM_HKDF_1MB")
     private val KEY_ENCRYPTION_KEY = KeysetHandle.generateNew(AEAD_KEY_TEMPLATE)
     private val streamingAead = KEY_ENCRYPTION_KEY.getPrimitive(StreamingAead::class.java)
-
   }
 }
-

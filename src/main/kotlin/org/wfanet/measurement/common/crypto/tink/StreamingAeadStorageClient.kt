@@ -16,30 +16,28 @@ package org.wfanet.measurement.common.crypto.tink
 
 import com.google.crypto.tink.StreamingAead
 import com.google.protobuf.ByteString
-import kotlinx.coroutines.channels.Channel
-import java.util.logging.Logger
-import org.wfanet.measurement.storage.StorageClient
 import java.io.ByteArrayOutputStream
-import java.nio.channels.ReadableByteChannel
 import java.nio.ByteBuffer
 import java.nio.channels.Channels
+import java.nio.channels.ReadableByteChannel
+import java.util.logging.Logger
 import kotlin.coroutines.CoroutineContext
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.annotations.BlockingExecutor
 import org.wfanet.measurement.common.BYTES_PER_MIB
 import org.wfanet.measurement.common.ByteStringOutputBuffer
+import org.wfanet.measurement.storage.StorageClient
 
 /**
  * A wrapper class for the [StorageClient] interface that leverages Tink AEAD encryption/decryption
  * for blob/object storage operations.
  *
- * This class provides streaming encryption and decryption of data using StreamingAead,
- * enabling secure storage of large files by processing them in chunks.
+ * This class provides streaming encryption and decryption of data using StreamingAead, enabling
+ * secure storage of large files by processing them in chunks.
  *
  * @param storageClient underlying client for accessing blob/object storage
  * @param streamingAead the StreamingAead instance used for encryption/decryption
@@ -54,22 +52,23 @@ class StreamingAeadStorageClient(
   /**
    * Encrypts and writes data to storage using StreamingAead.
    *
-   * This function takes a flow of data chunks, encrypts them using StreamingAead,
-   * and writes the encrypted content to storage.
+   * This function takes a flow of data chunks, encrypts them using StreamingAead, and writes the
+   * encrypted content to storage.
    *
    * @param blobKey The key (or name) of the blob where the encrypted content will be stored.
-   * @param content A Flow<ByteString> representing the source data that will be encrypted and stored.
-   *
+   * @param content A Flow<ByteString> representing the source data that will be encrypted and
+   *   stored.
    * @return A Blob object representing the encrypted data that was written to storage.
    */
   override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
     val encryptedContent = flow {
       ByteStringOutputBuffer(BYTES_PER_MIB).use { outputBuffer ->
         val outputStream = ByteArrayOutputStream()
-        val ciphertextChannel = streamingAead.newEncryptingChannel(
-          Channels.newChannel(outputStream),
-          blobKey.encodeToByteArray()
-        )
+        val ciphertextChannel =
+          streamingAead.newEncryptingChannel(
+            Channels.newChannel(outputStream),
+            blobKey.encodeToByteArray(),
+          )
         content.collect { byteString ->
           byteString.asReadOnlyByteBufferList().forEach { buffer ->
             while (buffer.hasRemaining()) {
@@ -105,8 +104,10 @@ class StreamingAeadStorageClient(
   }
 
   /** A blob that will decrypt the content when read */
-  private inner class EncryptedBlob(private val blob: StorageClient.Blob, private val blobKey: String) :
-    StorageClient.Blob {
+  private inner class EncryptedBlob(
+    private val blob: StorageClient.Blob,
+    private val blobKey: String,
+  ) : StorageClient.Blob {
     override val storageClient = this@StreamingAeadStorageClient.storageClient
 
     override val size: Long
@@ -115,55 +116,53 @@ class StreamingAeadStorageClient(
     /**
      * Reads and decrypts the blob's content.
      *
-     * This method handles the decryption of data by collecting all encrypted data first,
-     * then decrypting it as a single operation.
+     * This method handles the decryption of data by collecting all encrypted data first, then
+     * decrypting it as a single operation.
      *
      * @return A Flow of ByteString containing the decrypted data.
-     * @throws java.io.IOException If there is an issue reading from the stream or during decryption.
+     * @throws java.io.IOException If there is an issue reading from the stream or during
+     *   decryption.
      */
     override fun read(): Flow<ByteString> = flow {
       val chunkChannel = Channel<ByteString>(capacity = Channel.UNLIMITED)
 
-      blob.read().collect { chunk ->
-        chunkChannel.send(chunk)
-      }
+      blob.read().collect { chunk -> chunkChannel.send(chunk) }
       chunkChannel.close()
-//      CoroutineScope(streamingAeadContext).launch {
-//        blob.read().collect { chunk ->
-//          chunkChannel.send(chunk)
-//        }
-//        chunkChannel.close()
-//      }
+      //      CoroutineScope(streamingAeadContext).launch {
+      //        blob.read().collect { chunk ->
+      //          chunkChannel.send(chunk)
+      //        }
+      //        chunkChannel.close()
+      //      }
 
-      val plaintextChannel = this@StreamingAeadStorageClient.streamingAead.newDecryptingChannel(
-        object : ReadableByteChannel {
-          private var currentChunk: ByteString? = null
-          private var bufferOffset = 0
+      val plaintextChannel =
+        this@StreamingAeadStorageClient.streamingAead.newDecryptingChannel(
+          object : ReadableByteChannel {
+            private var currentChunk: ByteString? = null
+            private var bufferOffset = 0
 
-          override fun isOpen(): Boolean = true
+            override fun isOpen(): Boolean = true
 
-          override fun close() {}
+            override fun close() {}
 
-          override fun read(buffer: ByteBuffer): Int {
-            if (currentChunk == null || bufferOffset >= currentChunk!!.size()) {
-              currentChunk = runBlocking {
-                chunkChannel.receiveCatching().getOrNull()
+            override fun read(buffer: ByteBuffer): Int {
+              if (currentChunk == null || bufferOffset >= currentChunk!!.size()) {
+                currentChunk = runBlocking { chunkChannel.receiveCatching().getOrNull() }
+                if (currentChunk == null) return -1
+                bufferOffset = 0
               }
-              if (currentChunk == null) return -1
-              bufferOffset = 0
-            }
 
-            val nextChunkBuffer = currentChunk!!.asReadOnlyByteBuffer()
-            nextChunkBuffer.position(bufferOffset)
-            val bytesToRead = minOf(buffer.remaining(), nextChunkBuffer.remaining())
-            nextChunkBuffer.limit(bufferOffset + bytesToRead)
-            buffer.put(nextChunkBuffer)
-            bufferOffset += bytesToRead
-            return bytesToRead
-          }
-        },
-        blobKey.encodeToByteArray()
-      )
+              val nextChunkBuffer = currentChunk!!.asReadOnlyByteBuffer()
+              nextChunkBuffer.position(bufferOffset)
+              val bytesToRead = minOf(buffer.remaining(), nextChunkBuffer.remaining())
+              nextChunkBuffer.limit(bufferOffset + bytesToRead)
+              buffer.put(nextChunkBuffer)
+              bufferOffset += bytesToRead
+              return bytesToRead
+            }
+          },
+          blobKey.encodeToByteArray(),
+        )
 
       val buffer = ByteBuffer.allocate(8192)
       while (true) {
@@ -176,7 +175,6 @@ class StreamingAeadStorageClient(
     }
 
     override suspend fun delete() = blob.delete()
-
   }
 
   companion object {
