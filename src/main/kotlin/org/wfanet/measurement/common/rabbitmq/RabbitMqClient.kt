@@ -21,12 +21,15 @@ import com.rabbitmq.client.ConnectionFactory
 import com.rabbitmq.client.DefaultConsumer
 import com.rabbitmq.client.Envelope
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicInteger
 import kotlin.coroutines.CoroutineContext
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.channels.Channel as KChannel
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.ReceiveChannel
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.channels.onFailure
+import kotlinx.coroutines.channels.produce
+import kotlinx.coroutines.channels.trySendBlocking
 import org.jetbrains.annotations.BlockingExecutor
 
 /**
@@ -37,7 +40,6 @@ import org.jetbrains.annotations.BlockingExecutor
  * @property port The port of the RabbitMQ server
  * @property username The username for authentication
  * @property password The password for authentication
- * @property queueName The name of the queue to subscribe to
  * @property blockingContext The CoroutineContext to use for blocking operations
  */
 class RabbitMqClient(
@@ -45,64 +47,35 @@ class RabbitMqClient(
   private val port: Int,
   private val username: String,
   private val password: String,
-  private val queueName: String,
   private val blockingContext: @BlockingExecutor CoroutineContext = Dispatchers.IO,
 ) : AutoCloseable {
-  private val rabbitChannel: Channel
-  private val connectionKey = ConnectionKey(host, port, username, password)
-  private val connectionInfo = getOrCreateConnection(connectionKey)
 
-  companion object {
-    private val connections = ConcurrentHashMap<ConnectionKey, ConnectionInfo>()
+  private val activeChannels = ConcurrentHashMap<String, Channel>()
+  private val deliveryScope = CoroutineScope(blockingContext)
 
-    private data class ConnectionKey(
-      val host: String,
-      val port: Int,
-      val username: String,
-      val password: String,
-    )
-
-    private class ConnectionInfo(
-      val connection: Connection,
-      val referenceCount: AtomicInteger = AtomicInteger(0),
-    )
-
-    @Synchronized
-    private fun getOrCreateConnection(key: ConnectionKey): ConnectionInfo {
-      return connections
-        .computeIfAbsent(key) {
-          val factory =
-            ConnectionFactory().apply {
-              host = key.host
-              port = key.port
-              username = key.username
-              password = key.password
-            }
-          ConnectionInfo(factory.newConnection())
-        }
-        .also { it.referenceCount.incrementAndGet() }
-    }
-
-    @Synchronized
-    private fun releaseConnection(key: ConnectionKey) {
-      connections[key]?.let { info ->
-        if (info.referenceCount.decrementAndGet() == 0) {
-          connections.remove(key)
-          try {
-            info.connection.close()
-          } catch (e: Exception) {
-            println("Error closing connection: ${e.message}")
-          }
-        }
+  private val rabbitMqConnection: Lazy<Connection> = lazy {
+    val factory =
+      ConnectionFactory().apply {
+        this.host = this@RabbitMqClient.host
+        this.port = this@RabbitMqClient.port
+        this.username = this@RabbitMqClient.username
+        this.password = this@RabbitMqClient.password
       }
+    factory.newConnection()
+  }
+
+  private fun createChannel(): Channel {
+    try {
+      return rabbitMqConnection.value.createChannel()
+    } catch (e: Exception) {
+      throw RuntimeException("Failed to create channel", e)
     }
   }
 
-  init {
+  private val rabbitMqChannel: Lazy<Channel> = lazy {
     try {
-      rabbitChannel = connectionInfo.connection.createChannel()
+      rabbitMqConnection.value.createChannel()
     } catch (e: Exception) {
-      releaseConnection(connectionKey)
       throw RuntimeException("Failed to create channel", e)
     }
   }
@@ -122,53 +95,79 @@ class RabbitMqClient(
   }
 
   /**
-   * Subscribes to the configured queue and returns a ReceiveChannel of QueueMessage objects.
+   * Subscribes to the specified queue and returns a ReceiveChannel of QueueMessage objects.
    *
+   * @param queueName The name of the queue to subscribe to
    * @return A ReceiveChannel that will receive QueueMessages
    */
-  suspend fun <T> subscribe(): ReceiveChannel<QueueMessage<T>> {
-    if (!connectionInfo.connection.isOpen) {
+  @kotlinx.coroutines.ExperimentalCoroutinesApi
+  fun <T> subscribe(queueName: String): ReceiveChannel<QueueMessage<T>> {
+
+    if (!rabbitMqConnection.value.isOpen) {
       throw IllegalStateException("RabbitMQ connection is closed")
     }
-    val forwardChannel = KChannel<QueueMessage<T>>()
 
-    rabbitChannel.basicConsume(
-      queueName,
-      false,
-      object : DefaultConsumer(rabbitChannel) {
-        override fun handleDelivery(
-          consumerTag: String,
-          envelope: Envelope,
-          properties: AMQP.BasicProperties,
-          body: ByteArray,
-        ) {
-          @Suppress("UNCHECKED_CAST")
-          val message =
-            QueueMessage(
-              body = body as T,
-              deliveryTag = envelope.deliveryTag,
-              channel = rabbitChannel,
-            )
-          runBlocking { forwardChannel.send(message) }
+    val channel = activeChannels.computeIfAbsent(queueName) { createChannel() }
+
+    return deliveryScope.produce {
+      var currentConsumerTag: String? = null
+      channel.basicConsume(
+        queueName,
+        false,
+        object : DefaultConsumer(channel) {
+          override fun handleDelivery(
+            consumerTag: String,
+            envelope: Envelope,
+            properties: AMQP.BasicProperties,
+            body: ByteArray,
+          ) {
+            currentConsumerTag = consumerTag
+            @Suppress("UNCHECKED_CAST")
+            val message =
+              QueueMessage(body = body as T, deliveryTag = envelope.deliveryTag, channel = channel)
+            this@produce.trySendBlocking(message).onFailure { e ->
+              println("Failed to send message: ${e?.message}")
+              message.nack(requeue = true)
+            }
+          }
+        },
+      )
+
+      channel.addShutdownListener {
+        activeChannels.remove(queueName)
+        close()
+      }
+
+      awaitClose {
+        try {
+          currentConsumerTag?.let { tag -> channel.basicCancel(tag) }
+          channel.close()
+          activeChannels.remove(queueName)
+        } catch (e: Exception) {
+          println("Error cleaning up channel for queue $queueName: ${e.message}")
         }
-      },
-    )
-
-    rabbitChannel.addShutdownListener { runBlocking { forwardChannel.close() } }
-
-    return forwardChannel
+      }
+    }
   }
 
   override fun close() {
-    try {
-      rabbitChannel.close()
-    } catch (e: Exception) {
-      println("Error closing channel: ${e.message}")
-    } finally {
-      releaseConnection(connectionKey)
+
+    deliveryScope.cancel()
+
+    if (rabbitMqChannel.isInitialized()) {
+      try {
+        rabbitMqChannel.value.close()
+      } catch (e: Exception) {
+        println("Error closing channel: ${e.message}")
+      }
+    }
+
+    if (rabbitMqConnection.isInitialized()) {
+      try {
+        rabbitMqConnection.value.close()
+      } catch (e: Exception) {
+        println("Error closing connection: ${e.message}")
+      }
     }
   }
-
-  /** Returns the current number of active connections for testing/monitoring purposes */
-  fun getActiveConnectionCount(): Int = connections.size
 }

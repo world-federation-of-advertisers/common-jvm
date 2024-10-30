@@ -20,9 +20,6 @@ import com.rabbitmq.client.Channel
 import com.rabbitmq.client.ConnectionFactory
 import java.nio.charset.Charset
 import kotlin.time.Duration.Companion.seconds
-import kotlinx.coroutines.cancelAndJoin
-import kotlinx.coroutines.channels.consumeEach
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.withTimeout
@@ -87,7 +84,6 @@ class RabbitMqClientTest {
         port = 5672,
         username = "guest",
         password = "guest",
-        queueName = queueName,
         blockingContext = UnconfinedTestDispatcher(),
       )
 
@@ -101,7 +97,7 @@ class RabbitMqClientTest {
     assertThat(getQueueInfo().messageCount).isEqualTo(3)
     client.use { rabbitmq ->
       withTimeout(5.seconds) {
-        val messageChannel = rabbitmq.subscribe<ByteArray>()
+        val messageChannel = rabbitmq.subscribe<ByteArray>(queueName)
         for (message in messageChannel) {
           receivedMessages.add(message.body.toString(Charset.defaultCharset()))
           message.ack()
@@ -124,7 +120,6 @@ class RabbitMqClientTest {
         port = 5672,
         username = "guest",
         password = "guest",
-        queueName = queueName,
         blockingContext = UnconfinedTestDispatcher(),
       )
     assertThat(getQueueInfo().messageCount).isEqualTo(0)
@@ -145,7 +140,7 @@ class RabbitMqClientTest {
     val receivedMessages = mutableListOf<String>()
     client.use { rabbitmq ->
       withTimeout(5.seconds) {
-        val messageChannel = rabbitmq.subscribe<ByteArray>()
+        val messageChannel = rabbitmq.subscribe<ByteArray>(queueName)
         for (message in messageChannel) {
           val content = message.body.toString(Charset.defaultCharset())
           messageCount++
@@ -179,7 +174,6 @@ class RabbitMqClientTest {
         port = 5672,
         username = "guest",
         password = "guest",
-        queueName = queueName,
         blockingContext = UnconfinedTestDispatcher(),
       )
     assertThat(getQueueInfo().messageCount).isEqualTo(0)
@@ -196,7 +190,7 @@ class RabbitMqClientTest {
 
     client.use { rabbitmq ->
       withTimeout(5.seconds) {
-        val messageChannel = rabbitmq.subscribe<ByteArray>()
+        val messageChannel = rabbitmq.subscribe<ByteArray>(queueName)
         for (message in messageChannel) {
           val content = message.body.toString(Charset.defaultCharset())
           when {
@@ -219,56 +213,5 @@ class RabbitMqClientTest {
     val finalQueueInfo = getQueueInfo()
     assertThat(finalQueueInfo.messageCount).isEqualTo(0)
     assertThat(messageCount).isEqualTo(2)
-  }
-
-  @Test
-  fun testConnectionReuse() = runBlocking {
-    val client1 =
-      RabbitMqClient(
-        host = "localhost",
-        port = 5672,
-        username = "guest",
-        password = "guest",
-        queueName = queueName,
-        blockingContext = UnconfinedTestDispatcher(),
-      )
-
-    val client2 =
-      RabbitMqClient(
-        host = "localhost",
-        port = 5672,
-        username = "guest",
-        password = "guest",
-        queueName = queueName,
-        blockingContext = UnconfinedTestDispatcher(),
-      )
-
-    assertThat(client1.getActiveConnectionCount()).isEqualTo(1)
-    client1.close()
-    assertThat(client2.getActiveConnectionCount()).isEqualTo(1)
-    client2.close()
-    assertThat(client2.getActiveConnectionCount()).isEqualTo(0)
-  }
-
-  @Test
-  fun testConnectionCleanup() = runBlocking {
-    val client =
-      RabbitMqClient(
-        host = "localhost",
-        port = 5672,
-        username = "guest",
-        password = "guest",
-        queueName = queueName,
-        blockingContext = UnconfinedTestDispatcher(),
-      )
-
-    assertThat(client.getActiveConnectionCount()).isEqualTo(1)
-
-    client.use { rabbitmq ->
-      val job = launch { rabbitmq.subscribe<ByteArray>().consumeEach { message -> message.ack() } }
-      job.cancelAndJoin()
-    }
-
-    assertThat(client.getActiveConnectionCount()).isEqualTo(0)
   }
 }
