@@ -24,6 +24,7 @@ import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.channels.awaitClose
@@ -31,6 +32,7 @@ import kotlinx.coroutines.channels.onFailure
 import kotlinx.coroutines.channels.produce
 import kotlinx.coroutines.channels.trySendBlocking
 import org.jetbrains.annotations.BlockingExecutor
+import java.util.logging.Logger
 
 /**
  * A RabbitMQ client that provides messaging capabilities through a Kotlin coroutines-based
@@ -50,7 +52,6 @@ class RabbitMqClient(
   private val blockingContext: @BlockingExecutor CoroutineContext = Dispatchers.IO,
 ) : AutoCloseable {
 
-  private val activeChannels = ConcurrentHashMap<String, Channel>()
   private val deliveryScope = CoroutineScope(blockingContext)
 
   private val rabbitMqConnection: Lazy<Connection> = lazy {
@@ -64,33 +65,17 @@ class RabbitMqClient(
     factory.newConnection()
   }
 
-  private fun createChannel(): Channel {
-    try {
-      return rabbitMqConnection.value.createChannel()
-    } catch (e: Exception) {
-      throw RuntimeException("Failed to create channel", e)
-    }
-  }
-
-  private val rabbitMqChannel: Lazy<Channel> = lazy {
-    try {
-      rabbitMqConnection.value.createChannel()
-    } catch (e: Exception) {
-      throw RuntimeException("Failed to create channel", e)
-    }
-  }
-
   data class QueueMessage<T>(
     val body: T,
     private val deliveryTag: Long,
-    private val channel: Channel?,
+    private val channel: Channel,
   ) {
     fun ack() {
-      channel?.basicAck(deliveryTag, false)
+      channel.basicAck(deliveryTag, false)
     }
 
     fun nack(requeue: Boolean = true) {
-      channel?.basicNack(deliveryTag, false, requeue)
+      channel.basicNack(deliveryTag, false, requeue)
     }
   }
 
@@ -100,14 +85,14 @@ class RabbitMqClient(
    * @param queueName The name of the queue to subscribe to
    * @return A ReceiveChannel that will receive QueueMessages
    */
-  @kotlinx.coroutines.ExperimentalCoroutinesApi
+  @OptIn(ExperimentalCoroutinesApi::class) // For `produce`
   fun <T> subscribe(queueName: String): ReceiveChannel<QueueMessage<T>> {
 
     if (!rabbitMqConnection.value.isOpen) {
       throw IllegalStateException("RabbitMQ connection is closed")
     }
 
-    val channel = activeChannels.computeIfAbsent(queueName) { createChannel() }
+    val channel = rabbitMqConnection.value.createChannel()
 
     return deliveryScope.produce {
       var currentConsumerTag: String? = null
@@ -126,7 +111,7 @@ class RabbitMqClient(
             val message =
               QueueMessage(body = body as T, deliveryTag = envelope.deliveryTag, channel = channel)
             this@produce.trySendBlocking(message).onFailure { e ->
-              println("Failed to send message: ${e?.message}")
+              logger.severe("Failed to send message: ${e?.message}")
               message.nack(requeue = true)
             }
           }
@@ -134,17 +119,15 @@ class RabbitMqClient(
       )
 
       channel.addShutdownListener {
-        activeChannels.remove(queueName)
-        close()
+        this.close()
       }
 
       awaitClose {
         try {
           currentConsumerTag?.let { tag -> channel.basicCancel(tag) }
           channel.close()
-          activeChannels.remove(queueName)
         } catch (e: Exception) {
-          println("Error cleaning up channel for queue $queueName: ${e.message}")
+          logger.warning("Error cleaning up channel for queue $queueName: ${e.message}")
         }
       }
     }
@@ -154,20 +137,16 @@ class RabbitMqClient(
 
     deliveryScope.cancel()
 
-    if (rabbitMqChannel.isInitialized()) {
-      try {
-        rabbitMqChannel.value.close()
-      } catch (e: Exception) {
-        println("Error closing channel: ${e.message}")
-      }
-    }
-
     if (rabbitMqConnection.isInitialized()) {
       try {
         rabbitMqConnection.value.close()
       } catch (e: Exception) {
-        println("Error closing connection: ${e.message}")
+        logger.warning("Error closing connection: ${e.message}")
       }
     }
+  }
+
+  companion object {
+    internal val logger = Logger.getLogger(this::class.java.name)
   }
 }
