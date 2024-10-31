@@ -1,0 +1,11 @@
+package(default_visibility = ["//visibility:public"])
+
+alias(
+    name = "api",
+    actual = "@maven//:io_cloudevents_cloudevents_api",
+)
+
+alias(
+    name = "core",
+    actual = "@maven//:io_cloudevents_cloudevents_core",
+)

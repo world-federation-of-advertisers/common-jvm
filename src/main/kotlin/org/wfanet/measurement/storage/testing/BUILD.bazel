@@ -9,8 +9,12 @@ kt_jvm_library(
     name = "testing",
     srcs = glob(["*.kt"]),
     deps = [
+        "//imports/java/com/google/cloud:google_cloudevent_types",
+        "//imports/java/com/google/cloud/functions:functions_framework_api",
+        "//imports/java/com/google/cloud/storage",
         "//imports/java/com/google/common/truth",
         "//imports/java/com/google/protobuf",
+        "//imports/java/io/cloudevents:core",
         "//imports/java/org/junit",
         "//imports/kotlin/com/google/protobuf/kotlin",
         "//imports/kotlin/kotlin/test",
