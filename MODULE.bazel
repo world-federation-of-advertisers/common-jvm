@@ -209,8 +209,7 @@ maven.install(
         "com.google.cloud:google-cloudevent-types:0.16.0",
 
         # Cloud Functions
-        "io.cloudevents:cloudevents-api:4.0.1",
-        "io.cloudevents:cloudevents-core:4.0.1",
+        "io.cloudevents:cloudevents-core",
 
         # AWS.
         "software.amazon.awssdk:auth",
@@ -264,6 +263,7 @@ maven.install(
         "io.opentelemetry:opentelemetry-bom:1.42.1",
         "org.testcontainers:testcontainers-bom:1.19.3",
         "io.projectreactor:reactor-bom:2023.0.9",
+        "io.cloudevents:cloudevents-bom:4.0.1",
     ],
     fail_if_repin_required = True,
     fetch_sources = True,

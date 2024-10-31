@@ -20,6 +20,7 @@ import com.google.protobuf.ByteString
 import io.cloudevents.CloudEvent
 import io.cloudevents.core.builder.CloudEventBuilder
 import java.net.URI
+import java.util.logging.Logger
 import kotlinx.coroutines.flow.Flow
 import org.wfanet.measurement.storage.StorageClient
 
@@ -39,7 +40,10 @@ class GcsSubscribingStorageClient(private val storageClient: StorageClient) : St
         .withType("google.storage.object.finalize")
         .withData(dataBuilder.toByteArray())
         .build()
-    subscribingFunctions.forEach { subscribingFunction -> subscribingFunction.accept(event) }
+    subscribingFunctions.forEach { subscribingFunction ->
+      logger.fine { "Sending $blobKey to function $subscribingFunction" }
+      subscribingFunction.accept(event)
+    }
     return blob
   }
 
@@ -49,5 +53,9 @@ class GcsSubscribingStorageClient(private val storageClient: StorageClient) : St
 
   fun subscribe(function: CloudEventsFunction) {
     subscribingFunctions.add(function)
+  }
+
+  companion object {
+    internal val logger = Logger.getLogger(this::class.java.name)
   }
 }
