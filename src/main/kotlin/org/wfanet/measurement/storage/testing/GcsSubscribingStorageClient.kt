@@ -39,7 +39,6 @@ class GcsSubscribingStorageClient(private val storageClient: StorageClient) : St
         .withType("google.storage.object.finalize")
         .withData(dataBuilder.toByteArray())
         .build()
-    print(event)
     subscribingFunctions.forEach { subscribingFunction -> subscribingFunction.accept(event) }
     return blob
   }

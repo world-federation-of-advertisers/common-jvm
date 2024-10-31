@@ -24,13 +24,14 @@ import io.cloudevents.CloudEvent
 import kotlinx.coroutines.runBlocking
 import org.junit.Before
 import org.junit.Test
-import org.mockito.kotlin.any
+import org.junit.runner.RunWith
+import org.junit.runners.JUnit4
 import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
-import org.mockito.kotlin.whenever
 
+@RunWith(JUnit4::class)
 class GcsSubscribingStorageClientTest : AbstractStorageClientTest<InMemoryStorageClient>() {
   @Before
   fun initStorageClient() {
@@ -41,22 +42,25 @@ class GcsSubscribingStorageClientTest : AbstractStorageClientTest<InMemoryStorag
   fun `subscribe`() = runBlocking {
     val underlyingClient = InMemoryStorageClient()
     val client = GcsSubscribingStorageClient(underlyingClient)
-    val mockCloudFunction: CloudEventsFunction = mock {
-      whenever(it.accept(any())).then { print("Accept!!!!\n\n\n\nAccept!!!!") }
-    }
+    val mockCloudFunction: CloudEventsFunction = mock {}
 
     val blobKey = "some-blob-key"
     val contents = "some-contents".toByteStringUtf8()
-
+    val anotherBlobKey = "other-blob-key"
+    val otherContents = "other-contents".toByteStringUtf8()
     client.subscribe(mockCloudFunction)
 
     client.writeBlob(blobKey, contents)
+    client.writeBlob(anotherBlobKey, otherContents)
 
     val cloudEventCaptor = argumentCaptor<CloudEvent>()
-    verify(mockCloudFunction, times(1)).accept(cloudEventCaptor.capture())
+    verify(mockCloudFunction, times(2)).accept(cloudEventCaptor.capture())
 
     val data = StorageObjectData.newBuilder().setName(blobKey).setBucket("fake-bucket").build()
-    assertThat(StorageObjectData.parseFrom(cloudEventCaptor.firstValue.data!!.toBytes()))
-      .isEqualTo(data)
+    val otherData =
+      StorageObjectData.newBuilder().setName(anotherBlobKey).setBucket("fake-bucket").build()
+    val acceptedData =
+      cloudEventCaptor.allValues.map { StorageObjectData.parseFrom(it.data!!.toBytes())!! }
+    assertThat(acceptedData).containsExactlyElementsIn(listOf(data, otherData)).inOrder()
   }
 }
