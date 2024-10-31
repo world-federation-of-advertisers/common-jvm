@@ -147,6 +147,6 @@ class RabbitMqClient(
   }
 
   companion object {
-    internal val logger = Logger.getLogger(this::class.java.name)
+    private val logger = Logger.getLogger(this::class.java.name)
   }
 }
