@@ -16,25 +16,22 @@ package org.wfanet.measurement.common.crypto.tink
 
 import com.google.crypto.tink.StreamingAead
 import com.google.protobuf.ByteString
-import com.google.protobuf.kotlin.toByteString
 import java.nio.ByteBuffer
+import java.nio.channels.ClosedChannelException
 import java.nio.channels.ReadableByteChannel
-import java.nio.channels.WritableByteChannel
 import java.util.logging.Logger
 import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.produceIn
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import org.jetbrains.annotations.BlockingExecutor
 import org.wfanet.measurement.common.BYTES_PER_MIB
+import org.wfanet.measurement.common.CoroutineWritableByteChannel
 import org.wfanet.measurement.common.asFlow
 import org.wfanet.measurement.storage.StorageClient
 
@@ -56,84 +53,30 @@ class StreamingAeadStorageClient(
 ) : StorageClient {
 
   /**
-   * Encrypts and writes data to storage using StreamingAead.
+   * Writes an encrypted flow of data to storage using a specified blob key. This function encrypts
+   * each element of the [content] flow and streams it to the underlying storage client. The
+   * encryption is performed by wrapping a [CoroutineWritableByteChannel] in an encrypting channel,
+   * allowing for non-blocking, coroutine-friendly I/O.
    *
-   * This function takes a flow of data chunks, encrypts them using StreamingAead, and writes the
-   * encrypted content to storage.
-   *
-   * @param blobKey The key (or name) of the blob where the encrypted content will be stored.
-   * @param content A Flow<ByteString> representing the source data that will be encrypted and
-   *   stored.
-   * @return A Blob object representing the encrypted data that was written to storage.
+   * @param blobKey The key for the blob in storage, used as associated data in encryption.
+   * @param content A [Flow] of [ByteString] elements, each representing a chunk of data to be
+   *   encrypted and stored.
+   * @return A [StorageClient.Blob] object representing the stored encrypted blob.
+   * @throws ClosedChannelException if the channel is closed before all data is written.
    */
-  //  override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob
-  // {
-  //    val encryptedContent = flow {
-  ////      val flowEmittingChannel = object : WritableByteChannel {
-  ////
-  ////      }
-  //      val outputStream = ByteArrayOutputStream()
-  //      val ciphertextChannel =
-  //        streamingAead.newEncryptingChannel(
-  //          Channels.newChannel(outputStream),
-  //          blobKey.encodeToByteArray(),
-  //        )
-  //      content.collect { byteString ->
-  //        byteString.asReadOnlyByteBufferList().forEach { buffer ->
-  //          while (buffer.hasRemaining()) {
-  //            ciphertextChannel.write(buffer)
-  //          }
-  //        }
-  //        if (outputStream.size() > 0) {
-  //          emit(ByteString.copyFrom(outputStream.toByteArray()))
-  //          outputStream.reset()
-  //        }
-  //      }
-  //      ciphertextChannel.close()
-  //      if (outputStream.size() > 0) {
-  //        emit(ByteString.copyFrom(outputStream.toByteArray()))
-  //      }
-  //    }
-  //
-  //    val wrappedBlob: StorageClient.Blob = storageClient.writeBlob(blobKey, encryptedContent)
-  //    logger.fine { "Wrote encrypted content to storage with blobKey: $blobKey" }
-  //    return EncryptedBlob(wrappedBlob, blobKey)
-  //  }
   override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
     val encryptedContent = channelFlow {
-      val channel = Channel<ByteString>(Channel.UNLIMITED)
+      val channel = this@channelFlow
+      val writableChannel = CoroutineWritableByteChannel(channel)
 
-      val flowEmittingChannel =
-        object : WritableByteChannel {
-          override fun write(src: ByteBuffer): Int {
-            val bytesWritten = src.remaining()
-            val bytes = ByteArray(bytesWritten)
-            src.get(bytes)
-            channel.trySend(bytes.toByteString())
-            return bytesWritten
-          }
-
-          override fun isOpen() = true
-
-          override fun close() {
-            channel.close()
+      streamingAead.newEncryptingChannel(writableChannel, blobKey.encodeToByteArray()).use {
+        ciphertextChannel ->
+        content.collect { byteString ->
+          byteString.asReadOnlyByteBufferList().forEach { buffer ->
+            ciphertextChannel.write(buffer)
           }
         }
-
-      launch {
-        for (byteString in channel) {
-          send(byteString)
-        }
       }
-
-      val ciphertextChannel =
-        streamingAead.newEncryptingChannel(flowEmittingChannel, blobKey.encodeToByteArray())
-
-      content.collect { byteString ->
-        byteString.asReadOnlyByteBufferList().forEach { buffer -> ciphertextChannel.write(buffer) }
-      }
-
-      ciphertextChannel.close()
     }
 
     val wrappedBlob: StorageClient.Blob = storageClient.writeBlob(blobKey, encryptedContent)
@@ -188,9 +131,16 @@ class StreamingAeadStorageClient(
 
               override fun read(buffer: ByteBuffer): Int {
                 if (currentChunk == null || bufferOffset >= currentChunk!!.size()) {
-                  currentChunk = runBlocking { chunkChannel.receiveCatching().getOrNull() }
-                  if (currentChunk == null) return -1
-                  bufferOffset = 0
+                  val result = chunkChannel.tryReceive()
+                  when {
+                    result.isSuccess -> {
+                      currentChunk = result.getOrNull()
+                      if (currentChunk == null) return -1
+                      bufferOffset = 0
+                    }
+                    chunkChannel.isClosedForReceive -> return -1
+                    else -> return 0
+                  }
                 }
 
                 val nextChunkBuffer = currentChunk!!.asReadOnlyByteBuffer()
