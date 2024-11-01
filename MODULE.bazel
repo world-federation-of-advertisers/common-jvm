@@ -205,6 +205,11 @@ maven.install(
         "com.google.cloud:google-cloud-nio",
         "com.google.cloud:google-cloud-spanner",
         "com.google.cloud:google-cloud-bigquery",
+        "com.google.cloud.functions:functions-framework-api:1.1.0",
+        "com.google.cloud:google-cloudevent-types:0.16.0",
+
+        # Cloud Functions
+        "io.cloudevents:cloudevents-core",
 
         # AWS.
         "software.amazon.awssdk:auth",
@@ -258,6 +263,7 @@ maven.install(
         "io.opentelemetry:opentelemetry-bom:1.42.1",
         "org.testcontainers:testcontainers-bom:1.19.3",
         "io.projectreactor:reactor-bom:2023.0.9",
+        "io.cloudevents:cloudevents-bom:4.0.1",
     ],
     fail_if_repin_required = True,
     fetch_sources = True,
