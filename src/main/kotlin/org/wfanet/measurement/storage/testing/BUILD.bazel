@@ -12,7 +12,7 @@ kt_jvm_library(
         "//imports/java/com/google/cloud/functions:functions_framework_api",
         "//imports/java/com/google/cloud/storage",
         "//imports/java/com/google/common/truth",
-        "//imports/java/com/google/events:google_cloudevent_types",
+        "//imports/java/com/google/events",
         "//imports/java/com/google/protobuf",
         "//imports/java/io/cloudevents/core",
         "//imports/java/org/junit",
