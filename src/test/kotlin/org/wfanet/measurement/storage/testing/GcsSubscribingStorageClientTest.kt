@@ -39,7 +39,7 @@ class GcsSubscribingStorageClientTest : AbstractStorageClientTest<InMemoryStorag
   }
 
   @Test
-  fun `subscribe`() = runBlocking {
+  fun `writeBlob publishes finalize event to subscribers`() = runBlocking {
     val underlyingClient = InMemoryStorageClient()
     val client = GcsSubscribingStorageClient(underlyingClient)
     val mockCloudFunction: CloudEventsFunction = mock {}
