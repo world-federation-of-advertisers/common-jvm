@@ -28,16 +28,34 @@ import kotlinx.coroutines.channels.SendChannel
  * @property delegate The [SendChannel] to which this [WritableByteChannel] will send data.
  * @constructor Creates a writable channel that writes each [ByteBuffer] as a [ByteString] to the
  *   provided [SendChannel].
- * @throws ClosedChannelException if the channel is closed and cannot accept more data.
  */
 class CoroutineWritableByteChannel(private val delegate: SendChannel<ByteString>) :
   WritableByteChannel {
+
+  /**
+   * Writes the contents of the provided [ByteBuffer] to the [SendChannel] as a [ByteString].
+   *
+   * If the channel is not ready to accept data, the method returns `0` without consuming any bytes
+   * from the buffer, allowing the caller to retry. If the channel is closed, a
+   * [ClosedChannelException] is thrown.
+   *
+   * @param source The [ByteBuffer] containing the data to write.
+   * @return The number of bytes written, or `0` if the channel is temporarily unable to accept
+   *   data.
+   * @throws ClosedChannelException if the channel is closed and cannot accept more data.
+   */
   override fun write(source: ByteBuffer): Int {
+    val originalPosition = source.position()
+    val bytesToWrite = source.remaining()
     val byteString = ByteString.copyFrom(source)
-    if (delegate.trySend(byteString).isClosed) {
+    val result = delegate.trySend(byteString)
+    if (result.isClosed) {
       throw ClosedChannelException()
+    } else if (result.isFailure) {
+      source.position(originalPosition)
+      return 0
     }
-    return byteString.size()
+    return bytesToWrite
   }
 
   override fun isOpen(): Boolean = !delegate.isClosedForSend

@@ -25,18 +25,53 @@ import kotlinx.coroutines.channels.ReceiveChannel
  * coroutine channel.
  *
  * @property delegate The [ReceiveChannel] from which this [ReadableByteChannel] will read data.
- * @return The number of bytes read into the buffer, or -1 if the channel is closed and no data
- *   remains.
  * @constructor Creates a readable channel that reads each [ByteString] from the provided
  *   [ReceiveChannel] and writes it to the specified [ByteBuffer].
  */
 class CoroutineReadableByteChannel(private val delegate: ReceiveChannel<ByteString>) :
   ReadableByteChannel {
+
+  private var remainingBytes: ByteArray? = null
+  private var remainingOffset = 0
+
+  /**
+   * Reads bytes from the [ReceiveChannel] and transfers them into the provided buffer. If there are
+   * leftover bytes from a previous read that didn’t fit in the buffer, they are written first.
+   *
+   * When the [ReceiveChannel] has no data available:
+   * - Returns `0` if the channel is open but temporarily empty, allowing the caller to retry later.
+   * - Returns `-1` if the channel is closed and no more data will arrive.
+   *
+   * If only part of a [ByteString] fits into `destination`, the unread portion is saved for future
+   * reads, ensuring data is preserved between calls.
+   *
+   * @param destination The [ByteBuffer] where data will be written.
+   * @return The number of bytes written to `destination`, `0` if no data is available, or `-1` if
+   *   the channel is closed and all data has been read.
+   */
   override fun read(destination: ByteBuffer): Int {
+    remainingBytes?.let {
+      val bytesToWrite = minOf(destination.remaining(), it.size - remainingOffset)
+      destination.put(it, remainingOffset, bytesToWrite)
+      remainingOffset += bytesToWrite
+
+      if (remainingOffset >= it.size) {
+        remainingBytes = null
+        remainingOffset = 0
+      }
+      return bytesToWrite
+    }
+
     val result = delegate.tryReceive()
-    val byteString = result.getOrNull() ?: return -1 // -1 indicates the end of the stream
-    destination.put(byteString.toByteArray())
-    return byteString.size()
+    val byteString = result.getOrNull() ?: return if (result.isClosed) -1 else 0
+    val bytesToWrite = minOf(destination.remaining(), byteString.size())
+    byteString.substring(0, bytesToWrite).copyTo(destination)
+    if (bytesToWrite < byteString.size()) {
+      remainingBytes = byteString.toByteArray()
+      remainingOffset = bytesToWrite
+    }
+
+    return bytesToWrite
   }
 
   override fun isOpen(): Boolean = !delegate.isClosedForReceive

@@ -16,9 +16,7 @@ package org.wfanet.measurement.common.crypto.tink
 
 import com.google.crypto.tink.StreamingAead
 import com.google.protobuf.ByteString
-import java.nio.ByteBuffer
 import java.nio.channels.ClosedChannelException
-import java.nio.channels.ReadableByteChannel
 import java.util.logging.Logger
 import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.CoroutineScope
@@ -31,6 +29,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.produceIn
 import org.jetbrains.annotations.BlockingExecutor
 import org.wfanet.measurement.common.BYTES_PER_MIB
+import org.wfanet.measurement.common.CoroutineReadableByteChannel
 import org.wfanet.measurement.common.CoroutineWritableByteChannel
 import org.wfanet.measurement.common.asFlow
 import org.wfanet.measurement.storage.StorageClient
@@ -118,43 +117,10 @@ class StreamingAeadStorageClient(
       val scope = CoroutineScope(streamingAeadContext)
       try {
         val chunkChannel = blob.read().produceIn(scope)
+        val readableChannel = CoroutineReadableByteChannel(chunkChannel)
 
         val plaintextChannel =
-          this@StreamingAeadStorageClient.streamingAead.newDecryptingChannel(
-            object : ReadableByteChannel {
-              private var currentChunk: ByteString? = null
-              private var bufferOffset = 0
-
-              override fun isOpen(): Boolean = true
-
-              override fun close() {}
-
-              override fun read(buffer: ByteBuffer): Int {
-                if (currentChunk == null || bufferOffset >= currentChunk!!.size()) {
-                  val result = chunkChannel.tryReceive()
-                  when {
-                    result.isSuccess -> {
-                      currentChunk = result.getOrNull()
-                      if (currentChunk == null) return -1
-                      bufferOffset = 0
-                    }
-                    chunkChannel.isClosedForReceive -> return -1
-                    else -> return 0
-                  }
-                }
-
-                val nextChunkBuffer = currentChunk!!.asReadOnlyByteBuffer()
-                nextChunkBuffer.position(bufferOffset)
-                val bytesToRead = minOf(buffer.remaining(), nextChunkBuffer.remaining())
-                nextChunkBuffer.limit(bufferOffset + bytesToRead)
-                buffer.put(nextChunkBuffer)
-                bufferOffset += bytesToRead
-                return bytesToRead
-              }
-            },
-            blobKey.encodeToByteArray(),
-          )
-
+          streamingAead.newDecryptingChannel(readableChannel, blobKey.encodeToByteArray())
         emitAll(plaintextChannel.asFlow(BYTES_PER_MIB, streamingAeadContext))
       } finally {
         scope.cancel()
