@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.produceIn
+import kotlinx.coroutines.yield
 import org.jetbrains.annotations.BlockingExecutor
 import org.wfanet.measurement.common.BYTES_PER_MIB
 import org.wfanet.measurement.common.CoroutineReadableByteChannel
@@ -65,14 +66,19 @@ class StreamingAeadStorageClient(
    */
   override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
     val encryptedContent = channelFlow {
-      val channel = this@channelFlow
       val writableChannel = CoroutineWritableByteChannel(channel)
 
       streamingAead.newEncryptingChannel(writableChannel, blobKey.encodeToByteArray()).use {
         ciphertextChannel ->
         content.collect { byteString ->
           byteString.asReadOnlyByteBufferList().forEach { buffer ->
-            ciphertextChannel.write(buffer)
+            while (buffer.hasRemaining()) {
+              val bytesWritten = ciphertextChannel.write(buffer)
+              if (bytesWritten == 0) {
+                yield()
+                continue
+              }
+            }
           }
         }
       }
