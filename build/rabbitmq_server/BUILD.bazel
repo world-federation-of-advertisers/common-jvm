@@ -1,0 +1,28 @@
+load("@bazel_skylib//rules:native_binary.bzl", "native_binary")
+
+exports_files([
+    "sbin/rabbitmq-server",
+    "sbin/rabbitmq-env",
+])
+
+filegroup(
+    name = "rabbitmq_files",
+    srcs = glob(["**"]),
+    visibility = ["//visibility:public"],
+)
+
+native_binary(
+    name = "rabbitmq_server",
+    src = "@rabbitmq//:sbin/rabbitmq-server",
+    data = [":rabbitmq_files"],
+    visibility = ["//visibility:public"],
+)
+
+#filegroup(
+#    name = "rabbitmq_binaries",
+#    srcs = [
+#        "sbin/rabbitmq-env",
+#        "sbin/rabbitmq-server",
+#    ],
+#    visibility = ["//visibility:public"],
+#)

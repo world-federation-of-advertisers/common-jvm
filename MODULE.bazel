@@ -253,7 +253,7 @@ maven.install(
         "com.github.luben:zstd-jni:1.5.2-5",
 
         # RabbitMQ
-        "com.rabbitmq:amqp-client:5.22.0"
+        "com.rabbitmq:amqp-client:5.22.0",
     ],
     # Note that order matters here, where earlier BOMs "win".
     boms = [
@@ -318,4 +318,12 @@ http_archive(
     sha256 = "1e4e32f6198facbac7a35b04fa4c1acb5e6d9bb13f983c60903da9cbbbd9f5b5",
     strip_prefix = "highwayhash-a7f68e2f95fac08b24327d74747521cf634d5aff",
     url = "https://github.com/google/highwayhash/archive/a7f68e2f95fac08b24327d74747521cf634d5aff.tar.gz",
+)
+
+http_archive(
+    name = "rabbitmq",
+    build_file = "//build/rabbitmq_server:BUILD.bazel",
+    sha256 = "607ba3b4fd1fc133f3bada1b2225ff0527f99cc6eb32423ae73f6c9f5ee9bd13",
+    strip_prefix = "rabbitmq_server-4.0.3",
+    url = "https://github.com/rabbitmq/rabbitmq-server/releases/download/v4.0.3/rabbitmq-server-generic-unix-4.0.3.tar.xz",
 )

@@ -3,9 +3,9 @@ load("@wfa_rules_kotlin_jvm//kotlin:defs.bzl", "kt_jvm_test")
 kt_jvm_test(
     name = "RabbitMqClientTest",
     srcs = ["RabbitMqClientTest.kt"],
-    jvm_flags = [
-        "-Dtest-broker.A.nodename=rabbit@localhost",
-        "-Drabbitmqctl.bin=/usr/sbin/rabbitmqctl",
+    data = [
+        "@rabbitmq//:rabbitmq_files",
+        "@rabbitmq//:rabbitmq_server",
     ],
     test_class = "org.wfanet.measurement.common.rabbitmq.RabbitMqClientTest",
     deps = [
@@ -16,3 +16,7 @@ kt_jvm_test(
         "//src/main/kotlin/org/wfanet/measurement/common/rabbitmq:rabbit_mq_client",
     ],
 )
+
+#    data = [
+#        "@rabbitmq//:sbin/rabbitmq-server",
+#    ],
