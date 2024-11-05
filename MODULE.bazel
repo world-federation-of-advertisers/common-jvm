@@ -320,6 +320,29 @@ http_archive(
     url = "https://github.com/google/highwayhash/archive/a7f68e2f95fac08b24327d74747521cf634d5aff.tar.gz",
 )
 
+#http_archive(
+#    name = "erlang",
+#    build_file = "//build/erlang:BUILD.bazel",
+#    sha256 = "d6e92683cc7505faf124252d390ba14d0c335d15a138c6b770d3b80b33db8f48",
+#    url = "https://github.com/erlang/otp/releases/download/OTP-26.2.5.5/otp_src_26.2.5.5.tar.gz",
+#)
+#
+#http_archive(
+#    name = "erlang",
+#    build_file = "//build/erlang:BUILD.bazel",
+#    sha256 = "21a0cff545702baa8ba5575f8f4c6f55e7f2359f4b2b31265712a34983c7079c",
+#    url = "https://github.com/rabbitmq/erlang-rpm/releases/download/v26.2.5.5/erlang-26.2.5.5-1.fc38.aarch64.rpm",
+#)
+
+#http_archive(
+#    name = "erlang",
+#    build_file = "//build/erlang:BUILD.bazel",
+#    sha256 = "e17c63bfb94e3769a137f21e8f9d669581c950ca138a4006c44e7626cde68c48",
+#    strip_prefix = "usr",
+#    type = "deb",
+#    urls = ["https://binaries2.erlang-solutions.com/ubuntu/pool/contrib/e/esl-erlang/esl-erlang_26.2.3-1~ubuntu~jammy_amd64.deb"],
+#)
+
 http_archive(
     name = "rabbitmq",
     build_file = "//build/rabbitmq_server:BUILD.bazel",
