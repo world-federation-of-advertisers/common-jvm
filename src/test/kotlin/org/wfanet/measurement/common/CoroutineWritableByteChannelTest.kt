@@ -20,11 +20,8 @@ import java.nio.ByteBuffer
 import java.nio.channels.ClosedChannelException
 import kotlin.test.assertFailsWith
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-import org.junit.After
-import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
@@ -32,46 +29,44 @@ import org.junit.runners.JUnit4
 @RunWith(JUnit4::class)
 class CoroutineWritableByteChannelTest {
 
-  private lateinit var channel: Channel<ByteString>
-  private lateinit var coroutineWritableByteChannel: CoroutineWritableByteChannel
-
-  @Before
-  fun setUp() {
-    channel = Channel()
-    coroutineWritableByteChannel = CoroutineWritableByteChannel(channel)
-  }
-
-  @After
-  fun tearDown() {
-    coroutineWritableByteChannel.close()
-  }
-
   @Test
   fun `write - successfully writes data to channel`() = runBlocking {
     val testData = "hello world"
+
+    val channel = Channel<ByteString>()
+    val coroutineWritableByteChannel = CoroutineWritableByteChannel(channel)
     val buffer = ByteBuffer.wrap(testData.toByteArray())
-    val receivedData = launch {
-      val received = channel.receive()
-      assertThat(received.toStringUtf8()).isEqualTo(testData)
+    launch {
+      val bytesWritten = coroutineWritableByteChannel.write(buffer)
+      assertThat(bytesWritten).isEqualTo(testData.length)
     }
-    delay(100)
-    val bytesWritten = coroutineWritableByteChannel.write(buffer)
-    assertThat(bytesWritten).isEqualTo(testData.length)
-    receivedData.join()
+
+    val received = channel.receive()
+    assertThat(received.toStringUtf8()).isEqualTo(testData)
+
+    coroutineWritableByteChannel.close()
   }
 
   @Test
   fun `write - returns zero when no receiver available`(): Unit = runBlocking {
     val testData = "test data"
+
+    val channel = Channel<ByteString>()
+    val coroutineWritableByteChannel = CoroutineWritableByteChannel(channel)
     val buffer = ByteBuffer.wrap(testData.toByteArray())
     val bytesWritten = coroutineWritableByteChannel.write(buffer)
     assertThat(bytesWritten).isEqualTo(0)
     assertThat(buffer.position()).isEqualTo(0)
+
+    coroutineWritableByteChannel.close()
   }
 
   @Test
   fun `write - throws when channel is closed`(): Unit = runBlocking {
     val testData = "test data"
+
+    val channel = Channel<ByteString>()
+    val coroutineWritableByteChannel = CoroutineWritableByteChannel(channel)
     val buffer = ByteBuffer.wrap(testData.toByteArray())
 
     channel.close()
@@ -81,6 +76,8 @@ class CoroutineWritableByteChannelTest {
 
   @Test
   fun `isOpen - returns false when channel is closed`() = runBlocking {
+    val channel = Channel<ByteString>()
+    val coroutineWritableByteChannel = CoroutineWritableByteChannel(channel)
     assertThat(coroutineWritableByteChannel.isOpen()).isTrue()
 
     channel.close()
@@ -90,31 +87,37 @@ class CoroutineWritableByteChannelTest {
 
   @Test
   fun `write - handles large data correctly`() = runBlocking {
+    val channel = Channel<ByteString>()
+    val coroutineWritableByteChannel = CoroutineWritableByteChannel(channel)
     val testData = ByteArray(1024) { it.toByte() }
     val buffer = ByteBuffer.wrap(testData)
-    val receivedData = launch {
-      val received = channel.receive()
-      assertThat(received.toByteArray()).isEqualTo(testData)
+    launch {
+      val bytesWritten = coroutineWritableByteChannel.write(buffer)
+      assertThat(bytesWritten).isEqualTo(testData.size)
     }
-    delay(100)
-    val bytesWritten = coroutineWritableByteChannel.write(buffer)
-    assertThat(bytesWritten).isEqualTo(testData.size)
-    receivedData.join()
+    val received = channel.receive()
+    assertThat(received.toByteArray()).isEqualTo(testData)
+
+    coroutineWritableByteChannel.close()
   }
 
   @Test
   fun `write - maintains buffer position`() = runBlocking {
     val testData = "hello world"
+
+    val channel = Channel<ByteString>()
+    val coroutineWritableByteChannel = CoroutineWritableByteChannel(channel)
     val buffer = ByteBuffer.wrap(testData.toByteArray())
     buffer.position(6)
-    val receivedData = launch {
-      val received = channel.receive()
-      assertThat(received.toStringUtf8()).isEqualTo("world")
+
+    launch {
+      val bytesWritten = coroutineWritableByteChannel.write(buffer)
+      assertThat(bytesWritten).isEqualTo(5)
+      assertThat(buffer.position()).isEqualTo(11)
     }
-    delay(100)
-    val bytesWritten = coroutineWritableByteChannel.write(buffer)
-    assertThat(bytesWritten).isEqualTo(5)
-    assertThat(buffer.position()).isEqualTo(11)
-    receivedData.join()
+    val received = channel.receive()
+    assertThat(received.toStringUtf8()).isEqualTo("world")
+
+    coroutineWritableByteChannel.close()
   }
 }

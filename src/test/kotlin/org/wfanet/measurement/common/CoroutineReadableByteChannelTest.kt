@@ -18,11 +18,8 @@ import com.google.common.truth.Truth.assertThat
 import com.google.protobuf.ByteString
 import java.nio.ByteBuffer
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-import org.junit.After
-import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
@@ -30,76 +27,89 @@ import org.junit.runners.JUnit4
 @RunWith(JUnit4::class)
 class CoroutineReadableByteChannelTest {
 
-  private lateinit var channel: Channel<ByteString>
-  private lateinit var coroutineReadableByteChannel: CoroutineReadableByteChannel
+  @Test
+  fun `read - reads data from channel`() = runBlocking {
+    val testData = ByteString.copyFromUtf8("hello")
 
-  @Before
-  fun setUp() {
-    channel = Channel()
-    coroutineReadableByteChannel = CoroutineReadableByteChannel(channel)
-  }
+    val channel = Channel<ByteString>()
+    val coroutineReadableByteChannel = CoroutineReadableByteChannel(channel)
+    val buffer = ByteBuffer.allocate(5)
+    launch {
+      val bytesRead = coroutineReadableByteChannel.read(buffer)
+      assertThat(bytesRead).isEqualTo(testData.size())
+    }
+    channel.send(testData)
+    assertThat(buffer.array().toList()).isEqualTo(testData.toByteArray().toList())
 
-  @After
-  fun tearDown() {
     coroutineReadableByteChannel.close()
   }
 
   @Test
-  fun `read - reads data from channel`() = runBlocking {
-    val testData = ByteString.copyFromUtf8("hello")
-    val buffer = ByteBuffer.allocate(5)
-    launch { channel.send(testData) }
-    delay(100)
-    val bytesRead = coroutineReadableByteChannel.read(buffer)
-    assertThat(testData.size()).isEqualTo(bytesRead)
-    assertThat(testData.toByteArray().toList()).isEqualTo(buffer.array().toList())
-  }
-
-  @Test
-  fun `read - handles remaining bytes correctly`() = runBlocking {
+  fun `read buffers channel items when destination buffer is filled`() = runBlocking {
     val testData = ByteString.copyFromUtf8("hello world")
+
+    val channel = Channel<ByteString>()
+    val coroutineReadableByteChannel = CoroutineReadableByteChannel(channel)
+
     val buffer = ByteBuffer.allocate(5)
-    launch { channel.send(testData) }
-    delay(100)
-    val bytesRead = coroutineReadableByteChannel.read(buffer)
-    assertThat(5).isEqualTo(bytesRead)
-    buffer.flip()
-    assertThat("hello").isEqualTo(ByteString.copyFrom(buffer).toStringUtf8())
-    buffer.clear()
-    var remainingBytesRead = coroutineReadableByteChannel.read(buffer)
-    buffer.flip()
-    assertThat(" worl").isEqualTo(ByteString.copyFrom(buffer).toStringUtf8())
-    assertThat(5).isEqualTo(remainingBytesRead)
-    buffer.clear()
-    remainingBytesRead = coroutineReadableByteChannel.read(buffer)
-    buffer.flip()
-    assertThat("d").isEqualTo(ByteString.copyFrom(buffer).toStringUtf8())
-    assertThat(1).isEqualTo(remainingBytesRead)
+
+    launch {
+      val bytesRead = coroutineReadableByteChannel.read(buffer)
+      assertThat(bytesRead).isEqualTo(5)
+      buffer.flip()
+      assertThat(Charsets.UTF_8.decode(buffer).toString()).isEqualTo("hello")
+      buffer.clear()
+      var remainingBytesRead = coroutineReadableByteChannel.read(buffer)
+      buffer.flip()
+      assertThat(Charsets.UTF_8.decode(buffer).toString()).isEqualTo(" worl")
+      assertThat(remainingBytesRead).isEqualTo(5)
+      buffer.clear()
+      remainingBytesRead = coroutineReadableByteChannel.read(buffer)
+      buffer.flip()
+      assertThat(Charsets.UTF_8.decode(buffer).toString()).isEqualTo("d")
+      assertThat(remainingBytesRead).isEqualTo(1)
+    }
+
+    channel.send(testData)
+    coroutineReadableByteChannel.close()
   }
 
   @Test
   fun `read - returns 0 when no data available`() = runBlocking {
+    val channel = Channel<ByteString>()
+    val coroutineReadableByteChannel = CoroutineReadableByteChannel(channel)
+
     val buffer = ByteBuffer.allocate(5)
     val bytesRead = coroutineReadableByteChannel.read(buffer)
-    assertThat(0).isEqualTo(bytesRead)
+    assertThat(bytesRead).isEqualTo(0)
+
+    coroutineReadableByteChannel.close()
   }
 
   @Test
   fun `read - returns -1 when channel is closed and empty`() = runBlocking {
+    val channel = Channel<ByteString>()
+    val coroutineReadableByteChannel = CoroutineReadableByteChannel(channel)
     channel.close()
     val buffer = ByteBuffer.allocate(5)
     val bytesRead = coroutineReadableByteChannel.read(buffer)
-    assertThat(-1).isEqualTo(bytesRead)
+    assertThat(bytesRead).isEqualTo(-1)
   }
 
   @Test
   fun `isOpen - returns false after close`() = runBlocking {
+    val channel = Channel<ByteString>()
+    val coroutineReadableByteChannel = CoroutineReadableByteChannel(channel)
     coroutineReadableByteChannel.close()
     assertThat(coroutineReadableByteChannel.isOpen()).isFalse()
   }
 
   @Test
   fun `isOpen - returns true when channel is open`() = runBlocking {
+    val channel = Channel<ByteString>()
+    val coroutineReadableByteChannel = CoroutineReadableByteChannel(channel)
     assertThat(coroutineReadableByteChannel.isOpen()).isTrue()
+
+    coroutineReadableByteChannel.close()
   }
 }

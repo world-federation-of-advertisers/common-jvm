@@ -15,8 +15,10 @@
 package org.wfanet.measurement.common
 
 import com.google.protobuf.ByteString
+import com.google.protobuf.kotlin.toByteString
 import java.nio.ByteBuffer
 import java.nio.channels.ReadableByteChannel
+import java.util.*
 import kotlinx.coroutines.channels.ReceiveChannel
 
 /**
@@ -31,8 +33,7 @@ import kotlinx.coroutines.channels.ReceiveChannel
 class CoroutineReadableByteChannel(private val delegate: ReceiveChannel<ByteString>) :
   ReadableByteChannel {
 
-  private var remainingBytes: ByteArray? = null
-  private var remainingOffset = 0
+  private var remainingBuffer: ByteBuffer? = null
 
   /**
    * Reads bytes from the [ReceiveChannel] and transfers them into the provided buffer. If there are
@@ -50,27 +51,33 @@ class CoroutineReadableByteChannel(private val delegate: ReceiveChannel<ByteStri
    *   the channel is closed and all data has been read.
    */
   override fun read(destination: ByteBuffer): Int {
-    remainingBytes?.let {
-      val bytesToWrite = minOf(destination.remaining(), it.size - remainingOffset)
-      destination.put(it, remainingOffset, bytesToWrite)
-      remainingOffset += bytesToWrite
 
-      if (remainingOffset >= it.size) {
-        remainingBytes = null
-        remainingOffset = 0
+    if (remainingBuffer != null) {
+      val buffer = remainingBuffer!!
+      val bytesWritten = writeToDestination(destination, buffer)
+      if (!buffer.hasRemaining()) {
+        remainingBuffer = null
       }
-      return bytesToWrite
+      return bytesWritten
     }
 
     val result = delegate.tryReceive()
     val byteString = result.getOrNull() ?: return if (result.isClosed) -1 else 0
-    val bytesToWrite = minOf(destination.remaining(), byteString.size())
-    byteString.substring(0, bytesToWrite).copyTo(destination)
-    if (bytesToWrite < byteString.size()) {
-      remainingBytes = byteString.toByteArray()
-      remainingOffset = bytesToWrite
+    val buffer = byteString.asReadOnlyByteBuffer()
+    val bytesWritter = writeToDestination(destination, buffer)
+    if (buffer.hasRemaining()) {
+      remainingBuffer = buffer
     }
 
+    return bytesWritter
+  }
+
+  private fun writeToDestination(destination: ByteBuffer, source: ByteBuffer): Int{
+    val bytesToWrite = minOf(destination.remaining(), source.remaining())
+    val originalLimit = source.limit()
+    source.limit(source.position() + bytesToWrite)
+    destination.put(source)
+    source.limit(originalLimit)
     return bytesToWrite
   }
 

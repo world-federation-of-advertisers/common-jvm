@@ -15,7 +15,6 @@
 package org.wfanet.measurement.storage
 
 import com.google.protobuf.ByteString
-import java.io.ByteArrayOutputStream
 import java.util.logging.Logger
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -51,22 +50,15 @@ class MesosRecordIoStorageClient(private val storageClient: StorageClient) : Sto
   override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
     var recordsWritten = 0
     val processedContent = flow {
-      val outputStream = ByteArrayOutputStream()
+      val outputStream: ByteString.Output = ByteString.newOutput()
       content.collect { byteString ->
-        val rawBytes = byteString.toByteArray()
-        val recordSize = rawBytes.size.toString()
-        val fullRecord = recordSize + RECORD_DELIMITER + String(rawBytes, Charsets.UTF_8)
+        val recordSize: String = byteString.size().toString()
+        val fullRecord: String = recordSize + RECORD_DELIMITER + byteString.toStringUtf8()
         val fullRecordBytes = fullRecord.toByteArray(Charsets.UTF_8)
         outputStream.write(fullRecordBytes)
         recordsWritten++
-        emit(ByteString.copyFrom(outputStream.toByteArray()))
+        emit(outputStream.toByteString())
         outputStream.reset()
-      }
-
-      val remainingBytes = outputStream.toByteArray()
-      if (remainingBytes.isNotEmpty()) {
-        recordsWritten++
-        emit(ByteString.copyFrom(remainingBytes))
       }
     }
 
@@ -106,7 +98,7 @@ class MesosRecordIoStorageClient(private val storageClient: StorageClient) : Sto
      * @throws java.io.IOException If there is an issue reading from the stream.
      */
     override fun read(): Flow<ByteString> = flow {
-      val buffer = StringBuilder()
+      val recordSizeBuffer = StringBuilder()
       var currentRecordSize = -1
       var recordBuffer = ByteString.newOutput()
 
@@ -116,15 +108,17 @@ class MesosRecordIoStorageClient(private val storageClient: StorageClient) : Sto
 
         while (position < chunkString.length) {
           if (currentRecordSize == -1) {
-            while (position < chunkString.length) {
-              val char = chunkString[position++]
-              if (char == '\n') {
-                currentRecordSize = buffer.toString().toInt()
-                buffer.clear()
-                recordBuffer = ByteString.newOutput(currentRecordSize)
-                break
-              }
-              buffer.append(char)
+
+            val newlineIndex = chunkString.indexOf(RECORD_DELIMITER, position)
+            if (newlineIndex != -1) {
+              recordSizeBuffer.append(chunkString.substring(position, newlineIndex))
+              currentRecordSize = recordSizeBuffer.toString().toInt()
+              recordSizeBuffer.clear()
+              recordBuffer = ByteString.newOutput(currentRecordSize)
+              position = newlineIndex + 1
+            } else {
+              recordSizeBuffer.append(chunkString.substring(position))
+              break
             }
           }
           if (currentRecordSize > 0) {
@@ -140,7 +134,7 @@ class MesosRecordIoStorageClient(private val storageClient: StorageClient) : Sto
             if (recordBuffer.size() == currentRecordSize) {
               emit(recordBuffer.toByteString())
               currentRecordSize = -1
-              recordBuffer = ByteString.newOutput()
+              recordBuffer.reset()
             }
           }
         }
@@ -151,7 +145,7 @@ class MesosRecordIoStorageClient(private val storageClient: StorageClient) : Sto
   }
 
   companion object {
-    const val RECORD_DELIMITER = "\n"
-    internal val logger = Logger.getLogger(this::class.java.name)
+    private const val RECORD_DELIMITER = '\n'
+    private val logger = Logger.getLogger(this::class.java.name)
   }
 }
