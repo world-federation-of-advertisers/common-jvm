@@ -24,3 +24,13 @@ kt_jvm_library(
         "//src/main/kotlin/org/wfanet/measurement/common",
     ],
 )
+
+kt_jvm_library(
+    name = "mesos_recordio_storage_client",
+    srcs = glob(["*.kt"]),
+    deps = [
+        "//imports/kotlin/kotlinx/coroutines:core",
+        "//src/main/kotlin/org/wfanet/measurement/common",
+        "//src/main/kotlin/org/wfanet/measurement/storage:store",
+    ],
+)

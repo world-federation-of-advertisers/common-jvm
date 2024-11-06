@@ -28,6 +28,36 @@ kt_jvm_test(
 )
 
 kt_jvm_test(
+    name = "CoroutineReadableByteChannelTest",
+    srcs = ["CoroutineReadableByteChannelTest.kt"],
+    test_class = "org.wfanet.measurement.common.CoroutineReadableByteChannelTest",
+    deps = [
+        "//imports/java/com/google/common/truth",
+        "//imports/java/com/google/protobuf",
+        "//imports/java/org/junit",
+        "//imports/kotlin/kotlin/test",
+        "//imports/kotlin/kotlinx/coroutines:core",
+        "//imports/kotlin/kotlinx/coroutines/test",
+        "//src/main/kotlin/org/wfanet/measurement/common",
+    ],
+)
+
+kt_jvm_test(
+    name = "CoroutineWritableByteChannelTest",
+    srcs = ["CoroutineWritableByteChannelTest.kt"],
+    test_class = "org.wfanet.measurement.common.CoroutineWritableByteChannelTest",
+    deps = [
+        "//imports/java/com/google/common/truth",
+        "//imports/java/com/google/protobuf",
+        "//imports/java/org/junit",
+        "//imports/kotlin/kotlin/test",
+        "//imports/kotlin/kotlinx/coroutines:core",
+        "//imports/kotlin/kotlinx/coroutines/test",
+        "//src/main/kotlin/org/wfanet/measurement/common",
+    ],
+)
+
+kt_jvm_test(
     name = "ProtoUtilsTest",
     srcs = ["ProtoUtilsTest.kt"],
     test_class = "org.wfanet.measurement.common.ProtoUtilsTest",
