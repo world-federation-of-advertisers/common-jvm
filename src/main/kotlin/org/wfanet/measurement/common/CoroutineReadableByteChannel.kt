@@ -24,9 +24,9 @@ import kotlinx.coroutines.channels.ReceiveChannel
  * This class enables coroutine-friendly, asynchronous reads by delegating read operations to a
  * coroutine channel.
  *
- * @property delegate The [ReceiveChannel] from which this [ReadableByteChannel] will read data.
  * @constructor Creates a readable channel that reads each [ByteString] from the provided
  *   [ReceiveChannel] and writes it to the specified [ByteBuffer].
+ * @property delegate The [ReceiveChannel] from which this [ReadableByteChannel] will read data.
  */
 class CoroutineReadableByteChannel(private val delegate: ReceiveChannel<ByteString>) :
   ReadableByteChannel {

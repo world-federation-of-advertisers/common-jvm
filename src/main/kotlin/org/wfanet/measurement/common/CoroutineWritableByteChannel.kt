@@ -25,9 +25,9 @@ import kotlinx.coroutines.channels.SendChannel
  * class enables coroutine-friendly, asynchronous writes by delegating write operations to a
  * coroutine channel.
  *
- * @property delegate The [SendChannel] to which this [WritableByteChannel] will send data.
  * @constructor Creates a writable channel that writes each [ByteBuffer] as a [ByteString] to the
  *   provided [SendChannel].
+ * @property delegate The [SendChannel] to which this [WritableByteChannel] will send data.
  */
 class CoroutineWritableByteChannel(private val delegate: SendChannel<ByteString>) :
   WritableByteChannel {
