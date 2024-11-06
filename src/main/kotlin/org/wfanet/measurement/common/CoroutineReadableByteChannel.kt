@@ -15,10 +15,8 @@
 package org.wfanet.measurement.common
 
 import com.google.protobuf.ByteString
-import com.google.protobuf.kotlin.toByteString
 import java.nio.ByteBuffer
 import java.nio.channels.ReadableByteChannel
-import java.util.*
 import kotlinx.coroutines.channels.ReceiveChannel
 
 /**
@@ -33,7 +31,7 @@ import kotlinx.coroutines.channels.ReceiveChannel
 class CoroutineReadableByteChannel(private val delegate: ReceiveChannel<ByteString>) :
   ReadableByteChannel {
 
-  private var remainingBuffer: ByteBuffer? = null
+  private var remainingBuffer: ByteBuffer = ByteString.EMPTY.asReadOnlyByteBuffer()
 
   /**
    * Reads bytes from the [ReceiveChannel] and transfers them into the provided buffer. If there are
@@ -52,27 +50,27 @@ class CoroutineReadableByteChannel(private val delegate: ReceiveChannel<ByteStri
    */
   override fun read(destination: ByteBuffer): Int {
 
-    if (remainingBuffer != null) {
-      val buffer = remainingBuffer!!
-      val bytesWritten = writeToDestination(destination, buffer)
-      if (!buffer.hasRemaining()) {
-        remainingBuffer = null
-      }
+    if (remainingBuffer.hasRemaining()) {
+      val bytesWritten = writeToDestination(destination, remainingBuffer)
       return bytesWritten
     }
 
     val result = delegate.tryReceive()
     val byteString = result.getOrNull() ?: return if (result.isClosed) -1 else 0
-    val buffer = byteString.asReadOnlyByteBuffer()
-    val bytesWritter = writeToDestination(destination, buffer)
-    if (buffer.hasRemaining()) {
-      remainingBuffer = buffer
-    }
-
-    return bytesWritter
+    remainingBuffer = byteString.asReadOnlyByteBuffer()
+    val bytesWritten = writeToDestination(destination, remainingBuffer)
+    return bytesWritten
   }
 
-  private fun writeToDestination(destination: ByteBuffer, source: ByteBuffer): Int{
+  /**
+   * Transfers bytes from source to destination ByteBuffer, limited by the remaining capacity of
+   * both buffers. Preserves the source buffer's original limit after the transfer.
+   *
+   * @param destination The target ByteBuffer to write data into
+   * @param source The source ByteBuffer to read data from
+   * @return The number of bytes transferred
+   */
+  private fun writeToDestination(destination: ByteBuffer, source: ByteBuffer): Int {
     val bytesToWrite = minOf(destination.remaining(), source.remaining())
     val originalLimit = source.limit()
     source.limit(source.position() + bytesToWrite)

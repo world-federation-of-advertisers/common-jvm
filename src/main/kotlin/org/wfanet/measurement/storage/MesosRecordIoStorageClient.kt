@@ -29,6 +29,8 @@ import kotlinx.coroutines.flow.flow
  *
  * @param storageClient underlying client for accessing blob/object storage
  */
+// TODO(@marcopremier): Refactor into MesosRecordIoStore<T : Message> to handle proto message
+// serialization internally and make current StorageClient implementation private.
 class MesosRecordIoStorageClient(private val storageClient: StorageClient) : StorageClient {
 
   /**
