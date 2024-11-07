@@ -110,3 +110,11 @@ kt_jvm_library(
         "//src/main/kotlin/org/wfanet/measurement/common",
     ],
 )
+
+kt_jvm_library(
+    name = "signed_store",
+    srcs = ["SignedStore.kt"],
+    deps = [
+        ":signed_blob",
+    ],
+)
