@@ -50,7 +50,7 @@ class RabbitMqClient(
   private val username: String,
   private val password: String,
   private val blockingContext: @BlockingExecutor CoroutineContext = Dispatchers.IO,
-) : AutoCloseable {
+) : QueueClient {
 
   private val deliveryScope = CoroutineScope(blockingContext)
 
@@ -65,20 +65,6 @@ class RabbitMqClient(
     factory.newConnection()
   }
 
-  data class QueueMessage<T>(
-    val body: T,
-    private val deliveryTag: Long,
-    private val channel: Channel,
-  ) {
-    fun ack() {
-      channel.basicAck(deliveryTag, false)
-    }
-
-    fun nack(requeue: Boolean = true) {
-      channel.basicNack(deliveryTag, false, requeue)
-    }
-  }
-
   /**
    * Subscribes to the specified queue and returns a ReceiveChannel of QueueMessage objects.
    *
@@ -86,7 +72,7 @@ class RabbitMqClient(
    * @return A ReceiveChannel that will receive QueueMessages
    */
   @OptIn(ExperimentalCoroutinesApi::class) // For `produce`
-  fun <T> subscribe(queueName: String): ReceiveChannel<QueueMessage<T>> {
+  override fun <T> subscribe(queueName: String): ReceiveChannel<QueueClient.QueueMessage<T>> {
 
     if (!rabbitMqConnection.value.isOpen) {
       throw IllegalStateException("RabbitMQ connection is closed")
@@ -109,7 +95,7 @@ class RabbitMqClient(
             currentConsumerTag = consumerTag
             @Suppress("UNCHECKED_CAST")
             val message =
-              QueueMessage(body = body as T, deliveryTag = envelope.deliveryTag, channel = channel)
+              QueueClient.QueueMessage(body = body as T, deliveryTag = envelope.deliveryTag, channel = channel)
             this@produce.trySendBlocking(message).onFailure { e ->
               logger.severe("Failed to send message: ${e?.message}")
               message.nack(requeue = true)

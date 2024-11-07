@@ -1,0 +1,17 @@
+load("@wfa_rules_kotlin_jvm//kotlin:defs.bzl", "kt_jvm_library")
+
+package(
+    default_testonly = True,
+    default_visibility = ["//visibility:public"],
+)
+
+kt_jvm_library(
+    name = "testing",
+    srcs = glob(["*.kt"]),
+    deps = [
+        "//imports/java/com/rabbitmq/client",
+        "//imports/kotlin/kotlinx/coroutines:core",
+        "//imports/kotlin/org/mockito/kotlin",
+        "//src/main/kotlin/org/wfanet/measurement/common/rabbitmq:queue_client",
+    ],
+)
