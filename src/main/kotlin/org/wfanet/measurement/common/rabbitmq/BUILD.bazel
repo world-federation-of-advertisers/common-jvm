@@ -15,6 +15,7 @@ kt_jvm_library(
     name = "rabbit_mq_client",
     srcs = ["RabbitMqClient.kt"],
     deps = [
+        ":queue_client",
         "//imports/java/com/rabbitmq/client",
         "//imports/kotlin/kotlinx/coroutines:core",
         "//src/main/kotlin/org/wfanet/measurement/common",
