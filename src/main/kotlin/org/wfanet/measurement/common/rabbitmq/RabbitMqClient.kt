@@ -14,6 +14,7 @@
 
 package org.wfanet.measurement.common.rabbitmq
 
+import com.google.protobuf.Message
 import com.rabbitmq.client.AMQP
 import com.rabbitmq.client.Connection
 import com.rabbitmq.client.ConnectionFactory
@@ -31,6 +32,7 @@ import kotlinx.coroutines.channels.produce
 import kotlinx.coroutines.channels.trySendBlocking
 import org.jetbrains.annotations.BlockingExecutor
 import java.util.logging.Logger
+import com.google.protobuf.Parser
 
 /**
  * A RabbitMQ client that provides messaging capabilities through a Kotlin coroutines-based
@@ -47,10 +49,10 @@ class RabbitMqClient(
   private val port: Int,
   private val username: String,
   private val password: String,
-  private val blockingContext: @BlockingExecutor CoroutineContext = Dispatchers.IO,
+  override val blockingContext: @BlockingExecutor CoroutineContext = Dispatchers.IO,
 ) : QueueClient {
 
-  private val deliveryScope = CoroutineScope(blockingContext)
+  private val scope = CoroutineScope(blockingContext)
 
   private val rabbitMqConnection: Lazy<Connection> = lazy {
     val factory =
@@ -70,7 +72,10 @@ class RabbitMqClient(
    * @return A ReceiveChannel that will receive QueueMessages
    */
   @OptIn(ExperimentalCoroutinesApi::class) // For `produce`
-  override fun <T> subscribe(queueName: String): ReceiveChannel<QueueClient.QueueMessage<T>> {
+  override fun <T : Message> subscribe(
+    queueName: String,
+    parser: Parser<T>
+  ): ReceiveChannel<QueueClient.QueueMessage<T>> {
 
     if (!rabbitMqConnection.value.isOpen) {
       throw IllegalStateException("RabbitMQ connection is closed")
@@ -78,7 +83,7 @@ class RabbitMqClient(
 
     val channel = rabbitMqConnection.value.createChannel()
 
-    return deliveryScope.produce {
+    return scope.produce {
       var currentConsumerTag: String? = null
       channel.basicConsume(
         queueName,
@@ -91,9 +96,8 @@ class RabbitMqClient(
             body: ByteArray,
           ) {
             currentConsumerTag = consumerTag
-            @Suppress("UNCHECKED_CAST")
             val message =
-              QueueClient.QueueMessage(body = body as T, deliveryTag = envelope.deliveryTag, channel = channel)
+              QueueClient.QueueMessage(body = parser.parseFrom(body), deliveryTag = envelope.deliveryTag, channel = channel)
             this@produce.trySendBlocking(message).onFailure { e ->
               logger.severe("Failed to send message: ${e?.message}")
               message.nack(requeue = true)
@@ -119,7 +123,7 @@ class RabbitMqClient(
 
   override fun close() {
 
-    deliveryScope.cancel()
+    scope.cancel()
 
     if (rabbitMqConnection.isInitialized()) {
       try {

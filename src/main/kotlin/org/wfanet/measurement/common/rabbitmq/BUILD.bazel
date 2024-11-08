@@ -6,6 +6,7 @@ kt_jvm_library(
     name = "queue_client",
     srcs = ["QueueClient.kt"],
     deps = [
+        "//imports/java/com/google/protobuf",
         "//imports/java/com/rabbitmq/client",
         "//imports/kotlin/kotlinx/coroutines:core",
     ],
@@ -16,6 +17,7 @@ kt_jvm_library(
     srcs = ["RabbitMqClient.kt"],
     deps = [
         ":queue_client",
+        "//imports/java/com/google/protobuf",
         "//imports/java/com/rabbitmq/client",
         "//imports/kotlin/kotlinx/coroutines:core",
         "//src/main/kotlin/org/wfanet/measurement/common",

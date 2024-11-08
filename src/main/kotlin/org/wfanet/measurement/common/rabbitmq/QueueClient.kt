@@ -15,10 +15,18 @@
 package org.wfanet.measurement.common.rabbitmq
 
 import com.rabbitmq.client.Channel
+import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.channels.ReceiveChannel
+import com.google.protobuf.Message
+import com.google.protobuf.Parser
 
 interface QueueClient : AutoCloseable {
-  fun <T> subscribe(queueName: String): ReceiveChannel<QueueMessage<T>>
+
+  val blockingContext: CoroutineContext
+  fun <T : Message> subscribe(
+    queueName: String,
+    parser: Parser<T>
+  ): ReceiveChannel<QueueMessage<T>>
 
   data class QueueMessage<T>(
     val body: T,

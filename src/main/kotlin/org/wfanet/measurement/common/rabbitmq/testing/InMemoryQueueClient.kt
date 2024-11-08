@@ -1,5 +1,6 @@
 package org.wfanet.measurement.common.rabbitmq.testing
 
+import com.google.protobuf.Message
 import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -9,26 +10,33 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.channels.produce
 import org.wfanet.measurement.common.rabbitmq.QueueClient
+import org.jetbrains.annotations.BlockingExecutor
+import com.google.protobuf.Parser
 
 /** In-memory [QueueClient]. */
 @OptIn(ExperimentalCoroutinesApi::class) // For `produce`
 class InMemoryQueueClient(
-  blockingContext: CoroutineContext = Dispatchers.IO
+  override val blockingContext: @BlockingExecutor CoroutineContext = Dispatchers.IO,
 ) : QueueClient {
 
   private val scope = CoroutineScope(blockingContext)
   private val messageChannel = Channel<ByteArray>()
 
-  override fun <T> subscribe(queueName: String): ReceiveChannel<QueueClient.QueueMessage<T>> {
+  override fun <T : Message> subscribe(
+    queueName: String,
+    parser: Parser<T>
+  ): ReceiveChannel<QueueClient.QueueMessage<T>> {
+    println("~~~~~~~~~~~~~~~~~~~~~~~~ dentro subscribe")
     return scope.produce {
       for (body in messageChannel) {
-        @Suppress("UNCHECKED_CAST")
-        send(QueueClient.QueueMessage(body as T, 0L, mockRabbitChannel()))
+        println("~~~~~~~~~~~~~~~~~~~~~~~~ sendING message")
+        send(QueueClient.QueueMessage(parser.parseFrom(body), 0L, mockRabbitChannel()))
       }
     }
   }
 
   fun sendMessage(body: ByteArray) {
+    println("~~~~~~~~~~~~~~~~~~~~~~~~ send message")
     messageChannel.trySend(body)
   }
 
