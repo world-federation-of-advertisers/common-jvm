@@ -52,35 +52,14 @@ class RabbitMqClientTest {
     fun setupClass() {
 
       val rabbitmqServerPath = getRuntimePath(Paths.get("rabbitmq", "sbin", "rabbitmq-server"))
-
       val baseDir = createTempDir("rabbitmq_test").apply { deleteOnExit() }
-      val rabbitmqHome = getRuntimePath(Paths.get("rabbitmq_dist"))
-
-      val cookieFile = File(baseDir, ".erlang.cookie").apply {
-        writeText("RABBITMQ_TEST_COOKIE")
-        setReadable(true, true)
-        setWritable(true, true)
-        setReadable(false, false)
-        setReadable(true, true)
-        setWritable(false, false)
-        setWritable(true, true)
-      }
       val processBuilder = ProcessBuilder(rabbitmqServerPath.toString())
         .redirectErrorStream(true)
 
       processBuilder.environment().apply {
-//        put("RABBITMQ_COOKIE_FILE", cookieFile.absolutePath)
-//        put("RABBITMQ_NODENAME", "rabbit_test@localhost")
-//        put("RABBITMQ_BASE", baseDir.absolutePath)
         put("RABBITMQ_LOG_BASE", "$baseDir/log")
         put("RABBITMQ_MNESIA_BASE", "$baseDir/mnesia")
-//        put("RABBITMQ_ENABLED_PLUGINS_FILE", "${rabbitmqHome}/etc/rabbitmq/enabled_plugins")
-        put("HOME", baseDir.absolutePath)  // Use rabbitmqHome instead of home
-//        put("RABBITMQ_HOME", rabbitmqHome.toString())
-//        put("RABBITMQ_DATA_DIR", "$baseDir/data")
-//        put("ERLANG_HOME", "/usr/local/erlang/26.2.5.5")
-//        put("PATH", "${System.getenv("PATH")}:/usr/local/erlang/26.2.5.5/bin")
-//        put("RABBITMQ_COOKIE_FILE", cookieFile.absolutePath)
+        put("HOME", baseDir.absolutePath)
       }
 
       rabbitMqProcess = processBuilder.start()
@@ -146,8 +125,7 @@ class RabbitMqClientTest {
     connectionFactory.newConnection().use { connection ->
       connection.createChannel().use { channel ->
         try {
-          channel.queuePurge(queueName) // This empties the queue without deleting it
-          println("Queue $queueName has been emptied.")
+          channel.queuePurge(queueName)
         } catch (e: Exception) {
           println("Failed to purge queue: ${e.message}")
         }
@@ -178,7 +156,7 @@ class RabbitMqClientTest {
         blockingContext = UnconfinedTestDispatcher(),
       )
 
-    val messages = listOf("Message1", "Message2", "Message3")
+    val messages = listOf("UserName1", "UserName2", "UserName3")
     val receivedMessages = mutableListOf<String>()
     connectionFactory.newConnection().use { connection ->
       connection.createChannel().use { channel ->
@@ -215,7 +193,7 @@ class RabbitMqClientTest {
     connectionFactory.newConnection().use { connection ->
       connection.createChannel().use { channel ->
         repeat(2) { i ->
-          val message = "Message$i"
+          val message = "UserName$i"
           channel.basicPublish("", queueName, null, createTestWork(message).toByteArray())
         }
       }
@@ -234,12 +212,12 @@ class RabbitMqClientTest {
         messageCount++
 
         when (content) {
-          "Message0" -> {
+          "UserName0" -> {
             message.ack()
             receivedMessages.add(message.body.userName)
           }
 
-          "Message1" -> {
+          "UserName1" -> {
             message.nack(requeue = true)
             receivedMessages.add(message.body.userName)
             break
@@ -266,7 +244,7 @@ class RabbitMqClientTest {
     assertThat(getQueueInfo().messageCount).isEqualTo(0)
     connectionFactory.newConnection().use { connection ->
       connection.createChannel().use { channel ->
-        channel.basicPublish("", queueName, null, createTestWork("Message1").toByteArray())
+        channel.basicPublish("", queueName, null, createTestWork("UserName1").toByteArray())
       }
     }
 
@@ -282,12 +260,12 @@ class RabbitMqClientTest {
         when {
           messageCount == 0 -> {
             messageCount++
-            assertThat("Message1").isEqualTo(content)
+            assertThat("UserName1").isEqualTo(content)
             message.nack(requeue = true)
           }
           messageCount == 1 -> {
             messageCount++
-            assertThat("Message1").isEqualTo(content)
+            assertThat("UserName1").isEqualTo(content)
             message.ack()
             break
           }
