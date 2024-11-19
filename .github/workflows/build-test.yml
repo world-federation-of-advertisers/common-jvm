@@ -51,6 +51,13 @@ jobs:
         restore-keys: |-
           ${{ steps.get-cache-params.outputs.restore-key }}
 
+    - name: Set up Erlang/OTP
+      uses: erlef/setup-beam@v1
+      with:
+        otp-version: 26.2.5.5
+        install-rebar: true
+        install-elixir: false
+
     - name: Check lockfile
       run: bazel mod deps
 
