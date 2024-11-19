@@ -11,17 +11,6 @@ filegroup(
     visibility = ["//visibility:public"],
 )
 
-genrule(
-    name = "rabbitmq_setup",
-    srcs = [":rabbitmq_files"],
-    outs = ["rabbitmq_dist"],
-    cmd = """
-        mkdir -p $(OUTS)
-        cp -r $(GENDIR)/external/rabbitmq/* $(OUTS)/
-        chmod +x $(OUTS)/sbin/*
-    """,
-)
-
 native_binary(
     name = "rabbitmq_server",
     src = "@rabbitmq//:sbin/rabbitmq-server",
