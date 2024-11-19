@@ -26,17 +26,14 @@ class InMemoryQueueClient(
     queueName: String,
     parser: Parser<T>
   ): ReceiveChannel<QueueClient.QueueMessage<T>> {
-    println("~~~~~~~~~~~~~~~~~~~~~~~~ dentro subscribe")
     return scope.produce {
       for (body in messageChannel) {
-        println("~~~~~~~~~~~~~~~~~~~~~~~~ sendING message")
         send(QueueClient.QueueMessage(parser.parseFrom(body), 0L, mockRabbitChannel()))
       }
     }
   }
 
   fun sendMessage(body: ByteArray) {
-    println("~~~~~~~~~~~~~~~~~~~~~~~~ send message")
     messageChannel.trySend(body)
   }
 

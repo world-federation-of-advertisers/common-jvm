@@ -14,6 +14,7 @@ kt_jvm_test(
         "//imports/java/org/junit",
         "//imports/kotlin/kotlinx/coroutines/test",
         "//src/main/kotlin/org/wfanet/measurement/common/rabbitmq:rabbit_mq_client",
+        "//src/main/proto/wfa/measurement/common/rabbitmq:test_work_kt_jvm_proto",
     ],
 )
 
