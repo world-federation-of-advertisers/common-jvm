@@ -43,6 +43,7 @@ import com.google.api.gax.rpc.TransportChannelProvider
 import com.google.api.gax.core.CredentialsProvider;
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.runBlocking
+import org.wfanet.measurement.queue.MessageConsumer
 
 /**
  * A Google Pub/Sub client that processes one message at a time and ensures proper acknowledgment.
@@ -77,7 +78,7 @@ class GooglePubSubClient(
               .build()
 
             val pullResponse = runBlocking {
-              subscriberStub?.pullCallable()?.call(pullRequest)
+              subscriberStub.pullCallable()?.call(pullRequest)
             }
 
             val receivedMessage = pullResponse?.takeIf { it.receivedMessagesCount > 0 }?.getReceivedMessages(0)
@@ -92,7 +93,7 @@ class GooglePubSubClient(
             val parsedMessage = parser.parseFrom(pubsubMessage.data.toByteArray())
             val extensionJob = startDeadlineExtension(subscriptionName, ackId)
 
-            val consumer = object : AckReplyConsumer {
+            val consumer = object : MessageConsumer {
               override fun ack() {
                 scope.launch {
                   try {
@@ -100,7 +101,7 @@ class GooglePubSubClient(
                       .setSubscription(subscriptionName)
                       .addAckIds(ackId)
                       .build()
-                    subscriberStub?.acknowledgeCallable()?.call(ackRequest)
+                    subscriberStub.acknowledgeCallable()?.call(ackRequest)
                   } catch (e: Exception) {
                     logger.warning("Failed to ack message: ${e.message}")
                   } finally {
@@ -117,7 +118,7 @@ class GooglePubSubClient(
                       .addAckIds(ackId)
                       .setAckDeadlineSeconds(0)
                       .build()
-                    subscriberStub?.modifyAckDeadlineCallable()?.call(modifyRequest)
+                    subscriberStub.modifyAckDeadlineCallable()?.call(modifyRequest)
                   } catch (e: Exception) {
                     logger.warning("Failed to nack message: ${e.message}")
                   } finally {
@@ -170,7 +171,7 @@ class GooglePubSubClient(
               .setAckDeadlineSeconds(ackExtensionIntervalSeconds.toInt())
               .build()
             runBlocking {
-              subscriberStub?.modifyAckDeadlineCallable()?.call(modifyRequest)
+              subscriberStub.modifyAckDeadlineCallable()?.call(modifyRequest)
             }
             delay(ackExtensionIntervalSeconds * 1000)
           } catch (e: Exception) {
@@ -188,7 +189,7 @@ class GooglePubSubClient(
     isActive = false
     scope.cancel()
     try {
-      subscriberStub?.close()
+      subscriberStub.close()
     } catch (e: Exception) {
       logger.warning("Error closing subscriber stub: ${e.message}")
     }
@@ -198,130 +199,3 @@ class GooglePubSubClient(
     private val logger = Logger.getLogger(GooglePubSubClient::class.java.name)
   }
 }
-
-
-
-
-
-
-
-
-
-
-//
-//
-//---------------------
-//
-//
-//
-//override fun <T : Message> subscribe(
-//  subscriptionId: String,
-//  parser: Parser<T>
-//): ReceiveChannel<QueueClient.QueueMessage<T>> {
-//  val channel = Channel<QueueClient.QueueMessage<T>>(Channel.RENDEZVOUS)
-//  val subscriptionName = ProjectSubscriptionName.of(projectId, subscriptionId).toString()
-//
-//  // Launch coroutine for continuous pull
-//  scope.launch {
-//    while (isActive) {
-//      // Try to acquire the mutex - will wait here if a message is being processed
-//      processingMutex.withLock {
-//        try {
-//          // Pull exactly one message
-//          val pullRequest = PullRequest.newBuilder()
-//            .setMaxMessages(1)
-//            .setSubscription(subscriptionName)
-//            .build()
-//
-//          val pullResponse = withContext(blockingContext) {
-//            subscriberStub?.pullCallable()?.call(pullRequest)
-//          }
-//
-//          if (pullResponse?.receivedMessagesCount == 0) {
-//            delay(1000) // Wait a bit before next pull if no message
-//            return@withLock
-//          }
-//
-//          // Process the single received message
-//          val receivedMessage = pullResponse?.getReceivedMessages(0)
-//          if (receivedMessage != null) {
-//            val pubsubMessage = receivedMessage.message
-//            val ackId = receivedMessage.ackId
-//
-//            try {
-//              val parsedMessage = parser.parseFrom(pubsubMessage.data.toByteArray())
-//
-//              // Create custom AckReplyConsumer that uses the pull API
-//              val consumer = object : AckReplyConsumer {
-//                override fun ack() {
-//                  scope.launch(blockingContext) {
-//                    try {
-//                      val ackRequest = AcknowledgeRequest.newBuilder()
-//                        .setSubscription(subscriptionName)
-//                        .addAckIds(ackId)
-//                        .build()
-//                      subscriberStub?.acknowledgeCallable()?.call(ackRequest)
-//                    } catch (e: Exception) {
-//                      logger.warning("Failed to ack message: ${e.message}")
-//                    } finally {
-//                      processingMutex.unlock() // Release the lock after ack
-//                    }
-//                  }
-//                }
-//
-//                override fun nack() {
-//                  scope.launch(blockingContext) {
-//                    try {
-//                      val modifyRequest = ModifyAckDeadlineRequest.newBuilder()
-//                        .setSubscription(subscriptionName)
-//                        .addAckIds(ackId)
-//                        .setAckDeadlineSeconds(0) // Immediate retry
-//                        .build()
-//                      subscriberStub?.modifyAckDeadlineCallable()?.call(modifyRequest)
-//                    } catch (e: Exception) {
-//                      logger.warning("Failed to nack message: ${e.message}")
-//                    } finally {
-//                      processingMutex.unlock() // Release the lock after nack
-//                    }
-//                  }
-//                }
-//              }
-//
-//              val queueMessage = QueueClient.QueueMessage(
-//                body = parsedMessage,
-//                deliveryTag = pubsubMessage.messageId.hashCode().toLong(),
-//                consumer = consumer
-//              )
-//
-//              // Start deadline extension coroutine
-//              val extensionJob = startDeadlineExtension(subscriptionName, ackId)
-//
-//              try {
-//                // Don't unlock the mutex here - it will be unlocked after ack/nack
-//                channel.send(queueMessage)
-//              } catch (e: Exception) {
-//                logger.warning("Failed to send message to channel: ${e.message}")
-//                consumer.nack()
-//                extensionJob.cancel()
-//              } finally {
-//                extensionJob.join()
-//              }
-//            } catch (e: Exception) {
-//              logger.warning("Error processing message: ${e.message}")
-//              // Nack the message directly using the stub
-//              val modifyRequest = ModifyAckDeadlineRequest.newBuilder()
-//                .setSubscription(subscriptionName)
-//                .addAckIds(ackId)
-//                .setAckDeadlineSeconds(0)
-//                .build()
-//              subscriberStub?.modifyAckDeadlineCallable()?.call(modifyRequest)
-//              processingMutex.unlock() // Release the lock if parsing fails
-//            }
-//          }
-//        } catch (e: Exception) {
-//          logger.warning("Error in pull loop: ${e.message}")
-//          delay(1000) // Wait before retry
-//          processingMutex.unlock() // Release the lock if there's an error
-//        }
-//      }
-//    }

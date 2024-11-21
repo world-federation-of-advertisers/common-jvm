@@ -1,0 +1,14 @@
+load("@wfa_rules_kotlin_jvm//kotlin:defs.bzl", "kt_jvm_test")
+
+package(default_visibility = [
+    "//src/test/kotlin/org/wfanet/measurement/gcloud/pubsub:__subpackages__",
+])
+
+kt_jvm_test(
+    name = "google_pub_sub_emulator_client",
+    srcs = ["GooglePubSubEmulatorClient.kt"],
+    deps = [
+        "//imports/java/com/google/cloud/pubsub",
+        "//imports/java/org/testcontainers/containers:pubsub",
+    ],
+)

@@ -18,7 +18,11 @@ import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.channels.ReceiveChannel
 import com.google.protobuf.Message
 import com.google.protobuf.Parser
-import com.google.cloud.pubsub.v1.AckReplyConsumer
+
+interface MessageConsumer {
+  fun ack()
+  fun nack()
+}
 
 interface QueueClient : AutoCloseable {
 
@@ -31,7 +35,7 @@ interface QueueClient : AutoCloseable {
   data class QueueMessage<T>(
     val body: T,
     private val deliveryTag: Long,
-    private val consumer: AckReplyConsumer,
+    private val consumer: MessageConsumer,
   ) {
     fun ack() {
       consumer.ack()
