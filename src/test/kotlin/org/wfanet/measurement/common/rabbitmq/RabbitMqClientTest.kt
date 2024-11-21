@@ -98,28 +98,6 @@ class RabbitMqClientTest {
 
     }
 
-    @AfterClass
-    @JvmStatic
-    fun cleanupClass() {
-
-      connectionFactory.newConnection().use { connection ->
-        connection.createChannel().use { channel ->
-          try {
-            channel.queueDelete(queueName)
-          } catch (e: Exception) {
-            println("Failed to delete queue: ${e.message}")
-          }
-        }
-      }
-      try {
-        monitorChannel.close()
-        rabbitMqProcess.destroy()
-      } catch (e: Exception) {
-        println("Failed to close monitor channel: ${e.message}")
-      }
-    }
-  }
-
   @Before
   fun setup() {
     connectionFactory.newConnection().use { connection ->

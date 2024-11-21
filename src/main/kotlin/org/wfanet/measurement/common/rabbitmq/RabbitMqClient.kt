@@ -33,6 +33,7 @@ import kotlinx.coroutines.channels.trySendBlocking
 import org.jetbrains.annotations.BlockingExecutor
 import java.util.logging.Logger
 import com.google.protobuf.Parser
+import org.wfanet.measurement.queue.QueueClient
 
 /**
  * A RabbitMQ client that provides messaging capabilities through a Kotlin coroutines-based

@@ -1,0 +1,43 @@
+load("@wfa_rules_kotlin_jvm//kotlin:defs.bzl", "kt_jvm_test")
+
+#sh_binary(
+#    name = "start_emulator",
+#    srcs = ["start_emulator.sh"],
+#    visibility = ["//visibility:public"],
+#)
+
+#sh_binary(
+#    name = "install_and_start",
+#    srcs = ["install_and_start.sh"],
+#    visibility = ["//visibility:public"],
+#)
+#
+#sh_test(
+#    name = "start_emulator",
+#    srcs = ["start_emulator.sh"],
+#    args = [],
+#    local = True,
+#)
+
+kt_jvm_test(
+    name = "GooglePubSubClientTest",
+    srcs = ["GooglePubSubClientTest.kt"],
+    #    args = [
+    #        "--pubsub-emulator-host=localhost:8085",
+    #    ],
+    #    data = [":start_emulator"],
+    #    env = {
+    #        "PUBSUB_EMULATOR_HOST": "localhost:8085",
+    #    },
+    local = True,
+    test_class = "org.wfanet.measurement.gcloud.pubsub.GooglePubSubClientTest",
+    deps = [
+        "//imports/java/com/google/cloud/pubsub",
+        "//imports/java/com/google/common/truth",
+        "//imports/java/com/google/crypto/tink",
+        "//imports/java/org/junit",
+        "//imports/kotlin/kotlinx/coroutines/test",
+        "//src/main/kotlin/org/wfanet/measurement/gcloud/pubsub:google_pub_sub_client",
+        "//src/main/proto/wfa/measurement/common/rabbitmq:test_work_kt_jvm_proto",
+    ],
+)

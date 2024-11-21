@@ -7,6 +7,7 @@ kt_jvm_test(
         "@rabbitmq//:rabbitmq_files",
         "@rabbitmq//:rabbitmq_server",
     ],
+    local = True,
     test_class = "org.wfanet.measurement.common.rabbitmq.RabbitMqClientTest",
     deps = [
         "//imports/java/com/google/common/truth",

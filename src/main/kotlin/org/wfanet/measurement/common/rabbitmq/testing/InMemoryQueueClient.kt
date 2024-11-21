@@ -9,7 +9,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.channels.produce
-import org.wfanet.measurement.common.rabbitmq.QueueClient
+import org.wfanet.measurement.queue.QueueClient
 import org.jetbrains.annotations.BlockingExecutor
 import com.google.protobuf.Parser
 

@@ -12,33 +12,33 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package org.wfanet.measurement.common.rabbitmq
+package org.wfanet.measurement.queue
 
-import com.rabbitmq.client.Channel
 import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.channels.ReceiveChannel
 import com.google.protobuf.Message
 import com.google.protobuf.Parser
+import com.google.cloud.pubsub.v1.AckReplyConsumer
 
 interface QueueClient : AutoCloseable {
 
   val blockingContext: CoroutineContext
   fun <T : Message> subscribe(
-    queueName: String,
+    subscriptionId: String,
     parser: Parser<T>
   ): ReceiveChannel<QueueMessage<T>>
 
   data class QueueMessage<T>(
     val body: T,
     private val deliveryTag: Long,
-    private val channel: Channel,
+    private val consumer: AckReplyConsumer,
   ) {
     fun ack() {
-      channel.basicAck(deliveryTag, false)
+      consumer.ack()
     }
 
     fun nack(requeue: Boolean = true) {
-      channel.basicNack(deliveryTag, false, requeue)
+      consumer.nack()
     }
   }
 }
