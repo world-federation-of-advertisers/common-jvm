@@ -26,7 +26,7 @@ option java_outer_classname = "TestWorkProto";
 // Resource representing a test work.
 message TestWork {
   option (google.api.resource) = {
-    type: "common.rabbitmq.halo-common-jvm.org/TestWork"
+    type: "queue.halo-common-jvm.org/TestWork"
     pattern: "testWorks/{test_work}"
     singular: "testWork"
     plural: "testWorks"

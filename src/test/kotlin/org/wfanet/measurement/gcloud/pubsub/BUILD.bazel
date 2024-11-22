@@ -8,7 +8,6 @@ kt_jvm_test(
     deps = [
         "//imports/java/com/google/cloud/pubsub",
         "//imports/java/com/google/common/truth",
-        "//imports/java/com/google/crypto/tink",
         "//imports/java/org/junit",
         "//imports/java/org/testcontainers/containers:pubsub",
         "//imports/kotlin/kotlinx/coroutines/test",
