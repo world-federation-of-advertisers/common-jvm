@@ -1,8 +1,6 @@
 load("@wfa_rules_kotlin_jvm//kotlin:defs.bzl", "kt_jvm_test")
 
-package(default_visibility = [
-    "//src/test/kotlin/org/wfanet/measurement/gcloud/pubsub:__subpackages__",
-])
+package(default_visibility = ["//visibility:public"])
 
 kt_jvm_test(
     name = "google_pub_sub_emulator_client",
