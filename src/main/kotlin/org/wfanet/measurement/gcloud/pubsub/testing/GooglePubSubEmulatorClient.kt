@@ -14,7 +14,6 @@
 
 package org.wfanet.measurement.gcloud.pubsub.testing
 
-import org.testcontainers.containers.PubSubEmulatorContainer
 import com.google.api.gax.core.CredentialsProvider
 import com.google.api.gax.core.NoCredentialsProvider
 import com.google.api.gax.grpc.GrpcTransportChannel
@@ -33,8 +32,15 @@ import com.google.pubsub.v1.Subscription
 import com.google.pubsub.v1.TopicName
 import io.grpc.ManagedChannel
 import io.grpc.ManagedChannelBuilder
+import org.testcontainers.containers.PubSubEmulatorContainer
 import org.testcontainers.utility.DockerImageName
 
+/**
+ * A client for managing a Google Pub/Sub emulator, providing utilities to interact with topics and
+ * subscriptions in an emulated environment.
+ *
+ * This class uses Testcontainers to run the Google Pub/Sub emulator.
+ */
 class GooglePubSubEmulatorClient {
 
   private val PUBSUB_IMAGE_NAME = "gcr.io/google.com/cloudsdktool/cloud-sdk:317.0.0-emulators"
@@ -62,27 +68,32 @@ class GooglePubSubEmulatorClient {
     }
   }
 
+  /** Initializes the gRPC channel and sets up the transport and credentials providers. */
   private fun initializeChannel() {
-    channel = ManagedChannelBuilder.forAddress(pubsubEmulator.host, pubsubEmulator.getMappedPort(8085))
-      .usePlaintext()
-      .build()
+    channel =
+      ManagedChannelBuilder.forAddress(pubsubEmulator.host, pubsubEmulator.getMappedPort(8085))
+        .usePlaintext()
+        .build()
     channelProvider = FixedTransportChannelProvider.create(GrpcTransportChannel.create(channel))
     credentialsProvider = NoCredentialsProvider.create()
   }
 
+  /** Initializes the topic and subscription admin clients for managing Pub/Sub resources. */
   private fun initializeClients() {
-    topicAdminClient = TopicAdminClient.create(
-      TopicAdminSettings.newBuilder()
-        .setTransportChannelProvider(channelProvider)
-        .setCredentialsProvider(credentialsProvider)
-        .build()
-    )
-    subscriptionAdminClient = SubscriptionAdminClient.create(
-      SubscriptionAdminSettings.newBuilder()
-        .setTransportChannelProvider(channelProvider)
-        .setCredentialsProvider(credentialsProvider)
-        .build()
-    )
+    topicAdminClient =
+      TopicAdminClient.create(
+        TopicAdminSettings.newBuilder()
+          .setTransportChannelProvider(channelProvider)
+          .setCredentialsProvider(credentialsProvider)
+          .build()
+      )
+    subscriptionAdminClient =
+      SubscriptionAdminClient.create(
+        SubscriptionAdminSettings.newBuilder()
+          .setTransportChannelProvider(channelProvider)
+          .setCredentialsProvider(credentialsProvider)
+          .build()
+      )
   }
 
   fun createTopic(projectId: String, topicId: String): TopicName {
@@ -121,6 +132,11 @@ class GooglePubSubEmulatorClient {
       .build()
   }
 
+  /**
+   * Creates a gRPC subscriber stub for interacting with the Pub/Sub emulator.
+   *
+   * @return The created GrpcSubscriberStub instance.
+   */
   fun createSubscriberStub(): GrpcSubscriberStub {
     val subscriberStubSettings =
       SubscriberStubSettings.newBuilder()
@@ -129,5 +145,4 @@ class GooglePubSubEmulatorClient {
         .build()
     return GrpcSubscriberStub.create(subscriberStubSettings)
   }
-
 }

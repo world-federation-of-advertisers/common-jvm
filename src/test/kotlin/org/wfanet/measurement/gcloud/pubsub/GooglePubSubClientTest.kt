@@ -30,13 +30,13 @@ class GooglePubSubClientTest : AutoCloseable {
   private val topicId = "test-topic"
 
   private val emulatorClient: GooglePubSubEmulatorClient
+
   init {
     emulatorClient = GooglePubSubEmulatorClient()
     emulatorClient.startEmulator()
   }
 
   private lateinit var pubSubClient: GooglePubSubClient
-
 
   @Before
   fun setup() {
@@ -74,7 +74,7 @@ class GooglePubSubClientTest : AutoCloseable {
   }
 
   @Test
-  fun `should receive and nack message`() {
+  fun `message sould be published again after nack`() {
 
     runBlocking {
       val messages = listOf("UserName1")
@@ -119,5 +119,4 @@ class GooglePubSubClientTest : AutoCloseable {
   override fun close() {
     emulatorClient.stopEmulator()
   }
-
 }
