@@ -39,6 +39,7 @@ public class SubscriberTest : AutoCloseable {
 
   @Before
   fun setup() {
+    emulatorClient.createTopic(projectId, topicId)
     emulatorClient.createSubscription(projectId, subscriptionId, topicId)
   }
 
