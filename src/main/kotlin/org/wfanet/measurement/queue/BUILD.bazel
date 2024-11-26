@@ -3,8 +3,8 @@ load("@wfa_rules_kotlin_jvm//kotlin:defs.bzl", "kt_jvm_library")
 package(default_visibility = ["//visibility:public"])
 
 kt_jvm_library(
-    name = "queue_client",
-    srcs = ["QueueClient.kt"],
+    name = "queue_subscriber",
+    srcs = ["QueueSubscriber.kt"],
     deps = [
         "//imports/java/com/google/cloud/pubsub",
         "//imports/java/com/google/protobuf",

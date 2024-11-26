@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package org.wfanet.measurement.gcloud.pubsub
+package org.wfanet.measurement.gcloud.pubsub.subscriber
 
 import com.google.common.truth.Truth
 import com.google.pubsub.v1.PubsubMessage
@@ -22,8 +22,9 @@ import org.junit.Before
 import org.junit.Test
 import org.wfa.measurement.queue.TestWork
 import org.wfanet.measurement.gcloud.pubsub.testing.GooglePubSubEmulatorClient
+import org.wfanet.measurement.gcloud.pubsub.subscriber.Subscriber
 
-class GooglePubSubClientTest : AutoCloseable {
+public class SubscriberTest : AutoCloseable {
 
   private val projectId = "test-project"
   private val subscriptionId = "test-subscription"
@@ -36,7 +37,7 @@ class GooglePubSubClientTest : AutoCloseable {
     emulatorClient.startEmulator()
   }
 
-  private lateinit var pubSubClient: GooglePubSubClient
+  private lateinit var pubSubClient: Subscriber
 
   @Before
   fun setup() {
@@ -57,9 +58,9 @@ class GooglePubSubClientTest : AutoCloseable {
       val messages = listOf("UserName1", "UserName2", "UserName3")
       publishMessage(messages)
 
-      val subscriberStub = emulatorClient.createSubscriberStub()
+//      val subscriberStub = emulatorClient.createSubscriberStub()
 
-      pubSubClient = GooglePubSubClient(projectId = projectId, subscriberStub = subscriberStub)
+      pubSubClient = Subscriber(projectId = projectId, googlePubSubClient = emulatorClient)
 
       val receivedMessages = mutableListOf<String>()
       val messageChannel = pubSubClient.subscribe<TestWork>(subscriptionId, TestWork.parser())
@@ -80,9 +81,9 @@ class GooglePubSubClientTest : AutoCloseable {
       val messages = listOf("UserName1")
       publishMessage(messages)
 
-      val subscriberStub = emulatorClient.createSubscriberStub()
+//      val subscriberStub = emulatorClient.createSubscriberStub()
 
-      pubSubClient = GooglePubSubClient(projectId = projectId, subscriberStub = subscriberStub)
+      pubSubClient = Subscriber(projectId = projectId, googlePubSubClient = emulatorClient)
 
       val receivedMessages = mutableListOf<String>()
       val seenMessages = mutableSetOf<String>()

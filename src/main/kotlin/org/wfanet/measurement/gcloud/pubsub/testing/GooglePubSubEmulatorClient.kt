@@ -18,6 +18,7 @@ import com.google.api.gax.core.CredentialsProvider
 import com.google.api.gax.core.NoCredentialsProvider
 import com.google.api.gax.grpc.GrpcTransportChannel
 import com.google.api.gax.rpc.FixedTransportChannelProvider
+import com.google.api.gax.rpc.NotFoundException
 import com.google.api.gax.rpc.TransportChannelProvider
 import com.google.cloud.pubsub.v1.Publisher
 import com.google.cloud.pubsub.v1.SubscriptionAdminClient
@@ -26,6 +27,7 @@ import com.google.cloud.pubsub.v1.TopicAdminClient
 import com.google.cloud.pubsub.v1.TopicAdminSettings
 import com.google.cloud.pubsub.v1.stub.GrpcSubscriberStub
 import com.google.cloud.pubsub.v1.stub.SubscriberStubSettings
+import com.google.protobuf.ByteString
 import com.google.pubsub.v1.ProjectSubscriptionName
 import com.google.pubsub.v1.PushConfig
 import com.google.pubsub.v1.Subscription
@@ -34,6 +36,12 @@ import io.grpc.ManagedChannel
 import io.grpc.ManagedChannelBuilder
 import org.testcontainers.containers.PubSubEmulatorContainer
 import org.testcontainers.utility.DockerImageName
+import org.wfanet.measurement.gcloud.pubsub.GooglePubSubClient
+import org.threeten.bp.Duration
+import com.google.cloud.pubsub.v1.MessageReceiver
+import com.google.cloud.pubsub.v1.Subscriber
+import com.google.pubsub.v1.PubsubMessage
+import com.google.cloud.pubsub.v1.AckReplyConsumer
 
 /**
  * A client for managing a Google Pub/Sub emulator, providing utilities to interact with topics and
@@ -41,7 +49,7 @@ import org.testcontainers.utility.DockerImageName
  *
  * This class uses Testcontainers to run the Google Pub/Sub emulator.
  */
-class GooglePubSubEmulatorClient {
+class GooglePubSubEmulatorClient: GooglePubSubClient {
 
   private val PUBSUB_IMAGE_NAME = "gcr.io/google.com/cloudsdktool/cloud-sdk:317.0.0-emulators"
 
@@ -137,12 +145,53 @@ class GooglePubSubEmulatorClient {
    *
    * @return The created GrpcSubscriberStub instance.
    */
-  fun createSubscriberStub(): GrpcSubscriberStub {
-    val subscriberStubSettings =
-      SubscriberStubSettings.newBuilder()
-        .setTransportChannelProvider(channelProvider)
-        .setCredentialsProvider(credentialsProvider)
-        .build()
-    return GrpcSubscriberStub.create(subscriberStubSettings)
+//  fun createSubscriberStub(): GrpcSubscriberStub {
+//    val subscriberStubSettings =
+//      SubscriberStubSettings.newBuilder()
+//        .setTransportChannelProvider(channelProvider)
+//        .setCredentialsProvider(credentialsProvider)
+//        .build()
+//    return GrpcSubscriberStub.create(subscriberStubSettings)
+//  }
+
+  override fun buildSubscriber(
+    projectId: String,
+    subscriptionId: String,
+    ackExtensionPeriod: Duration,
+    messageHandler: (PubsubMessage, AckReplyConsumer) -> Unit
+  ): Subscriber {
+
+    val subscriptionName = ProjectSubscriptionName.format(projectId, subscriptionId)
+    val messageReceiver = MessageReceiver { message, consumer ->
+      messageHandler(message, consumer)
+    }
+    val subscriberBuilder = Subscriber.newBuilder(subscriptionName, messageReceiver)
+      .setChannelProvider(channelProvider)
+      .setCredentialsProvider(credentialsProvider)
+      .setMaxAckExtensionPeriod(ackExtensionPeriod)
+
+    return subscriberBuilder.build()
+  }
+
+  override fun publishMessage(projectId: String, topicId: String, messageContent: ByteString) {
+    val topicName = TopicName.of(projectId, topicId)
+    val publisher = Publisher.newBuilder(topicName)
+      .setChannelProvider(channelProvider)
+      .setCredentialsProvider(credentialsProvider)
+      .build()
+    val pubsubMessage = PubsubMessage.newBuilder()
+      .setData(messageContent)
+      .build()
+    publisher.publish(pubsubMessage).get()
+  }
+
+  override fun topicExists(projectId: String, topicId: String): Boolean {
+    val topicName = TopicName.of(projectId, topicId)
+    return try {
+      topicAdminClient.getTopic(topicName)
+      true
+    } catch (e: NotFoundException) {
+      false
+    }
   }
 }

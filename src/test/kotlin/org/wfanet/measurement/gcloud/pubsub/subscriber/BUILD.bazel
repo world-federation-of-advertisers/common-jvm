@@ -1,17 +1,17 @@
 load("@wfa_rules_kotlin_jvm//kotlin:defs.bzl", "kt_jvm_test")
 
 kt_jvm_test(
-    name = "GooglePubSubClientTest",
-    srcs = ["GooglePubSubClientTest.kt"],
+    name = "SubscriberTest",
+    srcs = ["SubscriberTest.kt"],
     local = True,
-    test_class = "org.wfanet.measurement.gcloud.pubsub.GooglePubSubClientTest",
+    test_class = "org.wfanet.measurement.gcloud.pubsub.subscriber.SubscriberTest",
     deps = [
         "//imports/java/com/google/cloud/pubsub",
         "//imports/java/com/google/common/truth",
         "//imports/java/org/junit",
         "//imports/java/org/testcontainers/containers:pubsub",
         "//imports/kotlin/kotlinx/coroutines/test",
-        "//src/main/kotlin/org/wfanet/measurement/gcloud/pubsub:google_pub_sub_client",
+        "//src/main/kotlin/org/wfanet/measurement/gcloud/pubsub/subscriber",
         "//src/main/kotlin/org/wfanet/measurement/gcloud/pubsub/testing:google_pub_sub_emulator_client",
         "//src/main/proto/wfa/measurement/queue:test_work_kt_jvm_proto",
     ],

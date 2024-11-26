@@ -6,9 +6,15 @@ kt_jvm_library(
     name = "google_pub_sub_client",
     srcs = ["GooglePubSubClient.kt"],
     deps = [
+        "//imports/java/com/google/cloud/pubsub",
         "//imports/java/com/google/protobuf",
-        "//imports/kotlin/kotlinx/coroutines:core",
-        "//src/main/kotlin/org/wfanet/measurement/common",
-        "//src/main/kotlin/org/wfanet/measurement/queue:queue_client",
+    ],
+)
+
+kt_jvm_library(
+    name = "default_google_pub_sub_client",
+    srcs = ["DefaultGooglePubSubClient.kt"],
+    deps = [
+        ":google_pub_sub_client",
     ],
 )

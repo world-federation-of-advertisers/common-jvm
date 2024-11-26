@@ -24,7 +24,7 @@ interface MessageConsumer {
   fun nack()
 }
 
-interface QueueClient : AutoCloseable {
+interface QueueSubscriber : AutoCloseable {
 
   val blockingContext: CoroutineContext
   fun <T : Message> subscribe(
