@@ -15,14 +15,12 @@
 package org.wfanet.measurement.gcloud.pubsub.subscriber
 
 import com.google.common.truth.Truth
-import com.google.pubsub.v1.PubsubMessage
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import org.wfa.measurement.queue.TestWork
 import org.wfanet.measurement.gcloud.pubsub.testing.GooglePubSubEmulatorClient
-import org.wfanet.measurement.gcloud.pubsub.subscriber.Subscriber
 
 public class SubscriberTest : AutoCloseable {
 
@@ -41,8 +39,7 @@ public class SubscriberTest : AutoCloseable {
 
   @Before
   fun setup() {
-    val topicName = emulatorClient.createTopic(projectId, topicId)
-    emulatorClient.createSubscription(projectId, subscriptionId, topicName)
+    emulatorClient.createSubscription(projectId, subscriptionId, topicId)
   }
 
   @After
@@ -57,8 +54,6 @@ public class SubscriberTest : AutoCloseable {
     runBlocking {
       val messages = listOf("UserName1", "UserName2", "UserName3")
       publishMessage(messages)
-
-//      val subscriberStub = emulatorClient.createSubscriberStub()
 
       pubSubClient = Subscriber(projectId = projectId, googlePubSubClient = emulatorClient)
 
@@ -80,8 +75,6 @@ public class SubscriberTest : AutoCloseable {
     runBlocking {
       val messages = listOf("UserName1")
       publishMessage(messages)
-
-//      val subscriberStub = emulatorClient.createSubscriberStub()
 
       pubSubClient = Subscriber(projectId = projectId, googlePubSubClient = emulatorClient)
 
@@ -109,11 +102,8 @@ public class SubscriberTest : AutoCloseable {
   }
 
   private fun publishMessage(messages: List<String>) {
-    val publisher = emulatorClient.createPublisher(projectId, topicId)
     messages.forEach { msg ->
-      val pubsubMessage: PubsubMessage =
-        PubsubMessage.newBuilder().setData(createTestWork(msg).toByteString()).build()
-      publisher.publish(pubsubMessage)
+      emulatorClient.publishMessage(projectId, topicId, createTestWork(msg).toByteString())
     }
   }
 

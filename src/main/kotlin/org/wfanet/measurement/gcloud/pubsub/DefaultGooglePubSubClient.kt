@@ -14,19 +14,19 @@
 
 package org.wfanet.measurement.gcloud.pubsub
 
-import com.google.protobuf.ByteString
-import org.threeten.bp.Duration
-import com.google.pubsub.v1.ProjectSubscriptionName
-import com.google.cloud.pubsub.v1.MessageReceiver
-import com.google.cloud.pubsub.v1.Subscriber
-import com.google.cloud.pubsub.v1.Publisher
-import com.google.pubsub.v1.TopicName;
 import com.google.api.gax.rpc.NotFoundException
-import com.google.pubsub.v1.PubsubMessage
-import com.google.cloud.pubsub.v1.TopicAdminClient
 import com.google.cloud.pubsub.v1.AckReplyConsumer
+import com.google.cloud.pubsub.v1.MessageReceiver
+import com.google.cloud.pubsub.v1.Publisher
+import com.google.cloud.pubsub.v1.Subscriber
+import com.google.cloud.pubsub.v1.TopicAdminClient
+import com.google.protobuf.ByteString
+import com.google.pubsub.v1.ProjectSubscriptionName
+import com.google.pubsub.v1.PubsubMessage
+import com.google.pubsub.v1.TopicName
+import org.threeten.bp.Duration
 
-class DefaultGooglePubSubClient: GooglePubSubClient {
+class DefaultGooglePubSubClient : GooglePubSubClient {
 
   override fun buildSubscriber(
     projectId: String,
@@ -36,22 +36,18 @@ class DefaultGooglePubSubClient: GooglePubSubClient {
   ): Subscriber {
 
     val subscriptionName = ProjectSubscriptionName.format(projectId, subscriptionId)
-    val messageReceiver = MessageReceiver { message, consumer ->
-      messageHandler(message, consumer)
-    }
-    val subscriberBuilder = Subscriber.newBuilder(subscriptionName, messageReceiver)
-      .setMaxAckExtensionPeriod(ackExtensionPeriod)
+    val messageReceiver = MessageReceiver { message, consumer -> messageHandler(message, consumer) }
+    val subscriberBuilder =
+      Subscriber.newBuilder(subscriptionName, messageReceiver)
+        .setMaxAckExtensionPeriod(ackExtensionPeriod)
 
     return subscriberBuilder.build()
   }
 
   override fun publishMessage(projectId: String, topicId: String, messageContent: ByteString) {
     val topicName = TopicName.of(projectId, topicId)
-    val publisher = Publisher.newBuilder(topicName)
-      .build()
-    val pubsubMessage = PubsubMessage.newBuilder()
-      .setData(messageContent)
-      .build()
+    val publisher = Publisher.newBuilder(topicName).build()
+    val pubsubMessage = PubsubMessage.newBuilder().setData(messageContent).build()
     publisher.publish(pubsubMessage).get()
   }
 
