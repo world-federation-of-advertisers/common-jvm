@@ -14,22 +14,21 @@
 
 package org.wfanet.measurement.queue
 
-import kotlin.coroutines.CoroutineContext
-import kotlinx.coroutines.channels.ReceiveChannel
 import com.google.protobuf.Message
 import com.google.protobuf.Parser
+import kotlinx.coroutines.channels.ReceiveChannel
 
 interface MessageConsumer {
   fun ack()
+
   fun nack()
 }
 
 interface QueueSubscriber : AutoCloseable {
 
-  val blockingContext: CoroutineContext
   fun <T : Message> subscribe(
     subscriptionId: String,
-    parser: Parser<T>
+    parser: Parser<T>,
   ): ReceiveChannel<QueueMessage<T>>
 
   data class QueueMessage<T>(
@@ -41,7 +40,7 @@ interface QueueSubscriber : AutoCloseable {
       consumer.ack()
     }
 
-    fun nack(requeue: Boolean = true) {
+    fun nack() {
       consumer.nack()
     }
   }

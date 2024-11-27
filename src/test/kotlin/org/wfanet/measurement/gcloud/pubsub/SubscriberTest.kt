@@ -12,41 +12,55 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package org.wfanet.measurement.gcloud.pubsub.subscriber
+package org.wfanet.measurement.gcloud.pubsub
 
 import com.google.common.truth.Truth
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.wfa.measurement.queue.TestWork
 import org.wfanet.measurement.gcloud.pubsub.testing.GooglePubSubEmulatorClient
+import org.wfanet.measurement.gcloud.pubsub.testing.GooglePubSubEmulatorProvider
 
-public class SubscriberTest : AutoCloseable {
+class SubscriberTest {
+
+  //  companion object {
+  //    @ClassRule
+  //    @JvmField
+  //    val pubSubEmulatorProvider = GooglePubSubEmulatorProvider()
+  //  }
+
+  @Rule @JvmField val pubSubEmulatorProvider = GooglePubSubEmulatorProvider()
 
   private val projectId = "test-project"
   private val subscriptionId = "test-subscription"
   private val topicId = "test-topic"
 
-  private val emulatorClient: GooglePubSubEmulatorClient
-
-  init {
-    emulatorClient = GooglePubSubEmulatorClient()
-    emulatorClient.startEmulator()
-  }
+  private lateinit var emulatorClient: GooglePubSubEmulatorClient
 
   private lateinit var pubSubClient: Subscriber
 
   @Before
   fun setup() {
-    emulatorClient.createTopic(projectId, topicId)
-    emulatorClient.createSubscription(projectId, subscriptionId, topicId)
+    runBlocking {
+      emulatorClient =
+        GooglePubSubEmulatorClient(
+          host = pubSubEmulatorProvider.host,
+          port = pubSubEmulatorProvider.port,
+        )
+      emulatorClient.createTopic(projectId, topicId)
+      emulatorClient.createSubscription(projectId, subscriptionId, topicId)
+    }
   }
 
   @After
   fun tearDown() {
-    emulatorClient.deleteTopic(projectId, topicId)
-    emulatorClient.deleteSubscription(projectId, subscriptionId)
+    runBlocking {
+      emulatorClient.deleteTopic(projectId, topicId)
+      emulatorClient.deleteSubscription(projectId, subscriptionId)
+    }
   }
 
   @Test
@@ -55,7 +69,6 @@ public class SubscriberTest : AutoCloseable {
     runBlocking {
       val messages = listOf("UserName1", "UserName2", "UserName3")
       publishMessage(messages)
-
       pubSubClient = Subscriber(projectId = projectId, googlePubSubClient = emulatorClient)
 
       val receivedMessages = mutableListOf<String>()
@@ -65,7 +78,6 @@ public class SubscriberTest : AutoCloseable {
         receivedMessages.add(message.body.userName)
         message.ack()
       }
-
       Truth.assertThat(receivedMessages).containsExactlyElementsIn(messages)
     }
   }
@@ -76,7 +88,6 @@ public class SubscriberTest : AutoCloseable {
     runBlocking {
       val messages = listOf("UserName1")
       publishMessage(messages)
-
       pubSubClient = Subscriber(projectId = projectId, googlePubSubClient = emulatorClient)
 
       val receivedMessages = mutableListOf<String>()
@@ -93,7 +104,6 @@ public class SubscriberTest : AutoCloseable {
           seenMessages.add(userName)
         }
       }
-
       Truth.assertThat(receivedMessages).containsExactlyElementsIn(messages)
     }
   }
@@ -102,13 +112,9 @@ public class SubscriberTest : AutoCloseable {
     return TestWork.newBuilder().setUserName(message).setUserAge("25").setUserCountry("US").build()
   }
 
-  private fun publishMessage(messages: List<String>) {
+  private suspend fun publishMessage(messages: List<String>) {
     messages.forEach { msg ->
-      emulatorClient.publishMessage(projectId, topicId, createTestWork(msg).toByteString())
+      emulatorClient.publishMessage(projectId, topicId, createTestWork(msg))
     }
-  }
-
-  override fun close() {
-    emulatorClient.stopEmulator()
   }
 }

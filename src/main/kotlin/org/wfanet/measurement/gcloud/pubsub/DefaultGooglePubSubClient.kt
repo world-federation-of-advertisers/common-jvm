@@ -20,11 +20,13 @@ import com.google.cloud.pubsub.v1.MessageReceiver
 import com.google.cloud.pubsub.v1.Publisher
 import com.google.cloud.pubsub.v1.Subscriber
 import com.google.cloud.pubsub.v1.TopicAdminClient
-import com.google.protobuf.ByteString
+import com.google.protobuf.Message
+import com.google.pubsub.v1.GetTopicRequest
 import com.google.pubsub.v1.ProjectSubscriptionName
 import com.google.pubsub.v1.PubsubMessage
 import com.google.pubsub.v1.TopicName
 import org.threeten.bp.Duration
+import org.wfanet.measurement.gcloud.common.await
 
 class DefaultGooglePubSubClient : GooglePubSubClient {
 
@@ -44,18 +46,23 @@ class DefaultGooglePubSubClient : GooglePubSubClient {
     return subscriberBuilder.build()
   }
 
-  override fun publishMessage(projectId: String, topicId: String, messageContent: ByteString) {
+  override suspend fun publishMessage(projectId: String, topicId: String, message: Message) {
     val topicName = TopicName.of(projectId, topicId)
     val publisher = Publisher.newBuilder(topicName).build()
-    val pubsubMessage = PubsubMessage.newBuilder().setData(messageContent).build()
-    publisher.publish(pubsubMessage).get()
+    try {
+      val pubsubMessage = PubsubMessage.newBuilder().setData(message.toByteString()).build()
+      publisher.publish(pubsubMessage).await()
+    } finally {
+      publisher.shutdown()
+    }
   }
 
-  override fun topicExists(projectId: String, topicId: String): Boolean {
+  override suspend fun topicExists(projectId: String, topicId: String): Boolean {
     return TopicAdminClient.create().use { topicAdminClient ->
-      val topicName = TopicName.of(projectId, topicId)
       try {
-        topicAdminClient.getTopic(topicName)
+        val request: GetTopicRequest =
+          GetTopicRequest.newBuilder().setTopic(TopicName.of(projectId, topicId).toString()).build()
+        topicAdminClient.getTopicCallable().futureCall(request).await()
         true
       } catch (e: NotFoundException) {
         false

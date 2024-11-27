@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package org.wfanet.measurement.gcloud.pubsub.subscriber
+package org.wfanet.measurement.gcloud.pubsub
 
 import com.google.protobuf.Message
 import com.google.protobuf.Parser
@@ -25,7 +25,6 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.launch
 import org.threeten.bp.Duration
-import org.wfanet.measurement.gcloud.pubsub.GooglePubSubClient
 import org.wfanet.measurement.queue.MessageConsumer
 import org.wfanet.measurement.queue.QueueSubscriber
 
@@ -41,7 +40,7 @@ import org.wfanet.measurement.queue.QueueSubscriber
 class Subscriber(
   val projectId: String,
   val googlePubSubClient: GooglePubSubClient,
-  override val blockingContext: CoroutineContext = Dispatchers.IO,
+  val blockingContext: CoroutineContext = Dispatchers.IO,
 ) : QueueSubscriber {
 
   private val scope = CoroutineScope(blockingContext)

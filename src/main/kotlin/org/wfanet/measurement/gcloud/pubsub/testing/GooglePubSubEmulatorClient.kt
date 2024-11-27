@@ -14,7 +14,6 @@
 
 package org.wfanet.measurement.gcloud.pubsub.testing
 
-import com.google.api.gax.core.CredentialsProvider
 import com.google.api.gax.core.NoCredentialsProvider
 import com.google.api.gax.grpc.GrpcTransportChannel
 import com.google.api.gax.rpc.FixedTransportChannelProvider
@@ -28,60 +27,44 @@ import com.google.cloud.pubsub.v1.SubscriptionAdminClient
 import com.google.cloud.pubsub.v1.SubscriptionAdminSettings
 import com.google.cloud.pubsub.v1.TopicAdminClient
 import com.google.cloud.pubsub.v1.TopicAdminSettings
-import com.google.protobuf.ByteString
+import com.google.protobuf.Message
+import com.google.pubsub.v1.DeleteSubscriptionRequest
+import com.google.pubsub.v1.DeleteTopicRequest
+import com.google.pubsub.v1.GetTopicRequest
 import com.google.pubsub.v1.ProjectSubscriptionName
 import com.google.pubsub.v1.PubsubMessage
 import com.google.pubsub.v1.PushConfig
 import com.google.pubsub.v1.Subscription
+import com.google.pubsub.v1.Topic
 import com.google.pubsub.v1.TopicName
 import io.grpc.ManagedChannel
 import io.grpc.ManagedChannelBuilder
-import org.testcontainers.containers.PubSubEmulatorContainer
-import org.testcontainers.utility.DockerImageName
 import org.threeten.bp.Duration
+import org.wfanet.measurement.gcloud.common.await
 import org.wfanet.measurement.gcloud.pubsub.GooglePubSubClient
 
 /**
  * A client for managing a Google Pub/Sub emulator, providing utilities to interact with topics and
  * subscriptions in an emulated environment.
- *
- * This class uses Testcontainers to run the Google Pub/Sub emulator.
  */
-class GooglePubSubEmulatorClient : GooglePubSubClient {
+class GooglePubSubEmulatorClient(private val host: String, private val port: Int) :
+  GooglePubSubClient, AutoCloseable {
 
-  private val PUBSUB_IMAGE_NAME = "gcr.io/google.com/cloudsdktool/cloud-sdk:317.0.0-emulators"
-
-  private lateinit var pubsubEmulator: PubSubEmulatorContainer
   private lateinit var channel: ManagedChannel
   private lateinit var channelProvider: TransportChannelProvider
-  private lateinit var credentialsProvider: CredentialsProvider
   private lateinit var topicAdminClient: TopicAdminClient
   private lateinit var subscriptionAdminClient: SubscriptionAdminClient
+  private val credentialsProvider = NoCredentialsProvider.create()
 
-  fun startEmulator() {
-    pubsubEmulator = PubSubEmulatorContainer(DockerImageName.parse(PUBSUB_IMAGE_NAME))
-    pubsubEmulator.start()
+  init {
     initializeChannel()
     initializeClients()
   }
 
-  fun stopEmulator() {
-    if (::pubsubEmulator.isInitialized) {
-      pubsubEmulator.stop()
-    }
-    if (::channel.isInitialized) {
-      channel.shutdown()
-    }
-  }
-
   /** Initializes the gRPC channel and sets up the transport and credentials providers. */
   private fun initializeChannel() {
-    channel =
-      ManagedChannelBuilder.forAddress(pubsubEmulator.host, pubsubEmulator.getMappedPort(8085))
-        .usePlaintext()
-        .build()
+    channel = ManagedChannelBuilder.forAddress(host, port).usePlaintext().build()
     channelProvider = FixedTransportChannelProvider.create(GrpcTransportChannel.create(channel))
-    credentialsProvider = NoCredentialsProvider.create()
   }
 
   /** Initializes the topic and subscription admin clients for managing Pub/Sub resources. */
@@ -102,33 +85,37 @@ class GooglePubSubEmulatorClient : GooglePubSubClient {
       )
   }
 
-  fun createTopic(projectId: String, topicId: String): TopicName {
+  suspend fun createTopic(projectId: String, topicId: String): TopicName {
     val topicName = TopicName.of(projectId, topicId)
-    topicAdminClient.createTopic(topicName)
+    val topic = Topic.newBuilder().setName(topicName.toString()).build()
+    topicAdminClient.createTopicCallable().futureCall(topic).await()
     return topicName
   }
 
-  fun deleteTopic(projectId: String, topicId: String) {
+  suspend fun deleteTopic(projectId: String, topicId: String) {
     val topicName = TopicName.of(projectId, topicId)
-    topicAdminClient.deleteTopic(topicName)
+    val request = DeleteTopicRequest.newBuilder().setTopic(topicName.toString()).build()
+    topicAdminClient.deleteTopicCallable().futureCall(request).await()
   }
 
-  fun createSubscription(projectId: String, subscriptionId: String, topicId: String) {
+  suspend fun createSubscription(projectId: String, subscriptionId: String, topicId: String) {
     val topicName = TopicName.of(projectId, topicId)
     val subscriptionName = ProjectSubscriptionName.format(projectId, subscriptionId)
-    subscriptionAdminClient.createSubscription(
+    val subscription =
       Subscription.newBuilder()
         .setName(subscriptionName)
         .setTopic(topicName.toString())
         .setPushConfig(PushConfig.getDefaultInstance())
         .setAckDeadlineSeconds(10)
         .build()
-    )
+
+    subscriptionAdminClient.createSubscriptionCallable().futureCall(subscription).await()
   }
 
-  fun deleteSubscription(projectId: String, subscriptionId: String) {
+  suspend fun deleteSubscription(projectId: String, subscriptionId: String) {
     val subscriptionName = ProjectSubscriptionName.format(projectId, subscriptionId)
-    subscriptionAdminClient.deleteSubscription(subscriptionName)
+    val request = DeleteSubscriptionRequest.newBuilder().setSubscription(subscriptionName).build()
+    subscriptionAdminClient.deleteSubscriptionCallable().futureCall(request).await()
   }
 
   override fun buildSubscriber(
@@ -149,24 +136,31 @@ class GooglePubSubEmulatorClient : GooglePubSubClient {
     return subscriberBuilder.build()
   }
 
-  override fun publishMessage(projectId: String, topicId: String, messageContent: ByteString) {
+  override suspend fun publishMessage(projectId: String, topicId: String, message: Message) {
     val topicName = TopicName.of(projectId, topicId)
     val publisher =
       Publisher.newBuilder(topicName)
         .setChannelProvider(channelProvider)
         .setCredentialsProvider(credentialsProvider)
         .build()
-    val pubsubMessage = PubsubMessage.newBuilder().setData(messageContent).build()
-    publisher.publish(pubsubMessage).get()
+    val pubsubMessage = PubsubMessage.newBuilder().setData(message.toByteString()).build()
+    publisher.publish(pubsubMessage).await()
   }
 
-  override fun topicExists(projectId: String, topicId: String): Boolean {
-    val topicName = TopicName.of(projectId, topicId)
+  override suspend fun topicExists(projectId: String, topicId: String): Boolean {
     return try {
-      topicAdminClient.getTopic(topicName)
+      val request: GetTopicRequest =
+        GetTopicRequest.newBuilder().setTopic(TopicName.of(projectId, topicId).toString()).build()
+      topicAdminClient.getTopicCallable().futureCall(request).await()
       true
     } catch (e: NotFoundException) {
       false
+    }
+  }
+
+  override fun close() {
+    if (::channel.isInitialized) {
+      channel.shutdown()
     }
   }
 }
