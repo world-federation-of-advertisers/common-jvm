@@ -26,12 +26,6 @@ import org.wfanet.measurement.gcloud.pubsub.testing.GooglePubSubEmulatorProvider
 
 class SubscriberTest {
 
-  //  companion object {
-  //    @ClassRule
-  //    @JvmField
-  //    val pubSubEmulatorProvider = GooglePubSubEmulatorProvider()
-  //  }
-
   @Rule @JvmField val pubSubEmulatorProvider = GooglePubSubEmulatorProvider()
 
   private val projectId = "test-project"
