@@ -31,12 +31,12 @@ class GooglePubSubEmulatorProvider : TestRule {
   val port: Int
     get() = pubsubEmulator.getMappedPort(8085)
 
-  fun startEmulator() {
+  private fun startEmulator() {
     pubsubEmulator = PubSubEmulatorContainer(DockerImageName.parse(PUBSUB_IMAGE_NAME))
     pubsubEmulator.start()
   }
 
-  fun stopEmulator() {
+  private fun stopEmulator() {
     if (::pubsubEmulator.isInitialized) {
       pubsubEmulator.stop()
     }
@@ -56,6 +56,6 @@ class GooglePubSubEmulatorProvider : TestRule {
   }
 
   companion object {
-    const val PUBSUB_IMAGE_NAME = "gcr.io/google.com/cloudsdktool/cloud-sdk:317.0.0-emulators"
+    private const val PUBSUB_IMAGE_NAME = "gcr.io/google.com/cloudsdktool/cloud-sdk:317.0.0-emulators"
   }
 }

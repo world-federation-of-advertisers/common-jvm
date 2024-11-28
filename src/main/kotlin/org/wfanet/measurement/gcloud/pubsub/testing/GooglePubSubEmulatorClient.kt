@@ -50,40 +50,23 @@ import org.wfanet.measurement.gcloud.pubsub.GooglePubSubClient
 class GooglePubSubEmulatorClient(private val host: String, private val port: Int) :
   GooglePubSubClient, AutoCloseable {
 
-  private lateinit var channel: ManagedChannel
-  private lateinit var channelProvider: TransportChannelProvider
-  private lateinit var topicAdminClient: TopicAdminClient
-  private lateinit var subscriptionAdminClient: SubscriptionAdminClient
+  private val channel = ManagedChannelBuilder.forAddress(host, port).usePlaintext().build()
+  private val channelProvider = FixedTransportChannelProvider.create(GrpcTransportChannel.create(channel))
   private val credentialsProvider = NoCredentialsProvider.create()
-
-  init {
-    initializeChannel()
-    initializeClients()
-  }
-
-  /** Initializes the gRPC channel and sets up the transport and credentials providers. */
-  private fun initializeChannel() {
-    channel = ManagedChannelBuilder.forAddress(host, port).usePlaintext().build()
-    channelProvider = FixedTransportChannelProvider.create(GrpcTransportChannel.create(channel))
-  }
-
-  /** Initializes the topic and subscription admin clients for managing Pub/Sub resources. */
-  private fun initializeClients() {
-    topicAdminClient =
-      TopicAdminClient.create(
-        TopicAdminSettings.newBuilder()
-          .setTransportChannelProvider(channelProvider)
-          .setCredentialsProvider(credentialsProvider)
-          .build()
-      )
-    subscriptionAdminClient =
-      SubscriptionAdminClient.create(
-        SubscriptionAdminSettings.newBuilder()
-          .setTransportChannelProvider(channelProvider)
-          .setCredentialsProvider(credentialsProvider)
-          .build()
-      )
-  }
+  private val topicAdminClient =
+    TopicAdminClient.create(
+      TopicAdminSettings.newBuilder()
+        .setTransportChannelProvider(channelProvider)
+        .setCredentialsProvider(credentialsProvider)
+        .build()
+    )
+  private val subscriptionAdminClient =
+    SubscriptionAdminClient.create(
+      SubscriptionAdminSettings.newBuilder()
+        .setTransportChannelProvider(channelProvider)
+        .setCredentialsProvider(credentialsProvider)
+        .build()
+    )
 
   suspend fun createTopic(projectId: String, topicId: String): TopicName {
     val topicName = TopicName.of(projectId, topicId)
@@ -159,8 +142,6 @@ class GooglePubSubEmulatorClient(private val host: String, private val port: Int
   }
 
   override fun close() {
-    if (::channel.isInitialized) {
-      channel.shutdown()
-    }
+    channel.shutdown()
   }
 }
