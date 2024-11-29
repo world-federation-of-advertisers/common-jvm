@@ -17,6 +17,7 @@ package org.wfanet.measurement.gcloud.pubsub
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.runBlocking
 import org.junit.After
+import org.junit.Assert.assertThrows
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -34,9 +35,6 @@ class PublisherTest {
   private val topicIds = listOf("test-topic-one", "test-topic-two", "test-topic-three")
 
   private lateinit var emulatorClient: GooglePubSubEmulatorClient
-
-  private lateinit var subscriber: Subscriber
-  private lateinit var publisher: Publisher
 
   @Before
   fun setup() {
@@ -65,13 +63,12 @@ class PublisherTest {
 
   @Test
   fun `should publish against different topics`() {
-
     runBlocking {
       val messages = listOf("UserName1", "UserName2")
-      publisher = Publisher(projectId, emulatorClient)
+      val publisher = Publisher(projectId, emulatorClient)
       publisher.publishMessage(topicIds[0], createTestWork(messages[0]))
       publisher.publishMessage(topicIds[1], createTestWork(messages[1]))
-      subscriber = Subscriber(projectId = projectId, googlePubSubClient = emulatorClient)
+      val subscriber = Subscriber(projectId = projectId, googlePubSubClient = emulatorClient)
 
       val firstMessageChannel =
         subscriber.subscribe<TestWork>(subscriptionIds[0], TestWork.parser())
@@ -86,6 +83,20 @@ class PublisherTest {
       secondMessage.ack()
       secondMessageChannel.cancel()
       assertThat(secondMessage.body.userName).isEqualTo(messages[1])
+    }
+  }
+
+  @Test
+  fun `should raise an Exception when topic doesn't exist`() {
+    runBlocking {
+      val publisher = Publisher(projectId, emulatorClient)
+      val exception =
+        assertThrows(Exception::class.java) {
+          runBlocking {
+            publisher.publishMessage("test-topic-id", createTestWork("test-user-name"))
+          }
+        }
+      assertThat(exception).hasMessageThat().contains("Impossible to publish the message.")
     }
   }
 

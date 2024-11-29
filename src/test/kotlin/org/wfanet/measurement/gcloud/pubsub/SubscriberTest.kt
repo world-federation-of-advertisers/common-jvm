@@ -36,8 +36,6 @@ class SubscriberTest {
 
   private lateinit var emulatorClient: GooglePubSubEmulatorClient
 
-  private lateinit var subscriber: Subscriber
-
   @Before
   fun setup() {
     runBlocking {
@@ -65,7 +63,7 @@ class SubscriberTest {
     runBlocking {
       val messages = listOf("UserName1", "UserName2", "UserName3")
       publishMessage(messages)
-      subscriber = Subscriber(projectId = projectId, googlePubSubClient = emulatorClient)
+      val subscriber = Subscriber(projectId = projectId, googlePubSubClient = emulatorClient)
 
       val receivedMessages = mutableListOf<String>()
       val messageChannel = subscriber.subscribe<TestWork>(subscriptionId, TestWork.parser())
@@ -84,7 +82,7 @@ class SubscriberTest {
     runBlocking {
       val messages = listOf("UserName1")
       publishMessage(messages)
-      subscriber = Subscriber(projectId = projectId, googlePubSubClient = emulatorClient)
+      val subscriber = Subscriber(projectId = projectId, googlePubSubClient = emulatorClient)
 
       val receivedMessages = mutableListOf<String>()
       val seenMessages = mutableSetOf<String>()

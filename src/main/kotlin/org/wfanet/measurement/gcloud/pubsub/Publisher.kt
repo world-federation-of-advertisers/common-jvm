@@ -42,9 +42,13 @@ class Publisher(
    *
    * @param topicId The ID of the topic to publish the message to.
    * @param message The [Message] to be published.
-   * @throws Exception If there is an error while publishing the message.
+   * @throws Exception If provided Topic ID does not exist.
    */
   override suspend fun publishMessage(topicId: String, message: Message) {
+
+    if(!googlePubSubClient.topicExists(projectId, topicId)) {
+      throw Exception("Impossible to publish the message. Topic id: $topicId does not exist.")
+    }
 
     val pubsubPublisher =
       publishers.computeIfAbsent(topicId) { googlePubSubClient.buildPublisher(projectId, topicId) }
