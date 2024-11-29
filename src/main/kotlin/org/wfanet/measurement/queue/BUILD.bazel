@@ -6,8 +6,15 @@ kt_jvm_library(
     name = "queue_subscriber",
     srcs = ["QueueSubscriber.kt"],
     deps = [
-        "//imports/java/com/google/cloud/pubsub",
         "//imports/java/com/google/protobuf",
         "//imports/kotlin/kotlinx/coroutines:core",
+    ],
+)
+
+kt_jvm_library(
+    name = "queue_publisher",
+    srcs = ["QueuePublisher.kt"],
+    deps = [
+        "//imports/java/com/google/protobuf",
     ],
 )

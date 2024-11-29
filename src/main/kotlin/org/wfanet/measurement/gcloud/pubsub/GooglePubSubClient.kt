@@ -14,19 +14,50 @@
 
 package org.wfanet.measurement.gcloud.pubsub
 
+import com.google.api.gax.rpc.NotFoundException
 import com.google.cloud.pubsub.v1.AckReplyConsumer
-import com.google.cloud.pubsub.v1.Subscriber
-import com.google.protobuf.Message
+import com.google.cloud.pubsub.v1.Publisher as GooglePublisher
+import com.google.cloud.pubsub.v1.Subscriber as GoogleSubscriber
+import com.google.cloud.pubsub.v1.SubscriptionAdminClient
+import com.google.cloud.pubsub.v1.TopicAdminClient
+import com.google.pubsub.v1.DeleteSubscriptionRequest
+import com.google.pubsub.v1.DeleteTopicRequest
+import com.google.pubsub.v1.GetTopicRequest
+import com.google.pubsub.v1.ProjectSubscriptionName
 import com.google.pubsub.v1.PubsubMessage
+import com.google.pubsub.v1.PushConfig
+import com.google.pubsub.v1.Subscription
+import com.google.pubsub.v1.Topic
+import com.google.pubsub.v1.TopicName
 import org.threeten.bp.Duration
+import org.wfanet.measurement.gcloud.common.await
 
-interface GooglePubSubClient {
+/** Abstract base class for managing Google Cloud Pub/Sub resources and interactions. */
+abstract class GooglePubSubClient : AutoCloseable {
+
+  private val topicAdminClient by lazy { buildTopicAdminClient() }
+
+  private val subscriptionAdminClient by lazy { buildSubscriptionAdminClient() }
 
   /**
-   * Builds a subscriber for the specified Pub/Sub subscription.
+   * Builds the TopicAdminClient used to manage Pub/Sub topics.
    *
-   * @param projectId The Google Cloud project ID where the subscription resides.
-   * @param subscriptionId The ID of the Pub/Sub subscription to which the subscriber will listen.
+   * @return A new instance of [TopicAdminClient].
+   */
+  protected abstract fun buildTopicAdminClient(): TopicAdminClient
+
+  /**
+   * Builds the SubscriptionAdminClient used to manage Pub/Sub subscriptions.
+   *
+   * @return A new instance of [SubscriptionAdminClient].
+   */
+  protected abstract fun buildSubscriptionAdminClient(): SubscriptionAdminClient
+
+  /**
+   * Builds a Google Pub/Sub [Subscriber].
+   *
+   * @param projectId The Google Cloud project ID.
+   * @param subscriptionId The ID of the subscription to receive messages from.
    * @param ackExtensionPeriod The duration for which the acknowledgment deadline is extended while
    *   processing a message. This defines the time period during which the message will not be
    *   re-delivered if neither an acknowledgment (ack) nor a negative acknowledgment (nack) is
@@ -34,30 +65,74 @@ interface GooglePubSubClient {
    * @param messageHandler A callback function invoked for each message received. It provides the
    *   [PubsubMessage] and an [AckReplyConsumer] to acknowledge or negatively acknowledge the
    *   message.
-   * @return A [Subscriber] instance configured with the provided parameters.
+   * @return A [Subscriber] instance.
    */
-  fun buildSubscriber(
+  abstract fun buildSubscriber(
     projectId: String,
     subscriptionId: String,
     ackExtensionPeriod: Duration,
     messageHandler: (PubsubMessage, AckReplyConsumer) -> Unit,
-  ): Subscriber
+  ): GoogleSubscriber
 
   /**
-   * Publishes a message to the specified Pub/Sub topic.
+   * Builds a Google Pub/Sub [Publisher].
    *
-   * @param projectId The Google Cloud project ID where the topic resides.
-   * @param topicId The ID of the Pub/Sub topic to which the message will be published.
-   * @param message The protobuf message to be published.
+   * @param projectId The Google Cloud project ID.
+   * @param topicId The ID of the topic to publish messages to.
+   * @return A [Publisher] instance.
    */
-  suspend fun publishMessage(projectId: String, topicId: String, message: Message)
+  abstract fun buildPublisher(projectId: String, topicId: String): GooglePublisher
 
-  /**
-   * Checks if a Pub/Sub topic exists in the specified project.
-   *
-   * @param projectId The Google Cloud project ID where the topic is expected to exist.
-   * @param topicId The ID of the Pub/Sub topic to check.
-   * @return `true` if the topic exists, otherwise `false`.
-   */
-  suspend fun topicExists(projectId: String, topicId: String): Boolean
+  suspend fun createTopic(projectId: String, topicId: String): TopicName {
+    val topicName = TopicName.of(projectId, topicId)
+    val topic = Topic.newBuilder().setName(topicName.toString()).build()
+    topicAdminClient.createTopicCallable().futureCall(topic).await()
+    return topicName
+  }
+
+  suspend fun deleteTopic(projectId: String, topicId: String) {
+    val topicName = TopicName.of(projectId, topicId)
+    val request = DeleteTopicRequest.newBuilder().setTopic(topicName.toString()).build()
+    topicAdminClient.deleteTopicCallable().futureCall(request).await()
+  }
+
+  suspend fun topicExists(projectId: String, topicId: String): Boolean {
+    return try {
+      val request: GetTopicRequest =
+        GetTopicRequest.newBuilder().setTopic(TopicName.of(projectId, topicId).toString()).build()
+      topicAdminClient.getTopicCallable().futureCall(request).await()
+      true
+    } catch (e: NotFoundException) {
+      false
+    }
+  }
+
+  suspend fun createSubscription(projectId: String, subscriptionId: String, topicId: String) {
+    val topicName = TopicName.of(projectId, topicId)
+    val subscriptionName = ProjectSubscriptionName.format(projectId, subscriptionId)
+    val subscription =
+      Subscription.newBuilder()
+        .setName(subscriptionName)
+        .setTopic(topicName.toString())
+        .setPushConfig(PushConfig.getDefaultInstance())
+        .setAckDeadlineSeconds(10)
+        .build()
+
+    subscriptionAdminClient.createSubscriptionCallable().futureCall(subscription).await()
+  }
+
+  suspend fun deleteSubscription(projectId: String, subscriptionId: String) {
+    val subscriptionName = ProjectSubscriptionName.format(projectId, subscriptionId)
+    val request = DeleteSubscriptionRequest.newBuilder().setSubscription(subscriptionName).build()
+    subscriptionAdminClient.deleteSubscriptionCallable().futureCall(request).await()
+  }
+
+  override fun close() {
+    if ((this::topicAdminClient as Lazy<*>).isInitialized()) {
+      topicAdminClient.close()
+    }
+    if ((this::subscriptionAdminClient as Lazy<*>).isInitialized()) {
+      subscriptionAdminClient.close()
+    }
+  }
 }

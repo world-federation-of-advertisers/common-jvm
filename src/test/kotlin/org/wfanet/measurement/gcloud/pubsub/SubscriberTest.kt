@@ -15,6 +15,8 @@
 package org.wfanet.measurement.gcloud.pubsub
 
 import com.google.common.truth.Truth
+import com.google.pubsub.v1.PubsubMessage
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Before
@@ -34,7 +36,7 @@ class SubscriberTest {
 
   private lateinit var emulatorClient: GooglePubSubEmulatorClient
 
-  private lateinit var pubSubClient: Subscriber
+  private lateinit var subscriber: Subscriber
 
   @Before
   fun setup() {
@@ -63,10 +65,10 @@ class SubscriberTest {
     runBlocking {
       val messages = listOf("UserName1", "UserName2", "UserName3")
       publishMessage(messages)
-      pubSubClient = Subscriber(projectId = projectId, googlePubSubClient = emulatorClient)
+      subscriber = Subscriber(projectId = projectId, googlePubSubClient = emulatorClient)
 
       val receivedMessages = mutableListOf<String>()
-      val messageChannel = pubSubClient.subscribe<TestWork>(subscriptionId, TestWork.parser())
+      val messageChannel = subscriber.subscribe<TestWork>(subscriptionId, TestWork.parser())
       while (receivedMessages.size < messages.size) {
         val message = messageChannel.receive()
         receivedMessages.add(message.body.userName)
@@ -82,11 +84,11 @@ class SubscriberTest {
     runBlocking {
       val messages = listOf("UserName1")
       publishMessage(messages)
-      pubSubClient = Subscriber(projectId = projectId, googlePubSubClient = emulatorClient)
+      subscriber = Subscriber(projectId = projectId, googlePubSubClient = emulatorClient)
 
       val receivedMessages = mutableListOf<String>()
       val seenMessages = mutableSetOf<String>()
-      val messageChannel = pubSubClient.subscribe<TestWork>(subscriptionId, TestWork.parser())
+      val messageChannel = subscriber.subscribe<TestWork>(subscriptionId, TestWork.parser())
       while (receivedMessages.size < messages.size) {
         val message = messageChannel.receive()
         val userName = message.body.userName
@@ -107,8 +109,13 @@ class SubscriberTest {
   }
 
   private suspend fun publishMessage(messages: List<String>) {
+    val publisher = emulatorClient.buildPublisher(projectId, topicId)
     messages.forEach { msg ->
-      emulatorClient.publishMessage(projectId, topicId, createTestWork(msg))
+      val pubsubMessage =
+        PubsubMessage.newBuilder().setData(createTestWork(msg).toByteString()).build()
+      publisher.publish(pubsubMessage)
     }
+    publisher.shutdown()
+    publisher.awaitTermination(5, TimeUnit.SECONDS)
   }
 }

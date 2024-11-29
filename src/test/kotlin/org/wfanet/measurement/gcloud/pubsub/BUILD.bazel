@@ -9,8 +9,25 @@ kt_jvm_test(
         "//imports/java/com/google/cloud/pubsub",
         "//imports/java/com/google/common/truth",
         "//imports/java/org/junit",
-        "//imports/java/org/testcontainers/containers:pubsub",
         "//imports/kotlin/kotlinx/coroutines/test",
+        "//src/main/kotlin/org/wfanet/measurement/gcloud/pubsub:subscriber",
+        "//src/main/kotlin/org/wfanet/measurement/gcloud/pubsub/testing:google_pub_sub_emulator_client",
+        "//src/main/kotlin/org/wfanet/measurement/gcloud/pubsub/testing:google_pub_sub_emulator_provider",
+        "//src/main/proto/wfa/measurement/queue:test_work_kt_jvm_proto",
+    ],
+)
+
+kt_jvm_test(
+    name = "PublisherTest",
+    srcs = ["PublisherTest.kt"],
+    local = True,
+    test_class = "org.wfanet.measurement.gcloud.pubsub.PublisherTest",
+    deps = [
+        "//imports/java/com/google/cloud/pubsub",
+        "//imports/java/com/google/common/truth",
+        "//imports/java/org/junit",
+        "//imports/kotlin/kotlinx/coroutines/test",
+        "//src/main/kotlin/org/wfanet/measurement/gcloud/pubsub:publisher",
         "//src/main/kotlin/org/wfanet/measurement/gcloud/pubsub:subscriber",
         "//src/main/kotlin/org/wfanet/measurement/gcloud/pubsub/testing:google_pub_sub_emulator_client",
         "//src/main/kotlin/org/wfanet/measurement/gcloud/pubsub/testing:google_pub_sub_emulator_provider",

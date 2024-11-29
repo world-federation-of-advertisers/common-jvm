@@ -39,7 +39,7 @@ import org.wfanet.measurement.queue.QueueSubscriber
  */
 class Subscriber(
   val projectId: String,
-  val googlePubSubClient: GooglePubSubClient,
+  val googlePubSubClient: GooglePubSubClient = DefaultGooglePubSubClient(),
   val blockingContext: CoroutineContext = Dispatchers.IO,
 ) : QueueSubscriber {
 

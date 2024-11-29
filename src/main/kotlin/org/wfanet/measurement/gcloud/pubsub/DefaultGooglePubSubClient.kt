@@ -14,59 +14,46 @@
 
 package org.wfanet.measurement.gcloud.pubsub
 
-import com.google.api.gax.rpc.NotFoundException
 import com.google.cloud.pubsub.v1.AckReplyConsumer
 import com.google.cloud.pubsub.v1.MessageReceiver
-import com.google.cloud.pubsub.v1.Publisher
-import com.google.cloud.pubsub.v1.Subscriber
+import com.google.cloud.pubsub.v1.Publisher as GooglePublisher
+import com.google.cloud.pubsub.v1.Subscriber as GoogleSubscriber
+import com.google.cloud.pubsub.v1.SubscriptionAdminClient
+import com.google.cloud.pubsub.v1.SubscriptionAdminSettings
 import com.google.cloud.pubsub.v1.TopicAdminClient
-import com.google.protobuf.Message
-import com.google.pubsub.v1.GetTopicRequest
+import com.google.cloud.pubsub.v1.TopicAdminSettings
 import com.google.pubsub.v1.ProjectSubscriptionName
 import com.google.pubsub.v1.PubsubMessage
 import com.google.pubsub.v1.TopicName
 import org.threeten.bp.Duration
-import org.wfanet.measurement.gcloud.common.await
 
-class DefaultGooglePubSubClient : GooglePubSubClient {
+class DefaultGooglePubSubClient : GooglePubSubClient() {
+  override fun buildTopicAdminClient(): TopicAdminClient {
+    return TopicAdminClient.create(TopicAdminSettings.newBuilder().build())
+  }
+
+  override fun buildSubscriptionAdminClient(): SubscriptionAdminClient {
+    return SubscriptionAdminClient.create(SubscriptionAdminSettings.newBuilder().build())
+  }
 
   override fun buildSubscriber(
     projectId: String,
     subscriptionId: String,
     ackExtensionPeriod: Duration,
     messageHandler: (PubsubMessage, AckReplyConsumer) -> Unit,
-  ): Subscriber {
+  ): GoogleSubscriber {
 
     val subscriptionName = ProjectSubscriptionName.format(projectId, subscriptionId)
     val messageReceiver = MessageReceiver { message, consumer -> messageHandler(message, consumer) }
     val subscriberBuilder =
-      Subscriber.newBuilder(subscriptionName, messageReceiver)
+      GoogleSubscriber.newBuilder(subscriptionName, messageReceiver)
         .setMaxAckExtensionPeriod(ackExtensionPeriod)
 
     return subscriberBuilder.build()
   }
 
-  override suspend fun publishMessage(projectId: String, topicId: String, message: Message) {
+  override fun buildPublisher(projectId: String, topicId: String): GooglePublisher {
     val topicName = TopicName.of(projectId, topicId)
-    val publisher = Publisher.newBuilder(topicName).build()
-    try {
-      val pubsubMessage = PubsubMessage.newBuilder().setData(message.toByteString()).build()
-      publisher.publish(pubsubMessage).await()
-    } finally {
-      publisher.shutdown()
-    }
-  }
-
-  override suspend fun topicExists(projectId: String, topicId: String): Boolean {
-    return TopicAdminClient.create().use { topicAdminClient ->
-      try {
-        val request: GetTopicRequest =
-          GetTopicRequest.newBuilder().setTopic(TopicName.of(projectId, topicId).toString()).build()
-        topicAdminClient.getTopicCallable().futureCall(request).await()
-        true
-      } catch (e: NotFoundException) {
-        false
-      }
-    }
+    return GooglePublisher.newBuilder(topicName).build()
   }
 }
