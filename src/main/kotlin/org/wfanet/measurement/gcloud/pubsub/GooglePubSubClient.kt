@@ -115,7 +115,7 @@ abstract class GooglePubSubClient : AutoCloseable {
         .setName(subscriptionName)
         .setTopic(topicName.toString())
         .setPushConfig(PushConfig.getDefaultInstance())
-        .setAckDeadlineSeconds(10)
+        .setAckDeadlineSeconds(ACK_DEADLINE_PERIOD)
         .build()
 
     subscriptionAdminClient.createSubscriptionCallable().futureCall(subscription).await()
@@ -135,4 +135,9 @@ abstract class GooglePubSubClient : AutoCloseable {
       subscriptionAdminClient.close()
     }
   }
+
+  companion object {
+    const val ACK_DEADLINE_PERIOD = 10
+  }
+
 }
