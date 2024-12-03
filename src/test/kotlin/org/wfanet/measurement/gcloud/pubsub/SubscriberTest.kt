@@ -14,46 +14,44 @@
 
 package org.wfanet.measurement.gcloud.pubsub
 
-import com.google.common.truth.Truth
+import com.google.common.truth.Truth.assertThat
 import com.google.pubsub.v1.PubsubMessage
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Before
-import org.junit.Rule
+import org.junit.ClassRule
 import org.junit.Test
 import org.wfa.measurement.queue.testing.TestWork
 import org.wfanet.measurement.gcloud.pubsub.testing.GooglePubSubEmulatorClient
 import org.wfanet.measurement.gcloud.pubsub.testing.GooglePubSubEmulatorProvider
+import com.google.cloud.pubsub.v1.Publisher
 
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class SubscriberTest {
 
-  @Rule @JvmField val pubSubEmulatorProvider = GooglePubSubEmulatorProvider()
-
-  private val projectId = "test-project"
-  private val subscriptionId = "test-subscription"
-  private val topicId = "test-topic"
-
-  private lateinit var emulatorClient: GooglePubSubEmulatorClient
+  private val emulatorClient =
+    GooglePubSubEmulatorClient(
+      host = pubSubEmulatorProvider.host,
+      port = pubSubEmulatorProvider.port,
+    )
 
   @Before
-  fun setup() {
+  fun createTopicAndSubscription() {
     runBlocking {
-      emulatorClient =
-        GooglePubSubEmulatorClient(
-          host = pubSubEmulatorProvider.host,
-          port = pubSubEmulatorProvider.port,
-        )
-      emulatorClient.createTopic(projectId, topicId)
-      emulatorClient.createSubscription(projectId, subscriptionId, topicId)
+      publisher = emulatorClient.buildPublisher(PROJECT_ID, TOPIC_ID)
+      emulatorClient.createTopic(PROJECT_ID, TOPIC_ID)
+      emulatorClient.createSubscription(PROJECT_ID, SUBSCRIPTION_ID, TOPIC_ID)
     }
   }
 
   @After
-  fun tearDown() {
+  fun deleteTopicAndSubscription() {
     runBlocking {
-      emulatorClient.deleteTopic(projectId, topicId)
-      emulatorClient.deleteSubscription(projectId, subscriptionId)
+      emulatorClient.deleteTopic(PROJECT_ID, TOPIC_ID)
+      emulatorClient.deleteSubscription(PROJECT_ID, SUBSCRIPTION_ID)
+      publisher.shutdown()
+      publisher.awaitTermination(5, TimeUnit.SECONDS)
     }
   }
 
@@ -63,30 +61,30 @@ class SubscriberTest {
     runBlocking {
       val messages = listOf("UserName1", "UserName2", "UserName3")
       publishMessage(messages)
-      val subscriber = Subscriber(projectId = projectId, googlePubSubClient = emulatorClient)
+      val subscriber = Subscriber(projectId = PROJECT_ID, googlePubSubClient = emulatorClient)
 
       val receivedMessages = mutableListOf<String>()
-      val messageChannel = subscriber.subscribe<TestWork>(subscriptionId, TestWork.parser())
+      val messageChannel = subscriber.subscribe<TestWork>(SUBSCRIPTION_ID, TestWork.parser())
       while (receivedMessages.size < messages.size) {
         val message = messageChannel.receive()
         receivedMessages.add(message.body.userName)
         message.ack()
       }
-      Truth.assertThat(receivedMessages).containsExactlyElementsIn(messages)
+      assertThat(receivedMessages).containsExactlyElementsIn(messages)
     }
   }
 
   @Test
-  fun `message sould be published again after nack`() {
+  fun `message should be published again after nack`() {
 
     runBlocking {
       val messages = listOf("UserName1")
       publishMessage(messages)
-      val subscriber = Subscriber(projectId = projectId, googlePubSubClient = emulatorClient)
+      val subscriber = Subscriber(projectId = PROJECT_ID, googlePubSubClient = emulatorClient)
 
       val receivedMessages = mutableListOf<String>()
       val seenMessages = mutableSetOf<String>()
-      val messageChannel = subscriber.subscribe<TestWork>(subscriptionId, TestWork.parser())
+      val messageChannel = subscriber.subscribe<TestWork>(SUBSCRIPTION_ID, TestWork.parser())
       while (receivedMessages.size < messages.size) {
         val message = messageChannel.receive()
         val userName = message.body.userName
@@ -98,7 +96,7 @@ class SubscriberTest {
           seenMessages.add(userName)
         }
       }
-      Truth.assertThat(receivedMessages).containsExactlyElementsIn(messages)
+      assertThat(receivedMessages).containsExactlyElementsIn(messages)
     }
   }
 
@@ -107,13 +105,24 @@ class SubscriberTest {
   }
 
   private suspend fun publishMessage(messages: List<String>) {
-    val publisher = emulatorClient.buildPublisher(projectId, topicId)
     messages.forEach { msg ->
       val pubsubMessage =
         PubsubMessage.newBuilder().setData(createTestWork(msg).toByteString()).build()
       publisher.publish(pubsubMessage)
     }
-    publisher.shutdown()
-    publisher.awaitTermination(5, TimeUnit.SECONDS)
   }
+
+  companion object {
+
+    @ClassRule
+    @JvmField
+    val pubSubEmulatorProvider = GooglePubSubEmulatorProvider()
+
+    private lateinit var publisher: Publisher
+
+    private const val PROJECT_ID = "test-project"
+    private val SUBSCRIPTION_ID = "test-subscription"
+    private val TOPIC_ID = "test-topic"
+  }
+
 }

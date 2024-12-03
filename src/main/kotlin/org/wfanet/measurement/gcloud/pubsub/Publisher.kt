@@ -17,10 +17,21 @@ package org.wfanet.measurement.gcloud.pubsub
 import com.google.cloud.pubsub.v1.Publisher as GooglePublisher
 import com.google.protobuf.Message
 import com.google.pubsub.v1.PubsubMessage
+import io.grpc.Status
+import com.google.api.gax.rpc.ApiException
+import io.grpc.StatusRuntimeException
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import org.wfanet.measurement.gcloud.common.await
 import org.wfanet.measurement.queue.QueuePublisher
+
+sealed class QueuePublisherException(message: String, cause: Throwable? = null) : Exception(message, cause)
+
+class TopicNotFoundException(topicId: String, cause: Throwable? = null) :
+  QueuePublisherException("Topic $topicId does not exist.", cause)
+
+class PublishFailedException(topicId: String, cause: Throwable? = null) :
+  QueuePublisherException("Failed to publish message to topic $topicId.", cause)
 
 /**
  * A class for publishing messages to Google Cloud Pub/Sub topics.
@@ -29,32 +40,34 @@ import org.wfanet.measurement.queue.QueuePublisher
  * @property googlePubSubClient The client used for managing Pub/Sub resources. Defaults to
  *   [DefaultGooglePubSubClient].
  */
-class Publisher(
+class Publisher<T: Message>(
   val projectId: String,
   val googlePubSubClient: GooglePubSubClient = DefaultGooglePubSubClient(),
-) : QueuePublisher {
+) : QueuePublisher<T> {
 
   /** A concurrent map to store and reuse [Publisher] instances by topic ID. */
   private val publishers = ConcurrentHashMap<String, GooglePublisher>()
 
-  /**
-   * Publishes a message to the specified Pub/Sub topic.
-   *
-   * @param topicId The ID of the topic to publish the message to.
-   * @param message The [Message] to be published.
-   * @throws Exception If provided Topic ID does not exist.
-   */
-  override suspend fun publishMessage(topicId: String, message: Message) {
-
-    if(!googlePubSubClient.topicExists(projectId, topicId)) {
-      throw Exception("Impossible to publish the message. Topic id: $topicId does not exist.")
-    }
-
+  override suspend fun publishMessage(topicId: String, message: T) {
     val pubsubPublisher =
       publishers.computeIfAbsent(topicId) { googlePubSubClient.buildPublisher(projectId, topicId) }
 
     val pubsubMessage = PubsubMessage.newBuilder().setData(message.toByteString()).build()
-    pubsubPublisher.publish(pubsubMessage).await()
+    try {
+      pubsubPublisher.publish(pubsubMessage).await()
+    } catch (e: ApiException) {
+      val statusRuntimeException = e.cause as? StatusRuntimeException
+      if (statusRuntimeException != null) {
+        when (statusRuntimeException.status.code) {
+          Status.Code.NOT_FOUND -> throw TopicNotFoundException(topicId, e)
+          else -> throw PublishFailedException(topicId, e)
+        }
+      } else {
+        throw PublishFailedException(topicId, e)
+      }
+    } catch (e: Exception) {
+      throw PublishFailedException(topicId, e)
+    }
   }
 
   override fun close() {

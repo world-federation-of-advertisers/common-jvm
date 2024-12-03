@@ -17,46 +17,39 @@ package org.wfanet.measurement.gcloud.pubsub
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.runBlocking
 import org.junit.After
-import org.junit.Assert.assertThrows
+import kotlin.test.assertFailsWith
 import org.junit.Before
-import org.junit.Rule
+import org.junit.ClassRule
 import org.junit.Test
 import org.wfa.measurement.queue.testing.TestWork
 import org.wfanet.measurement.gcloud.pubsub.testing.GooglePubSubEmulatorClient
 import org.wfanet.measurement.gcloud.pubsub.testing.GooglePubSubEmulatorProvider
 
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class PublisherTest {
 
-  @Rule @JvmField val pubSubEmulatorProvider = GooglePubSubEmulatorProvider()
-
-  private val projectId = "test-project"
-  private val subscriptionIds =
-    listOf("test-subscription-one", "test-subscription-two", "test-subscription-three")
-  private val topicIds = listOf("test-topic-one", "test-topic-two", "test-topic-three")
-
-  private lateinit var emulatorClient: GooglePubSubEmulatorClient
+  private val emulatorClient =
+    GooglePubSubEmulatorClient(
+      host = pubSubEmulatorProvider.host,
+      port = pubSubEmulatorProvider.port,
+    )
 
   @Before
-  fun setup() {
+  fun createTopicAndSubscription() {
     runBlocking {
-      emulatorClient =
-        GooglePubSubEmulatorClient(
-          host = pubSubEmulatorProvider.host,
-          port = pubSubEmulatorProvider.port,
-        )
-      subscriptionIds.zip(topicIds).forEach { (subscriptionId, topicId) ->
-        emulatorClient.createTopic(projectId, topicId)
-        emulatorClient.createSubscription(projectId, subscriptionId, topicId)
+      SUBSCRIPTION_IDS.zip(TOPIC_IDS).forEach { (subscriptionId, topicId) ->
+        emulatorClient.createTopic(PROJECT_ID, topicId)
+        emulatorClient.createSubscription(PROJECT_ID, subscriptionId, topicId)
       }
     }
   }
 
   @After
-  fun tearDown() {
+  fun deleteTopicAndSubscription() {
     runBlocking {
-      subscriptionIds.zip(topicIds).forEach { (subscriptionId, topicId) ->
-        emulatorClient.deleteTopic(projectId, topicId)
-        emulatorClient.deleteSubscription(projectId, subscriptionId)
+      SUBSCRIPTION_IDS.zip(TOPIC_IDS).forEach { (subscriptionId, topicId) ->
+        emulatorClient.deleteTopic(PROJECT_ID, topicId)
+        emulatorClient.deleteSubscription(PROJECT_ID, subscriptionId)
       }
     }
   }
@@ -65,20 +58,18 @@ class PublisherTest {
   fun `should publish against different topics`() {
     runBlocking {
       val messages = listOf("UserName1", "UserName2")
-      val publisher = Publisher(projectId, emulatorClient)
-      publisher.publishMessage(topicIds[0], createTestWork(messages[0]))
-      publisher.publishMessage(topicIds[1], createTestWork(messages[1]))
-      val subscriber = Subscriber(projectId = projectId, googlePubSubClient = emulatorClient)
-
+      val publisher = Publisher<TestWork>(PROJECT_ID, emulatorClient)
+      publisher.publishMessage(TOPIC_IDS[0], createTestWork(messages[0]))
+      publisher.publishMessage(TOPIC_IDS[1], createTestWork(messages[1]))
+      val subscriber = Subscriber(projectId = PROJECT_ID, googlePubSubClient = emulatorClient)
       val firstMessageChannel =
-        subscriber.subscribe<TestWork>(subscriptionIds[0], TestWork.parser())
+        subscriber.subscribe<TestWork>(SUBSCRIPTION_IDS[0], TestWork.parser())
       val firstMessage = firstMessageChannel.receive()
       firstMessage.ack()
       firstMessageChannel.cancel()
       assertThat(firstMessage.body.userName).isEqualTo(messages[0])
-
       val secondMessageChannel =
-        subscriber.subscribe<TestWork>(subscriptionIds[1], TestWork.parser())
+        subscriber.subscribe<TestWork>(SUBSCRIPTION_IDS[1], TestWork.parser())
       val secondMessage = secondMessageChannel.receive()
       secondMessage.ack()
       secondMessageChannel.cancel()
@@ -87,20 +78,36 @@ class PublisherTest {
   }
 
   @Test
-  fun `should raise an Exception when topic doesn't exist`() {
+  fun `should raise a TopicNotFoundException when topic doesn't exist`() {
     runBlocking {
-      val publisher = Publisher(projectId, emulatorClient)
-      val exception =
-        assertThrows(Exception::class.java) {
-          runBlocking {
-            publisher.publishMessage("test-topic-id", createTestWork("test-user-name"))
-          }
+      val publisher = Publisher<TestWork>(PROJECT_ID, emulatorClient)
+
+      assertFailsWith<TopicNotFoundException> {
+        runBlocking {
+          publisher.publishMessage("test-topic-id", createTestWork("test-user-name"))
         }
-      assertThat(exception).hasMessageThat().contains("Impossible to publish the message.")
+      }
     }
   }
 
   private fun createTestWork(message: String): TestWork {
-    return TestWork.newBuilder().setUserName(message).setUserAge("25").setUserCountry("US").build()
+    return TestWork.newBuilder().apply {
+      userName = message
+      userAge = "25"
+      userCountry = "US"
+    }.build()
   }
+
+  companion object {
+
+    @ClassRule
+    @JvmField
+    val pubSubEmulatorProvider = GooglePubSubEmulatorProvider()
+
+    private const val PROJECT_ID = "test-project"
+    private val SUBSCRIPTION_IDS =
+      listOf("test-subscription-one", "test-subscription-two", "test-subscription-three")
+    private val TOPIC_IDS = listOf("test-topic-one", "test-topic-two", "test-topic-three")
+  }
+
 }

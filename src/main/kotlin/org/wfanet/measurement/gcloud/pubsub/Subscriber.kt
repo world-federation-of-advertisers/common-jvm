@@ -27,6 +27,10 @@ import kotlinx.coroutines.launch
 import org.threeten.bp.Duration
 import org.wfanet.measurement.queue.MessageConsumer
 import org.wfanet.measurement.queue.QueueSubscriber
+import kotlinx.coroutines.channels.produce
+import com.google.cloud.pubsub.v1.AckReplyConsumer
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.runBlocking
 
 /**
  * A Google Pub/Sub client that subscribes to a Pub/Sub subscription and provides messages in a
@@ -34,67 +38,37 @@ import org.wfanet.measurement.queue.QueueSubscriber
  *
  * @param projectId The Google Cloud project ID.
  * @param googlePubSubClient The client interface for interacting with the Google Pub/Sub service.
- * @param blockingContext The coroutine context used for blocking operations, defaulting to
- *   [Dispatchers.IO].
+ * @param context The coroutine context used for producing the channel, defaulting to [Dispatchers.IO].
  */
 class Subscriber(
   val projectId: String,
   val googlePubSubClient: GooglePubSubClient = DefaultGooglePubSubClient(),
-  val blockingContext: CoroutineContext = Dispatchers.IO,
+  val context: CoroutineContext = Dispatchers.IO,
 ) : QueueSubscriber {
 
-  private val scope = CoroutineScope(blockingContext)
-  private var isActive = true
+  private val scope = CoroutineScope(context)
 
-  /**
-   * Subscribes to a Pub/Sub subscription and returns a [ReceiveChannel] to consume messages
-   * asynchronously.
-   *
-   * @param subscriptionId The ID of the Pub/Sub subscription.
-   * @param parser A Protobuf [Parser] to parse messages into the desired type.
-   * @return A [ReceiveChannel] that emits [QueueSubscriber.QueueMessage] objects.
-   */
+  @kotlinx.coroutines.ExperimentalCoroutinesApi
   override fun <T : Message> subscribe(
     subscriptionId: String,
     parser: Parser<T>,
-  ): ReceiveChannel<QueueSubscriber.QueueMessage<T>> {
-    val channel = Channel<QueueSubscriber.QueueMessage<T>>(Channel.RENDEZVOUS)
-
+  ): ReceiveChannel<QueueSubscriber.QueueMessage<T>> = scope.produce(capacity = Channel.RENDEZVOUS) {
     val subscriber =
       googlePubSubClient.buildSubscriber(
         projectId = projectId,
         subscriptionId = subscriptionId,
         ackExtensionPeriod = Duration.ofHours(6),
       ) { message, consumer ->
-        scope.launch {
+        launch {
           try {
-
             val parsedMessage = parser.parseFrom(message.data.toByteArray())
             val queueMessage =
               QueueSubscriber.QueueMessage(
                 body = parsedMessage,
-                deliveryTag = message.messageId.hashCode().toLong(),
-                consumer =
-                  object : MessageConsumer {
-                    override fun ack() {
-                      try {
-                        consumer.ack()
-                      } catch (e: Exception) {
-                        logger.warning("Failed to ack message: ${e.message}")
-                      }
-                    }
-
-                    override fun nack() {
-                      try {
-                        consumer.nack()
-                      } catch (e: Exception) {
-                        logger.warning("Failed to nack message: ${e.message}")
-                      }
-                    }
-                  },
+                consumer = PubSubMessageConsumer(consumer),
               )
 
-            channel.send(queueMessage)
+            runBlocking { send(queueMessage) }
           } catch (e: Exception) {
             logger.warning("Error processing message: ${e.message}")
             consumer.nack()
@@ -105,20 +79,38 @@ class Subscriber(
     subscriber.startAsync().awaitRunning()
     logger.info("Subscriber started for subscription: $subscriptionId")
 
-    channel.invokeOnClose {
+    awaitClose {
       subscriber.stopAsync()
       subscriber.awaitTerminated()
     }
-
-    return channel
   }
 
+
   override fun close() {
-    isActive = false
     scope.cancel()
   }
 
+  private class PubSubMessageConsumer(private val consumer: AckReplyConsumer) : MessageConsumer {
+    override fun ack() {
+      try {
+        consumer.ack()
+      } catch (e: Exception) {
+        logger.warning("Failed to ack message: ${e.message}")
+        throw e
+      }
+    }
+
+    override fun nack() {
+      try {
+        consumer.nack()
+      } catch (e: Exception) {
+        logger.warning("Failed to nack message: ${e.message}")
+        throw e
+      }
+    }
+  }
+
   companion object {
-    private val logger = Logger.getLogger(Subscriber::class.java.name)
+    private val logger = Logger.getLogger(this::class.java.name)
   }
 }

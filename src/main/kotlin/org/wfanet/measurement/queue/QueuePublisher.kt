@@ -16,7 +16,17 @@ package org.wfanet.measurement.queue
 
 import com.google.protobuf.Message
 
-interface QueuePublisher : AutoCloseable {
+/**
+ * A class for publishing messages to a Queue.
+ */
+interface QueuePublisher<T: Message> : AutoCloseable {
 
-  suspend fun publishMessage(topicId: String, message: Message)
+  /**
+   * Publishes a message to the specified topic.
+   *
+   * @param topicId The ID of the topic to publish the message to.
+   * @param message The message to be published, where [T] is a type that extends [Message].
+   * @throws Exception If provided Topic ID does not exist.
+   */
+  suspend fun publishMessage(topicId: String, message: T)
 }

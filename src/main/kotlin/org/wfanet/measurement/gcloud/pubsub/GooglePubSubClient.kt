@@ -35,9 +35,8 @@ import org.wfanet.measurement.gcloud.common.await
 /** Abstract base class for managing Google Cloud Pub/Sub resources and interactions. */
 abstract class GooglePubSubClient : AutoCloseable {
 
-  private val topicAdminClient by lazy { buildTopicAdminClient() }
-
-  private val subscriptionAdminClient by lazy { buildSubscriptionAdminClient() }
+  private val topicAdminClient: Lazy<TopicAdminClient> = lazy { buildTopicAdminClient() }
+  private val subscriptionAdminClient: Lazy<SubscriptionAdminClient> = lazy { buildSubscriptionAdminClient() }
 
   /**
    * Builds the TopicAdminClient used to manage Pub/Sub topics.
@@ -54,7 +53,7 @@ abstract class GooglePubSubClient : AutoCloseable {
   protected abstract fun buildSubscriptionAdminClient(): SubscriptionAdminClient
 
   /**
-   * Builds a Google Pub/Sub [Subscriber].
+   * Builds a Google Pub/Sub [GoogleSubscriber].
    *
    * @param projectId The Google Cloud project ID.
    * @param subscriptionId The ID of the subscription to receive messages from.
@@ -86,21 +85,21 @@ abstract class GooglePubSubClient : AutoCloseable {
   suspend fun createTopic(projectId: String, topicId: String): TopicName {
     val topicName = TopicName.of(projectId, topicId)
     val topic = Topic.newBuilder().setName(topicName.toString()).build()
-    topicAdminClient.createTopicCallable().futureCall(topic).await()
+    topicAdminClient.value.createTopicCallable().futureCall(topic).await()
     return topicName
   }
 
   suspend fun deleteTopic(projectId: String, topicId: String) {
     val topicName = TopicName.of(projectId, topicId)
     val request = DeleteTopicRequest.newBuilder().setTopic(topicName.toString()).build()
-    topicAdminClient.deleteTopicCallable().futureCall(request).await()
+    topicAdminClient.value.deleteTopicCallable().futureCall(request).await()
   }
 
   suspend fun topicExists(projectId: String, topicId: String): Boolean {
     return try {
       val request: GetTopicRequest =
         GetTopicRequest.newBuilder().setTopic(TopicName.of(projectId, topicId).toString()).build()
-      topicAdminClient.getTopicCallable().futureCall(request).await()
+      topicAdminClient.value.getTopicCallable().futureCall(request).await()
       true
     } catch (e: NotFoundException) {
       false
@@ -115,29 +114,24 @@ abstract class GooglePubSubClient : AutoCloseable {
         .setName(subscriptionName)
         .setTopic(topicName.toString())
         .setPushConfig(PushConfig.getDefaultInstance())
-        .setAckDeadlineSeconds(ACK_DEADLINE_PERIOD)
         .build()
 
-    subscriptionAdminClient.createSubscriptionCallable().futureCall(subscription).await()
+    subscriptionAdminClient.value.createSubscriptionCallable().futureCall(subscription).await()
   }
 
   suspend fun deleteSubscription(projectId: String, subscriptionId: String) {
     val subscriptionName = ProjectSubscriptionName.format(projectId, subscriptionId)
     val request = DeleteSubscriptionRequest.newBuilder().setSubscription(subscriptionName).build()
-    subscriptionAdminClient.deleteSubscriptionCallable().futureCall(request).await()
+    subscriptionAdminClient.value.deleteSubscriptionCallable().futureCall(request).await()
   }
 
   override fun close() {
-    if ((this::topicAdminClient as Lazy<*>).isInitialized()) {
-      topicAdminClient.close()
+    if (topicAdminClient.isInitialized()) {
+      topicAdminClient.value.close()
     }
-    if ((this::subscriptionAdminClient as Lazy<*>).isInitialized()) {
-      subscriptionAdminClient.close()
+    if (subscriptionAdminClient.isInitialized()) {
+      subscriptionAdminClient.value.close()
     }
-  }
-
-  companion object {
-    const val ACK_DEADLINE_PERIOD = 10
   }
 
 }
