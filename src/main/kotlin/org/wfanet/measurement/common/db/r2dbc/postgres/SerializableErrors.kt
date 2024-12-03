@@ -35,7 +35,7 @@ object SerializableErrors {
   }
 
   @OptIn(ExperimentalTime::class)
-  private fun <T> Flow<T>.withSerializableErrorRetries(): Flow<T> {
+  fun <T> Flow<T>.withSerializableErrorRetries(): Flow<T> {
     val retryLimit: TimeMark = TimeSource.Monotonic.markNow().plus(SERIALIZABLE_RETRY_DURATION)
     return this.retry { e ->
       (retryLimit.hasNotPassedNow() &&
