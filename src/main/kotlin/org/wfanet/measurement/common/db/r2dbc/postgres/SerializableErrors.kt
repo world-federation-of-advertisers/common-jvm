@@ -15,9 +15,12 @@
 package org.wfanet.measurement.common.db.r2dbc.postgres
 
 import io.r2dbc.postgresql.api.PostgresqlException
+import kotlin.random.Random
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.ExperimentalTime
 import kotlin.time.TimeMark
 import kotlin.time.TimeSource
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.retry
@@ -31,12 +34,17 @@ object SerializableErrors {
     return flow { emit(block()) }.withSerializableErrorRetries().single()
   }
 
-  fun <T> Flow<T>.withSerializableErrorRetries(): Flow<T> {
+  @OptIn(ExperimentalTime::class)
+  private fun <T> Flow<T>.withSerializableErrorRetries(): Flow<T> {
     val retryLimit: TimeMark = TimeSource.Monotonic.markNow().plus(SERIALIZABLE_RETRY_DURATION)
     return this.retry { e ->
       (retryLimit.hasNotPassedNow() &&
         e is PostgresqlException &&
-        e.errorDetails.code == SERIALIZABLE_ERROR_CODE)
+        e.errorDetails.code == SERIALIZABLE_ERROR_CODE).also {
+          if (it) {
+            delay(Random.nextLong(250, 1000))
+          }
+      }
     }
   }
 }
