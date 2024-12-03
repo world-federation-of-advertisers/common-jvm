@@ -28,6 +28,7 @@ import kotlinx.coroutines.flow.single
 
 object SerializableErrors {
   private const val SERIALIZABLE_ERROR_CODE = "40001"
+  private const val TOO_MANY_CLIENTS_ERROR_CODE = "53300"
   private val SERIALIZABLE_RETRY_DURATION = 120.seconds
 
   suspend fun <T> retrying(block: suspend () -> T): T {
@@ -38,9 +39,12 @@ object SerializableErrors {
   fun <T> Flow<T>.withSerializableErrorRetries(): Flow<T> {
     val retryLimit: TimeMark = TimeSource.Monotonic.markNow().plus(SERIALIZABLE_RETRY_DURATION)
     return this.retry { e ->
+      println("attempting retry")
       (retryLimit.hasNotPassedNow() &&
         e is PostgresqlException &&
-        e.errorDetails.code == SERIALIZABLE_ERROR_CODE).also {
+        (
+          e.errorDetails.code == SERIALIZABLE_ERROR_CODE ||
+          e.errorDetails.code == TOO_MANY_CLIENTS_ERROR_CODE)).also {
           if (e is PostgresqlException) {
             println("error code: ${e.errorDetails.code}")
           }
