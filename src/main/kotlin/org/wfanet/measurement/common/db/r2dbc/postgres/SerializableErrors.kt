@@ -41,9 +41,7 @@ object SerializableErrors {
       (retryLimit.hasNotPassedNow() &&
         e is PostgresqlException &&
         e.errorDetails.code == SERIALIZABLE_ERROR_CODE).also {
-          if (it) {
-            delay(Random.nextLong(250, 1000))
-          }
+          delay(Random.nextLong(250, 1000))
       }
     }
   }
