@@ -15,9 +15,8 @@
 package org.wfanet.measurement.common.db.r2dbc.postgres
 
 import io.r2dbc.postgresql.api.PostgresqlException
-import kotlin.time.Duration.Companion.seconds
-import kotlin.time.TimeMark
-import kotlin.time.TimeSource
+import kotlin.random.Random
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.retry
@@ -25,18 +24,16 @@ import kotlinx.coroutines.flow.single
 
 object SerializableErrors {
   private const val SERIALIZABLE_ERROR_CODE = "40001"
-  private val SERIALIZABLE_RETRY_DURATION = 120.seconds
 
   suspend fun <T> retrying(block: suspend () -> T): T {
     return flow { emit(block()) }.withSerializableErrorRetries().single()
   }
 
   fun <T> Flow<T>.withSerializableErrorRetries(): Flow<T> {
-    val retryLimit: TimeMark = TimeSource.Monotonic.markNow().plus(SERIALIZABLE_RETRY_DURATION)
     return this.retry { e ->
-      (retryLimit.hasNotPassedNow() &&
-        e is PostgresqlException &&
-        e.errorDetails.code == SERIALIZABLE_ERROR_CODE)
+      (e is PostgresqlException && e.errorDetails.code == SERIALIZABLE_ERROR_CODE).also {
+        delay(Random.nextLong(50, 100))
+      }
     }
   }
 }
