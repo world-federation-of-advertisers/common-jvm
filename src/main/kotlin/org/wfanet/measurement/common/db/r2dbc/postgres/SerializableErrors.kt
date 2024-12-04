@@ -15,12 +15,9 @@
 package org.wfanet.measurement.common.db.r2dbc.postgres
 
 import io.r2dbc.postgresql.api.PostgresqlException
-import kotlin.random.Random
 import kotlin.time.Duration.Companion.seconds
-import kotlin.time.ExperimentalTime
 import kotlin.time.TimeMark
 import kotlin.time.TimeSource
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.retry
@@ -28,28 +25,18 @@ import kotlinx.coroutines.flow.single
 
 object SerializableErrors {
   private const val SERIALIZABLE_ERROR_CODE = "40001"
-  private const val TOO_MANY_CLIENTS_ERROR_CODE = "53300"
   private val SERIALIZABLE_RETRY_DURATION = 120.seconds
 
   suspend fun <T> retrying(block: suspend () -> T): T {
     return flow { emit(block()) }.withSerializableErrorRetries().single()
   }
 
-  @OptIn(ExperimentalTime::class)
   fun <T> Flow<T>.withSerializableErrorRetries(): Flow<T> {
     val retryLimit: TimeMark = TimeSource.Monotonic.markNow().plus(SERIALIZABLE_RETRY_DURATION)
     return this.retry { e ->
-      println("attempting retry: ${e.cause}")
       (retryLimit.hasNotPassedNow() &&
         e is PostgresqlException &&
-        (
-          e.errorDetails.code == SERIALIZABLE_ERROR_CODE ||
-          e.errorDetails.code == TOO_MANY_CLIENTS_ERROR_CODE)).also {
-          if (e is PostgresqlException) {
-            println("error code: ${e.errorDetails.code}")
-          }
-          delay(Random.nextLong(500, 1500))
-      }
+        e.errorDetails.code == SERIALIZABLE_ERROR_CODE)
     }
   }
 }

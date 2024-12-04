@@ -58,15 +58,15 @@ class PostgresDatabaseClient(getConnection: ConnectionProvider) : DatabaseClient
             .build()
         )
 
-      return PostgresDatabaseClient { connectionFactory.create().asFlow().retry(50) {
-        delay(Random.nextLong(250, 1000))
+      return PostgresDatabaseClient { connectionFactory.create().asFlow().retry {
+        delay(100)
         true
       }.single() }
     }
 
     fun fromConnectionFactory(connectionFactory: ConnectionFactory): PostgresDatabaseClient {
-      return PostgresDatabaseClient { connectionFactory.create().asFlow().retry(50) {
-        delay(Random.nextLong(250, 1000))
+      return PostgresDatabaseClient { connectionFactory.create().asFlow().retry {
+        delay(100)
         true
       }.single() }
     }
