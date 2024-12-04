@@ -63,6 +63,8 @@ class GooglePubSubTest: AbstractQueueTest() {
     @JvmField
     val pubSubEmulatorProvider = GooglePubSubEmulatorProvider()
 
+    private const val PROJECT_ID = "test-project"
+
   }
 
 }

@@ -26,7 +26,7 @@ interface QueuePublisher<T: Message> : AutoCloseable {
    *
    * @param topicId The ID of the topic to publish the message to.
    * @param message The message to be published, where [T] is a type that extends [Message].
-   * @throws [TopicNotFoundException] If the provided Topic ID does not exist.
+   * @throws TopicNotFoundException If the provided Topic ID does not exist.
    */
   suspend fun publishMessage(topicId: String, message: T)
 }
