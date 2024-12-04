@@ -34,14 +34,15 @@ object PostgresConnectionFactories {
         .option(ConnectionFactoryOptions.PASSWORD, "UNUSED")
         .option(ConnectionFactoryOptions.DATABASE, flags.database)
         .option(ConnectionFactoryOptions.HOST, flags.cloudSqlInstance)
-        .option(ConnectionFactoryOptions.STATEMENT_TIMEOUT, Duration.ofSeconds(60))
+        .option(ConnectionFactoryOptions.STATEMENT_TIMEOUT, Duration.ofSeconds(120))
         .option(GcpConnectionFactoryProvider.ENABLE_IAM_AUTH, true)
         .build()
     )
 
     val configuration: ConnectionPoolConfiguration = ConnectionPoolConfiguration
       .builder(connectionFactory)
-      .maxIdleTime(Duration.ofSeconds(300))
+      .maxIdleTime(Duration.ofMinutes(30))
+      .acquireRetry(30)
       .build()
 
     return ConnectionPool(configuration)
