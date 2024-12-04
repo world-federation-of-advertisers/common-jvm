@@ -21,6 +21,11 @@ import io.r2dbc.spi.ConnectionFactories
 import io.r2dbc.spi.ConnectionFactory
 import io.r2dbc.spi.ConnectionFactoryOptions
 import io.r2dbc.spi.IsolationLevel
+import kotlin.random.Random
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.retry
+import kotlinx.coroutines.flow.single
+import kotlinx.coroutines.reactive.asFlow
 import kotlinx.coroutines.reactive.awaitSingle
 import org.wfanet.measurement.common.db.postgres.PostgresFlags
 import org.wfanet.measurement.common.db.r2dbc.ConnectionProvider
@@ -53,11 +58,17 @@ class PostgresDatabaseClient(getConnection: ConnectionProvider) : DatabaseClient
             .build()
         )
 
-      return PostgresDatabaseClient { connectionFactory.create().awaitSingle() }
+      return PostgresDatabaseClient { connectionFactory.create().asFlow().retry(50) {
+        delay(Random.nextLong(250, 1000))
+        true
+      }.single() }
     }
 
     fun fromConnectionFactory(connectionFactory: ConnectionFactory): PostgresDatabaseClient {
-      return PostgresDatabaseClient { connectionFactory.create().awaitSingle() }
+      return PostgresDatabaseClient { connectionFactory.create().asFlow().retry(50) {
+        delay(Random.nextLong(250, 1000))
+        true
+      }.single() }
     }
   }
 }

@@ -39,7 +39,7 @@ object SerializableErrors {
   fun <T> Flow<T>.withSerializableErrorRetries(): Flow<T> {
     val retryLimit: TimeMark = TimeSource.Monotonic.markNow().plus(SERIALIZABLE_RETRY_DURATION)
     return this.retry { e ->
-      println("attempting retry")
+      println("attempting retry: ${e.cause}")
       (retryLimit.hasNotPassedNow() &&
         e is PostgresqlException &&
         (
