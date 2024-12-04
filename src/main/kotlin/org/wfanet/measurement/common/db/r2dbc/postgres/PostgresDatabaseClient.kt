@@ -21,7 +21,6 @@ import io.r2dbc.spi.ConnectionFactories
 import io.r2dbc.spi.ConnectionFactory
 import io.r2dbc.spi.ConnectionFactoryOptions
 import io.r2dbc.spi.IsolationLevel
-import kotlin.random.Random
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.retry
 import kotlinx.coroutines.flow.single
@@ -58,10 +57,7 @@ class PostgresDatabaseClient(getConnection: ConnectionProvider) : DatabaseClient
             .build()
         )
 
-      return PostgresDatabaseClient { connectionFactory.create().asFlow().retry {
-        delay(100)
-        true
-      }.single() }
+      return PostgresDatabaseClient { connectionFactory.create().awaitSingle() }
     }
 
     fun fromConnectionFactory(connectionFactory: ConnectionFactory): PostgresDatabaseClient {
