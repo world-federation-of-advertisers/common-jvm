@@ -32,7 +32,10 @@ object SerializableErrors {
   fun <T> Flow<T>.withSerializableErrorRetries(): Flow<T> {
     return this.retry { e ->
       (e is PostgresqlException && e.errorDetails.code == SERIALIZABLE_ERROR_CODE).also {
-        delay(Random.nextLong(50, 150))
+        if (e is PostgresqlException) {
+          println("postgresql error code: ${e.errorDetails.code}")
+        }
+        delay(Random.nextLong(100, 500))
       }
     }
   }
