@@ -18,8 +18,6 @@ import com.google.cloud.pubsub.v1.AckReplyConsumer
 import com.google.cloud.pubsub.v1.MessageReceiver
 import com.google.cloud.pubsub.v1.Publisher as GooglePublisher
 import com.google.cloud.pubsub.v1.Subscriber as GoogleSubscriber
-import com.google.cloud.pubsub.v1.SubscriptionAdminClient
-import com.google.cloud.pubsub.v1.SubscriptionAdminSettings
 import com.google.cloud.pubsub.v1.TopicAdminClient
 import com.google.cloud.pubsub.v1.TopicAdminSettings
 import com.google.pubsub.v1.ProjectSubscriptionName
@@ -30,10 +28,6 @@ import org.threeten.bp.Duration
 class DefaultGooglePubSubClient : GooglePubSubClient() {
   override fun buildTopicAdminClient(): TopicAdminClient {
     return TopicAdminClient.create(TopicAdminSettings.newBuilder().build())
-  }
-
-  override fun buildSubscriptionAdminClient(): SubscriptionAdminClient {
-    return SubscriptionAdminClient.create(SubscriptionAdminSettings.newBuilder().build())
   }
 
   override fun buildSubscriber(

@@ -17,13 +17,12 @@ package org.wfanet.measurement.gcloud.pubsub
 import com.google.cloud.pubsub.v1.Publisher as GooglePublisher
 import com.google.protobuf.Message
 import com.google.pubsub.v1.PubsubMessage
-import io.grpc.Status
 import com.google.api.gax.rpc.ApiException
-import io.grpc.StatusRuntimeException
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import org.wfanet.measurement.gcloud.common.await
 import org.wfanet.measurement.queue.QueuePublisher
+import com.google.api.gax.rpc.StatusCode
 
 sealed class QueuePublisherException(message: String, cause: Throwable? = null) : Exception(message, cause)
 
@@ -41,8 +40,8 @@ class PublishFailedException(topicId: String, cause: Throwable? = null) :
  *   [DefaultGooglePubSubClient].
  */
 class Publisher<T: Message>(
-  val projectId: String,
-  val googlePubSubClient: GooglePubSubClient = DefaultGooglePubSubClient(),
+  private val projectId: String,
+  private val googlePubSubClient: GooglePubSubClient = DefaultGooglePubSubClient(),
 ) : QueuePublisher<T> {
 
   /** A concurrent map to store and reuse [Publisher] instances by topic ID. */
@@ -56,14 +55,9 @@ class Publisher<T: Message>(
     try {
       pubsubPublisher.publish(pubsubMessage).await()
     } catch (e: ApiException) {
-      val statusRuntimeException = e.cause as? StatusRuntimeException
-      if (statusRuntimeException != null) {
-        when (statusRuntimeException.status.code) {
-          Status.Code.NOT_FOUND -> throw TopicNotFoundException(topicId, e)
-          else -> throw PublishFailedException(topicId, e)
-        }
-      } else {
-        throw PublishFailedException(topicId, e)
+      when (e.statusCode.code) {
+        StatusCode.Code.NOT_FOUND -> throw TopicNotFoundException(topicId, e)
+        else -> throw PublishFailedException(topicId, e)
       }
     } catch (e: Exception) {
       throw PublishFailedException(topicId, e)

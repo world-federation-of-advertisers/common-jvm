@@ -16,7 +16,6 @@ package org.wfanet.measurement.queue
 
 import com.google.protobuf.Message
 import com.google.protobuf.Parser
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.ReceiveChannel
 
 interface MessageConsumer {

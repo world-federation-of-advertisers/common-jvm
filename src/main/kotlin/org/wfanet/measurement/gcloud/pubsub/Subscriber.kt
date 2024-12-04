@@ -29,6 +29,7 @@ import org.wfanet.measurement.queue.MessageConsumer
 import org.wfanet.measurement.queue.QueueSubscriber
 import kotlinx.coroutines.channels.produce
 import com.google.cloud.pubsub.v1.AckReplyConsumer
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.runBlocking
 
@@ -38,17 +39,17 @@ import kotlinx.coroutines.runBlocking
  *
  * @param projectId The Google Cloud project ID.
  * @param googlePubSubClient The client interface for interacting with the Google Pub/Sub service.
- * @param context The coroutine context used for producing the channel, defaulting to [Dispatchers.IO].
+ * @param context The coroutine context used for producing the channel.
  */
 class Subscriber(
-  val projectId: String,
-  val googlePubSubClient: GooglePubSubClient = DefaultGooglePubSubClient(),
-  val context: CoroutineContext = Dispatchers.IO,
+  private val projectId: String,
+  private val googlePubSubClient: GooglePubSubClient = DefaultGooglePubSubClient(),
+  private val context: CoroutineContext = Dispatchers.Default,
 ) : QueueSubscriber {
 
   private val scope = CoroutineScope(context)
 
-  @kotlinx.coroutines.ExperimentalCoroutinesApi
+  @OptIn(ExperimentalCoroutinesApi::class) // For `produce`.
   override fun <T : Message> subscribe(
     subscriptionId: String,
     parser: Parser<T>,
@@ -59,21 +60,14 @@ class Subscriber(
         subscriptionId = subscriptionId,
         ackExtensionPeriod = Duration.ofHours(6),
       ) { message, consumer ->
-        launch {
-          try {
-            val parsedMessage = parser.parseFrom(message.data.toByteArray())
-            val queueMessage =
-              QueueSubscriber.QueueMessage(
-                body = parsedMessage,
-                consumer = PubSubMessageConsumer(consumer),
-              )
+        val parsedMessage = parser.parseFrom(message.data.toByteArray())
+        val queueMessage =
+          QueueSubscriber.QueueMessage(
+            body = parsedMessage,
+            consumer = PubSubMessageConsumer(consumer),
+          )
 
-            runBlocking { send(queueMessage) }
-          } catch (e: Exception) {
-            logger.warning("Error processing message: ${e.message}")
-            consumer.nack()
-          }
-        }
+        trySend(queueMessage)
       }
 
     subscriber.startAsync().awaitRunning()
@@ -92,21 +86,11 @@ class Subscriber(
 
   private class PubSubMessageConsumer(private val consumer: AckReplyConsumer) : MessageConsumer {
     override fun ack() {
-      try {
-        consumer.ack()
-      } catch (e: Exception) {
-        logger.warning("Failed to ack message: ${e.message}")
-        throw e
-      }
+      consumer.ack()
     }
 
     override fun nack() {
-      try {
-        consumer.nack()
-      } catch (e: Exception) {
-        logger.warning("Failed to nack message: ${e.message}")
-        throw e
-      }
+      consumer.nack()
     }
   }
 
