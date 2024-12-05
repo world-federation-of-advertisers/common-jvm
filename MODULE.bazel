@@ -233,6 +233,7 @@ maven.install(
         "org.postgresql:postgresql:42.7.0",
         "org.postgresql:r2dbc-postgresql:1.0.4.RELEASE",
         "io.r2dbc:r2dbc-spi:1.0.0.RELEASE",
+        "io.r2dbc:r2dbc-pool:1.0.0.RELEASE",
 
         # Liquibase.
         "org.yaml:snakeyaml:2.2",
