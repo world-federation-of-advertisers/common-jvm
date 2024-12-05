@@ -30,6 +30,7 @@ import org.wfanet.measurement.queue.QueueSubscriber
 import kotlinx.coroutines.channels.produce
 import com.google.cloud.pubsub.v1.AckReplyConsumer
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.channels.ClosedSendChannelException
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.runBlocking
 
@@ -67,7 +68,10 @@ class Subscriber(
             consumer = PubSubMessageConsumer(consumer),
           )
 
-        trySend(queueMessage)
+        val result = trySend(queueMessage)
+        if (result.isClosed) {
+          throw ClosedSendChannelException("Channel is closed. Cannot send message.")
+        }
       }
 
     subscriber.startAsync().awaitRunning()
