@@ -25,7 +25,6 @@ option java_outer_classname = "TestWorkProto";
 
 // Resource representing a test work.
 message TestWork {
-
   // Identifier for the test work.
   int64 id = 1 [(google.api.field_behavior) = IDENTIFIER];
 
