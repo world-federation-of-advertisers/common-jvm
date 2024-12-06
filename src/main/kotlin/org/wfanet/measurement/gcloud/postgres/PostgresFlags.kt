@@ -21,7 +21,7 @@ class PostgresFlags {
   @CommandLine.Option(
     names = ["--postgres-database"],
     description = ["Name of the Postgres database."],
-    required = true
+    required = true,
   )
   lateinit var database: String
     private set
@@ -29,7 +29,7 @@ class PostgresFlags {
   @CommandLine.Option(
     names = ["--postgres-cloud-sql-connection-name"],
     description = ["Instance connection name of the Postgres database."],
-    required = true
+    required = true,
   )
   lateinit var cloudSqlInstance: String
     private set
@@ -37,7 +37,7 @@ class PostgresFlags {
   @CommandLine.Option(
     names = ["--postgres-user"],
     description = ["User of the Postgres database."],
-    required = true
+    required = true,
   )
   lateinit var user: String
     private set
@@ -45,15 +45,16 @@ class PostgresFlags {
   @CommandLine.Option(
     names = ["--statement-timeout-seconds"],
     description = ["Statement timeout in seconds."],
-    required = false
+    required = false,
   )
   var statementTimeoutSeconds: Long = 120
     private set
 
   @CommandLine.Option(
     names = ["--max-idle-time-minutes"],
-    description = ["Maximum duration of time a connection can be idle in minutes before being closed."],
-    required = false
+    description =
+      ["Maximum duration of time a connection can be idle in minutes before being closed."],
+    required = false,
   )
   var maxIdleTimeMinutes: Long = 5
     private set
@@ -61,7 +62,7 @@ class PostgresFlags {
   @CommandLine.Option(
     names = ["--max-connection-pool-size"],
     description = ["Maximum number of connections in pool."],
-    required = false
+    required = false,
   )
   var maxPoolSize: Int = 16
     private set
@@ -69,7 +70,7 @@ class PostgresFlags {
   @CommandLine.Option(
     names = ["--acquire-retry"],
     description = ["Maximum number of retries when acquiring a connection from the pool."],
-    required = false
+    required = false,
   )
   var acquireRetry: Int = 10
     private set

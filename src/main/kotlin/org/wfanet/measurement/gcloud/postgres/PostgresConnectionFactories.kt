@@ -35,7 +35,10 @@ object PostgresConnectionFactories {
           .option(ConnectionFactoryOptions.PASSWORD, "UNUSED")
           .option(ConnectionFactoryOptions.DATABASE, flags.database)
           .option(ConnectionFactoryOptions.HOST, flags.cloudSqlInstance)
-          .option(ConnectionFactoryOptions.STATEMENT_TIMEOUT, Duration.ofSeconds(flags.statementTimeoutSeconds))
+          .option(
+            ConnectionFactoryOptions.STATEMENT_TIMEOUT,
+            Duration.ofSeconds(flags.statementTimeoutSeconds),
+          )
           .option(GcpConnectionFactoryProvider.ENABLE_IAM_AUTH, true)
           .build()
       )
