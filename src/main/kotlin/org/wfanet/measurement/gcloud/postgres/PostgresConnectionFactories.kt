@@ -41,7 +41,7 @@ object PostgresConnectionFactories {
 
     val configuration: ConnectionPoolConfiguration = ConnectionPoolConfiguration
       .builder(connectionFactory)
-      .maxIdleTime(Duration.ofMinutes(30))
+      .maxIdleTime(Duration.ofMinutes(10))
       .maxSize(20)
       .acquireRetry(30)
       .build()
