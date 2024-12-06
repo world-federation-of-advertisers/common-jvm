@@ -44,7 +44,6 @@ object PostgresConnectionFactories {
       ConnectionPoolConfiguration.builder(connectionFactory)
         .maxIdleTime(Duration.ofMinutes(5))
         .maxSize(16)
-        .max
         .acquireRetry(30)
         .build()
 
