@@ -18,7 +18,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.ClassRule
 import org.wfanet.measurement.gcloud.pubsub.testing.GooglePubSubEmulatorClient
 import org.wfanet.measurement.gcloud.pubsub.testing.GooglePubSubEmulatorProvider
-import org.wfanet.measurement.queue.AbstractQueueTest
+import org.wfanet.measurement.queue.testing.AbstractQueueTest
 import org.wfanet.measurement.queue.QueuePublisher
 import org.wfanet.measurement.queue.QueueSubscriber
 import org.wfa.measurement.queue.testing.TestWork

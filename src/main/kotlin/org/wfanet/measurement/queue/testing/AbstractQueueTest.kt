@@ -11,7 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-package org.wfanet.measurement.queue
+package org.wfanet.measurement.queue.testing
 
 import kotlin.test.assertFailsWith
 import kotlinx.coroutines.runBlocking
@@ -21,6 +21,8 @@ import org.junit.Test
 import org.wfanet.measurement.gcloud.pubsub.TopicNotFoundException
 import org.wfa.measurement.queue.testing.TestWork
 import org.wfa.measurement.queue.testing.testWork
+import org.wfanet.measurement.queue.QueuePublisher
+import org.wfanet.measurement.queue.QueueSubscriber
 
 abstract class AbstractQueueTest {
 

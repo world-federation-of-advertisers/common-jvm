@@ -23,7 +23,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ReceiveChannel
-import kotlinx.coroutines.launch
 import org.threeten.bp.Duration
 import org.wfanet.measurement.queue.MessageConsumer
 import org.wfanet.measurement.queue.QueueSubscriber
@@ -32,7 +31,8 @@ import com.google.cloud.pubsub.v1.AckReplyConsumer
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.ClosedSendChannelException
 import kotlinx.coroutines.channels.awaitClose
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.channels.trySendBlocking
+import org.jetbrains.annotations.BlockingExecutor
 
 /**
  * A Google Pub/Sub client that subscribes to a Pub/Sub subscription and provides messages in a
@@ -45,10 +45,10 @@ import kotlinx.coroutines.runBlocking
 class Subscriber(
   private val projectId: String,
   private val googlePubSubClient: GooglePubSubClient = DefaultGooglePubSubClient(),
-  private val context: CoroutineContext = Dispatchers.Default,
+  blockingContext: @BlockingExecutor CoroutineContext = Dispatchers.IO,
 ) : QueueSubscriber {
 
-  private val scope = CoroutineScope(context)
+  private val scope = CoroutineScope(blockingContext)
 
   @OptIn(ExperimentalCoroutinesApi::class) // For `produce`.
   override fun <T : Message> subscribe(
@@ -68,7 +68,7 @@ class Subscriber(
             consumer = PubSubMessageConsumer(consumer),
           )
 
-        val result = trySend(queueMessage)
+        val result = trySendBlocking(queueMessage)
         if (result.isClosed) {
           throw ClosedSendChannelException("Channel is closed. Cannot send message.")
         }
