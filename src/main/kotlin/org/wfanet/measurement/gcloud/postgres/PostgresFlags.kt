@@ -53,8 +53,7 @@ class PostgresFlags {
 
   @CommandLine.Option(
     names = ["--max-idle-time-minutes"],
-    description =
-      ["Maximum duration a connection can be idle before being closed."],
+    description = ["Maximum duration a connection can be idle before being closed."],
     required = false,
   )
   var maxIdleTime: Duration = Duration.ofMinutes(5)

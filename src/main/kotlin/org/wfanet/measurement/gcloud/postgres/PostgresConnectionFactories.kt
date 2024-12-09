@@ -20,7 +20,6 @@ import io.r2dbc.pool.ConnectionPoolConfiguration
 import io.r2dbc.spi.ConnectionFactories
 import io.r2dbc.spi.ConnectionFactory
 import io.r2dbc.spi.ConnectionFactoryOptions
-import java.time.Duration
 
 object PostgresConnectionFactories {
   @JvmStatic
