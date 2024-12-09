@@ -146,6 +146,11 @@ maven.artifact(
 )
 maven.artifact(
     testonly = True,
+    artifact = "gcloud",
+    group = "org.testcontainers",
+)
+maven.artifact(
+    testonly = True,
     artifact = "s3mock-junit4",
     exclusions = [
         # See https://github.com/adobe/S3Mock/issues/141
@@ -202,6 +207,7 @@ maven.install(
         "com.google.cloud:google-cloud-core",
         "com.google.cloud:google-cloud-core-grpc",
         "com.google.cloud:google-cloud-storage",
+        "com.google.cloud:google-cloud-pubsub",
         "com.google.cloud:google-cloud-nio",
         "com.google.cloud:google-cloud-spanner",
         "com.google.cloud:google-cloud-bigquery",

@@ -4,3 +4,8 @@ alias(
     name = "postgresql",
     actual = "@maven//:org_testcontainers_postgresql",
 )
+
+alias(
+    name = "pubsub",
+    actual = "@maven//:org_testcontainers_gcloud",
+)
