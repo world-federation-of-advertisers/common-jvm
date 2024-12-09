@@ -14,17 +14,18 @@
 
 package org.wfanet.measurement.gcloud.pubsub
 
+import com.google.api.gax.rpc.ApiException
+import com.google.api.gax.rpc.StatusCode
 import com.google.cloud.pubsub.v1.Publisher as GooglePublisher
 import com.google.protobuf.Message
 import com.google.pubsub.v1.PubsubMessage
-import com.google.api.gax.rpc.ApiException
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import org.wfanet.measurement.gcloud.common.await
 import org.wfanet.measurement.queue.QueuePublisher
-import com.google.api.gax.rpc.StatusCode
 
-sealed class QueuePublisherException(message: String, cause: Throwable? = null) : Exception(message, cause)
+sealed class QueuePublisherException(message: String, cause: Throwable? = null) :
+  Exception(message, cause)
 
 class TopicNotFoundException(topicId: String, cause: Throwable? = null) :
   QueuePublisherException("Topic $topicId does not exist.", cause)
@@ -39,7 +40,7 @@ class PublishFailedException(topicId: String, cause: Throwable? = null) :
  * @property googlePubSubClient The client used for managing Pub/Sub resources. Defaults to
  *   [DefaultGooglePubSubClient].
  */
-class Publisher<T: Message>(
+class Publisher<T : Message>(
   private val projectId: String,
   private val googlePubSubClient: GooglePubSubClient = DefaultGooglePubSubClient(),
 ) : QueuePublisher<T> {

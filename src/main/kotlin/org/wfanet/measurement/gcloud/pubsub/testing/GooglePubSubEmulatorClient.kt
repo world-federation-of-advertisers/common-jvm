@@ -26,15 +26,15 @@ import com.google.cloud.pubsub.v1.SubscriptionAdminSettings
 import com.google.cloud.pubsub.v1.TopicAdminClient
 import com.google.cloud.pubsub.v1.TopicAdminSettings
 import com.google.pubsub.v1.DeleteSubscriptionRequest
-import com.google.pubsub.v1.PushConfig
-import com.google.pubsub.v1.Subscription
 import com.google.pubsub.v1.ProjectSubscriptionName
 import com.google.pubsub.v1.PubsubMessage
+import com.google.pubsub.v1.PushConfig
+import com.google.pubsub.v1.Subscription
 import com.google.pubsub.v1.TopicName
 import io.grpc.ManagedChannelBuilder
 import org.threeten.bp.Duration
-import org.wfanet.measurement.gcloud.pubsub.GooglePubSubClient
 import org.wfanet.measurement.gcloud.common.await
+import org.wfanet.measurement.gcloud.pubsub.GooglePubSubClient
 
 /**
  * A client for managing a Google Pub/Sub emulator, providing utilities to interact with topics and
@@ -114,6 +114,6 @@ class GooglePubSubEmulatorClient(host: String, port: Int) : GooglePubSubClient()
     channel.shutdown()
     if (subscriptionAdminClient.isInitialized()) {
       subscriptionAdminClient.value.close()
-      }
+    }
   }
 }

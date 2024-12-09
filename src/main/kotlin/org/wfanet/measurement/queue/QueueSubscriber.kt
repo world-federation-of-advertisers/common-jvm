@@ -25,14 +25,13 @@ interface MessageConsumer {
 }
 
 /**
- * A Queue client that subscribes to a subscription and provides messages in a
- * coroutine-based channel.
+ * A Queue client that subscribes to a subscription and provides messages in a coroutine-based
+ * channel.
  */
 interface QueueSubscriber : AutoCloseable {
 
   /**
-   * Subscribes to a subscription and returns a [ReceiveChannel] to consume messages
-   * asynchronously.
+   * Subscribes to a subscription and returns a [ReceiveChannel] to consume messages asynchronously.
    *
    * @param subscriptionId The ID of the subscription.
    * @param parser A Protobuf [Parser] to parse messages into the desired type.
@@ -43,10 +42,7 @@ interface QueueSubscriber : AutoCloseable {
     parser: Parser<T>,
   ): ReceiveChannel<QueueMessage<T>>
 
-  data class QueueMessage<T>(
-    val body: T,
-    private val consumer: MessageConsumer,
-  ) {
+  data class QueueMessage<T>(val body: T, private val consumer: MessageConsumer) {
     fun ack() {
       consumer.ack()
     }

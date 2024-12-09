@@ -56,6 +56,7 @@ class GooglePubSubEmulatorProvider : TestRule {
   }
 
   companion object {
-    private const val PUBSUB_IMAGE_NAME = "gcr.io/google.com/cloudsdktool/cloud-sdk:317.0.0-emulators"
+    private const val PUBSUB_IMAGE_NAME =
+      "gcr.io/google.com/cloudsdktool/cloud-sdk:317.0.0-emulators"
   }
 }

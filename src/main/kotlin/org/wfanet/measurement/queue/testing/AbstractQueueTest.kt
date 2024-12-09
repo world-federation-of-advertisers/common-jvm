@@ -13,14 +13,14 @@
 // limitations under the License.
 package org.wfanet.measurement.queue.testing
 
+import com.google.common.truth.Truth.assertThat
 import kotlin.test.assertFailsWith
 import kotlinx.coroutines.runBlocking
-import com.google.common.truth.Truth.assertThat
 import org.junit.Before
 import org.junit.Test
-import org.wfanet.measurement.gcloud.pubsub.TopicNotFoundException
 import org.wfa.measurement.queue.testing.TestWork
 import org.wfa.measurement.queue.testing.testWork
+import org.wfanet.measurement.gcloud.pubsub.TopicNotFoundException
 import org.wfanet.measurement.queue.QueuePublisher
 import org.wfanet.measurement.queue.QueueSubscriber
 
@@ -30,9 +30,11 @@ abstract class AbstractQueueTest {
   private lateinit var queueSubscriber: QueueSubscriber
 
   protected abstract fun createPublisher(): QueuePublisher<TestWork>
+
   protected abstract fun createSubscriber(): QueueSubscriber
 
   abstract suspend fun createTopicAndSubscription()
+
   abstract suspend fun deleteTopicAndSubscription()
 
   @Before
@@ -41,15 +43,11 @@ abstract class AbstractQueueTest {
     queueSubscriber = createSubscriber()
   }
 
-
   @Test
   fun `should raise a TopicNotFoundException when topic doesn't exist`() {
     runBlocking {
-
       assertFailsWith<TopicNotFoundException> {
-        runBlocking {
-          queuePublisher.publishMessage("test-topic-id", createTestWork(1L))
-        }
+        runBlocking { queuePublisher.publishMessage("test-topic-id", createTestWork(1L)) }
       }
     }
   }
@@ -83,7 +81,8 @@ abstract class AbstractQueueTest {
     runBlocking {
       createTopicAndSubscription()
       val ids = listOf(1L, 2L, 3L)
-      val messageChannel = queueSubscriber.subscribe<TestWork>(SUBSCRIPTION_IDS[0], TestWork.parser())
+      val messageChannel =
+        queueSubscriber.subscribe<TestWork>(SUBSCRIPTION_IDS[0], TestWork.parser())
 
       for (id in ids) {
         queuePublisher.publishMessage(TOPIC_IDS[0], createTestWork(id))
@@ -102,7 +101,8 @@ abstract class AbstractQueueTest {
       createTopicAndSubscription()
       val id = 1L
       queuePublisher.publishMessage(TOPIC_IDS[0], createTestWork(id))
-      val messageChannel = queueSubscriber.subscribe<TestWork>(SUBSCRIPTION_IDS[0], TestWork.parser())
+      val messageChannel =
+        queueSubscriber.subscribe<TestWork>(SUBSCRIPTION_IDS[0], TestWork.parser())
       var message = messageChannel.receive()
       assertThat(message.body.id).isEqualTo(id)
       message.nack()
@@ -125,8 +125,7 @@ abstract class AbstractQueueTest {
   companion object {
 
     val TOPIC_IDS = listOf("test-topic-1", "test-topic-2", "test-topic-3")
-    val SUBSCRIPTION_IDS = listOf("test-subscription-1", "test-subscription-2", "test-subscription-3")
-
+    val SUBSCRIPTION_IDS =
+      listOf("test-subscription-1", "test-subscription-2", "test-subscription-3")
   }
-
 }

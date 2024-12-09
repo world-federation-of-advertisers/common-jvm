@@ -14,13 +14,11 @@
 
 package org.wfanet.measurement.gcloud.pubsub
 
-import com.google.api.gax.rpc.NotFoundException
 import com.google.cloud.pubsub.v1.AckReplyConsumer
 import com.google.cloud.pubsub.v1.Publisher as GooglePublisher
 import com.google.cloud.pubsub.v1.Subscriber as GoogleSubscriber
 import com.google.cloud.pubsub.v1.TopicAdminClient
 import com.google.pubsub.v1.DeleteTopicRequest
-import com.google.pubsub.v1.GetTopicRequest
 import com.google.pubsub.v1.PubsubMessage
 import com.google.pubsub.v1.Topic
 import com.google.pubsub.v1.TopicName
@@ -87,5 +85,4 @@ abstract class GooglePubSubClient : AutoCloseable {
       topicAdminClient.value.close()
     }
   }
-
 }

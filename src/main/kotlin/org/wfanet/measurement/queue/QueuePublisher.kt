@@ -16,10 +16,8 @@ package org.wfanet.measurement.queue
 
 import com.google.protobuf.Message
 
-/**
- * A class for publishing messages to a Queue.
- */
-interface QueuePublisher<T: Message> : AutoCloseable {
+/** A class for publishing messages to a Queue. */
+interface QueuePublisher<T : Message> : AutoCloseable {
 
   /**
    * Publishes a message to the specified topic.

@@ -14,25 +14,25 @@
 
 package org.wfanet.measurement.gcloud.pubsub
 
+import com.google.cloud.pubsub.v1.AckReplyConsumer
 import com.google.protobuf.Message
 import com.google.protobuf.Parser
 import java.util.logging.Logger
 import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.ClosedSendChannelException
 import kotlinx.coroutines.channels.ReceiveChannel
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.channels.produce
+import kotlinx.coroutines.channels.trySendBlocking
+import org.jetbrains.annotations.BlockingExecutor
 import org.threeten.bp.Duration
 import org.wfanet.measurement.queue.MessageConsumer
 import org.wfanet.measurement.queue.QueueSubscriber
-import kotlinx.coroutines.channels.produce
-import com.google.cloud.pubsub.v1.AckReplyConsumer
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.channels.ClosedSendChannelException
-import kotlinx.coroutines.channels.awaitClose
-import kotlinx.coroutines.channels.trySendBlocking
-import org.jetbrains.annotations.BlockingExecutor
 
 /**
  * A Google Pub/Sub client that subscribes to a Pub/Sub subscription and provides messages in a
@@ -54,35 +54,35 @@ class Subscriber(
   override fun <T : Message> subscribe(
     subscriptionId: String,
     parser: Parser<T>,
-  ): ReceiveChannel<QueueSubscriber.QueueMessage<T>> = scope.produce(capacity = Channel.RENDEZVOUS) {
-    val subscriber =
-      googlePubSubClient.buildSubscriber(
-        projectId = projectId,
-        subscriptionId = subscriptionId,
-        ackExtensionPeriod = Duration.ofHours(6),
-      ) { message, consumer ->
-        val parsedMessage = parser.parseFrom(message.data.toByteArray())
-        val queueMessage =
-          QueueSubscriber.QueueMessage(
-            body = parsedMessage,
-            consumer = PubSubMessageConsumer(consumer),
-          )
+  ): ReceiveChannel<QueueSubscriber.QueueMessage<T>> =
+    scope.produce(capacity = Channel.RENDEZVOUS) {
+      val subscriber =
+        googlePubSubClient.buildSubscriber(
+          projectId = projectId,
+          subscriptionId = subscriptionId,
+          ackExtensionPeriod = Duration.ofHours(6),
+        ) { message, consumer ->
+          val parsedMessage = parser.parseFrom(message.data.toByteArray())
+          val queueMessage =
+            QueueSubscriber.QueueMessage(
+              body = parsedMessage,
+              consumer = PubSubMessageConsumer(consumer),
+            )
 
-        val result = trySendBlocking(queueMessage)
-        if (result.isClosed) {
-          throw ClosedSendChannelException("Channel is closed. Cannot send message.")
+          val result = trySendBlocking(queueMessage)
+          if (result.isClosed) {
+            throw ClosedSendChannelException("Channel is closed. Cannot send message.")
+          }
         }
+
+      subscriber.startAsync().awaitRunning()
+      logger.info("Subscriber started for subscription: $subscriptionId")
+
+      awaitClose {
+        subscriber.stopAsync()
+        subscriber.awaitTerminated()
       }
-
-    subscriber.startAsync().awaitRunning()
-    logger.info("Subscriber started for subscription: $subscriptionId")
-
-    awaitClose {
-      subscriber.stopAsync()
-      subscriber.awaitTerminated()
     }
-  }
-
 
   override fun close() {
     scope.cancel()

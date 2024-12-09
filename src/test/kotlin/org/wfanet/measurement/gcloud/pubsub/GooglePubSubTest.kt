@@ -16,14 +16,14 @@ package org.wfanet.measurement.gcloud.pubsub
 
 import kotlinx.coroutines.runBlocking
 import org.junit.ClassRule
+import org.wfa.measurement.queue.testing.TestWork
 import org.wfanet.measurement.gcloud.pubsub.testing.GooglePubSubEmulatorClient
 import org.wfanet.measurement.gcloud.pubsub.testing.GooglePubSubEmulatorProvider
-import org.wfanet.measurement.queue.testing.AbstractQueueTest
 import org.wfanet.measurement.queue.QueuePublisher
 import org.wfanet.measurement.queue.QueueSubscriber
-import org.wfa.measurement.queue.testing.TestWork
+import org.wfanet.measurement.queue.testing.AbstractQueueTest
 
-class GooglePubSubTest: AbstractQueueTest() {
+class GooglePubSubTest : AbstractQueueTest() {
 
   private val emulatorClient =
     GooglePubSubEmulatorClient(
@@ -59,12 +59,8 @@ class GooglePubSubTest: AbstractQueueTest() {
 
   companion object {
 
-    @ClassRule
-    @JvmField
-    val pubSubEmulatorProvider = GooglePubSubEmulatorProvider()
+    @ClassRule @JvmField val pubSubEmulatorProvider = GooglePubSubEmulatorProvider()
 
     private const val PROJECT_ID = "test-project"
-
   }
-
 }
