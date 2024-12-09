@@ -47,16 +47,18 @@ class PostgresFlags {
     names = ["--statement-timeout"],
     description = ["Statement timeout duration."],
     required = false,
+    defaultValue = "PT120S",
   )
-  var statementTimeout: Duration = Duration.ofSeconds(120)
+  lateinit var statementTimeout: Duration
     private set
 
   @CommandLine.Option(
-    names = ["--max-idle-time-minutes"],
+    names = ["--max-idle-time"],
     description = ["Maximum duration a connection can be idle before being closed."],
     required = false,
+    defaultValue = "PT5M",
   )
-  var maxIdleTime: Duration = Duration.ofMinutes(5)
+  lateinit var maxIdleTime: Duration
     private set
 
   @CommandLine.Option(
