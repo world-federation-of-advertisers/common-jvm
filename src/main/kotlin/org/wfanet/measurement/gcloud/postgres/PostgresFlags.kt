@@ -47,7 +47,7 @@ class PostgresFlags {
     names = ["--statement-timeout"],
     description = ["Statement timeout duration."],
     required = false,
-    defaultValue = "PT120S",
+    defaultValue = "120s",
   )
   lateinit var statementTimeout: Duration
     private set
@@ -56,7 +56,7 @@ class PostgresFlags {
     names = ["--max-idle-time"],
     description = ["Maximum duration a connection can be idle before being closed."],
     required = false,
-    defaultValue = "PT5M",
+    defaultValue = "5m",
   )
   lateinit var maxIdleTime: Duration
     private set
