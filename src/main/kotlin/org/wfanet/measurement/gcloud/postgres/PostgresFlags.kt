@@ -15,6 +15,7 @@
 package org.wfanet.measurement.gcloud.postgres
 
 import java.time.Duration
+import kotlin.properties.Delegates
 import picocli.CommandLine
 
 /** Common command-line flags for connecting to a single Postgres database. */
@@ -61,19 +62,21 @@ class PostgresFlags {
   lateinit var maxIdleTime: Duration
     private set
 
-  @CommandLine.Option(
+  @set:CommandLine.Option(
     names = ["--max-connection-pool-size"],
     description = ["Maximum number of connections in pool."],
     required = false,
+    defaultValue = "16",
   )
-  var maxPoolSize: Int = 16
+  var maxPoolSize by Delegates.notNull<Int>()
     private set
 
-  @CommandLine.Option(
+  @set:CommandLine.Option(
     names = ["--acquire-retry"],
     description = ["Maximum number of retries when acquiring a connection from the pool."],
     required = false,
+    defaultValue = "10",
   )
-  var acquireRetry: Int = 10
+  var acquireRetry by Delegates.notNull<Int>()
     private set
 }
