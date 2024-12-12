@@ -6,6 +6,8 @@ kt_jvm_library(
     name = "grpc",
     srcs = glob(["*.kt"]),
     deps = [
+        "//imports/java/com/google/crypto/tink",
+        "//imports/java/com/google/gson",
         "//imports/java/com/google/protobuf",
         "//imports/java/io/grpc:api",
         "//imports/java/io/grpc:context",

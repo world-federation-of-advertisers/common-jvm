@@ -52,3 +52,18 @@ kt_jvm_test(
         "//src/main/kotlin/org/wfanet/measurement/common/grpc",
     ],
 )
+
+kt_jvm_test(
+    name = "OpenIdConnectAuthenticationTest",
+    srcs = ["OpenIdConnectAuthenticationTest.kt"],
+    test_class = "org.wfanet.measurement.common.grpc.OpenIdConnectAuthenticationTest",
+    deps = [
+        "//imports/java/com/google/common/truth",
+        "//imports/java/org/junit",
+        "//imports/kotlin/kotlin/test",
+        "//imports/kotlin/org/mockito/kotlin",
+        "//src/main/kotlin/org/wfanet/measurement/common/grpc",
+        "//src/main/kotlin/org/wfanet/measurement/common/grpc/testing",
+        "//src/main/kotlin/org/wfanet/measurement/common/testing",
+    ],
+)
