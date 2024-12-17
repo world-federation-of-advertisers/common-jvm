@@ -38,11 +38,11 @@ class OpenIdConnectAuthenticationTest {
   fun `verifyAndDecodeBearerToken returns VerifiedToken`() {
     val issuer = "example.com"
     val subject = "user1@example.com"
-    val audience = "foobar"
+    val clientId = "foobar"
     val scopes = setOf("foo.bar", "foo.baz")
-    val openIdProvider = OpenIdProvider(issuer)
-    val credentials = openIdProvider.generateCredentials(audience, subject, scopes)
-    val auth = OpenIdConnectAuthentication(audience, listOf(openIdProvider.providerConfig))
+    val openIdProvider = OpenIdProvider(issuer, clientId)
+    val credentials = openIdProvider.generateCredentials(subject, scopes)
+    val auth = OpenIdConnectAuthentication(listOf(openIdProvider.providerConfig))
 
     val token = auth.verifyAndDecodeBearerToken(extractHeaders(credentials))
 
@@ -53,17 +53,16 @@ class OpenIdConnectAuthenticationTest {
   fun `verifyAndDecodeBearerToken throws UNAUTHENTICATED when token is expired`() {
     val issuer = "example.com"
     val subject = "user1@example.com"
-    val audience = "foobar"
+    val clientId = "foobar"
     val scopes = setOf("foo.bar", "foo.baz")
-    val openIdProvider = OpenIdProvider(issuer)
+    val openIdProvider = OpenIdProvider(issuer, clientId)
     val credentials =
       openIdProvider.generateCredentials(
-        audience,
         subject,
         scopes,
         Instant.now().minus(Duration.ofMinutes(5)),
       )
-    val auth = OpenIdConnectAuthentication(audience, listOf(openIdProvider.providerConfig))
+    val auth = OpenIdConnectAuthentication(listOf(openIdProvider.providerConfig))
 
     val exception =
       assertFailsWith<StatusException> {
@@ -75,33 +74,14 @@ class OpenIdConnectAuthenticationTest {
   }
 
   @Test
-  fun `verifyAndDecodeBearerToken throws UNAUTHENTICATED when audience does not match`() {
-    val issuer = "example.com"
-    val subject = "user1@example.com"
-    val audience = "foobar"
-    val scopes = setOf("foo.bar", "foo.baz")
-    val openIdProvider = OpenIdProvider(issuer)
-    val credentials = openIdProvider.generateCredentials("bad-audience", subject, scopes)
-    val auth = OpenIdConnectAuthentication(audience, listOf(openIdProvider.providerConfig))
-
-    val exception =
-      assertFailsWith<StatusException> {
-        auth.verifyAndDecodeBearerToken(extractHeaders(credentials))
-      }
-
-    assertThat(exception.status.code).isEqualTo(Status.Code.UNAUTHENTICATED)
-    assertThat(exception).hasMessageThat().ignoringCase().contains("audience")
-  }
-
-  @Test
   fun `verifyAndDecodeBearerToken throws UNAUTHENTICATED when provider not found for issuer`() {
     val issuer = "example.com"
     val subject = "user1@example.com"
-    val audience = "foobar"
+    val clientId = "foobar"
     val scopes = setOf("foo.bar", "foo.baz")
-    val openIdProvider = OpenIdProvider(issuer)
-    val credentials = openIdProvider.generateCredentials(audience, subject, scopes)
-    val auth = OpenIdConnectAuthentication(audience, emptyList())
+    val openIdProvider = OpenIdProvider(issuer, clientId)
+    val credentials = openIdProvider.generateCredentials(subject, scopes)
+    val auth = OpenIdConnectAuthentication(emptyList())
 
     val exception =
       assertFailsWith<StatusException> {
@@ -114,9 +94,8 @@ class OpenIdConnectAuthenticationTest {
 
   @Test
   fun `verifyAndDecodeBearerToken throws UNAUTHENTICATED when token is not a valid JWT`() {
-    val audience = "foobar"
     val credentials = BearerTokenCallCredentials("foo", false)
-    val auth = OpenIdConnectAuthentication(audience, emptyList())
+    val auth = OpenIdConnectAuthentication(emptyList())
 
     val exception =
       assertFailsWith<StatusException> {
@@ -129,8 +108,7 @@ class OpenIdConnectAuthenticationTest {
 
   @Test
   fun `verifyAndDecodeBearerToken throws UNAUTHENTICATED when header not found`() {
-    val audience = "foobar"
-    val auth = OpenIdConnectAuthentication(audience, emptyList())
+    val auth = OpenIdConnectAuthentication(emptyList())
 
     val exception = assertFailsWith<StatusException> { auth.verifyAndDecodeBearerToken(Metadata()) }
 
