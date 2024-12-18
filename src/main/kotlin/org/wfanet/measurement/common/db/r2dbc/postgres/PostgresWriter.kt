@@ -72,8 +72,9 @@ abstract class PostgresWriter<T> {
     val transactionContext = databaseClient.readWriteTransaction()
     try {
       return SerializableErrors.retrying { runTransaction(transactionContext, idGenerator) }
-    } finally {
+    } catch (e: Exception) {
       transactionContext.close()
+      throw e
     }
   }
 
