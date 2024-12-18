@@ -55,6 +55,7 @@ internal open class ReadContextImpl protected constructor(protected val connecti
   }
 
   override suspend fun close() {
+    // if connection is already closed, PooledConnection throws exception.
     try {
       connection.close().awaitFirstOrNull()
     } catch (_: Exception) {}
@@ -77,6 +78,7 @@ internal open class ReadContextImpl protected constructor(protected val connecti
       try {
         connection.beginTransaction(definition).awaitFirstOrNull()
       } catch (e: Exception) {
+        // if connection is already closed, PooledConnection throws exception.
         try {
           connection.close().awaitFirstOrNull()
         } catch (_: Exception) {}
