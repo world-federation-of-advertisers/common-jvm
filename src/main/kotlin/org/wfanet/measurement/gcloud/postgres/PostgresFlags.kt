@@ -21,7 +21,7 @@ class PostgresFlags {
   @CommandLine.Option(
     names = ["--postgres-database"],
     description = ["Name of the Postgres database."],
-    required = true
+    required = true,
   )
   lateinit var database: String
     private set
@@ -29,7 +29,7 @@ class PostgresFlags {
   @CommandLine.Option(
     names = ["--postgres-cloud-sql-connection-name"],
     description = ["Instance connection name of the Postgres database."],
-    required = true
+    required = true,
   )
   lateinit var cloudSqlInstance: String
     private set
@@ -37,7 +37,7 @@ class PostgresFlags {
   @CommandLine.Option(
     names = ["--postgres-user"],
     description = ["User of the Postgres database."],
-    required = true
+    required = true,
   )
   lateinit var user: String
     private set
