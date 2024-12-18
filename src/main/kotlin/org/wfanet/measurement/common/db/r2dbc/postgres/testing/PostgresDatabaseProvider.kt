@@ -83,7 +83,8 @@ class PostgresDatabaseProviderRule(private val changelogPath: Path) :
       val connectionFactory =
         ConnectionFactories.get(
           ConnectionFactoryOptions.builder()
-            .option(ConnectionFactoryOptions.DRIVER, "postgresql")
+            .option(ConnectionFactoryOptions.DRIVER, "pool")
+            .option(ConnectionFactoryOptions.PROTOCOL, "postgresql")
             .option(ConnectionFactoryOptions.HOST, host)
             .option(
               ConnectionFactoryOptions.PORT,
