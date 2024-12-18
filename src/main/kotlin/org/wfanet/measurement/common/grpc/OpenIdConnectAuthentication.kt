@@ -21,6 +21,7 @@ import com.google.crypto.tink.jwt.JwkSetConverter
 import com.google.crypto.tink.jwt.JwtPublicKeyVerify
 import com.google.crypto.tink.jwt.JwtSignatureConfig
 import com.google.crypto.tink.jwt.JwtValidator
+import com.google.crypto.tink.jwt.VerifiedJwt
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import io.grpc.Metadata
@@ -32,17 +33,11 @@ import org.wfanet.measurement.common.base64UrlDecode
 
 /** Utility for extracting OpenID Connect (OIDC) token information from gRPC request headers. */
 class OpenIdConnectAuthentication(
-  audience: String,
   openIdProviderConfigs: Iterable<OpenIdProviderConfig>,
   clock: Clock = Clock.systemUTC(),
 ) {
-  private val jwtValidator =
-    JwtValidator.newBuilder().setClock(clock).expectAudience(audience).ignoreIssuer().build()
-
-  private val jwksHandleByIssuer: Map<String, KeysetHandle> =
-    openIdProviderConfigs.associateBy({ it.issuer }) {
-      JwkSetConverter.toPublicKeysetHandle(it.jwks)
-    }
+  private val openIdProviderByIssuer: Map<String, OpenIdProvider> =
+    openIdProviderConfigs.associateBy({ it.issuer }) { OpenIdProvider(it, clock) }
 
   /**
    * Verifies and decodes an OIDC bearer token from [headers].
@@ -74,13 +69,13 @@ class OpenIdConnectAuthentication(
     val issuer =
       payload.get(ISSUER_CLAIM)?.asString
         ?: throw Status.UNAUTHENTICATED.withDescription("Issuer not found").asException()
-    val jwksHandle =
-      jwksHandleByIssuer[issuer]
+    val provider: OpenIdProvider =
+      openIdProviderByIssuer[issuer]
         ?: throw Status.UNAUTHENTICATED.withDescription("Unknown issuer").asException()
 
-    val verifiedJwt =
+    val verifiedJwt: VerifiedJwt =
       try {
-        jwksHandle.getPrimitive(JwtPublicKeyVerify::class.java).verifyAndDecode(token, jwtValidator)
+        provider.verifyAndDecode(token)
       } catch (e: GeneralSecurityException) {
         throw Status.UNAUTHENTICATED.withCause(e).withDescription(e.message).asException()
       }
@@ -113,5 +108,20 @@ class OpenIdConnectAuthentication(
     val issuer: String,
     /** JSON Web Key Set (JWKS) for the provider. */
     val jwks: String,
+    /** Client ID registered with the provider. */
+    val clientId: String,
   )
+
+  private class OpenIdProvider(providerConfig: OpenIdProviderConfig, clock: Clock) {
+    private val jwtValidator: JwtValidator =
+      JwtValidator.newBuilder()
+        .expectIssuer(providerConfig.issuer)
+        .expectAudience(providerConfig.clientId)
+        .setClock(clock)
+        .build()
+    private val jwksHandle: KeysetHandle = JwkSetConverter.toPublicKeysetHandle(providerConfig.jwks)
+
+    fun verifyAndDecode(token: String): VerifiedJwt =
+      jwksHandle.getPrimitive(JwtPublicKeyVerify::class.java).verifyAndDecode(token, jwtValidator)
+  }
 }
