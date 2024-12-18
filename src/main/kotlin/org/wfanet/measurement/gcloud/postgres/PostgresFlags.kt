@@ -14,8 +14,6 @@
 
 package org.wfanet.measurement.gcloud.postgres
 
-import java.time.Duration
-import kotlin.properties.Delegates
 import picocli.CommandLine
 
 /** Common command-line flags for connecting to a single Postgres database. */
@@ -23,7 +21,7 @@ class PostgresFlags {
   @CommandLine.Option(
     names = ["--postgres-database"],
     description = ["Name of the Postgres database."],
-    required = true,
+    required = true
   )
   lateinit var database: String
     private set
@@ -31,7 +29,7 @@ class PostgresFlags {
   @CommandLine.Option(
     names = ["--postgres-cloud-sql-connection-name"],
     description = ["Instance connection name of the Postgres database."],
-    required = true,
+    required = true
   )
   lateinit var cloudSqlInstance: String
     private set
@@ -39,44 +37,8 @@ class PostgresFlags {
   @CommandLine.Option(
     names = ["--postgres-user"],
     description = ["User of the Postgres database."],
-    required = true,
+    required = true
   )
   lateinit var user: String
-    private set
-
-  @CommandLine.Option(
-    names = ["--statement-timeout"],
-    description = ["Statement timeout duration."],
-    required = false,
-    defaultValue = "120s",
-  )
-  lateinit var statementTimeout: Duration
-    private set
-
-  @CommandLine.Option(
-    names = ["--max-idle-time"],
-    description = ["Maximum duration a connection can be idle before being closed."],
-    required = false,
-    defaultValue = "5m",
-  )
-  lateinit var maxIdleTime: Duration
-    private set
-
-  @set:CommandLine.Option(
-    names = ["--max-connection-pool-size"],
-    description = ["Maximum number of connections in pool."],
-    required = false,
-    defaultValue = "16",
-  )
-  var maxPoolSize by Delegates.notNull<Int>()
-    private set
-
-  @set:CommandLine.Option(
-    names = ["--acquire-retry"],
-    description = ["Maximum number of retries when acquiring a connection from the pool."],
-    required = false,
-    defaultValue = "10",
-  )
-  var acquireRetry by Delegates.notNull<Int>()
     private set
 }

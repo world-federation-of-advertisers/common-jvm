@@ -15,7 +15,6 @@ kt_jvm_library(
     srcs = ["PostgresConnectionFactories.kt"],
     deps = [
         "//imports/java/com/google/cloud/sql:r2dbc-core",
-        "//imports/java/io/r2dbc/pool",
         "//imports/java/org/postgresql:r2dbc",
         "//src/main/kotlin/org/wfanet/measurement/gcloud/postgres:flags",
     ],

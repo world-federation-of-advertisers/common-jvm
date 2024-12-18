@@ -15,8 +15,6 @@
 package org.wfanet.measurement.gcloud.postgres
 
 import com.google.cloud.sql.core.GcpConnectionFactoryProvider
-import io.r2dbc.pool.ConnectionPool
-import io.r2dbc.pool.ConnectionPoolConfiguration
 import io.r2dbc.spi.ConnectionFactories
 import io.r2dbc.spi.ConnectionFactory
 import io.r2dbc.spi.ConnectionFactoryOptions
@@ -24,28 +22,17 @@ import io.r2dbc.spi.ConnectionFactoryOptions
 object PostgresConnectionFactories {
   @JvmStatic
   fun buildConnectionFactory(flags: PostgresFlags): ConnectionFactory {
-    val connectionFactory =
-      ConnectionFactories.get(
-        ConnectionFactoryOptions.builder()
-          .option(ConnectionFactoryOptions.DRIVER, "gcp")
-          .option(ConnectionFactoryOptions.PROTOCOL, "postgresql")
-          .option(ConnectionFactoryOptions.USER, flags.user)
-          // a non-empty password is required, but the value doesn't matter
-          .option(ConnectionFactoryOptions.PASSWORD, "UNUSED")
-          .option(ConnectionFactoryOptions.DATABASE, flags.database)
-          .option(ConnectionFactoryOptions.HOST, flags.cloudSqlInstance)
-          .option(ConnectionFactoryOptions.STATEMENT_TIMEOUT, flags.statementTimeout)
-          .option(GcpConnectionFactoryProvider.ENABLE_IAM_AUTH, true)
-          .build()
-      )
-
-    val configuration: ConnectionPoolConfiguration =
-      ConnectionPoolConfiguration.builder(connectionFactory)
-        .maxIdleTime(flags.maxIdleTime)
-        .maxSize(flags.maxPoolSize)
-        .acquireRetry(flags.acquireRetry)
+    return ConnectionFactories.get(
+      ConnectionFactoryOptions.builder()
+        .option(ConnectionFactoryOptions.DRIVER, "gcp")
+        .option(ConnectionFactoryOptions.PROTOCOL, "postgresql")
+        .option(ConnectionFactoryOptions.USER, flags.user)
+        // a non-empty password is required, but the value doesn't matter
+        .option(ConnectionFactoryOptions.PASSWORD, "UNUSED")
+        .option(ConnectionFactoryOptions.DATABASE, flags.database)
+        .option(ConnectionFactoryOptions.HOST, flags.cloudSqlInstance)
+        .option(GcpConnectionFactoryProvider.ENABLE_IAM_AUTH, true)
         .build()
-
-    return ConnectionPool(configuration)
+    )
   }
 }
