@@ -25,7 +25,7 @@ import org.wfanet.measurement.common.identity.IdGenerator
 abstract class PostgresWriter<T> {
   data class TransactionScope(
     val transactionContext: ReadWriteContext,
-    val idGenerator: IdGenerator
+    val idGenerator: IdGenerator,
   )
 
   /**
@@ -41,7 +41,7 @@ abstract class PostgresWriter<T> {
 
   private suspend fun runTransaction(
     transactionContext: ReadWriteContext,
-    idGenerator: IdGenerator
+    idGenerator: IdGenerator,
   ): T {
     try {
       val result: T
