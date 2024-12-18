@@ -12,6 +12,7 @@ kt_jvm_library(
         "//imports/java/liquibase/ext:postgresql",
     ],
     deps = [
+        "//imports/java/io/r2dbc/pool",
         "//imports/java/org/testcontainers/containers:postgresql",
         "//imports/kotlin/kotlinx/coroutines/reactive",
         "//src/main/kotlin/org/wfanet/measurement/common/db/liquibase",

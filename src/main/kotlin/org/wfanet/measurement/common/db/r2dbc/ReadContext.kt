@@ -20,6 +20,8 @@ import io.r2dbc.spi.Connection
 import io.r2dbc.spi.Result
 import io.r2dbc.spi.Row
 import io.r2dbc.spi.TransactionDefinition
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.reactive.asFlow
 import kotlinx.coroutines.reactive.awaitFirstOrNull
 import kotlinx.coroutines.reactive.awaitSingle
 
@@ -53,7 +55,7 @@ internal open class ReadContextImpl protected constructor(protected val connecti
   }
 
   override suspend fun close() {
-    connection.close().awaitFirstOrNull()
+    connection.close().asFlow().catch {}.collect {}
   }
 
   override suspend fun rollback() {

@@ -16,9 +16,12 @@
 
 package org.wfanet.measurement.common.db.r2dbc.postgres.testing
 
+import io.r2dbc.pool.ConnectionPool
+import io.r2dbc.pool.ConnectionPoolConfiguration
 import io.r2dbc.spi.ConnectionFactories
 import io.r2dbc.spi.ConnectionFactoryOptions
 import java.nio.file.Path
+import java.time.Duration
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.reactive.awaitFirst
 import org.junit.rules.TestRule
@@ -92,7 +95,14 @@ class PostgresDatabaseProviderRule(private val changelogPath: Path) :
             .build()
         )
 
-      return PostgresDatabaseClient { connectionFactory.create().awaitFirst() }
+      val configuration: ConnectionPoolConfiguration =
+        ConnectionPoolConfiguration.builder(connectionFactory)
+          .maxIdleTime(Duration.ofMinutes(5))
+          .maxSize(16)
+          .acquireRetry(10)
+          .build()
+
+      return PostgresDatabaseClient { ConnectionPool(configuration).create().awaitFirst() }
     }
   }
 }
