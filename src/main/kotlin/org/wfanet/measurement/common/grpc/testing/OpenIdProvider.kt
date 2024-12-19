@@ -29,35 +29,35 @@ import org.wfanet.measurement.common.grpc.BearerTokenCallCredentials
 import org.wfanet.measurement.common.grpc.OpenIdConnectAuthentication
 
 /** An ephemeral OpenID provider for testing. */
-class OpenIdProvider(private val issuer: String) {
+class OpenIdProvider(issuer: String, clientId: String) {
   private val jwkSetHandle = KeysetHandle.generateNew(KEY_TEMPLATE)
 
-  val providerConfig: OpenIdConnectAuthentication.OpenIdProviderConfig by lazy {
-    val jwks = JwkSetConverter.fromPublicKeysetHandle(jwkSetHandle.publicKeysetHandle)
-    OpenIdConnectAuthentication.OpenIdProviderConfig(issuer, jwks)
-  }
+  val providerConfig =
+    OpenIdConnectAuthentication.OpenIdProviderConfig(
+      issuer,
+      JwkSetConverter.fromPublicKeysetHandle(jwkSetHandle.publicKeysetHandle),
+      clientId,
+    )
 
   fun generateCredentials(
-    audience: String,
     subject: String,
     scopes: Set<String>,
     expiration: Instant = Instant.now().plus(Duration.ofMinutes(5)),
   ): BearerTokenCallCredentials {
-    val token = generateSignedToken(audience, subject, scopes, expiration)
+    val token = generateSignedToken(subject, scopes, expiration)
     return BearerTokenCallCredentials(token, false)
   }
 
   /** Generates a signed and encoded JWT using the specified parameters. */
   private fun generateSignedToken(
-    audience: String,
     subject: String,
     scopes: Set<String>,
     expiration: Instant,
   ): String {
     val rawJwt =
       RawJwt.newBuilder()
-        .setAudience(audience)
-        .setIssuer(issuer)
+        .setAudience(providerConfig.clientId)
+        .setIssuer(providerConfig.issuer)
         .setSubject(subject)
         .addStringClaim("scope", scopes.joinToString(" "))
         .setExpiration(expiration)
