@@ -1,4 +1,4 @@
-// Copyright 2020 The Cross-Media Measurement Authors
+// Copyright 2025 The Cross-Media Measurement Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,11 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package org.wfanet.measurement.storage.testing
+package org.wfanet.measurement.gcloud.gcs.testing
 
 import com.google.cloud.functions.CloudEventsFunction
 import com.google.events.cloud.storage.v1.StorageObjectData
 import com.google.protobuf.ByteString
+import com.google.protobuf.Timestamp
+import com.google.protobuf.util.JsonFormat
 import io.cloudevents.CloudEvent
 import io.cloudevents.core.builder.CloudEventBuilder
 import java.net.URI
@@ -24,22 +26,42 @@ import java.util.logging.Logger
 import kotlinx.coroutines.flow.Flow
 import org.wfanet.measurement.storage.StorageClient
 
-/** Used for local testing of Cloud Run function triggered by upload to Cloud Storage. */
+/**
+ * Used for local testing of Cloud Run function triggered by upload to Cloud Storage. Emulates
+ * https://cloud.google.com/functions/docs/samples/functions-cloudevent-storage-unit-test
+ */
 class GcsSubscribingStorageClient(private val storageClient: StorageClient) : StorageClient {
   private var subscribingFunctions = mutableListOf<CloudEventsFunction>()
 
   override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
-    val blob = storageClient.writeBlob(blobKey, content)
-    val dataBuilder: StorageObjectData =
-      StorageObjectData.newBuilder().setName(blobKey).setBucket("fake-bucket").build()
+    val blob = storageClient.writeBlob(blobKey.removePrefix("gs://$FAKE_BUCKET/"), content)
+    // Get the current time in milliseconds
+    val millis = System.currentTimeMillis()
+
+    // Create a Timestamp object
+    val timestamp =
+        Timestamp.newBuilder()
+            .setSeconds(millis / 1000)
+            .setNanos(((millis % 1000) * 1000000).toInt())
+            .build()
+
+    val dataBuilder =
+        StorageObjectData.newBuilder()
+            .setName(blobKey.removePrefix(STORAGE_PREFIX))
+            .setBucket(FAKE_BUCKET)
+            .setMetageneration(10)
+            .setTimeCreated(timestamp)
+            .setUpdated(timestamp)
+
+    val jsonData = JsonFormat.printer().print(dataBuilder)
 
     val event: CloudEvent =
-      CloudEventBuilder.v1()
-        .withId("some-id")
-        .withSource(URI.create("some-uri"))
-        .withType("google.storage.object.finalize")
-        .withData(dataBuilder.toByteArray())
-        .build()
+        CloudEventBuilder.v1()
+            .withId("some-id")
+            .withSource(URI.create("some-uri"))
+            .withType("google.storage.object.finalize")
+            .withData("application/json", jsonData.toByteArray())
+            .build()
     subscribingFunctions.forEach { subscribingFunction ->
       logger.fine { "Sending $blobKey to function $subscribingFunction" }
       subscribingFunction.accept(event)
@@ -48,7 +70,7 @@ class GcsSubscribingStorageClient(private val storageClient: StorageClient) : St
   }
 
   override suspend fun getBlob(blobKey: String): StorageClient.Blob? {
-    return getBlob(blobKey)
+    return storageClient.getBlob(blobKey.removePrefix(STORAGE_PREFIX))
   }
 
   fun subscribe(function: CloudEventsFunction) {
@@ -57,5 +79,7 @@ class GcsSubscribingStorageClient(private val storageClient: StorageClient) : St
 
   companion object {
     internal val logger = Logger.getLogger(this::class.java.name)
+    val FAKE_BUCKET = "fake-bucket"
+    private val STORAGE_PREFIX = "gs://$FAKE_BUCKET/"
   }
 }
