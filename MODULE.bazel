@@ -175,7 +175,7 @@ maven.install(
         "junit:junit:4.13.2",
         "org.conscrypt:conscrypt-openjdk-uber:2.5.2",
         "org.jetbrains:annotations:23.0.0",
-        "info.picocli:picocli:4.4.0",
+        "info.picocli:picocli:4.7.6",
         "com.google.code.gson:gson:2.10.1",
         "io.netty:netty-handler:4.1.108.Final",
         "com.google.crypto.tink:tink:" + TINK_VERSION,
