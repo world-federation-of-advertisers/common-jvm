@@ -9,14 +9,3 @@ kt_jvm_test(
         "//src/main/kotlin/org/wfanet/measurement/storage/testing",
     ],
 )
-
-kt_jvm_test(
-    name = "GcsSubscribingStorageClientTest",
-    srcs = ["GcsSubscribingStorageClientTest.kt"],
-    test_class = "org.wfanet.measurement.storage.testing.GcsSubscribingStorageClientTest",
-    deps = [
-        "//imports/java/org/junit",
-        "//src/main/kotlin/org/wfanet/measurement/storage/testing",
-        "@wfa_common_jvm//imports/kotlin/org/mockito/kotlin",
-    ],
-)
