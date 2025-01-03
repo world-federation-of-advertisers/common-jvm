@@ -30,11 +30,14 @@ import org.wfanet.measurement.storage.StorageClient
  * Used for local testing of Cloud Run function triggered by upload to Cloud Storage. Emulates
  * https://cloud.google.com/functions/docs/samples/functions-cloudevent-storage-unit-test
  */
-class GcsSubscribingStorageClient(private val storageClient: StorageClient) : StorageClient {
+class GcsSubscribingStorageClient(
+    private val storageClient: StorageClient,
+    private val bucket: String = FAKE_BUCKET
+) : StorageClient {
   private var subscribingFunctions = mutableListOf<CloudEventsFunction>()
 
   override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
-    val blob = storageClient.writeBlob(blobKey.removePrefix("gs://$FAKE_BUCKET/"), content)
+    val blob = storageClient.writeBlob(blobKey, content)
     // Get the current time in milliseconds
     val millis = System.currentTimeMillis()
 
@@ -47,8 +50,8 @@ class GcsSubscribingStorageClient(private val storageClient: StorageClient) : St
 
     val dataBuilder =
         StorageObjectData.newBuilder()
-            .setName(blobKey.removePrefix(STORAGE_PREFIX))
-            .setBucket(FAKE_BUCKET)
+            .setName(blobKey)
+            .setBucket(bucket)
             .setMetageneration(10)
             .setTimeCreated(timestamp)
             .setUpdated(timestamp)
@@ -70,7 +73,7 @@ class GcsSubscribingStorageClient(private val storageClient: StorageClient) : St
   }
 
   override suspend fun getBlob(blobKey: String): StorageClient.Blob? {
-    return storageClient.getBlob(blobKey.removePrefix(STORAGE_PREFIX))
+    return storageClient.getBlob(blobKey)
   }
 
   fun subscribe(function: CloudEventsFunction) {
@@ -79,7 +82,6 @@ class GcsSubscribingStorageClient(private val storageClient: StorageClient) : St
 
   companion object {
     internal val logger = Logger.getLogger(this::class.java.name)
-    val FAKE_BUCKET = "fake-bucket"
-    private val STORAGE_PREFIX = "gs://$FAKE_BUCKET/"
+    const val FAKE_BUCKET = "fake-bucket"
   }
 }
