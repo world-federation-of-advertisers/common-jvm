@@ -17,6 +17,7 @@
 package org.wfanet.measurement.gcloud.gcs.testing
 
 import com.google.cloud.functions.CloudEventsFunction
+import com.google.cloud.storage.contrib.nio.testing.LocalStorageHelper
 import com.google.common.truth.Truth.assertThat
 import com.google.events.cloud.storage.v1.StorageObjectData
 import com.google.protobuf.kotlin.toByteStringUtf8
@@ -32,20 +33,20 @@ import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
+import org.wfanet.measurement.gcloud.gcs.GcsStorageClient
 import org.wfanet.measurement.storage.testing.AbstractStorageClientTest
-import org.wfanet.measurement.storage.testing.InMemoryStorageClient
 
 @RunWith(JUnit4::class)
-class GcsSubscribingStorageClientTest : AbstractStorageClientTest<InMemoryStorageClient>() {
+class GcsSubscribingStorageClientTest : AbstractStorageClientTest<GcsStorageClient>() {
   @Before
   fun initStorageClient() {
-    storageClient = InMemoryStorageClient()
+    val storage = LocalStorageHelper.getOptions().service
+    storageClient = GcsStorageClient(storage, BUCKET)
   }
 
   @Test
   fun `writeBlob publishes finalize event to subscribers`() = runBlocking {
-    val underlyingClient = InMemoryStorageClient()
-    val client = GcsSubscribingStorageClient(underlyingClient)
+    val client = GcsSubscribingStorageClient(storageClient)
     val mockCloudFunction: CloudEventsFunction = mock {}
 
     val blobKey = "some-blob-key"
@@ -66,7 +67,7 @@ class GcsSubscribingStorageClientTest : AbstractStorageClientTest<InMemoryStorag
             .map { Pair(it!!.name, it!!.bucket) }
     assertThat(acceptedData)
         .containsExactlyElementsIn(
-            listOf(Pair("some-blob-key", "fake-bucket"), Pair("other-blob-key", "fake-bucket")))
+            listOf(Pair("some-blob-key", BUCKET), Pair("other-blob-key", BUCKET)))
         .inOrder()
   }
 
@@ -86,5 +87,9 @@ class GcsSubscribingStorageClientTest : AbstractStorageClientTest<InMemoryStorag
     val parser = JsonFormat.parser().ignoringUnknownFields()
     parser.merge(cloudEventData, builder)
     return builder.build()
+  }
+
+  companion object {
+    private const val BUCKET = "test-bucket"
   }
 }

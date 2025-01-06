@@ -5,6 +5,7 @@ kt_jvm_test(
     srcs = ["GcsSubscribingStorageClientTest.kt"],
     test_class = "org.wfanet.measurement.gcloud.gcs.testing.GcsSubscribingStorageClientTest",
     deps = [
+        "//imports/java/com/google/cloud/storage/contrib/nio",
         "//imports/java/org/junit",
         "//src/main/kotlin/org/wfanet/measurement/gcloud/gcs/testing",
         "@wfa_common_jvm//imports/kotlin/org/mockito/kotlin",

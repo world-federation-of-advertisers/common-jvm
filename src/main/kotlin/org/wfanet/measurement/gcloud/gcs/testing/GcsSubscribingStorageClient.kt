@@ -25,45 +25,44 @@ import java.net.URI
 import java.util.logging.Logger
 import kotlinx.coroutines.flow.Flow
 import org.wfanet.measurement.storage.StorageClient
+import java.time.Clock
+import org.wfanet.measurement.common.protoTimestamp
+import org.wfanet.measurement.gcloud.gcs.GcsStorageClient
+import com.google.cloud.storage.Storage
+import org.wfanet.measurement.common.toJson
 
 /**
  * Used for local testing of Cloud Run function triggered by upload to Cloud Storage. Emulates
  * https://cloud.google.com/functions/docs/samples/functions-cloudevent-storage-unit-test
  */
 class GcsSubscribingStorageClient(
-    private val storageClient: StorageClient,
-    private val bucket: String = FAKE_BUCKET
-) : StorageClient {
+  private val storageClient: GcsStorageClient,
+    private val clock: Clock = Clock.systemUTC(),
+): StorageClient {
   private var subscribingFunctions = mutableListOf<CloudEventsFunction>()
 
   override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
     val blob = storageClient.writeBlob(blobKey, content)
-    // Get the current time in milliseconds
-    val millis = System.currentTimeMillis()
 
-    // Create a Timestamp object
-    val timestamp =
-        Timestamp.newBuilder()
-            .setSeconds(millis / 1000)
-            .setNanos(((millis % 1000) * 1000000).toInt())
-            .build()
+    // Get current system timestamp.
+    val timestamp = clock.protoTimestamp()
 
-    val dataBuilder =
+
+    val data =
         StorageObjectData.newBuilder()
             .setName(blobKey)
-            .setBucket(bucket)
+            .setBucket(storageClient.bucketName)
             .setMetageneration(10)
             .setTimeCreated(timestamp)
             .setUpdated(timestamp)
-
-    val jsonData = JsonFormat.printer().print(dataBuilder)
+            .build()
 
     val event: CloudEvent =
         CloudEventBuilder.v1()
             .withId("some-id")
             .withSource(URI.create("some-uri"))
             .withType("google.storage.object.finalize")
-            .withData("application/json", jsonData.toByteArray())
+            .withData("application/json", data.toJson().toByteArray())
             .build()
     subscribingFunctions.forEach { subscribingFunction ->
       logger.fine { "Sending $blobKey to function $subscribingFunction" }
