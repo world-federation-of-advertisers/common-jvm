@@ -17,11 +17,8 @@ package org.wfanet.measurement.storage
 import com.google.cloud.storage.StorageOptions
 import java.io.File
 import java.util.regex.Pattern
-import org.wfanet.measurement.aws.s3.S3StorageClient
 import org.wfanet.measurement.gcloud.gcs.GcsStorageClient
 import org.wfanet.measurement.storage.filesystem.FileSystemStorageClient
-import software.amazon.awssdk.regions.Region
-import software.amazon.awssdk.services.s3.S3AsyncClient
 
 // Data class to store parsed information
 data class BlobUrl(
@@ -42,13 +39,7 @@ fun parseBlobUrl(url: String): BlobUrl? {
   // Match input URL with the regex
   val s3Matcher = s3Regex.matcher(url)
   if (s3Matcher.matches()) {
-    return BlobUrl(
-      protocol = "s3",
-      bucket = s3Matcher.group("bucket"),
-      region = s3Matcher.group("region"),
-      project = null,
-      path = s3Matcher.group("path"),
-    )
+    throw IllegalArgumentException("S3 is not currently supported")
   }
   val gsMatcher = gsRegex.matcher(url)
   if (gsMatcher.matches()) {
@@ -77,8 +68,7 @@ fun getStorageClient(blobUrl: BlobUrl): StorageClient {
   val storageClient: StorageClient =
     when (blobUrl.protocol) {
       "s3" -> {
-        val asyncClient = S3AsyncClient.builder().region(Region.of(blobUrl.region!!)).build()
-        S3StorageClient(asyncClient, blobUrl.bucket!!)
+        throw IllegalArgumentException("S3 is not currently supported")
       }
       "gs" -> {
         val storageOptions = StorageOptions.newBuilder().setProjectId(blobUrl.project!!).build()
@@ -87,7 +77,7 @@ fun getStorageClient(blobUrl: BlobUrl): StorageClient {
       "file" -> {
         FileSystemStorageClient(directory = File("/"))
       }
-      else -> throw Exception("Unsupported blobUrl: $blobUrl")
+      else -> throw IllegalArgumentException("Unsupported blobUrl: $blobUrl")
     }
 
   return storageClient

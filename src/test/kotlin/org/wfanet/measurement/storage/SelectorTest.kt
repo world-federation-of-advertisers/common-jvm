@@ -17,11 +17,10 @@
 package org.wfanet.measurement.storage
 
 import com.google.common.truth.Truth.assertThat
-import kotlin.test.assertTrue
+import org.junit.Assert.assertThrows
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
-import org.wfanet.measurement.aws.s3.S3StorageClient
 import org.wfanet.measurement.gcloud.gcs.GcsStorageClient
 import org.wfanet.measurement.storage.filesystem.FileSystemStorageClient
 
@@ -30,11 +29,9 @@ class SelectorTest {
   @Test
   fun testS3Url() {
     val s3Url = "s3://my-bucket.s3.us-west-2.amazonaws.com/path/to/file"
-    val blobUrl = parseBlobUrl(s3Url)!!
-    assertThat(blobUrl).isEqualTo(BlobUrl("s3", "my-bucket", "us-west-2", null, "path/to/file"))
-
-    val storageClient = getStorageClient(blobUrl)
-    assertTrue(storageClient is S3StorageClient)
+    assertThrows(IllegalArgumentException::class.java) { parseBlobUrl(s3Url) }
+    val blobUrl = BlobUrl("s3", "my-bucket", "us-west-2", null, "path/to/file")
+    assertThrows(IllegalArgumentException::class.java) { getStorageClient(blobUrl) }
   }
 
   @Test
