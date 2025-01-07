@@ -17,28 +17,25 @@ package org.wfanet.measurement.gcloud.gcs.testing
 import com.google.cloud.functions.CloudEventsFunction
 import com.google.events.cloud.storage.v1.StorageObjectData
 import com.google.protobuf.ByteString
-import com.google.protobuf.Timestamp
-import com.google.protobuf.util.JsonFormat
 import io.cloudevents.CloudEvent
 import io.cloudevents.core.builder.CloudEventBuilder
 import java.net.URI
+import java.time.Clock
 import java.util.logging.Logger
 import kotlinx.coroutines.flow.Flow
-import org.wfanet.measurement.storage.StorageClient
-import java.time.Clock
 import org.wfanet.measurement.common.protoTimestamp
-import org.wfanet.measurement.gcloud.gcs.GcsStorageClient
-import com.google.cloud.storage.Storage
 import org.wfanet.measurement.common.toJson
+import org.wfanet.measurement.gcloud.gcs.GcsStorageClient
+import org.wfanet.measurement.storage.StorageClient
 
 /**
  * Used for local testing of Cloud Run function triggered by upload to Cloud Storage. Emulates
  * https://cloud.google.com/functions/docs/samples/functions-cloudevent-storage-unit-test
  */
 class GcsSubscribingStorageClient(
-  private val storageClient: GcsStorageClient,
+    private val storageClient: GcsStorageClient,
     private val clock: Clock = Clock.systemUTC(),
-): StorageClient {
+) : StorageClient {
   private var subscribingFunctions = mutableListOf<CloudEventsFunction>()
 
   override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
@@ -46,7 +43,6 @@ class GcsSubscribingStorageClient(
 
     // Get current system timestamp.
     val timestamp = clock.protoTimestamp()
-
 
     val data =
         StorageObjectData.newBuilder()

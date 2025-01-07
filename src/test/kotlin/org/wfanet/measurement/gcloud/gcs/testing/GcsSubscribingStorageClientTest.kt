@@ -68,7 +68,7 @@ class GcsSubscribingStorageClientTest : AbstractStorageClientTest<GcsStorageClie
     assertThat(acceptedData)
         .containsExactlyElementsIn(
             listOf(Pair("some-blob-key", BUCKET), Pair("other-blob-key", BUCKET)))
-        .inOrder()
+        .inOrder(`)
   }
 
   /*
