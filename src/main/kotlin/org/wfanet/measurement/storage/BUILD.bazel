@@ -40,10 +40,10 @@ kt_jvm_library(
     srcs = ["Selector.kt"],
     deps = [
         ":client",
-        "//src/main/kotlin/org/wfanet/measurement/gcloud/gcs",
-        "//src/main/kotlin/org/wfanet/measurement/storage/filesystem:client",
         "//imports/java/com/google/protobuf",
         "//imports/kotlin/kotlinx/coroutines:core",
         "//src/main/kotlin/org/wfanet/measurement/common",
+        "//src/main/kotlin/org/wfanet/measurement/gcloud/gcs",
+        "//src/main/kotlin/org/wfanet/measurement/storage/filesystem:client",
     ],
 )
