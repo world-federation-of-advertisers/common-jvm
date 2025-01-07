@@ -62,13 +62,14 @@ class GcsSubscribingStorageClientTest : AbstractStorageClientTest<GcsStorageClie
     verify(mockCloudFunction, times(2)).accept(cloudEventCaptor.capture())
 
     val acceptedData =
-        cloudEventCaptor.allValues
-            .map { parseStorageObjectData(it) }
-            .map { Pair(it!!.name, it!!.bucket) }
+      cloudEventCaptor.allValues
+        .map { parseStorageObjectData(it) }
+        .map { Pair(it!!.name, it!!.bucket) }
     assertThat(acceptedData)
-        .containsExactlyElementsIn(
-            listOf(Pair("some-blob-key", BUCKET), Pair("other-blob-key", BUCKET)))
-        .inOrder(`)
+      .containsExactlyElementsIn(
+        listOf(Pair("some-blob-key", BUCKET), Pair("other-blob-key", BUCKET))
+      )
+      .inOrder()
   }
 
   /*
