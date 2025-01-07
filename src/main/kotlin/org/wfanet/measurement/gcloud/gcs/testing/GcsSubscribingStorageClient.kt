@@ -33,8 +33,8 @@ import org.wfanet.measurement.storage.StorageClient
  * https://cloud.google.com/functions/docs/samples/functions-cloudevent-storage-unit-test
  */
 class GcsSubscribingStorageClient(
-    private val storageClient: GcsStorageClient,
-    private val clock: Clock = Clock.systemUTC(),
+  private val storageClient: GcsStorageClient,
+  private val clock: Clock = Clock.systemUTC(),
 ) : StorageClient {
   private var subscribingFunctions = mutableListOf<CloudEventsFunction>()
 
@@ -45,21 +45,21 @@ class GcsSubscribingStorageClient(
     val timestamp = clock.protoTimestamp()
 
     val data =
-        StorageObjectData.newBuilder()
-            .setName(blobKey)
-            .setBucket(storageClient.bucketName)
-            .setMetageneration(10)
-            .setTimeCreated(timestamp)
-            .setUpdated(timestamp)
-            .build()
+      StorageObjectData.newBuilder()
+        .setName(blobKey)
+        .setBucket(storageClient.bucketName)
+        .setMetageneration(10)
+        .setTimeCreated(timestamp)
+        .setUpdated(timestamp)
+        .build()
 
     val event: CloudEvent =
-        CloudEventBuilder.v1()
-            .withId("some-id")
-            .withSource(URI.create("some-uri"))
-            .withType("google.storage.object.finalize")
-            .withData("application/json", data.toJson().toByteArray())
-            .build()
+      CloudEventBuilder.v1()
+        .withId("some-id")
+        .withSource(URI.create("some-uri"))
+        .withType("google.storage.object.finalize")
+        .withData("application/json", data.toJson().toByteArray())
+        .build()
     subscribingFunctions.forEach { subscribingFunction ->
       logger.fine { "Sending $blobKey to function $subscribingFunction" }
       subscribingFunction.accept(event)
