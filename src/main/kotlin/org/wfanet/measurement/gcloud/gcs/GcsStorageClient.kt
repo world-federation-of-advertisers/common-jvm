@@ -52,7 +52,7 @@ private const val READ_BUFFER_SIZE = BYTES_PER_MIB * 2
  */
 class GcsStorageClient(
   private val storage: Storage,
-  private val bucketName: String,
+  val bucketName: String,
   private val blockingContext: @BlockingExecutor CoroutineContext = Dispatchers.IO,
   private val maxAttempts: Int = 5,
   private val retryBackoff: ExponentialBackoff = ExponentialBackoff(),

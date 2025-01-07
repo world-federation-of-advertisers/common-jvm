@@ -14,13 +14,16 @@
  * limitations under the License.
  */
 
-package org.wfanet.measurement.storage.testing
+package org.wfanet.measurement.gcloud.gcs.testing
 
 import com.google.cloud.functions.CloudEventsFunction
+import com.google.cloud.storage.contrib.nio.testing.LocalStorageHelper
 import com.google.common.truth.Truth.assertThat
 import com.google.events.cloud.storage.v1.StorageObjectData
 import com.google.protobuf.kotlin.toByteStringUtf8
+import com.google.protobuf.util.JsonFormat
 import io.cloudevents.CloudEvent
+import java.nio.charset.StandardCharsets
 import kotlinx.coroutines.runBlocking
 import org.junit.Before
 import org.junit.Test
@@ -30,18 +33,20 @@ import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
+import org.wfanet.measurement.gcloud.gcs.GcsStorageClient
+import org.wfanet.measurement.storage.testing.AbstractStorageClientTest
 
 @RunWith(JUnit4::class)
-class GcsSubscribingStorageClientTest : AbstractStorageClientTest<InMemoryStorageClient>() {
+class GcsSubscribingStorageClientTest : AbstractStorageClientTest<GcsStorageClient>() {
   @Before
   fun initStorageClient() {
-    storageClient = InMemoryStorageClient()
+    val storage = LocalStorageHelper.getOptions().service
+    storageClient = GcsStorageClient(storage, BUCKET)
   }
 
   @Test
   fun `writeBlob publishes finalize event to subscribers`() = runBlocking {
-    val underlyingClient = InMemoryStorageClient()
-    val client = GcsSubscribingStorageClient(underlyingClient)
+    val client = GcsSubscribingStorageClient(storageClient)
     val mockCloudFunction: CloudEventsFunction = mock {}
 
     val blobKey = "some-blob-key"
@@ -56,11 +61,36 @@ class GcsSubscribingStorageClientTest : AbstractStorageClientTest<InMemoryStorag
     val cloudEventCaptor = argumentCaptor<CloudEvent>()
     verify(mockCloudFunction, times(2)).accept(cloudEventCaptor.capture())
 
-    val data = StorageObjectData.newBuilder().setName(blobKey).setBucket("fake-bucket").build()
-    val otherData =
-      StorageObjectData.newBuilder().setName(anotherBlobKey).setBucket("fake-bucket").build()
     val acceptedData =
-      cloudEventCaptor.allValues.map { StorageObjectData.parseFrom(it.data!!.toBytes())!! }
-    assertThat(acceptedData).containsExactlyElementsIn(listOf(data, otherData)).inOrder()
+      cloudEventCaptor.allValues
+        .map { parseStorageObjectData(it) }
+        .map { Pair(it!!.name, it!!.bucket) }
+    assertThat(acceptedData)
+      .containsExactlyElementsIn(
+        listOf(Pair("some-blob-key", BUCKET), Pair("other-blob-key", BUCKET))
+      )
+      .inOrder()
+  }
+
+  /*
+   * Based on java example from https://cloud.google.com/functions/docs/samples/functions-cloudevent-storage
+   */
+  private fun parseStorageObjectData(event: CloudEvent): StorageObjectData? {
+    if (event.data == null) {
+      return null
+    }
+    val cloudEventData = String(event.getData().toBytes(), StandardCharsets.UTF_8)
+    val builder: StorageObjectData.Builder = StorageObjectData.newBuilder()
+
+    // If you do not ignore unknown fields, then JsonFormat.Parser returns an
+    // error when encountering a new or unknown field. Note that you might lose
+    // some event data in the unmarshaling process by ignoring unknown fields.
+    val parser = JsonFormat.parser().ignoringUnknownFields()
+    parser.merge(cloudEventData, builder)
+    return builder.build()
+  }
+
+  companion object {
+    private const val BUCKET = "test-bucket"
   }
 }
