@@ -17,6 +17,7 @@ package org.wfanet.measurement.common
 import com.google.protobuf.ByteString
 import java.nio.ByteBuffer
 import java.nio.channels.ReadableByteChannel
+import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.channels.ReceiveChannel
 
 /**
@@ -24,9 +25,9 @@ import kotlinx.coroutines.channels.ReceiveChannel
  * This class enables coroutine-friendly, asynchronous reads by delegating read operations to a
  * coroutine channel.
  *
+ * @property delegate The [ReceiveChannel] from which this [ReadableByteChannel] will read data.
  * @constructor Creates a readable channel that reads each [ByteString] from the provided
  *   [ReceiveChannel] and writes it to the specified [ByteBuffer].
- * @property delegate The [ReceiveChannel] from which this [ReadableByteChannel] will read data.
  */
 class CoroutineReadableByteChannel(private val delegate: ReceiveChannel<ByteString>) :
   ReadableByteChannel {
@@ -49,7 +50,6 @@ class CoroutineReadableByteChannel(private val delegate: ReceiveChannel<ByteStri
    *   the channel is closed and all data has been read.
    */
   override fun read(destination: ByteBuffer): Int {
-
     if (remainingBuffer.hasRemaining()) {
       val bytesWritten = writeToDestination(destination, remainingBuffer)
       return bytesWritten
@@ -79,6 +79,7 @@ class CoroutineReadableByteChannel(private val delegate: ReceiveChannel<ByteStri
     return bytesToWrite
   }
 
+  @OptIn(DelicateCoroutinesApi::class) // Safe usage since read is guarded by tryReceive.
   override fun isOpen(): Boolean = !delegate.isClosedForReceive
 
   override fun close() {
