@@ -30,6 +30,7 @@ import org.wfanet.measurement.common.db.r2dbc.DatabaseClient
 class PostgresDatabaseClient(getConnection: ConnectionProvider) : DatabaseClient(getConnection) {
   override val readTransactionDefinition: PostgresTransactionDefinition
     get() = Companion.readTransactionDefinition
+
   override val readWriteTransactionDefinition: PostgresTransactionDefinition
     get() = Companion.readWriteTransactionDefinition
 

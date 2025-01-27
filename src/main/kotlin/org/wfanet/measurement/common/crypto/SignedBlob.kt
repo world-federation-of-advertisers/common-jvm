@@ -26,7 +26,7 @@ import org.wfanet.measurement.storage.StorageClient
 class SignedBlob(
   wrapped: StorageClient.Blob,
   val signature: ByteString,
-  val algorithm: SignatureAlgorithm
+  val algorithm: SignatureAlgorithm,
 ) : StorageClient.Blob by wrapped {
 
   /**
@@ -37,7 +37,7 @@ class SignedBlob(
    */
   suspend inline fun readAndVerify(
     certificate: X509Certificate,
-    crossinline action: suspend (ByteString) -> Unit
+    crossinline action: suspend (ByteString) -> Unit,
   ): Boolean {
     return read().collectAndVerify(certificate, algorithm, signature, action)
   }
@@ -68,7 +68,7 @@ suspend fun StorageClient.createSignedBlob(
 suspend fun StorageClient.createSignedBlob(
   blobKey: String,
   content: Flow<ByteString>,
-  newSigner: () -> Signature
+  newSigner: () -> Signature,
 ): SignedBlob {
   val signer = newSigner()
   val outFlow = content.onEach(signer::update)

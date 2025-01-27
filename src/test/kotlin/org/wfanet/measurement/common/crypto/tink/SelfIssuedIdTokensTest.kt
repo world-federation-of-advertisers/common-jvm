@@ -47,9 +47,9 @@ class SelfIssuedIdTokensTest {
           state = STATE,
           nonce = NONCE,
           redirectUri = REDIRECT_URI,
-          isSelfIssued = true
+          isSelfIssued = true,
         ),
-        clock
+        clock,
       )
     val tokenParts = idToken.split(".")
     val claims =
@@ -61,7 +61,7 @@ class SelfIssuedIdTokensTest {
       SelfIssuedIdTokens.validateJwt(
         redirectUri = REDIRECT_URI,
         idToken = idToken,
-        publicJwkHandle = publicJwkHandle
+        publicJwkHandle = publicJwkHandle,
       )
 
     assertThat(apiIdToExternalId(claims.get("state").asString) == STATE).isTrue()

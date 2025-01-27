@@ -55,7 +55,7 @@ object ErrorLoggingServerInterceptor : ServerInterceptor {
                 methodDescriptor.serviceName,
                 methodDescriptor.bareMethodName,
                 message,
-                status.cause
+                status.cause,
               )
             }
             else -> {}

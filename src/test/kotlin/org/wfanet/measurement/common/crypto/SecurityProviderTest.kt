@@ -47,7 +47,7 @@ private val SERVER_SKID =
     0xC4,
     0x2C,
     0x63,
-    0xA8
+    0xA8,
   )
 private val CLIENT_AKID =
   byteStringOf(

@@ -31,7 +31,7 @@ private const val READ_BUFFER_SIZE = 1024 * 4 // 4 KiB
 /** [StorageClient] implementation that stores blobs as files under [directory]. */
 class FileSystemStorageClient(
   private val directory: File,
-  private val coroutineContext: @BlockingExecutor CoroutineContext = Dispatchers.IO
+  private val coroutineContext: @BlockingExecutor CoroutineContext = Dispatchers.IO,
 ) : StorageClient {
   init {
     require(directory.isDirectory) { "$directory is not a directory" }

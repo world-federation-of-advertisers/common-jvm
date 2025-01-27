@@ -45,11 +45,11 @@ data class OpenEndTimeRange(val start: Instant, val endExclusive: Instant) {
 
     fun fromClosedDateRange(
       dateRange: ClosedRange<LocalDate>,
-      zoneOffset: ZoneOffset = ZoneOffset.UTC
+      zoneOffset: ZoneOffset = ZoneOffset.UTC,
     ) =
       OpenEndTimeRange(
         dateRange.start.atStartOfDay().toInstant(zoneOffset),
-        dateRange.endInclusive.plusDays(1).atStartOfDay().toInstant(zoneOffset)
+        dateRange.endInclusive.plusDays(1).atStartOfDay().toInstant(zoneOffset),
       )
   }
 }

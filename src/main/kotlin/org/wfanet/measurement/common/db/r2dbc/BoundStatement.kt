@@ -34,11 +34,14 @@ private constructor(private val baseSql: String, private val bindings: Collectio
   abstract class Binder {
     /** Binds the parameter named [name] to [value]. */
     fun bind(name: String, value: ExternalId?) = bind(name, value?.value)
+
     /** Binds the parameter named [name] to [value]. */
     fun bind(name: String, value: InternalId?) = bind(name, value?.value)
+
     /** Binds the parameter named [name] to [value]. */
     fun bind(name: String, value: Message?) =
       bind(name, value?.toByteString()?.asReadOnlyByteBuffer())
+
     /** Binds the parameter named [name] to [value]. */
     fun bind(name: String, value: ProtocolMessageEnum?) = bind(name, value?.number)
 
@@ -60,11 +63,14 @@ private constructor(private val baseSql: String, private val bindings: Collectio
 
     /** Binds the parameter [index] to [value]. */
     fun bind(index: Int, value: ExternalId?) = bind(index, value?.value)
+
     /** Binds the parameter [index] to [value]. */
     fun bind(index: Int, value: InternalId?) = bind(index, value?.value)
+
     /** Binds the parameter [index] to [value]. */
     fun bind(index: Int, value: Message?) =
       bind(index, value?.toByteString()?.asReadOnlyByteBuffer())
+
     /** Binds the parameter [index] to [value]. */
     fun bind(index: Int, value: ProtocolMessageEnum?) = bind(index, value?.number)
 

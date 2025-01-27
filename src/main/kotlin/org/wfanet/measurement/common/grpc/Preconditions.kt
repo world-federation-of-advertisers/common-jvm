@@ -62,6 +62,6 @@ fun failGrpc(status: Status = Status.INVALID_ARGUMENT, provideDescription: () ->
 fun failGrpc(
   status: Status = Status.INVALID_ARGUMENT,
   cause: Throwable,
-  provideDescription: () -> String
+  provideDescription: () -> String,
 ): Nothing =
   throw status.withDescription(provideDescription()).withCause(cause).asRuntimeException()

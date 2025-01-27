@@ -53,5 +53,5 @@ fun Channel.withDefaultDeadline(duration: Long, timeUnit: TimeUnit): Channel =
 fun Channel.withDefaultDeadline(duration: Duration): Channel =
   ClientInterceptors.interceptForward(
     this,
-    DefaultDeadlineInterceptor(duration.toMillis(), TimeUnit.MILLISECONDS)
+    DefaultDeadlineInterceptor(duration.toMillis(), TimeUnit.MILLISECONDS),
   )

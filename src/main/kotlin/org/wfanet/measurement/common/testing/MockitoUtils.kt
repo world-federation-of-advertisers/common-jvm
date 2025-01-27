@@ -25,14 +25,14 @@ import org.mockito.verification.VerificationMode
 /** Captures the sole parameter to [method] on a Mockito [mock]. */
 inline fun <reified T : Any, M> verifyAndCapture(
   mock: M,
-  crossinline method: suspend M.(T) -> Any
+  crossinline method: suspend M.(T) -> Any,
 ): T = captureFirst { verifyBlocking(mock) { this.method(capture()) } }
 
 /** Captures all parameters to [method] with [mode] on a Mockito [mock] */
 inline fun <reified T : Any, reified M> verifyAndCapture(
   mock: M,
   crossinline method: suspend M.(T) -> Any,
-  mode: VerificationMode
+  mode: VerificationMode,
 ): List<T> {
   val captor: KArgumentCaptor<T> = argumentCaptor()
   verifyBlocking(mock, mode) { method(captor.capture()) }
@@ -56,7 +56,7 @@ inline fun <reified T : Any> captureFirst(block: KArgumentCaptor<T>.() -> Unit):
  */
 inline fun <reified T : Message, M> verifyProtoArgument(
   mock: M,
-  noinline method: suspend M.(T) -> Any
+  noinline method: suspend M.(T) -> Any,
 ): ProtoSubject {
   return ProtoTruth.assertThat(verifyAndCapture(mock, method))
 }

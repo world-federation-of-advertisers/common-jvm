@@ -42,7 +42,7 @@ object LoggingServerInterceptor : ServerInterceptor {
   override fun <ReqT, RespT> interceptCall(
     call: ServerCall<ReqT, RespT>,
     headers: Metadata?,
-    next: ServerCallHandler<ReqT, RespT>
+    next: ServerCallHandler<ReqT, RespT>,
   ): ServerCall.Listener<ReqT> {
     val requestNumber = requestCounter.incrementAndGet()
     val requestId = Tracing.getOtelTraceId() ?: requestNumber.toString()
@@ -56,7 +56,7 @@ object LoggingServerInterceptor : ServerInterceptor {
             Level.INFO,
             serviceName,
             methodName,
-            "[$threadName] gRPC $requestId response: $messageToLog"
+            "[$threadName] gRPC $requestId response: $messageToLog",
           )
           super.sendMessage(message)
         }
@@ -84,7 +84,7 @@ object LoggingServerInterceptor : ServerInterceptor {
           Level.INFO,
           serviceName,
           methodName,
-          "[$threadName] gRPC $requestId request: $headers $messageToLog"
+          "[$threadName] gRPC $requestId request: $headers $messageToLog",
         )
         super.onMessage(message)
       }

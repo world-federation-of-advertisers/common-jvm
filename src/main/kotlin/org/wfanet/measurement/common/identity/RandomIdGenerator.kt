@@ -20,7 +20,7 @@ import kotlin.random.Random
 
 class RandomIdGenerator(
   private val clock: Clock = Clock.systemUTC(),
-  private val random: Random = Random.Default
+  private val random: Random = Random.Default,
 ) : IdGenerator {
   override fun generateInternalId(): InternalId = InternalId(generateLong())
 

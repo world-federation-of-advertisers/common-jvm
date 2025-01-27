@@ -22,7 +22,7 @@ class TlsFlags {
   @CommandLine.Option(
     names = ["--tls-cert-file"],
     description = ["User's own TLS cert file."],
-    defaultValue = ""
+    defaultValue = "",
   )
   lateinit var certFile: File
     private set
@@ -30,7 +30,7 @@ class TlsFlags {
   @CommandLine.Option(
     names = ["--tls-key-file"],
     description = ["User's own TLS private key file."],
-    defaultValue = ""
+    defaultValue = "",
   )
   lateinit var privateKeyFile: File
     private set
@@ -38,7 +38,7 @@ class TlsFlags {
   @CommandLine.Option(
     names = ["--cert-collection-file"],
     description = ["Trusted root Cert collection file."],
-    required = false
+    required = false,
   )
   var certCollectionFile: File? = null
     private set

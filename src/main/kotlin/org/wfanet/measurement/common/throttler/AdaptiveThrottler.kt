@@ -43,7 +43,7 @@ class AdaptiveThrottler(
   private val overloadFactor: Double,
   private val clock: Clock,
   private val timeHorizon: Duration,
-  private val pollDelay: Duration
+  private val pollDelay: Duration,
 ) : Throttler {
 
   /** Create an [AdaptiveThrottler] from the values set in [Flags]. */
@@ -106,9 +106,9 @@ class AdaptiveThrottler(
       description =
         [
           "How much to overload the backend. If the factor is 1.1 it is expected ",
-          "that 10% of requests will fail due to throttling."
+          "that 10% of requests will fail due to throttling.",
         ],
-      defaultValue = "1.1"
+      defaultValue = "1.1",
     )
     var overloadFactor by Delegates.notNull<Double>()
       private set
@@ -117,7 +117,7 @@ class AdaptiveThrottler(
       names = ["--throttler-time-horizon"],
       required = true,
       description = ["Time window to look at to determine proportion of accepted requests."],
-      defaultValue = "2m"
+      defaultValue = "2m",
     )
     lateinit var timeHorizon: Duration
       private set
@@ -126,7 +126,7 @@ class AdaptiveThrottler(
       names = ["--throttler-poll-delay"],
       required = true,
       description = ["How often to retry when throttled."],
-      defaultValue = "1ms"
+      defaultValue = "1ms",
     )
     lateinit var throttlePollDelay: Duration
       private set

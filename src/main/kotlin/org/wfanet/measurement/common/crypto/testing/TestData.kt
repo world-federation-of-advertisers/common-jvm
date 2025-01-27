@@ -37,7 +37,7 @@ object TestData {
           "common",
           "crypto",
           "testing",
-          "testdata"
+          "testdata",
         )
       )!!
       .toFile()
@@ -72,69 +72,69 @@ object TestData {
   "Use TestData",
   ReplaceWith(
     "TestData.FIXED_SERVER_CERT_PEM_FILE",
-    "org.wfanet.measurement.common.crypto.testing.TestData"
-  )
+    "org.wfanet.measurement.common.crypto.testing.TestData",
+  ),
 )
 val FIXED_SERVER_CERT_PEM_FILE = TestData.FIXED_SERVER_CERT_PEM_FILE
 @Deprecated(
   "Use TestData",
   ReplaceWith(
     "TestData.FIXED_SERVER_KEY_FILE",
-    "org.wfanet.measurement.common.crypto.testing.TestData"
-  )
+    "org.wfanet.measurement.common.crypto.testing.TestData",
+  ),
 )
 val FIXED_SERVER_KEY_FILE = TestData.FIXED_SERVER_KEY_FILE
 @Deprecated(
   "Use TestData",
   ReplaceWith(
     "TestData.FIXED_SERVER_CERT_DER_FILE",
-    "org.wfanet.measurement.common.crypto.testing.TestData"
-  )
+    "org.wfanet.measurement.common.crypto.testing.TestData",
+  ),
 )
 val FIXED_SERVER_CERT_DER_FILE = TestData.FIXED_SERVER_CERT_DER_FILE
 @Deprecated(
   "Use TestData",
   ReplaceWith(
     "TestData.FIXED_SERVER_KEY_DER_FILE",
-    "org.wfanet.measurement.common.crypto.testing.TestData"
-  )
+    "org.wfanet.measurement.common.crypto.testing.TestData",
+  ),
 )
 val FIXED_SERVER_KEY_DER_FILE = TestData.FIXED_SERVER_KEY_DER_FILE
 @Deprecated(
   "Use TestData",
   ReplaceWith(
     "TestData.FIXED_CA_CERT_PEM_FILE",
-    "org.wfanet.measurement.common.crypto.testing.TestData"
-  )
+    "org.wfanet.measurement.common.crypto.testing.TestData",
+  ),
 )
 val FIXED_CA_CERT_PEM_FILE = TestData.FIXED_CA_CERT_PEM_FILE
 @Deprecated(
   "Use TestData",
-  ReplaceWith("TestData.FIXED_CA_KEY_FILE", "org.wfanet.measurement.common.crypto.testing.TestData")
+  ReplaceWith("TestData.FIXED_CA_KEY_FILE", "org.wfanet.measurement.common.crypto.testing.TestData"),
 )
 val FIXED_CA_KEY_FILE = TestData.FIXED_CA_KEY_FILE
 @Deprecated(
   "Use TestData",
   ReplaceWith(
     "TestData.FIXED_CLIENT_CERT_PEM_FILE",
-    "org.wfanet.measurement.common.crypto.testing.TestData"
-  )
+    "org.wfanet.measurement.common.crypto.testing.TestData",
+  ),
 )
 val FIXED_CLIENT_CERT_PEM_FILE = TestData.FIXED_CLIENT_CERT_PEM_FILE
 @Deprecated(
   "Use TestData",
   ReplaceWith(
     "TestData.FIXED_EXPIRED_CERT_PEM_FILE",
-    "org.wfanet.measurement.common.crypto.testing.TestData"
-  )
+    "org.wfanet.measurement.common.crypto.testing.TestData",
+  ),
 )
 val FIXED_EXPIRED_CERT_PEM_FILE = TestData.FIXED_EXPIRED_CERT_PEM_FILE
 @Deprecated(
   "Use TestData",
   ReplaceWith(
     "TestData.FIXED_EXPIRED_CERT_KEY_FILE",
-    "org.wfanet.measurement.common.crypto.testing.TestData"
-  )
+    "org.wfanet.measurement.common.crypto.testing.TestData",
+  ),
 )
 val FIXED_EXPIRED_CERT_KEY_FILE = TestData.FIXED_EXPIRED_CERT_KEY_FILE
 
@@ -142,15 +142,15 @@ val FIXED_EXPIRED_CERT_KEY_FILE = TestData.FIXED_EXPIRED_CERT_KEY_FILE
   "Use TestData",
   ReplaceWith(
     "TestData.FIXED_ENCRYPTION_PRIVATE_KEYSET",
-    "org.wfanet.measurement.common.crypto.testing.TestData"
-  )
+    "org.wfanet.measurement.common.crypto.testing.TestData",
+  ),
 )
 val FIXED_ENCRYPTION_PRIVATE_KEYSET = TestData.FIXED_ENCRYPTION_PRIVATE_KEYSET
 @Deprecated(
   "Use TestData",
   ReplaceWith(
     "TestData.FIXED_ENCRYPTION_PUBLIC_KEYSET",
-    "org.wfanet.measurement.common.crypto.testing.TestData"
-  )
+    "org.wfanet.measurement.common.crypto.testing.TestData",
+  ),
 )
 val FIXED_ENCRYPTION_PUBLIC_KEYSET = TestData.FIXED_ENCRYPTION_PUBLIC_KEYSET
