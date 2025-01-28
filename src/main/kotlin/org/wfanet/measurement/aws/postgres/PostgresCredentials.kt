@@ -21,10 +21,7 @@ import software.amazon.awssdk.services.secretsmanager.SecretsManagerClient
 import software.amazon.awssdk.services.secretsmanager.model.GetSecretValueRequest
 import software.amazon.awssdk.services.secretsmanager.model.GetSecretValueResponse
 
-data class PostgresCredentials(
-  val username: String,
-  val password: String,
-) {
+data class PostgresCredentials(val username: String, val password: String) {
   companion object {
     fun fromAwsSecretManager(region: Region, secretName: String): PostgresCredentials {
       val secretManagerCli =

@@ -27,7 +27,7 @@ import com.google.cloud.spanner.Instance
 fun createDatabase(
   spannerInstance: Instance,
   schemaDefinitionLines: Sequence<String>,
-  databaseName: String
+  databaseName: String,
 ): Database =
   spannerInstance.createDatabase(databaseName, toDdlStatements(schemaDefinitionLines)).get()
 

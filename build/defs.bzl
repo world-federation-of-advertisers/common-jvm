@@ -14,6 +14,8 @@
 
 """Utility functions definitions."""
 
+load("@rules_java//java/common:java_info.bzl", "JavaInfo")
+
 # buildifier: disable=unnamed-macro
 def to_label(label_string):
     """Returns a Label object for a possibly relative label string."""

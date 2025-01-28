@@ -24,7 +24,7 @@ class PostgresFlags {
   @CommandLine.Option(
     names = ["--postgres-host"],
     description = ["Host name of the Postgres database."],
-    required = true
+    required = true,
   )
   lateinit var host: String
     private set
@@ -32,7 +32,7 @@ class PostgresFlags {
   @set:CommandLine.Option(
     names = ["--postgres-port"],
     description = ["Port of the Postgres database."],
-    required = true
+    required = true,
   )
   var port: Int by Delegates.notNull()
     private set
@@ -41,7 +41,7 @@ class PostgresFlags {
     names = ["--postgres-credential-secret-name"],
     description =
       ["Name of the AWS Secrets Manager secret that stores the password of the Postgres database."],
-    required = true
+    required = true,
   )
   lateinit var credentialSecretName: String
     private set
@@ -50,7 +50,7 @@ class PostgresFlags {
     names = ["--postgres-region"],
     description = ["AWS region that the postgres is located in."],
     converter = [RegionConverter::class],
-    required = true
+    required = true,
   )
   lateinit var region: Region
     private set

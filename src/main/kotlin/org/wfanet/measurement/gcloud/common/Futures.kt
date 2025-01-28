@@ -32,14 +32,16 @@ private class ListenableFutureAdapter<T>(delegate: ListenableFuture<T>) :
   SimpleForwardingListenableFuture<T>(delegate), ApiFuture<T>
 
 private fun <T> ListenableFuture<T>.asApiFuture(): ApiFuture<T> {
-  @Suppress("UNCHECKED_CAST") return (this as? ApiFuture<T>) ?: ListenableFutureAdapter(this)
+  @Suppress("UNCHECKED_CAST")
+  return (this as? ApiFuture<T>) ?: ListenableFutureAdapter(this)
 }
 
 private class ApiFutureAdapter<T>(delegate: ApiFuture<T>) :
   ForwardingApiFuture<T>(delegate), ListenableFuture<T>
 
 fun <T> ApiFuture<T>.asListenableFuture(): ListenableFuture<T> {
-  @Suppress("UNCHECKED_CAST") return (this as? ListenableFuture<T>) ?: ApiFutureAdapter<T>(this)
+  @Suppress("UNCHECKED_CAST")
+  return (this as? ListenableFuture<T>) ?: ApiFutureAdapter<T>(this)
 }
 
 /**

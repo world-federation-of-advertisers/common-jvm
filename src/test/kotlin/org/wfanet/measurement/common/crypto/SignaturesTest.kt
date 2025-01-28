@@ -167,7 +167,7 @@ class SignaturesTest {
     val hybridChainPrivateKey =
       readPrivateKey(
         TestData.FIXED_CERT_WITH_RSA_PSS_SIG_KEY_FILE,
-        hybridChainCertificate.publicKey.algorithm
+        hybridChainCertificate.publicKey.algorithm,
       )
   }
 }

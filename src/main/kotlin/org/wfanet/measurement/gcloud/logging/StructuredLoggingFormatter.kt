@@ -96,7 +96,7 @@ class StructuredLoggingFormatter : Formatter() {
         level.toSeverity(),
         Instant.ofEpochMilli(millis),
         textPayload,
-        sourceLocation
+        sourceLocation,
       )
     }
   }

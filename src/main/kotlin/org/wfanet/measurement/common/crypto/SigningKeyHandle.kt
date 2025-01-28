@@ -98,7 +98,7 @@ data class SigningKeyHandle(val certificate: X509Certificate, private val privat
 suspend inline fun Flow<ByteString>.collectAndSign(
   keyHandle: SigningKeyHandle,
   algorithm: SignatureAlgorithm,
-  crossinline action: suspend (ByteString) -> Unit
+  crossinline action: suspend (ByteString) -> Unit,
 ): ByteString = collectAndSign({ keyHandle.newSigner(algorithm) }, action)
 
 /**
@@ -112,14 +112,14 @@ suspend inline fun Flow<ByteString>.collectAndSign(
 @Suppress("DEPRECATION")
 suspend inline fun Flow<ByteString>.collectAndSign(
   keyHandle: SigningKeyHandle,
-  crossinline action: suspend (ByteString) -> Unit
+  crossinline action: suspend (ByteString) -> Unit,
 ): ByteString = collectAndSign(keyHandle::newSigner, action)
 
 suspend fun StorageClient.createSignedBlob(
   blobKey: String,
   content: Flow<ByteString>,
   signingKey: SigningKeyHandle,
-  algorithm: SignatureAlgorithm
+  algorithm: SignatureAlgorithm,
 ): SignedBlob = createSignedBlob(blobKey, content) { signingKey.newSigner(algorithm) }
 
 @Deprecated("Specify algorithm explicitly")
@@ -127,5 +127,5 @@ suspend fun StorageClient.createSignedBlob(
 suspend fun StorageClient.createSignedBlob(
   blobKey: String,
   content: Flow<ByteString>,
-  signingKey: SigningKeyHandle
+  signingKey: SigningKeyHandle,
 ): SignedBlob = createSignedBlob(blobKey, content, signingKey::newSigner)

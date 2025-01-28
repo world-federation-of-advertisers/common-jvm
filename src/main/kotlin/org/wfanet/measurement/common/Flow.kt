@@ -75,7 +75,7 @@ fun <T, R> Flow<T>.pairAll(block: suspend (T) -> Flow<R>): Flow<Pair<T, R>> = tr
 fun <T> Flow<T>.withRetriesOnEach(
   maxAttempts: Int,
   retryPredicate: (Throwable) -> Boolean = { true },
-  onEachBlock: suspend (T) -> Unit
+  onEachBlock: suspend (T) -> Unit,
 ): Flow<T> = onEach {
   repeat(maxAttempts) { idx ->
     val attempt = idx + 1
@@ -107,7 +107,7 @@ fun <T> Flow<T>.withRetriesOnEach(
 fun <T, R> Flow<T>.mapConcurrently(
   scope: CoroutineScope,
   concurrency: Int,
-  transform: suspend (T) -> R
+  transform: suspend (T) -> R,
 ): Flow<R> {
   return map { scope.async { transform(it) } }.buffer(concurrency).map { it.await() }
 }

@@ -40,14 +40,14 @@ enum class HashAlgorithm(
   // From RFC 4055
   SHA256("2.16.840.1.101.3.4.2.1"),
   SHA384("2.16.840.1.101.3.4.2.2"),
-  SHA512("2.16.840.1.101.3.4.2.3")
+  SHA512("2.16.840.1.101.3.4.2.3"),
 }
 
 enum class SignatureAlgorithm(
   /** OID in dot notation */
   val oid: String,
   /** Java Security standard algorithm name */
-  val javaName: String
+  val javaName: String,
 ) {
   // From RFC 5758
   ECDSA_WITH_SHA256("1.2.840.10045.4.3.2", "SHA256withECDSA"),
@@ -103,7 +103,7 @@ object Signatures {
   inline fun verify(
     data: ByteString,
     signature: ByteString,
-    newVerifier: () -> Signature
+    newVerifier: () -> Signature,
   ): Boolean {
     return newVerifier().apply { update(data) }.verify(signature.toByteArray())
   }
@@ -170,7 +170,7 @@ fun PrivateKey.sign(certificate: X509Certificate, data: ByteString): ByteString 
  */
 suspend inline fun Flow<ByteString>.collectAndSign(
   newSigner: () -> Signature,
-  crossinline action: suspend (ByteString) -> Unit
+  crossinline action: suspend (ByteString) -> Unit,
 ): ByteString {
   val signer = newSigner()
   collect { bytes ->
@@ -222,7 +222,7 @@ fun X509Certificate.newVerifier(): Signature {
 fun X509Certificate.verifySignature(
   algorithm: SignatureAlgorithm,
   data: ByteString,
-  signature: ByteString
+  signature: ByteString,
 ): Boolean {
   return Signatures.verify(data, signature) { newVerifier(algorithm) }
 }
@@ -246,7 +246,7 @@ fun X509Certificate.verifySignature(data: ByteString, signature: ByteString): Bo
 suspend inline fun Flow<ByteString>.collectAndVerify(
   signature: ByteString,
   newVerifier: () -> Signature,
-  crossinline action: suspend (ByteString) -> Unit
+  crossinline action: suspend (ByteString) -> Unit,
 ): Boolean {
   val verifier = newVerifier()
   collect { bytes ->
@@ -266,7 +266,7 @@ suspend inline fun Flow<ByteString>.collectAndVerify(
   certificate: X509Certificate,
   algorithm: SignatureAlgorithm,
   signature: ByteString,
-  crossinline action: suspend (ByteString) -> Unit
+  crossinline action: suspend (ByteString) -> Unit,
 ): Boolean {
   return collectAndVerify(signature, { certificate.newVerifier(algorithm) }, action)
 }
@@ -281,7 +281,7 @@ suspend inline fun Flow<ByteString>.collectAndVerify(
 suspend inline fun Flow<ByteString>.collectAndVerify(
   certificate: X509Certificate,
   signature: ByteString,
-  crossinline action: suspend (ByteString) -> Unit
+  crossinline action: suspend (ByteString) -> Unit,
 ): Boolean {
   val algorithm = requireNotNull(certificate.signatureAlgorithm)
   return collectAndVerify(certificate, algorithm, signature, action)
@@ -340,7 +340,7 @@ fun Flow<ByteString>.verifying(
  */
 @Deprecated(
   "Use Flow<ByteString>.verifying",
-  ReplaceWith("data.verifying(this, algorithm, signature)")
+  ReplaceWith("data.verifying(this, algorithm, signature)"),
 )
 fun X509Certificate.verifySignedFlow(
   data: Flow<ByteString>,
@@ -360,6 +360,6 @@ fun X509Certificate.validate(trustedIssuer: X509Certificate) {
   val validator = CertPathValidator.getInstance(CERT_PATH_VALIDATOR_ALGORITHM)
   validator.validate(
     generateCertPath(listOf(this)),
-    PKIXParameters(setOf(trustAnchor)).also { it.isRevocationEnabled = false }
+    PKIXParameters(setOf(trustAnchor)).also { it.isRevocationEnabled = false },
   )
 }

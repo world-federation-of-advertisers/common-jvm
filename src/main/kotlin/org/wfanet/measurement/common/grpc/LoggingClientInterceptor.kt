@@ -42,7 +42,7 @@ object LoggingClientInterceptor : ClientInterceptor {
   override fun <ReqT, RespT> interceptCall(
     method: MethodDescriptor<ReqT, RespT>,
     callOptions: CallOptions,
-    next: Channel
+    next: Channel,
   ): ClientCall<ReqT, RespT> {
     val requestNumber = requestCounter.incrementAndGet()
     val requestId = Tracing.getOtelTraceId() ?: requestNumber.toString()
@@ -56,7 +56,7 @@ object LoggingClientInterceptor : ClientInterceptor {
           Level.INFO,
           serviceName,
           methodName,
-          "[$threadName] gRPC client $requestId headers:\n$headers"
+          "[$threadName] gRPC client $requestId headers:\n$headers",
         )
         val listener =
           object : SimpleForwardingClientCallListener<RespT>(responseListener) {
@@ -66,7 +66,7 @@ object LoggingClientInterceptor : ClientInterceptor {
                 Level.INFO,
                 serviceName,
                 methodName,
-                "[$threadName] gRPC client $requestId response:\n$messageToLog"
+                "[$threadName] gRPC client $requestId response:\n$messageToLog",
               )
               super.onMessage(message)
             }
@@ -77,7 +77,7 @@ object LoggingClientInterceptor : ClientInterceptor {
                   Level.INFO,
                   serviceName,
                   methodName,
-                  "[$threadName] gRPC client $requestId complete"
+                  "[$threadName] gRPC client $requestId complete",
                 )
               } else {
                 val message =
@@ -102,7 +102,7 @@ object LoggingClientInterceptor : ClientInterceptor {
           Level.INFO,
           serviceName,
           methodName,
-          "[$threadName] gRPC client $requestId request: $messageToLog"
+          "[$threadName] gRPC client $requestId request: $messageToLog",
         )
         super.sendMessage(message)
       }

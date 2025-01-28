@@ -21,7 +21,7 @@ class PostgresFlags {
   @CommandLine.Option(
     names = ["--postgres-database"],
     description = ["Name of the Postgres database."],
-    required = false
+    required = false,
   )
   var database: String = ""
     private set
@@ -29,7 +29,7 @@ class PostgresFlags {
   @CommandLine.Option(
     names = ["--postgres-host"],
     description = ["Host name of the Postgres database."],
-    required = true
+    required = true,
   )
   lateinit var host: String
     private set
@@ -37,7 +37,7 @@ class PostgresFlags {
   @CommandLine.Option(
     names = ["--postgres-port"],
     description = ["Port of the Postgres database."],
-    required = true
+    required = true,
   )
   var port: Int = 0
     private set
@@ -45,7 +45,7 @@ class PostgresFlags {
   @CommandLine.Option(
     names = ["--postgres-user"],
     description = ["User of the Postgres database."],
-    required = true
+    required = true,
   )
   lateinit var user: String
     private set
@@ -53,7 +53,7 @@ class PostgresFlags {
   @CommandLine.Option(
     names = ["--postgres-password"],
     description = ["Password of the Postgres database."],
-    required = true
+    required = true,
   )
   lateinit var password: String
     private set

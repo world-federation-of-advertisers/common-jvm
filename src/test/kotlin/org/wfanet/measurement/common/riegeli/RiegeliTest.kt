@@ -105,7 +105,7 @@ class RiegeliTest {
             "measurement",
             "common",
             "riegeli",
-            "testing"
+            "testing",
           )
         )!!
         .toFile()
