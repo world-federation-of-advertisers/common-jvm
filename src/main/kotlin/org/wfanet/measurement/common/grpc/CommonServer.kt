@@ -226,7 +226,7 @@ private constructor(
       return fromParameters(
         flags.debugVerboseGrpcLogging,
         flags.tlsFlags.signingCerts,
-        if (flags.clientAuthRequired) ClientAuth.REQUIRE else ClientAuth.NONE,
+        if (flags.clientAuthRequired) ClientAuth.REQUIRE else ClientAuth.OPTIONAL,
         nameForLogging,
         services,
         flags.port,
