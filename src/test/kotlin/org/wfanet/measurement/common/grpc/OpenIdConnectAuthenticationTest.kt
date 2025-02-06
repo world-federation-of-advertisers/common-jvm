@@ -22,7 +22,6 @@ import io.grpc.Metadata
 import io.grpc.Status
 import io.grpc.StatusException
 import java.time.Duration
-import java.time.Instant
 import java.util.concurrent.Executor
 import kotlin.test.assertFailsWith
 import org.junit.Test
@@ -57,12 +56,7 @@ class OpenIdConnectAuthenticationTest {
     val scopes = setOf("foo.bar", "foo.baz")
     val openIdProvider = OpenIdProvider(issuer)
     val credentials =
-      openIdProvider.generateCredentials(
-        audience,
-        subject,
-        scopes,
-        Instant.now().minus(Duration.ofMinutes(5)),
-      )
+      openIdProvider.generateCredentials(audience, subject, scopes, ttl = Duration.ofMinutes(-1))
     val auth = OpenIdConnectAuthentication(audience, listOf(openIdProvider.providerConfig))
 
     val exception =
