@@ -32,7 +32,7 @@ import org.wfanet.measurement.common.grpc.testing.OpenIdProvider
 import org.wfanet.measurement.common.testing.verifyAndCapture
 
 @RunWith(JUnit4::class)
-class OpenIdConnectAuthenticationTest {
+class OAuthTokenAuthenticationTest {
   @Test
   fun `verifyAndDecodeBearerToken returns VerifiedToken`() {
     val issuer = "example.com"
@@ -41,11 +41,11 @@ class OpenIdConnectAuthenticationTest {
     val scopes = setOf("foo.bar", "foo.baz")
     val openIdProvider = OpenIdProvider(issuer)
     val credentials = openIdProvider.generateCredentials(audience, subject, scopes)
-    val auth = OpenIdConnectAuthentication(audience, listOf(openIdProvider.providerConfig))
+    val auth = OAuthTokenAuthentication(audience, listOf(openIdProvider.providerConfig))
 
     val token = auth.verifyAndDecodeBearerToken(extractHeaders(credentials))
 
-    assertThat(token).isEqualTo(OpenIdConnectAuthentication.VerifiedToken(issuer, subject, scopes))
+    assertThat(token).isEqualTo(OAuthTokenAuthentication.VerifiedToken(issuer, subject, scopes))
   }
 
   @Test
@@ -57,7 +57,7 @@ class OpenIdConnectAuthenticationTest {
     val openIdProvider = OpenIdProvider(issuer)
     val credentials =
       openIdProvider.generateCredentials(audience, subject, scopes, ttl = Duration.ofMinutes(-1))
-    val auth = OpenIdConnectAuthentication(audience, listOf(openIdProvider.providerConfig))
+    val auth = OAuthTokenAuthentication(audience, listOf(openIdProvider.providerConfig))
 
     val exception =
       assertFailsWith<StatusException> {
@@ -76,7 +76,7 @@ class OpenIdConnectAuthenticationTest {
     val scopes = setOf("foo.bar", "foo.baz")
     val openIdProvider = OpenIdProvider(issuer)
     val credentials = openIdProvider.generateCredentials("bad-audience", subject, scopes)
-    val auth = OpenIdConnectAuthentication(audience, listOf(openIdProvider.providerConfig))
+    val auth = OAuthTokenAuthentication(audience, listOf(openIdProvider.providerConfig))
 
     val exception =
       assertFailsWith<StatusException> {
@@ -95,7 +95,7 @@ class OpenIdConnectAuthenticationTest {
     val scopes = setOf("foo.bar", "foo.baz")
     val openIdProvider = OpenIdProvider(issuer)
     val credentials = openIdProvider.generateCredentials(audience, subject, scopes)
-    val auth = OpenIdConnectAuthentication(audience, emptyList())
+    val auth = OAuthTokenAuthentication(audience, emptyList())
 
     val exception =
       assertFailsWith<StatusException> {
@@ -110,7 +110,7 @@ class OpenIdConnectAuthenticationTest {
   fun `verifyAndDecodeBearerToken throws UNAUTHENTICATED when token is not a valid JWT`() {
     val audience = "foobar"
     val credentials = BearerTokenCallCredentials("foo", false)
-    val auth = OpenIdConnectAuthentication(audience, emptyList())
+    val auth = OAuthTokenAuthentication(audience, emptyList())
 
     val exception =
       assertFailsWith<StatusException> {
@@ -124,7 +124,7 @@ class OpenIdConnectAuthenticationTest {
   @Test
   fun `verifyAndDecodeBearerToken throws UNAUTHENTICATED when header not found`() {
     val audience = "foobar"
-    val auth = OpenIdConnectAuthentication(audience, emptyList())
+    val auth = OAuthTokenAuthentication(audience, emptyList())
 
     val exception = assertFailsWith<StatusException> { auth.verifyAndDecodeBearerToken(Metadata()) }
 

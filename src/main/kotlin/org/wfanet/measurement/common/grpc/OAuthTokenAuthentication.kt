@@ -30,8 +30,8 @@ import java.security.GeneralSecurityException
 import java.time.Clock
 import org.wfanet.measurement.common.base64UrlDecode
 
-/** Utility for extracting OpenID Connect (OIDC) token information from gRPC request headers. */
-class OpenIdConnectAuthentication(
+/** Utility for extracting RFC 9068 OAuth token information from [BearerTokenCallCredentials]. */
+class OAuthTokenAuthentication(
   audience: String,
   openIdProviderConfigs: Iterable<OpenIdProviderConfig>,
   clock: Clock = Clock.systemUTC(),
@@ -45,18 +45,11 @@ class OpenIdConnectAuthentication(
     }
 
   /**
-   * Verifies and decodes an OIDC bearer token from [headers].
-   *
-   * The token must be a signed JWT.
+   * Verifies and decodes an OAuth2 bearer token from [credentials].
    *
    * @throws io.grpc.StatusException on failure
    */
-  fun verifyAndDecodeBearerToken(headers: Metadata): VerifiedToken {
-    val credentials =
-      BearerTokenCallCredentials.fromHeaders(headers)
-        ?: throw Status.UNAUTHENTICATED.withDescription("Bearer token not found in headers")
-          .asException()
-
+  fun verifyAndDecodeBearerToken(credentials: BearerTokenCallCredentials): VerifiedToken {
     val token: String = credentials.token
     val tokenParts = token.split(".")
     if (tokenParts.size != 3) {
@@ -96,6 +89,20 @@ class OpenIdConnectAuthentication(
       }
 
     return VerifiedToken(issuer, verifiedJwt.subject, scopes)
+  }
+
+  /**
+   * Verifies and decodes an OAuth2 bearer token from [headers].
+   *
+   * @throws io.grpc.StatusException on failure
+   */
+  fun verifyAndDecodeBearerToken(headers: Metadata): VerifiedToken {
+    val credentials =
+      BearerTokenCallCredentials.fromHeaders(headers)
+        ?: throw Status.UNAUTHENTICATED.withDescription("Bearer token not found in headers")
+          .asException()
+
+    return verifyAndDecodeBearerToken(credentials)
   }
 
   companion object {
