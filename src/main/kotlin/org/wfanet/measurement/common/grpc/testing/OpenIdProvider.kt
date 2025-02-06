@@ -27,7 +27,7 @@ import java.time.Clock
 import java.time.Duration
 import java.util.UUID
 import org.wfanet.measurement.common.grpc.BearerTokenCallCredentials
-import org.wfanet.measurement.common.grpc.OpenIdConnectAuthentication
+import org.wfanet.measurement.common.grpc.OAuthTokenAuthentication
 
 /** An OpenID provider for testing. */
 class OpenIdProvider(
@@ -36,9 +36,9 @@ class OpenIdProvider(
   private val clock: Clock = Clock.systemUTC(),
   private val generateUuid: () -> UUID = UUID::randomUUID,
 ) {
-  val providerConfig: OpenIdConnectAuthentication.OpenIdProviderConfig by lazy {
+  val providerConfig: OAuthTokenAuthentication.OpenIdProviderConfig by lazy {
     val jwks = JwkSetConverter.fromPublicKeysetHandle(jwkSetHandle.publicKeysetHandle)
-    OpenIdConnectAuthentication.OpenIdProviderConfig(issuer, jwks)
+    OAuthTokenAuthentication.OpenIdProviderConfig(issuer, jwks)
   }
 
   fun generateCredentials(
