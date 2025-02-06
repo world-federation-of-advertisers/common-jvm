@@ -37,7 +37,12 @@ class OAuthTokenAuthentication(
   clock: Clock = Clock.systemUTC(),
 ) {
   private val jwtValidator =
-    JwtValidator.newBuilder().setClock(clock).expectAudience(audience).ignoreIssuer().build()
+    JwtValidator.newBuilder()
+      .setClock(clock)
+      .expectTypeHeader(JWT_TYPE)
+      .expectAudience(audience)
+      .ignoreIssuer()
+      .build()
 
   private val jwksHandleByIssuer: Map<String, KeysetHandle> =
     openIdProviderConfigs.associateBy({ it.issuer }) {
@@ -112,6 +117,7 @@ class OAuthTokenAuthentication(
 
     private const val ISSUER_CLAIM = "iss"
     private const val SCOPES_CLAIM = "scope"
+    private const val JWT_TYPE = "at+jwt"
   }
 
   data class VerifiedToken(val issuer: String, val subject: String, val scopes: Set<String>)
