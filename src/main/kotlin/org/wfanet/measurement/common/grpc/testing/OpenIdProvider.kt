@@ -64,6 +64,7 @@ class OpenIdProvider(
     val issuedAt = clock.instant()
     val rawJwt =
       RawJwt.newBuilder()
+        .setTypeHeader(JWT_TYPE)
         .setJwtId(jwtId.toString())
         .setAudience(audience)
         .setIssuer(issuer)
@@ -83,6 +84,7 @@ class OpenIdProvider(
     }
 
     const val DEFAULT_CLIENT_ID = "testing-client"
+    private const val JWT_TYPE = "at+jwt"
     private val KEY_TEMPLATE: KeyTemplate = KeyTemplates.get("JWT_ES256")
   }
 }
