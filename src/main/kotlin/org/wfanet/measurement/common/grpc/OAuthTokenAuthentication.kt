@@ -58,33 +58,37 @@ class OAuthTokenAuthentication(
     val token: String = credentials.token
     val tokenParts = token.split(".")
     if (tokenParts.size != 3) {
-      throw Status.UNAUTHENTICATED.withDescription("Token is not a valid signed JWT").asException()
+      throw Status.UNAUTHENTICATED.withDescription("$ERROR_CODE: Token is not a valid signed JWT")
+        .asException()
     }
     val payload: JsonObject =
       try {
         JsonParser.parseString(tokenParts[1].base64UrlDecode().toStringUtf8()).asJsonObject
       } catch (e: IOException) {
         throw Status.UNAUTHENTICATED.withCause(e)
-          .withDescription("Token is not a valid signed JWT")
+          .withDescription("$ERROR_CODE: Token is not a valid signed JWT")
           .asException()
       }
 
     val issuer =
       payload.get(ISSUER_CLAIM)?.asString
-        ?: throw Status.UNAUTHENTICATED.withDescription("Issuer not found").asException()
+        ?: throw Status.UNAUTHENTICATED.withDescription("$ERROR_CODE: Issuer not found")
+          .asException()
     val jwksHandle =
       jwksHandleByIssuer[issuer]
-        ?: throw Status.UNAUTHENTICATED.withDescription("Unknown issuer").asException()
+        ?: throw Status.UNAUTHENTICATED.withDescription("$ERROR_CODE: Unknown issuer").asException()
 
     val verifiedJwt =
       try {
         jwksHandle.getPrimitive(JwtPublicKeyVerify::class.java).verifyAndDecode(token, jwtValidator)
       } catch (e: GeneralSecurityException) {
-        throw Status.UNAUTHENTICATED.withCause(e).withDescription(e.message).asException()
+        throw Status.UNAUTHENTICATED.withCause(e)
+          .withDescription("$ERROR_CODE: ${e.message}")
+          .asException()
       }
 
     if (!verifiedJwt.hasSubject()) {
-      throw Status.UNAUTHENTICATED.withDescription("Subject not found").asException()
+      throw Status.UNAUTHENTICATED.withDescription("$ERROR_CODE: Subject not found").asException()
     }
     val scopes: Set<String> =
       if (verifiedJwt.hasStringClaim(SCOPES_CLAIM)) {
@@ -118,6 +122,9 @@ class OAuthTokenAuthentication(
     private const val ISSUER_CLAIM = "iss"
     private const val SCOPES_CLAIM = "scope"
     private const val JWT_TYPE = "at+jwt"
+
+    /** Error code defined in RFC 6750. */
+    private const val ERROR_CODE = "invalid_token"
   }
 
   data class VerifiedToken(val issuer: String, val subject: String, val scopes: Set<String>)

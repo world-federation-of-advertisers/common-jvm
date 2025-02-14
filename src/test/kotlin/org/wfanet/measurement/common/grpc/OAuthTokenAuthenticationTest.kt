@@ -66,6 +66,7 @@ class OAuthTokenAuthenticationTest {
 
     assertThat(exception.status.code).isEqualTo(Status.Code.UNAUTHENTICATED)
     assertThat(exception).hasMessageThat().ignoringCase().contains("expired")
+    assertThat(exception).hasMessageThat().contains("invalid_token")
   }
 
   @Test
@@ -85,6 +86,7 @@ class OAuthTokenAuthenticationTest {
 
     assertThat(exception.status.code).isEqualTo(Status.Code.UNAUTHENTICATED)
     assertThat(exception).hasMessageThat().ignoringCase().contains("audience")
+    assertThat(exception).hasMessageThat().contains("invalid_token")
   }
 
   @Test
@@ -104,6 +106,7 @@ class OAuthTokenAuthenticationTest {
 
     assertThat(exception.status.code).isEqualTo(Status.Code.UNAUTHENTICATED)
     assertThat(exception).hasMessageThat().ignoringCase().contains("issuer")
+    assertThat(exception).hasMessageThat().contains("invalid_token")
   }
 
   @Test
@@ -119,6 +122,7 @@ class OAuthTokenAuthenticationTest {
 
     assertThat(exception.status.code).isEqualTo(Status.Code.UNAUTHENTICATED)
     assertThat(exception).hasMessageThat().contains("JWT")
+    assertThat(exception).hasMessageThat().contains("invalid_token")
   }
 
   @Test
