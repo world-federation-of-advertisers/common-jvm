@@ -34,3 +34,13 @@ kt_jvm_library(
         "//src/main/kotlin/org/wfanet/measurement/storage:store",
     ],
 )
+
+kt_jvm_library(
+    name = "sharded_storage_client",
+    srcs = ["ShardedStorageClient.kt"],
+    deps = [
+        "//imports/kotlin/kotlinx/coroutines:core",
+        "//src/main/kotlin/org/wfanet/measurement/common",
+        "//src/main/kotlin/org/wfanet/measurement/storage:store",
+    ],
+)
