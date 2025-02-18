@@ -10,3 +10,14 @@ kt_jvm_test(
         "//src/main/kotlin/org/wfanet/measurement/storage/testing",
     ],
 )
+
+kt_jvm_test(
+    name = "ShardedStorageClientTest",
+    srcs = ["ShardedStorageClientTest.kt"],
+    deps = [
+        "//imports/java/com/google/common/truth",
+        "//imports/java/org/junit",
+        "//src/main/kotlin/org/wfanet/measurement/storage:sharded_storage_client",
+        "//src/main/kotlin/org/wfanet/measurement/storage/testing",
+    ],
+)
