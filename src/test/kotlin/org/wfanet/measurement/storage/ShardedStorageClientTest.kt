@@ -25,11 +25,7 @@ class ShardedStorageClientTest {
     val testData = "impression1"
     val blobKey = "/labelled-impressions/ds/2025-02-14/event-group-id/12345/sharded-impressions"
     val testDataFlow = flowOf(ByteString.copyFromUtf8(testData))
-    shardedtorageClient.writeBlob(
-      blobKey,
-      testDataFlow,
-      2
-    )
+    shardedtorageClient.writeBlob(blobKey, testDataFlow, 2)
     val blob = shardedtorageClient.getBlob(blobKey)
     requireNotNull(blob) { "Blob should exist" }
     val results = blob.read().toList()
@@ -42,11 +38,7 @@ class ShardedStorageClientTest {
     val testData = listOf("impression1", "impression2", "impression3", "impression4")
     val blobKey = "/labelled-impressions/ds/2025-02-14/event-group-id/12345/sharded-impressions"
     val testDataFlow = flow { testData.forEach { record -> emit(ByteString.copyFromUtf8(record)) } }
-    shardedtorageClient.writeBlob(
-      blobKey,
-      testDataFlow,
-      2
-    )
+    shardedtorageClient.writeBlob(blobKey, testDataFlow, 2)
     val blob = shardedtorageClient.getBlob(blobKey)
     requireNotNull(blob) { "Blob should exist" }
     val results = blob.read().toList()
@@ -57,15 +49,12 @@ class ShardedStorageClientTest {
 
   @Test
   fun `test writing and reading large volume of data`() = runBlocking {
-    val data =  """{"people": [{"virtual_person_id": 1, "label": { "demo": { "gender": 1 } }}, {"virtual_person_id": 2, "label": { "demo": { "gender": 2 } }}]}"""
+    val data =
+      """{"people": [{"virtual_person_id": 1, "label": { "demo": { "gender": 1 } }}, {"virtual_person_id": 2, "label": { "demo": { "gender": 2 } }}]}"""
     val testData = List(130000) { data } // ~4MB
     val blobKey = "/labelled-impressions/ds/2025-02-14/event-group-id/12345/sharded-impressions"
     val testDataFlow = flow { testData.forEach { record -> emit(ByteString.copyFromUtf8(record)) } }
-    shardedtorageClient.writeBlob(
-      blobKey,
-      testDataFlow,
-      20
-    )
+    shardedtorageClient.writeBlob(blobKey, testDataFlow, 20)
     val blob = shardedtorageClient.getBlob(blobKey)
     requireNotNull(blob) { "Blob should exist" }
     val results = blob.read().toList()
