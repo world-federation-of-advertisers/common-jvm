@@ -23,16 +23,16 @@ class ShardedStorageClient(private val underlyingStorageClient: MesosRecordIoSto
    * Writes sharded data to MesosRecordIoStorage after it has been split into chunks.
    *
    * This function takes a flow of ByteString, splits it into chunks, and stores it in different
-   * shards. The sharded data will be stored at the location blobKey-x-of-N, where x is the shard
+   * shards. The sharded data will be stored at the location {blobKey}-x-of-N, where x is the shard
    * index and N is the total number of shards. The data stored at the location blobKey is metadata
-   * that describes the number of shards in the format "xxxxxx-*-of-N, where N is the total number
+   * that describes the number of shards in the format "{blobKey}-*-of-N", where N is the total number
    * of shards.
    *
    * @param blobKey The key (or name) of the blob where the content will be stored.
-   * @param content A Flow<ByteString> representing the source of RecordIO rows that will be stored.
+   * @param content A Flow<ByteString> representing the source of data that will be stored.
    * @param chunkSize The size of the chunks that the data will be split into
    * @return A Blob object representing file that contains metadata on the sharded data the was
-   *   written to storage. The file will be in the format "blobKey-*-of-N", where N represents the
+   *   written to storage. The file will be in the format "{blobKey}-*-of-N", where N represents the
    *   total number of shards the data was split into.
    */
   suspend fun writeBlob(blobKey: String, content: Flow<ByteString>, chunkSize: Int): StorageClient.Blob {
@@ -52,12 +52,12 @@ class ShardedStorageClient(private val underlyingStorageClient: MesosRecordIoSto
       chunks.add(currentChunk.asFlow())
     }
 
-    // Write all smaller Flow<ByteString> chunks to storage using the same blob key concatinated
+    // Write all smaller Flow<ByteString> chunks to storage using the same blob key concatenated
     // with the indexed entry of each shard with the pattern "-x-of-totalNumberOfChunks"
     runBlocking {
       chunks.mapIndexed { index, it ->
         async {
-          writeBlob("$blobKey-${index + 1}-of-${chunks.size}", it)
+          underlyingStorageClient.writeBlob("$blobKey-${index + 1}-of-${chunks.size}", it)
         }
       }
     }
@@ -65,21 +65,21 @@ class ShardedStorageClient(private val underlyingStorageClient: MesosRecordIoSto
     // Write a string to storage that signifies the size of the sharded content and return Blob with this
     // metadata
     val shardData = listOf("$blobKey-*-of-${chunks.size}".toByteStringUtf8())
-    return writeBlob(blobKey, shardData.asFlow())
+    return underlyingStorageClient.writeBlob(blobKey, shardData.asFlow())
   }
 
   /**
    * Writes data to storage.
    *
-   * This function is not meant to be called directly. It should only be used through the method
-   * writeBlob(blobKey: String, content: Flow<ByteString>, chunkSize: Int).
+   * This function will call writeBlob(blobKey: String, content: Flow<ByteString>, chunkSize: Int)
+   * with the DEFAULT_CHUNK_SIZE
    *
    * @param blobKey The key (or name) of the blob where the content will be stored.
    * @param content A Flow<ByteString> representing the source of RecordIO rows that will be stored.
    * @return A Blob object representing file that was written to storage.
    */
   override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
-    return underlyingStorageClient.writeBlob(blobKey, content)
+    return writeBlob(blobKey, content, DEFAULT_CHUNK_SIZE)
   }
 
   /**
@@ -88,16 +88,20 @@ class ShardedStorageClient(private val underlyingStorageClient: MesosRecordIoSto
    * Blob content is read as format when [Blob.read] is called.
    */
   override suspend fun getBlob(blobKey: String): StorageClient.Blob? {
-    return Blob(blobKey, underlyingStorageClient, underlyingStorageClient.getBlob(blobKey)!!.size)
+    val blob = underlyingStorageClient.getBlob(blobKey) ?: return null
+    return Blob(blob, blobKey)
   }
 
-  private inner class Blob(private val blobKey: String, override val storageClient: StorageClient, override val size: Long): StorageClient.Blob {
+  private inner class Blob(private val metadataBlob: StorageClient.Blob, private val blobKey: String, override val storageClient: MesosRecordIoStorageClient = this@ShardedStorageClient.underlyingStorageClient): StorageClient.Blob {
+    override val size: Long
+      get() = metadataBlob.size
+
     /**
      * Reads data from MesosRecordIoStorage.
      *
-     * This function reads sharded data from storage by 1) reading in metadata blob that describes
-     * the number of shards this data is split over, 2) asynchronously pull in all sharded data,
-     * 3) merge sharded data and return result.
+     * This function reads sharded data from storage by 1) reading in metadata blob at the location
+     * blobKey that describes the number of shards this data is split into, 2) asynchronously pull
+     * in all sharded data, 3) merge sharded data and return result.
      *
      *
      * @return A Flow of ByteString, where each emission represents a complete record from the
@@ -106,22 +110,14 @@ class ShardedStorageClient(private val underlyingStorageClient: MesosRecordIoSto
      * @throws kotlin.Exception If there is an issue reading sharded data.
      */
     override fun read(): Flow<ByteString> {
-      // 1. Read metadata blob to discover number of sharded files. Will be a string in the format "sharded-impressions-*-of-N"
-      val metadata  = runBlocking {
-        try {
-          underlyingStorageClient.getBlob(blobKey)
-        } catch (e: Exception) {
-          throw Exception("Error retrieving blob metadata at path: $blobKey:", e)
-        }
-      }
-      requireNotNull(metadata) {
-        "No blob metadata found at path: $blobKey"
-      }
+      // 1. Read metadata blob to discover number of sharded files. Will be a string in the format
+      // "sharded-impressions-*-of-N"
       val numShardsData= runBlocking {
-        metadata.read().reduce { acc, byteString -> acc.concat(byteString) }.toStringUtf8()
+        metadataBlob.read().reduce { acc, byteString -> acc.concat(byteString) }.toStringUtf8()
       }
 
-      // Get total number of shards from blob with pattern xxxxxxxx-*-of-N where N is total number of shards
+      // Get total number of shards from blob with pattern {blobKey}-*-of-N where N is total number
+      // of shards
       val numShards = numShardsData.split("-of-").last().toInt()
 
       // 2. Read in different files in parallel from underlying storage client
@@ -147,5 +143,9 @@ class ShardedStorageClient(private val underlyingStorageClient: MesosRecordIoSto
     override suspend fun delete() {
       storageClient.getBlob(blobKey)?.delete()
     }
+  }
+
+  companion object {
+    private const val DEFAULT_CHUNK_SIZE = 2
   }
 }
