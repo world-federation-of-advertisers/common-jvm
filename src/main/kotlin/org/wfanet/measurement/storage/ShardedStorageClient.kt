@@ -6,24 +6,42 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.asFlow
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.reduce
 import kotlinx.coroutines.runBlocking
 
-class ShardedStorageClient(private val underlyingStorageClient: StorageClient): StorageClient {
-  override suspend fun getBlob(blobKey: String): StorageClient.Blob? {
-    return Blob(blobKey, underlyingStorageClient, underlyingStorageClient.getBlob(blobKey)!!.size)
-  }
-
+/**
+ * A wrapper class for the [StorageClient] interface that handles writing and reading data into
+ * shards
+ *
+ * This class supports chunking data and writing it into separate shards automatically
+ *
+ * @param underlyingStorageClient underlying client for accessing blob/object storage
+ */
+class ShardedStorageClient(private val underlyingStorageClient: MesosRecordIoStorageClient): StorageClient {
+  /**
+   * Writes sharded data to MesosRecordIoStorage after it has been split into chunks.
+   *
+   * This function takes a flow of ByteString, splits it into chunks, and stores it in different
+   * shards. The sharded data will be stored at the location blobKey-x-of-N, where x is the shard
+   * index and N is the total number of shards. The data stored at the location blobKey is metadata
+   * that describes the number of shards in the format "xxxxxx-*-of-N, where N is the total number
+   * of shards.
+   *
+   * @param blobKey The key (or name) of the blob where the content will be stored.
+   * @param content A Flow<ByteString> representing the source of RecordIO rows that will be stored.
+   * @param chunkSize The size of the chunks that the data will be split into
+   * @return A Blob object representing file that contains metadata on the sharded data the was
+   *   written to storage. The file will be in the format "blobKey-*-of-N", where N represents the
+   *   total number of shards the data was split into.
+   */
   suspend fun writeBlob(blobKey: String, content: Flow<ByteString>, chunkSize: Int): StorageClient.Blob {
     val chunks = mutableListOf<Flow<ByteString>>()
     var currentChunk = mutableListOf<ByteString>()
 
     // Shard current Flow<ByteString> into smaller Flow<ByteString> chunks of size chunkSize
     content.collect { byteString ->
-      val dataSize: String = byteString.size().toString()
-      val separatedChunk: String = dataSize + "\n" + byteString.toStringUtf8()
-      currentChunk.add(separatedChunk.toByteStringUtf8())
+      currentChunk.add(byteString)
       if (currentChunk.size == chunkSize) {
         chunks.add(currentChunk.asFlow())
         currentChunk = mutableListOf()
@@ -50,15 +68,54 @@ class ShardedStorageClient(private val underlyingStorageClient: StorageClient): 
     return writeBlob(blobKey, shardData.asFlow())
   }
 
+  /**
+   * Writes data to storage.
+   *
+   * This function is not meant to be called directly. It should only be used through the method
+   * writeBlob(blobKey: String, content: Flow<ByteString>, chunkSize: Int).
+   *
+   * @param blobKey The key (or name) of the blob where the content will be stored.
+   * @param content A Flow<ByteString> representing the source of RecordIO rows that will be stored.
+   * @return A Blob object representing file that was written to storage.
+   */
   override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
     return underlyingStorageClient.writeBlob(blobKey, content)
   }
 
+  /**
+   * Returns a [StorageClient.Blob] with specified blob key, or `null` if not found.
+   *
+   * Blob content is read as format when [Blob.read] is called.
+   */
+  override suspend fun getBlob(blobKey: String): StorageClient.Blob? {
+    return Blob(blobKey, underlyingStorageClient, underlyingStorageClient.getBlob(blobKey)!!.size)
+  }
+
   private inner class Blob(private val blobKey: String, override val storageClient: StorageClient, override val size: Long): StorageClient.Blob {
+    /**
+     * Reads data from MesosRecordIoStorage.
+     *
+     * This function reads sharded data from storage by 1) reading in metadata blob that describes
+     * the number of shards this data is split over, 2) asynchronously pull in all sharded data,
+     * 3) merge sharded data and return result.
+     *
+     *
+     * @return A Flow of ByteString, where each emission represents a complete record from the
+     *   RecordIO formatted data.
+     * @throws kotlin.Exception If there is an issue reading metadata file.
+     * @throws kotlin.Exception If there is an issue reading sharded data.
+     */
     override fun read(): Flow<ByteString> {
-      // 1. Read original file to discover number of sharded files. Will be a string in the format "sharded-impressions-*-of-N"
+      // 1. Read metadata blob to discover number of sharded files. Will be a string in the format "sharded-impressions-*-of-N"
       val metadata  = runBlocking {
-        underlyingStorageClient.getBlob(blobKey)!! // /{prefix}/ds/{ds}/event-group-id/{event-group-id}/sharded-impressions
+        try {
+          underlyingStorageClient.getBlob(blobKey)
+        } catch (e: Exception) {
+          throw Exception("Error retrieving blob metadata at path: $blobKey:", e)
+        }
+      }
+      requireNotNull(metadata) {
+        "No blob metadata found at path: $blobKey"
       }
       val numShardsData= runBlocking {
         metadata.read().reduce { acc, byteString -> acc.concat(byteString) }.toStringUtf8()
@@ -82,51 +139,9 @@ class ShardedStorageClient(private val underlyingStorageClient: StorageClient): 
       }
 
       // 3. Return a merged Flow<ByteString>
-      return flow {
-        shardedData.map {
-          val recordSizeBuffer = StringBuilder()
-          var currentRecordSize = -1
-          var recordBuffer = ByteString.newOutput()
-
-          it.read().collect { chunk ->
-            var position = 0
-            val chunkString = chunk.toStringUtf8()
-
-            while (position < chunkString.length) {
-              if (currentRecordSize == -1) {
-
-                val newlineIndex = chunkString.indexOf("\n", position)
-                if (newlineIndex != -1) {
-                  recordSizeBuffer.append(chunkString.substring(position, newlineIndex))
-                  currentRecordSize = recordSizeBuffer.toString().toInt()
-                  recordSizeBuffer.clear()
-                  recordBuffer = ByteString.newOutput(currentRecordSize)
-                  position = newlineIndex + 1
-                } else {
-                  recordSizeBuffer.append(chunkString.substring(position))
-                  break
-                }
-              }
-              if (currentRecordSize > 0) {
-                val remainingBytes = chunkString.length - position
-                val bytesToRead = minOf(remainingBytes, currentRecordSize - recordBuffer.size())
-
-                if (bytesToRead > 0) {
-                  recordBuffer.write(
-                    chunkString.substring(position, position + bytesToRead).toByteArray(Charsets.UTF_8)
-                  )
-                  position += bytesToRead
-                }
-                if (recordBuffer.size() == currentRecordSize) {
-                  emit(recordBuffer.toByteString())
-                  currentRecordSize = -1
-                  recordBuffer.reset()
-                }
-              }
-            }
-          }
-        }
-      }
+      return shardedData.map {
+        it.read()
+      }.merge()
     }
 
     override suspend fun delete() {
