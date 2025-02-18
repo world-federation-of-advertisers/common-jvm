@@ -11,7 +11,6 @@ import kotlinx.coroutines.flow.reduce
 import kotlinx.coroutines.runBlocking
 
 class ShardedStorageClient(private val underlyingStorageClient: StorageClient): StorageClient {
-
   override suspend fun getBlob(blobKey: String): StorageClient.Blob? {
     return Blob(blobKey, underlyingStorageClient, underlyingStorageClient.getBlob(blobKey)!!.size)
   }
@@ -27,7 +26,7 @@ class ShardedStorageClient(private val underlyingStorageClient: StorageClient): 
       currentChunk.add(separatedChunk.toByteStringUtf8())
       if (currentChunk.size == chunkSize) {
         chunks.add(currentChunk.asFlow())
-        currentChunk = mutableListOf<ByteString>()
+        currentChunk = mutableListOf()
       }
     }
     // Add any remaining elements as the last chunk
@@ -37,8 +36,12 @@ class ShardedStorageClient(private val underlyingStorageClient: StorageClient): 
 
     // Write all smaller Flow<ByteString> chunks to storage using the same blob key concatinated
     // with the indexed entry of each shard with the pattern "-x-of-totalNumberOfChunks"
-    chunks.mapIndexed { index, it ->
-      writeBlob("$blobKey-${index+1}-of-${chunks.size}", it)
+    runBlocking {
+      chunks.mapIndexed { index, it ->
+        async {
+          writeBlob("$blobKey-${index + 1}-of-${chunks.size}", it)
+        }
+      }
     }
 
     // Write a string to storage that signifies the size of the sharded content and return Blob with this
@@ -46,9 +49,11 @@ class ShardedStorageClient(private val underlyingStorageClient: StorageClient): 
     val shardData = listOf("$blobKey-*-of-${chunks.size}".toByteStringUtf8())
     return writeBlob(blobKey, shardData.asFlow())
   }
+
   override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
     return underlyingStorageClient.writeBlob(blobKey, content)
   }
+
   private inner class Blob(private val blobKey: String, override val storageClient: StorageClient, override val size: Long): StorageClient.Blob {
     override fun read(): Flow<ByteString> {
       // 1. Read original file to discover number of sharded files. Will be a string in the format "sharded-impressions-*-of-N"
