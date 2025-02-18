@@ -1,3 +1,17 @@
+// Copyright 2025 The Cross-Media Measurement Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package org.wfanet.measurement.storage
 
 import com.google.protobuf.ByteString
@@ -39,7 +53,7 @@ class ShardedStorageClient(private val underlyingStorageClient: MesosRecordIoSto
   suspend fun writeBlob(
     blobKey: String,
     content: Flow<ByteString>,
-    chunkSize: Int
+    chunkSize: Int,
   ): StorageClient.Blob {
     val chunks = mutableListOf<Flow<ByteString>>()
     var currentChunk = mutableListOf<ByteString>()
@@ -100,7 +114,7 @@ class ShardedStorageClient(private val underlyingStorageClient: MesosRecordIoSto
     private val metadataBlob: StorageClient.Blob,
     private val blobKey: String,
     override val storageClient: MesosRecordIoStorageClient =
-      this@ShardedStorageClient.underlyingStorageClient
+      this@ShardedStorageClient.underlyingStorageClient,
   ) : StorageClient.Blob {
     override val size: Long
       get() = metadataBlob.size
