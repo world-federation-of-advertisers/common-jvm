@@ -43,7 +43,7 @@ class ShardedStorageClient(private val underlyingStorageClient: MesosRecordIoSto
    * that describes the number of shards in the format "{blobKey}-*-of-N", where N is the total
    * number of shards.
    *
-   * @param blobKey The key (or name) of the blob where the content will be stored.
+   * @param blobKey Logical directory where the content will be stored.
    * @param content A Flow<ByteString> representing the source of data that will be stored.
    * @param chunkSize The size of the chunks that the data will be split into
    * @return A Blob object representing file that contains metadata on the sharded data the was
@@ -55,35 +55,35 @@ class ShardedStorageClient(private val underlyingStorageClient: MesosRecordIoSto
     content: Flow<ByteString>,
     chunkSize: Int,
   ): StorageClient.Blob {
-    val chunks = mutableListOf<Flow<ByteString>>()
     var currentChunk = mutableListOf<ByteString>()
+    var chunkIndex = 0
 
     // Shard current Flow<ByteString> into smaller Flow<ByteString> chunks of size chunkSize
     content.collect { byteString ->
       currentChunk.add(byteString)
       if (currentChunk.size == chunkSize) {
-        chunks.add(currentChunk.asFlow())
+        chunkIndex++
+        // Write all smaller Flow<ByteString> chunks to storage using the same blob key concatenated
+        // with the indexed entry of each shard with the pattern blobKey/chunk-x
+        underlyingStorageClient.writeBlob(
+          getChunkBlobKey(blobKey, chunkIndex),
+          currentChunk.asFlow()
+        )
         currentChunk = mutableListOf()
       }
     }
     // Add any remaining elements as the last chunk
     if (currentChunk.isNotEmpty()) {
-      chunks.add(currentChunk.asFlow())
+      chunkIndex++
+      underlyingStorageClient.writeBlob(
+        getChunkBlobKey(blobKey, chunkIndex),
+        currentChunk.asFlow()
+      )
     }
-
-    // Write all smaller Flow<ByteString> chunks to storage using the same blob key concatenated
-    // with the indexed entry of each shard with the pattern "-x-of-totalNumberOfChunks"
-    runBlocking {
-      chunks.mapIndexed { index, it ->
-        async { underlyingStorageClient.writeBlob("$blobKey-${index + 1}-of-${chunks.size}", it) }
-      }
-    }
-
     // Write a string to storage that signifies the size of the sharded content and return Blob with
-    // this
-    // metadata
-    val shardData = listOf("$blobKey-*-of-${chunks.size}".toByteStringUtf8())
-    return underlyingStorageClient.writeBlob(blobKey, shardData.asFlow())
+    // this metadata
+    val shardData = listOf("$blobKey/chunk-*-of-${chunkIndex}".toByteStringUtf8())
+    return underlyingStorageClient.writeBlob("$blobKey/$CHUNK_METADATA_SUFFIX", shardData.asFlow())
   }
 
   /**
@@ -106,7 +106,7 @@ class ShardedStorageClient(private val underlyingStorageClient: MesosRecordIoSto
    * Blob content is read as format when [Blob.read] is called.
    */
   override suspend fun getBlob(blobKey: String): StorageClient.Blob? {
-    val blob = underlyingStorageClient.getBlob(blobKey) ?: return null
+    val blob = underlyingStorageClient.getBlob("$blobKey/$CHUNK_METADATA_SUFFIX") ?: return null
     return Blob(blob, blobKey)
   }
 
@@ -143,8 +143,8 @@ class ShardedStorageClient(private val underlyingStorageClient: MesosRecordIoSto
       val numShards = numShardsData.split("-of-").last().toInt()
 
       // 2. Read in different files in parallel from underlying storage client
-      val filePaths = (1..numShards).map { "$blobKey-$it-of-$numShards" }
-      val shardedData = runBlocking {
+      val filePaths = (1..numShards).map { getChunkBlobKey(blobKey, it) }
+      val shardedData: List<StorageClient.Blob> = runBlocking {
         filePaths
           .map {
             async {
@@ -168,6 +168,11 @@ class ShardedStorageClient(private val underlyingStorageClient: MesosRecordIoSto
   }
 
   companion object {
-    private const val DEFAULT_CHUNK_SIZE = 2
+    private const val DEFAULT_CHUNK_SIZE = 50
+    private const val CHUNK_METADATA_SUFFIX = "metadata"
+
+    private fun getChunkBlobKey(blobKey: String, chunkIndex: Int): String {
+      return "$blobKey/chunk-$chunkIndex"
+    }
   }
 }
