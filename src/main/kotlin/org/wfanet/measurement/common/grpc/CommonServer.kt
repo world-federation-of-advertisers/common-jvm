@@ -44,7 +44,7 @@ private constructor(
   healthPort: Int,
   threadPoolSize: Int,
   verboseGrpcLogging: Boolean,
-  services: Iterable<ServerServiceDefinition>,
+  private val services: Iterable<ServerServiceDefinition>,
   sslContext: SslContext?,
 ) {
   init {
@@ -85,6 +85,7 @@ private constructor(
           addService(service)
         }
         addService(ProtoReflectionServiceV1.newInstance())
+        addService(healthStatusManager.healthService)
         if (verboseGrpcLogging) {
           intercept(LoggingServerInterceptor)
         } else {
@@ -106,8 +107,8 @@ private constructor(
   fun start(): CommonServer {
     check(!started.get()) { "$nameForLogging already started" }
     server.start()
-    server.services.forEach {
-      healthStatusManager.setStatus(it.serviceDescriptor.name, ServingStatus.SERVING)
+    for (service in services) {
+      healthStatusManager.setStatus(service.serviceDescriptor.name, ServingStatus.SERVING)
     }
     healthServer.start()
 

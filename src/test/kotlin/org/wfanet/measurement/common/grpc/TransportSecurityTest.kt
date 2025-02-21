@@ -15,10 +15,12 @@
 package org.wfanet.measurement.common.grpc
 
 import com.google.common.truth.Truth.assertThat
-import io.grpc.health.v1.HealthCheckRequest
-import io.grpc.health.v1.HealthCheckResponse
-import io.grpc.health.v1.HealthGrpcKt.HealthCoroutineStub
-import io.grpc.protobuf.services.HealthStatusManager
+import com.google.longrunning.GetOperationRequest
+import com.google.longrunning.Operation
+import com.google.longrunning.OperationsGrpcKt
+import com.google.longrunning.getOperationRequest
+import com.google.longrunning.operation
+import io.grpc.BindableService
 import io.grpc.testing.GrpcCleanupRule
 import io.netty.handler.ssl.ClientAuth
 import java.io.File
@@ -37,14 +39,24 @@ import org.wfanet.measurement.common.crypto.SigningCerts
 
 private const val ALGORITHM = "ec"
 private const val CURVE = "prime256v1"
-private const val SERVICE = "DummyService"
 private const val HOSTNAME = "localhost"
 private const val SUBJECT_ALT_NAME_EXT = "subjectAltName=DNS:$HOSTNAME,IP:127.0.0.1"
+private val OPERATION = operation {
+  name = "operations/foo"
+  done = true
+}
 
 @RunWith(JUnit4::class)
 class TransportSecurityTest {
   private val tempDir: File = temporaryFolder.root
-  private val healthStatusManager = HealthStatusManager()
+
+  /** Arbitrary service implementation to verify RPCs succeed. */
+  private val service: BindableService =
+    object : OperationsGrpcKt.OperationsCoroutineImplBase() {
+      override suspend fun getOperation(request: GetOperationRequest): Operation {
+        return OPERATION
+      }
+    }
 
   private val serverCerts =
     SigningCerts.fromPemFiles(
@@ -77,10 +89,9 @@ class TransportSecurityTest {
           certs = serverCerts,
           clientAuth = clientAuth,
           nameForLogging = "test",
-          services = listOf(healthStatusManager.healthService.withVerboseLogging()),
+          services = listOf(service.bindService()),
         )
         .start()
-    healthStatusManager.setStatus(SERVICE, HealthCheckResponse.ServingStatus.SERVING)
 
     grpcCleanup.register(server.server)
   }
@@ -141,33 +152,31 @@ class TransportSecurityTest {
 
   @Test
   fun `TLS RPC succeeds`() {
-
     startCommonServer(ClientAuth.NONE)
-
     val channel =
       grpcCleanup.register(
         buildTlsChannel("$HOSTNAME:$port", clientCerts.trustedCertificates.values)
       )
-    val client = HealthCoroutineStub(channel)
+    val client = OperationsGrpcKt.OperationsCoroutineStub(channel)
 
     val response = runBlocking {
-      client.check(HealthCheckRequest.newBuilder().apply { service = SERVICE }.build())
+      client.getOperation(getOperationRequest { name = OPERATION.name })
     }
 
-    assertThat(response.status).isEqualTo(HealthCheckResponse.ServingStatus.SERVING)
+    assertThat(response).isEqualTo(OPERATION)
   }
 
   @Test
   fun `mTLS RPC succeeds`() {
     startCommonServer(ClientAuth.REQUIRE)
     val channel = grpcCleanup.register(buildMutualTlsChannel("$HOSTNAME:$port", clientCerts))
-    val client = HealthCoroutineStub(channel)
+    val client = OperationsGrpcKt.OperationsCoroutineStub(channel)
 
     val response = runBlocking {
-      client.check(HealthCheckRequest.newBuilder().apply { service = SERVICE }.build())
+      client.getOperation(getOperationRequest { name = OPERATION.name })
     }
 
-    assertThat(response.status).isEqualTo(HealthCheckResponse.ServingStatus.SERVING)
+    assertThat(response).isEqualTo(OPERATION)
   }
 
   companion object {
