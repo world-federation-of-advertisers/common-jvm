@@ -17,6 +17,7 @@
 package org.wfanet.measurement.storage
 
 import com.google.common.truth.Truth.assertThat
+import java.nio.file.Files
 import org.junit.Assert.assertThrows
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -25,32 +26,34 @@ import org.wfanet.measurement.gcloud.gcs.GcsStorageClient
 import org.wfanet.measurement.storage.filesystem.FileSystemStorageClient
 
 @RunWith(JUnit4::class)
-class SelectorTest {
+class StorageClientFactoryTest {
   @Test
   fun testS3Url() {
     val s3Url = "s3://my-bucket.s3.us-west-2.amazonaws.com/path/to/file"
-    assertThrows(IllegalArgumentException::class.java) { parseBlobUrl(s3Url) }
+    assertThrows(IllegalArgumentException::class.java) { StorageClientFactory.parseBlobUrl(s3Url) }
     val blobUrl = BlobUrl("s3", "my-bucket", "us-west-2", null, "path/to/file")
-    assertThrows(IllegalArgumentException::class.java) { getStorageClient(blobUrl) }
+    assertThrows(IllegalArgumentException::class.java) {
+      StorageClientFactory(blobUrl, Files.createTempDirectory(null).toFile()).build()
+    }
   }
 
   @Test
   fun testGsUrl() {
-    val gsUrl = "gs://my-bucket/path/to/file?project=my-project"
-    val blobUrl = parseBlobUrl(gsUrl)!!
+    val gcsUrl = "gs://my-bucket/path/to/file?project=my-project"
+    val blobUrl = StorageClientFactory.parseBlobUrl(gcsUrl)
     assertThat(blobUrl).isEqualTo(BlobUrl("gs", "my-bucket", null, "my-project", "path/to/file"))
 
-    val storageClient = getStorageClient(blobUrl)
+    val storageClient = StorageClientFactory(blobUrl, Files.createTempDirectory(null).toFile()).build()
     assertThat(storageClient is GcsStorageClient)
   }
 
   @Test
   fun testFileUrl() {
     val fileUrl = "file:///path/to/file"
-    val blobUrl = parseBlobUrl(fileUrl)!!
+    val blobUrl = StorageClientFactory.parseBlobUrl(fileUrl)
     assertThat(blobUrl).isEqualTo(BlobUrl("file", null, null, null, "/path/to/file"))
 
-    val storageClient = getStorageClient(blobUrl)
+    val storageClient = StorageClientFactory(blobUrl, Files.createTempDirectory(null).toFile()).build()
     assertThat(storageClient is FileSystemStorageClient)
   }
 }

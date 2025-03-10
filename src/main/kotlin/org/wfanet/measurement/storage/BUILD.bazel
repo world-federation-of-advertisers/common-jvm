@@ -36,8 +36,8 @@ kt_jvm_library(
 )
 
 kt_jvm_library(
-    name = "selector",
-    srcs = ["Selector.kt"],
+    name = "storage_client_factory",
+    srcs = ["StorageClientFactory.kt"],
     deps = [
         ":client",
         "//imports/java/com/google/protobuf",
