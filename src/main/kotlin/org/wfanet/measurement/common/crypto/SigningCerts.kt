@@ -23,7 +23,7 @@ import org.wfanet.measurement.common.toHexString
 data class SigningCerts(
   val privateKeyHandle: SigningKeyHandle,
   /** [Map] of subject key identifier (SKID) to trusted [X509Certificate]. */
-  val trustedCertificates: Map<ByteString, X509Certificate>
+  val trustedCertificates: Map<ByteString, X509Certificate>,
 ) {
   init {
     for ((skid, certificate) in trustedCertificates) {
@@ -40,28 +40,28 @@ data class SigningCerts(
 
   constructor(
     privateKeyHandle: SigningKeyHandle,
-    trustedCertificates: Iterable<X509Certificate>
+    trustedCertificates: Iterable<X509Certificate>,
   ) : this(
     privateKeyHandle,
     trustedCertificates.associateBy {
       requireNotNull(it.subjectKeyIdentifier) {
         "Trusted certificate missing subject key identifier (SKID)"
       }
-    }
+    },
   )
 
   companion object {
     fun fromPemFiles(
       certificateFile: File,
       privateKeyFile: File,
-      trustedCertCollectionFile: File? = null
+      trustedCertCollectionFile: File? = null,
     ): SigningCerts {
       val certificate = readCertificate(certificateFile)
       val keyAlgorithm = certificate.publicKey.algorithm
 
       return SigningCerts(
         SigningKeyHandle(certificate, readPrivateKey(privateKeyFile, keyAlgorithm)),
-        trustedCertCollectionFile?.let { readCertificateCollection(it) } ?: listOf()
+        trustedCertCollectionFile?.let { readCertificateCollection(it) } ?: listOf(),
       )
     }
   }

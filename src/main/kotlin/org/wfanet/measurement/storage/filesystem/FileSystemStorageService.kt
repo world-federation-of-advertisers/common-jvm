@@ -37,7 +37,7 @@ import org.wfanet.measurement.internal.testing.readBlobResponse
 /** [ForwardedStorageCoroutineService] implementation that uses [FileSystemStorageClient]. */
 class FileSystemStorageService(
   directory: File,
-  coroutineContext: @BlockingExecutor CoroutineContext
+  coroutineContext: @BlockingExecutor CoroutineContext,
 ) : ForwardedStorageCoroutineService() {
   val storageClient: FileSystemStorageClient = FileSystemStorageClient(directory, coroutineContext)
 

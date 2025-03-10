@@ -22,7 +22,7 @@ private val MAX_SHUTDOWN_TIMEOUT = Duration.ofMinutes(10)
 
 private class ChannelShutdownHook(
   private val channel: ManagedChannel,
-  private val timeoutMillis: Long
+  private val timeoutMillis: Long,
 ) : Runnable {
   override fun run() {
     // Use stderr since the logger may have been reset by its JVM shutdown hook.

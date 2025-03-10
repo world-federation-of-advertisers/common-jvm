@@ -34,7 +34,7 @@ enum class DurationFormat {
   /*
    * ISO-8601 duration format.
    */
-  ISO_8601
+  ISO_8601,
 }
 
 /** Parses the string to a [Duration]. */

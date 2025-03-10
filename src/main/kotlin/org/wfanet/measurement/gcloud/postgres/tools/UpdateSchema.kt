@@ -46,6 +46,7 @@ class UpdateSchema : BaseUpdateSchema() {
 
   companion object {
     private const val SOCKET_FACTORY_CLASS = "com.google.cloud.sql.postgres.SocketFactory"
+
     @JvmStatic fun main(args: Array<String>) = commandLineMain(UpdateSchema(), args)
   }
 }

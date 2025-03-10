@@ -27,7 +27,7 @@ import org.wfanet.measurement.common.CountDownLatch
 suspend fun launchAndCancelWithLatch(
   latch: CountDownLatch,
   timeout: Duration = Duration.ofSeconds(10),
-  block: suspend () -> Unit
+  block: suspend () -> Unit,
 ) {
   withTimeout(timeout) {
     val job = launch { block() }

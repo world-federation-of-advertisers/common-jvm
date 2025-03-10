@@ -49,7 +49,7 @@ open class QueryResult internal constructor(private val result: Result) {
 
 internal class SingleUseQueryResult(
   result: Result,
-  private val closeTransaction: suspend () -> Unit
+  private val closeTransaction: suspend () -> Unit,
 ) : QueryResult(result) {
 
   override fun <T : Any> consume(transform: Function<in ResultRow, out T>): Flow<T> {
@@ -70,7 +70,7 @@ class ResultRow(private val delegate: Row) {
 
   inline fun <reified T : ProtocolMessageEnum?> getProtoEnum(
     name: String,
-    forNumber: (Int) -> T?
+    forNumber: (Int) -> T?,
   ): T = asReadable().getProtoEnum(name, forNumber)
 }
 
@@ -112,7 +112,7 @@ inline fun <reified T : Message?> Readable.getProtoMessage(name: String, parser:
 
 inline fun <reified T : ProtocolMessageEnum?> Readable.getProtoEnum(
   name: String,
-  forNumber: (Int) -> T?
+  forNumber: (Int) -> T?,
 ): T {
   val number: Int =
     if (Reflect.isNullable<T>()) {

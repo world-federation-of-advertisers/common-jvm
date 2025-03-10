@@ -23,27 +23,32 @@ import com.google.crypto.tink.jwt.JwkSetConverter
 import com.google.crypto.tink.jwt.JwtPublicKeySign
 import com.google.crypto.tink.jwt.JwtSignatureConfig
 import com.google.crypto.tink.jwt.RawJwt
+import java.time.Clock
 import java.time.Duration
-import java.time.Instant
+import java.util.UUID
 import org.wfanet.measurement.common.grpc.BearerTokenCallCredentials
-import org.wfanet.measurement.common.grpc.OpenIdConnectAuthentication
+import org.wfanet.measurement.common.grpc.OAuthTokenAuthentication
 
-/** An ephemeral OpenID provider for testing. */
-class OpenIdProvider(private val issuer: String) {
-  private val jwkSetHandle = KeysetHandle.generateNew(KEY_TEMPLATE)
-
-  val providerConfig: OpenIdConnectAuthentication.OpenIdProviderConfig by lazy {
+/** An OpenID provider for testing. */
+class OpenIdProvider(
+  private val issuer: String,
+  private val jwkSetHandle: KeysetHandle = KeysetHandle.generateNew(KEY_TEMPLATE),
+  private val clock: Clock = Clock.systemUTC(),
+  private val generateUuid: () -> UUID = UUID::randomUUID,
+) {
+  val providerConfig: OAuthTokenAuthentication.OpenIdProviderConfig by lazy {
     val jwks = JwkSetConverter.fromPublicKeysetHandle(jwkSetHandle.publicKeysetHandle)
-    OpenIdConnectAuthentication.OpenIdProviderConfig(issuer, jwks)
+    OAuthTokenAuthentication.OpenIdProviderConfig(issuer, jwks)
   }
 
   fun generateCredentials(
     audience: String,
     subject: String,
     scopes: Set<String>,
-    expiration: Instant = Instant.now().plus(Duration.ofMinutes(5)),
+    ttl: Duration = Duration.ofMinutes(5),
+    clientId: String = DEFAULT_CLIENT_ID,
   ): BearerTokenCallCredentials {
-    val token = generateSignedToken(audience, subject, scopes, expiration)
+    val token = generateSignedToken(audience, subject, scopes, clientId, ttl)
     return BearerTokenCallCredentials(token, false)
   }
 
@@ -52,15 +57,22 @@ class OpenIdProvider(private val issuer: String) {
     audience: String,
     subject: String,
     scopes: Set<String>,
-    expiration: Instant,
+    clientId: String,
+    ttl: Duration,
   ): String {
+    val jwtId = generateUuid()
+    val issuedAt = clock.instant()
     val rawJwt =
       RawJwt.newBuilder()
+        .setTypeHeader(JWT_TYPE)
+        .setJwtId(jwtId.toString())
         .setAudience(audience)
         .setIssuer(issuer)
         .setSubject(subject)
+        .setIssuedAt(issuedAt)
+        .setExpiration(issuedAt.plus(ttl))
+        .addStringClaim("client_id", clientId)
         .addStringClaim("scope", scopes.joinToString(" "))
-        .setExpiration(expiration)
         .build()
     val signer = jwkSetHandle.getPrimitive(JwtPublicKeySign::class.java)
     return signer.signAndEncode(rawJwt)
@@ -71,6 +83,8 @@ class OpenIdProvider(private val issuer: String) {
       JwtSignatureConfig.register()
     }
 
+    const val DEFAULT_CLIENT_ID = "testing-client"
+    private const val JWT_TYPE = "at+jwt"
     private val KEY_TEMPLATE: KeyTemplate = KeyTemplates.get("JWT_ES256")
   }
 }

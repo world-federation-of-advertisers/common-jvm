@@ -30,7 +30,7 @@ suspend fun queryForResults(dbClient: AsyncDatabaseClient, sqlQuery: String): Li
 suspend fun assertQueryReturns(
   dbClient: AsyncDatabaseClient,
   sqlQuery: String,
-  expected: Iterable<Struct>
+  expected: Iterable<Struct>,
 ) {
   val expectedColumns = expected.map { it.type.toString() }.toSet()
   require(expectedColumns.size == 1) {
@@ -63,7 +63,7 @@ suspend fun assertQueryReturns(
 suspend fun assertQueryReturns(
   dbClient: AsyncDatabaseClient,
   sqlQuery: String,
-  vararg expected: Struct
+  vararg expected: Struct,
 ) {
   assertQueryReturns(dbClient, sqlQuery, expected.asIterable())
 }

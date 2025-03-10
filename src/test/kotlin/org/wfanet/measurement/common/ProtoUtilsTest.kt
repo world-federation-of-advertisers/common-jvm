@@ -75,7 +75,7 @@ class ProtoUtilsTest {
               putElements("duchy-1", originalBytes)
               putElements("duchy-2", originalBytes)
             }
-            .build()
+            .build(),
         )
       }
 

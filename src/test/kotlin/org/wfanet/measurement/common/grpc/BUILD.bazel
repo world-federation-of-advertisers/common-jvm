@@ -54,9 +54,9 @@ kt_jvm_test(
 )
 
 kt_jvm_test(
-    name = "OpenIdConnectAuthenticationTest",
-    srcs = ["OpenIdConnectAuthenticationTest.kt"],
-    test_class = "org.wfanet.measurement.common.grpc.OpenIdConnectAuthenticationTest",
+    name = "OAuthTokenAuthenticationTest",
+    srcs = ["OAuthTokenAuthenticationTest.kt"],
+    test_class = "org.wfanet.measurement.common.grpc.OAuthTokenAuthenticationTest",
     deps = [
         "//imports/java/com/google/common/truth",
         "//imports/java/org/junit",

@@ -120,7 +120,7 @@ object SelfIssuedIdTokens {
   fun validateJwt(
     idToken: String,
     publicJwkHandle: PublicJwkHandle,
-    redirectUri: String
+    redirectUri: String,
   ): VerifiedJwt {
     val validator =
       JwtValidator.newBuilder()

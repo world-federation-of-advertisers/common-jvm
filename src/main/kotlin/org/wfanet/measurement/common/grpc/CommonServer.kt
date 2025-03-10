@@ -20,6 +20,7 @@ import io.grpc.ServerServiceDefinition
 import io.grpc.health.v1.HealthCheckResponse.ServingStatus
 import io.grpc.netty.NettyServerBuilder
 import io.grpc.protobuf.services.HealthStatusManager
+import io.grpc.protobuf.services.ProtoReflectionServiceV1
 import io.netty.handler.ssl.ClientAuth
 import io.netty.handler.ssl.SslContext
 import java.io.IOException
@@ -80,7 +81,10 @@ private constructor(
         if (sslContext != null) {
           sslContext(sslContext)
         }
-        services.forEach { addService(it) }
+        for (service in services) {
+          addService(service)
+        }
+        addService(ProtoReflectionServiceV1.newInstance())
         if (verboseGrpcLogging) {
           intercept(LoggingServerInterceptor)
         } else {
@@ -226,7 +230,7 @@ private constructor(
       return fromParameters(
         flags.debugVerboseGrpcLogging,
         flags.tlsFlags.signingCerts,
-        if (flags.clientAuthRequired) ClientAuth.REQUIRE else ClientAuth.NONE,
+        if (flags.clientAuthRequired) ClientAuth.REQUIRE else ClientAuth.OPTIONAL,
         nameForLogging,
         services,
         flags.port,

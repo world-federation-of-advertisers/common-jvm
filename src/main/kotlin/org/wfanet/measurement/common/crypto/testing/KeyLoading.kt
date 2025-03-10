@@ -29,6 +29,6 @@ fun loadSigningKey(certificateDer: File, privateKeyDer: File): SigningKeyHandle 
     certificateDer.inputStream().use { input -> readCertificate(input) }
   return SigningKeyHandle(
     certificate,
-    readPrivateKey(privateKeyDer.readByteString(), certificate.publicKey.algorithm)
+    readPrivateKey(privateKeyDer.readByteString(), certificate.publicKey.algorithm),
   )
 }

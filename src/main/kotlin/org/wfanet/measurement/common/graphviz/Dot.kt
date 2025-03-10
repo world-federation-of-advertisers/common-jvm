@@ -30,8 +30,11 @@ interface Attributes : Element {
 
 interface Scope : Element {
   fun node(name: String, initAttributes: Attributes.() -> Unit = {})
+
   fun edge(pair: Pair<String, String>, initAttributes: Attributes.() -> Unit = {})
+
   fun scope(name: String? = null, init: Scope.() -> Unit)
+
   fun attributes(init: Attributes.() -> Unit)
 }
 

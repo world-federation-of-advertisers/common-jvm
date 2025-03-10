@@ -37,7 +37,7 @@ class SigningKeyHandleTest {
         signingKey.certificate.verifySignature(
           SignatureAlgorithm.ECDSA_WITH_SHA256,
           MESSAGE_BINARY,
-          signature
+          signature,
         )
       )
       .isTrue()

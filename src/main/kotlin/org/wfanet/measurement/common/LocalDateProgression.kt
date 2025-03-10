@@ -24,7 +24,7 @@ import java.time.temporal.TemporalAmount
 data class LocalDateProgression(
   override val start: LocalDate,
   override val endInclusive: LocalDate,
-  val step: TemporalAmount = Period.ofDays(1)
+  val step: TemporalAmount = Period.ofDays(1),
 ) : ClosedRange<LocalDate>, Iterable<LocalDate> {
   override fun iterator(): Iterator<LocalDate> {
     return iterator {
