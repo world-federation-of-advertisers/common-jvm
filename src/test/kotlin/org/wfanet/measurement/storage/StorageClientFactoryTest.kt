@@ -28,33 +28,42 @@ import org.wfanet.measurement.storage.filesystem.FileSystemStorageClient
 @RunWith(JUnit4::class)
 class StorageClientFactoryTest {
   @Test
-  fun testS3Url() {
+  fun `parseBlobUri throws IllegalArgumentException when scheme is s3`() {
     val s3Url = "s3://my-bucket.s3.us-west-2.amazonaws.com/path/to/file"
     assertThrows(IllegalArgumentException::class.java) { StorageClientFactory.parseBlobUri(s3Url) }
-    val blobUrl = BlobUri("s3", "my-bucket", "us-west-2", "path/to/file")
+    val blobUri = BlobUri("s3", "my-bucket", "path/to/file")
     assertThrows(IllegalArgumentException::class.java) {
-      StorageClientFactory(blobUrl, Files.createTempDirectory(null).toFile()).build()
+      StorageClientFactory(blobUri, Files.createTempDirectory(null).toFile()).build()
     }
   }
 
   @Test
-  fun testGsUrl() {
+  fun `able to parse google cloud storage uri`() {
     val gcsUrl = "gs://my-bucket/path/to/file?project"
-    val blobUrl = StorageClientFactory.parseBlobUri(gcsUrl)
-    assertThat(blobUrl).isEqualTo(BlobUri("gs", "my-bucket", null, "path/to/file"))
+    val blobUri = StorageClientFactory.parseBlobUri(gcsUrl)
+    assertThat(blobUri).isEqualTo(BlobUri("gs", "my-bucket", "path/to/file"))
+  }
 
-    val storageClient = StorageClientFactory(blobUrl, file = null, projectId = "project-id").build()
+  @Test
+  fun `gs uri returns google cloud storage client`() {
+    val blobUri = BlobUri("gs", "my-bucket", "path/to/file")
+    val storageClient = StorageClientFactory(blobUri, rootDirectory = null, projectId = "project-id").build()
     assertThat(storageClient is GcsStorageClient)
   }
 
   @Test
-  fun testFileUrl() {
+  fun `able to parse file system uri`() {
     val fileUrl = "file:///path/to/file"
-    val blobUrl = StorageClientFactory.parseBlobUri(fileUrl)
-    assertThat(blobUrl).isEqualTo(BlobUri("file", null, null, "/path/to/file"))
+    val blobUri = StorageClientFactory.parseBlobUri(fileUrl)
+    assertThat(blobUri).isEqualTo(BlobUri("file", null, "path/to/file"))
+  }
+
+  @Test
+  fun `file system uri returns file system storage client`() {
+    val blobUri = BlobUri("file", null, "path/to/file")
 
     val storageClient =
-      StorageClientFactory(blobUrl, Files.createTempDirectory(null).toFile()).build()
+      StorageClientFactory(blobUri, Files.createTempDirectory(null).toFile()).build()
     assertThat(storageClient is FileSystemStorageClient)
   }
 }

@@ -21,23 +21,26 @@ import org.wfanet.measurement.gcloud.gcs.GcsStorageClient
 import org.wfanet.measurement.storage.filesystem.FileSystemStorageClient
 
 // Data class to store parsed information
-data class BlobUri(val scheme: String, val bucket: String?, val region: String?, val path: String)
+data class BlobUri(val scheme: String, val bucket: String?, val path: String)
 
 /*
- * Builds a [StorageClient] from a blob uri. Currently only supports Google Cloud Storage.
+ * Builds a [StorageClient] from a blob uri. Currently only supports Google Cloud Storage and File System.
  * If file system storage should be supported, input a root File were data should be written/read.
+ * @blobUri - the [BlobUri] from which a StorageClient can be built
+ * @rootDirectory - only needed for file system storage clients
+ * @projectId - optional if google cloud storage client needs require project id
  */
 class StorageClientFactory(
-  private val blobUrl: BlobUri,
-  private val file: File? = null,
+  private val blobUri: BlobUri,
+  private val rootDirectory: File? = null,
   private val projectId: String? = null,
 ) {
 
-  constructor(url: String, file: File) : this(parseBlobUri(url)!!, file)
+  constructor(url: String, rootDirectory: File) : this(parseBlobUri(url), rootDirectory)
 
   fun build(): StorageClient {
     val storageClient: StorageClient =
-      when (blobUrl.scheme) {
+      when (blobUri.scheme) {
         "s3" -> {
           throw IllegalArgumentException("S3 is not currently supported")
         }
@@ -45,12 +48,12 @@ class StorageClientFactory(
           val storageOptions =
             if (projectId != null) StorageOptions.newBuilder().setProjectId(projectId).build()
             else StorageOptions.getDefaultInstance()
-          GcsStorageClient(storageOptions.service, blobUrl.bucket!!)
+          GcsStorageClient(storageOptions.service, requireNotNull(blobUri.bucket))
         }
         "file" -> {
-          FileSystemStorageClient(directory = file!!)
+          FileSystemStorageClient(requireNotNull(rootDirectory))
         }
-        else -> throw IllegalArgumentException("Unsupported blobUrl: $blobUrl")
+        else -> throw IllegalArgumentException("Unsupported blobUrl: $blobUri")
       }
 
     return storageClient
@@ -59,18 +62,17 @@ class StorageClientFactory(
   companion object {
     fun parseBlobUri(url: String): BlobUri {
       val uri = URI.create(url)
+      val bucket = uri.host
+      val path = uri.path.removePrefix("/")
       return when (uri.scheme) {
         "s3" -> {
           throw IllegalArgumentException("S3 is not currently supported")
         }
         "gs" -> {
-          val bucket = uri.host
-          val path = uri.path.removePrefix("/")
-
-          BlobUri(scheme = "gs", bucket = bucket, region = null, path = path)
+          BlobUri(scheme = "gs", bucket = bucket, path = path)
         }
         "file" -> {
-          BlobUri(scheme = "file", bucket = null, region = null, path = uri.path)
+          BlobUri(scheme = "file", bucket = null, path = path)
         }
         else -> throw IllegalArgumentException("Unable to parse blob uri $url")
       }
