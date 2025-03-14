@@ -27,11 +27,15 @@ data class BlobUri(val scheme: String, val bucket: String?, val region: String?,
  * Builds a [StorageClient] from a blob uri. Currently only supports Google Cloud Storage.
  * If file system storage should be supported, input a root File were data should be written/read.
  */
-class StorageClientFactory(private val blobUrl: BlobUri, private val file: File?) {
+class StorageClientFactory(
+  private val blobUrl: BlobUri,
+  private val file: File? = null,
+  private val projectId: String? = null,
+) {
 
   constructor(url: String, file: File) : this(parseBlobUri(url)!!, file)
 
-  fun build(projectId: String? = null): StorageClient {
+  fun build(): StorageClient {
     val storageClient: StorageClient =
       when (blobUrl.scheme) {
         "s3" -> {

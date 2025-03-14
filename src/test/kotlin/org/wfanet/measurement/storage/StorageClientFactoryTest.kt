@@ -43,8 +43,7 @@ class StorageClientFactoryTest {
     val blobUrl = StorageClientFactory.parseBlobUri(gcsUrl)
     assertThat(blobUrl).isEqualTo(BlobUri("gs", "my-bucket", null, "path/to/file"))
 
-    val storageClient =
-      StorageClientFactory(blobUrl, Files.createTempDirectory(null).toFile()).build(projectId = "project-id")
+    val storageClient = StorageClientFactory(blobUrl, file = null, projectId = "project-id").build()
     assertThat(storageClient is GcsStorageClient)
   }
 
