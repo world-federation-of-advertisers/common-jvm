@@ -22,6 +22,7 @@ import java.lang.NumberFormatException
 import kotlin.test.assertFailsWith
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.toList
@@ -30,7 +31,10 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
+import org.wfanet.measurement.storage.testing.ComplexMessage
+import org.wfanet.measurement.storage.testing.ComplexMessageKt
 import org.wfanet.measurement.storage.testing.InMemoryStorageClient
+import org.wfanet.measurement.storage.testing.complexMessage
 
 @RunWith(JUnit4::class)
 class MesosRecordIoStorageClientTest {
@@ -162,17 +166,8 @@ class MesosRecordIoStorageClientTest {
       requireNotNull(blob) { "Blob should exist" }
 
       when {
-        invalidContent.startsWith("-5") -> {
-          assertFailsWith<IllegalArgumentException>(
-            "Expected IllegalArgumentException for content: $invalidContent"
-          ) {
-            blob.read().collect {}
-          }
-        }
         !invalidContent.startsWith("100") -> {
-          assertFailsWith<NumberFormatException>(
-            "Expected NumberFormatException for content: $invalidContent"
-          ) {
+          assertFailsWith<IllegalArgumentException> {
             blob.read().collect {}
           }
         }
@@ -180,6 +175,32 @@ class MesosRecordIoStorageClientTest {
           blob.read().collect {}
         }
       }
+    }
+  }
+
+  @Test
+  fun `test writing and reading multiple complex records`() = runBlocking {
+    val testSubMessage = ComplexMessageKt.subMessage{
+      field1 += listOf(1, 2, 3)
+      field2 = ComplexMessage.Enum.STATE_2
+      field3 = (1..1000).map { ('a'..'z').random() }.joinToString("")
+      field4 = 100L
+    }
+    val testData = complexMessage {
+      field1 += listOf(1, 2, 3)
+      field2 += listOf(testSubMessage, testSubMessage)
+      field3 = 100.0
+    }
+    val numRecords = 2
+    val blobKey = "test-single-record"
+    val data: Flow<ByteString> = flow { repeat(numRecords) { emit(testData.toByteString()) } }
+    mesosRecordIoStorageClient.writeBlob(blobKey, data)
+    val blob = mesosRecordIoStorageClient.getBlob(blobKey)
+    requireNotNull(blob) { "Blob should exist" }
+    val records = blob.read().toList()
+    assertThat(records.size).isEqualTo(numRecords)
+    for (record in records) {
+      assertThat(testData).isEqualTo(ComplexMessage.parseFrom(record))
     }
   }
 }
