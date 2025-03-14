@@ -18,11 +18,10 @@ package org.wfanet.measurement.storage
 
 import com.google.common.truth.Truth.assertThat
 import com.google.protobuf.ByteString
-import java.lang.NumberFormatException
 import kotlin.test.assertFailsWith
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.toList
@@ -167,9 +166,7 @@ class MesosRecordIoStorageClientTest {
 
       when {
         !invalidContent.startsWith("100") -> {
-          assertFailsWith<IllegalArgumentException> {
-            blob.read().collect {}
-          }
+          assertFailsWith<IllegalArgumentException> { blob.read().collect {} }
         }
         else -> {
           blob.read().collect {}
@@ -180,12 +177,13 @@ class MesosRecordIoStorageClientTest {
 
   @Test
   fun `test writing and reading multiple complex records`() = runBlocking {
-    val testSubMessage = ComplexMessageKt.subMessage{
-      field1 += listOf(1, 2, 3)
-      field2 = ComplexMessage.Enum.STATE_2
-      field3 = (1..1000).map { ('a'..'z').random() }.joinToString("")
-      field4 = 100L
-    }
+    val testSubMessage =
+      ComplexMessageKt.subMessage {
+        field1 += listOf(1, 2, 3)
+        field2 = ComplexMessage.Enum.STATE_2
+        field3 = (1..1000).map { ('a'..'z').random() }.joinToString("")
+        field4 = 100L
+      }
     val testData = complexMessage {
       field1 += listOf(1, 2, 3)
       field2 += listOf(testSubMessage, testSubMessage)

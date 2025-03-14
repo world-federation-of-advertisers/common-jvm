@@ -16,9 +16,9 @@ package org.wfanet.measurement.storage
 
 import com.google.protobuf.ByteString
 import java.util.logging.Logger
+import kotlin.ByteArray
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
-import kotlin.ByteArray
 
 /**
  * A wrapper class for the [StorageClient] interface that handles Apache Mesos RecordIO formatted
@@ -57,7 +57,8 @@ class MesosRecordIoStorageClient(private val storageClient: StorageClient) : Sto
       content.collect { byteString ->
         val byteArray = byteString.toByteArray()
         val recordSize: String = byteArray.size.toString()
-        val fullRecordBytes: ByteArray = (recordSize + RECORD_DELIMITER).toByteArray(Charsets.UTF_8) + byteArray
+        val fullRecordBytes: ByteArray =
+          (recordSize + RECORD_DELIMITER).toByteArray(Charsets.UTF_8) + byteArray
         outputStream.write(fullRecordBytes)
         recordsWritten++
         emit(outputStream.toByteString())
@@ -128,7 +129,9 @@ class MesosRecordIoStorageClient(private val storageClient: StorageClient) : Sto
             val newlineIndex = chunkByteArray.indexOf(RECORD_DELIMITER, position)
             if (newlineIndex != -1) {
               require(newlineIndex != position)
-              recordSizeBuffer.append(chunkByteArray.sliceArray(position until newlineIndex).toString(Charsets.UTF_8))
+              recordSizeBuffer.append(
+                chunkByteArray.sliceArray(position until newlineIndex).toString(Charsets.UTF_8)
+              )
               currentRecordSize = recordSizeBuffer.toString().toInt()
               recordSizeBuffer.clear()
               recordBuffer = ByteString.newOutput(currentRecordSize)
@@ -143,9 +146,7 @@ class MesosRecordIoStorageClient(private val storageClient: StorageClient) : Sto
             val bytesToRead = minOf(remainingBytes, currentRecordSize - recordBuffer.size())
 
             if (bytesToRead > 0) {
-              recordBuffer.write(
-                chunkByteArray.sliceArray(position until position + bytesToRead)
-              )
+              recordBuffer.write(chunkByteArray.sliceArray(position until position + bytesToRead))
               position += bytesToRead
             }
             if (recordBuffer.size() == currentRecordSize) {
