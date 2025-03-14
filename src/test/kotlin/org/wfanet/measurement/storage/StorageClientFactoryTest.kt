@@ -30,8 +30,8 @@ class StorageClientFactoryTest {
   @Test
   fun testS3Url() {
     val s3Url = "s3://my-bucket.s3.us-west-2.amazonaws.com/path/to/file"
-    assertThrows(IllegalArgumentException::class.java) { StorageClientFactory.parseBlobUrl(s3Url) }
-    val blobUrl = BlobUrl("s3", "my-bucket", "us-west-2", null, "path/to/file")
+    assertThrows(IllegalArgumentException::class.java) { StorageClientFactory.parseBlobUri(s3Url) }
+    val blobUrl = BlobUri("s3", "my-bucket", "us-west-2", "path/to/file")
     assertThrows(IllegalArgumentException::class.java) {
       StorageClientFactory(blobUrl, Files.createTempDirectory(null).toFile()).build()
     }
@@ -39,21 +39,23 @@ class StorageClientFactoryTest {
 
   @Test
   fun testGsUrl() {
-    val gcsUrl = "gs://my-bucket/path/to/file?project=my-project"
-    val blobUrl = StorageClientFactory.parseBlobUrl(gcsUrl)
-    assertThat(blobUrl).isEqualTo(BlobUrl("gs", "my-bucket", null, "my-project", "path/to/file"))
+    val gcsUrl = "gs://my-bucket/path/to/file?project"
+    val blobUrl = StorageClientFactory.parseBlobUri(gcsUrl)
+    assertThat(blobUrl).isEqualTo(BlobUri("gs", "my-bucket", null, "path/to/file"))
 
-    val storageClient = StorageClientFactory(blobUrl, Files.createTempDirectory(null).toFile()).build()
+    val storageClient =
+      StorageClientFactory(blobUrl, Files.createTempDirectory(null).toFile()).build(projectId = "project-id")
     assertThat(storageClient is GcsStorageClient)
   }
 
   @Test
   fun testFileUrl() {
     val fileUrl = "file:///path/to/file"
-    val blobUrl = StorageClientFactory.parseBlobUrl(fileUrl)
-    assertThat(blobUrl).isEqualTo(BlobUrl("file", null, null, null, "/path/to/file"))
+    val blobUrl = StorageClientFactory.parseBlobUri(fileUrl)
+    assertThat(blobUrl).isEqualTo(BlobUri("file", null, null, "/path/to/file"))
 
-    val storageClient = StorageClientFactory(blobUrl, Files.createTempDirectory(null).toFile()).build()
+    val storageClient =
+      StorageClientFactory(blobUrl, Files.createTempDirectory(null).toFile()).build()
     assertThat(storageClient is FileSystemStorageClient)
   }
 }
