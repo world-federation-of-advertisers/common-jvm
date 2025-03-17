@@ -47,7 +47,8 @@ class StorageClientFactoryTest {
   @Test
   fun `gs uri returns google cloud storage client`() {
     val blobUri = BlobUri("gs", "my-bucket", "path/to/file")
-    val storageClient = StorageClientFactory(blobUri, rootDirectory = null, projectId = "project-id").build()
+    val storageClient =
+      StorageClientFactory(blobUri, rootDirectory = null, projectId = "project-id").build()
     assertThat(storageClient is GcsStorageClient)
   }
 
