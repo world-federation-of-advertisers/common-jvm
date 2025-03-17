@@ -17,7 +17,6 @@ package org.wfanet.measurement.storage
 import com.google.protobuf.ByteString
 import com.google.protobuf.kotlin.toByteStringUtf8
 import java.util.logging.Logger
-import kotlin.ByteArray
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 
