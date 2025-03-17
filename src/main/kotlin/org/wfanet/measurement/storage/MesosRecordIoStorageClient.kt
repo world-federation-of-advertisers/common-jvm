@@ -15,6 +15,7 @@
 package org.wfanet.measurement.storage
 
 import com.google.protobuf.ByteString
+import com.google.protobuf.kotlin.toByteStringUtf8
 import java.util.logging.Logger
 import kotlin.ByteArray
 import kotlinx.coroutines.flow.Flow
@@ -32,7 +33,12 @@ import kotlinx.coroutines.flow.flow
  */
 // TODO(@marcopremier): Refactor into MesosRecordIoStore<T : Message> to handle proto message
 // serialization internally and make current StorageClient implementation private.
-class MesosRecordIoStorageClient(private val storageClient: StorageClient) : StorageClient {
+class MesosRecordIoStorageClient(
+  private val storageClient: StorageClient,
+  private val recordDelimiter: ByteString = "\n".toByteStringUtf8(),
+) : StorageClient {
+
+  // private val recordDelimiterBytes = recordDelimiter.toByteArray()
 
   /**
    * Writes RecordIO rows to storage using the RecordIO format.
@@ -52,17 +58,11 @@ class MesosRecordIoStorageClient(private val storageClient: StorageClient) : Sto
    */
   override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
     var recordsWritten = 0
-    val processedContent = flow {
-      val outputStream: ByteString.Output = ByteString.newOutput()
-      content.collect { byteString ->
-        val byteArray = byteString.toByteArray()
-        val recordSize: String = byteArray.size.toString()
-        val fullRecordBytes: ByteArray =
-          (recordSize + RECORD_DELIMITER).toByteArray(Charsets.UTF_8) + byteArray
-        outputStream.write(fullRecordBytes)
+    val processedContent: Flow<ByteString> = flow {
+      content.collect { recordData: ByteString ->
+        val recordSize = recordData.size().toString().toByteStringUtf8()
         recordsWritten++
-        emit(outputStream.toByteString())
-        outputStream.reset()
+        emit(recordSize.concat(recordDelimiter).concat(recordData))
       }
     }
 
@@ -89,17 +89,20 @@ class MesosRecordIoStorageClient(private val storageClient: StorageClient) : Sto
     override val size: Long
       get() = blob.size
 
-    private fun ByteArray.indexOf(targetString: String, position: Int = 0): Int {
-      val targetBytes = targetString.toByteArray()
-      if (position < 0 || position >= this.size) {
-        return -1 // Invalid position
+    private fun ByteString.indexOf(target: ByteString, position: Int = 0): Int {
+      if (position < 0 || position >= this.size()) {
+        return -1
       }
-      for (i in position..this.size - targetBytes.size) {
-        if (this.sliceArray(i until i + targetBytes.size).contentEquals(targetBytes)) {
+      val targetSize = target.size()
+      if (targetSize == 0) {
+        return -1
+      }
+      for (i in position..this.size() - targetSize) {
+        if (this.substring(i, i + targetSize).equals(target)) {
           return i
         }
       }
-      return -1 // Not found
+      return -1
     }
 
     /**
@@ -119,34 +122,34 @@ class MesosRecordIoStorageClient(private val storageClient: StorageClient) : Sto
       var currentRecordSize = -1
       var recordBuffer = ByteString.newOutput()
 
-      blob.read().collect { chunk ->
+      blob.read().collect { chunk: ByteString ->
         var position = 0
-        val chunkByteArray = chunk.toByteArray()
 
-        while (position < chunkByteArray.size) {
+        while (position < chunk.size()) {
           if (currentRecordSize == -1) {
 
-            val newlineIndex = chunkByteArray.indexOf(RECORD_DELIMITER, position)
+            val newlineIndex = chunk.indexOf(recordDelimiter, position)
             if (newlineIndex != -1) {
               require(newlineIndex != position)
               recordSizeBuffer.append(
-                chunkByteArray.sliceArray(position until newlineIndex).toString(Charsets.UTF_8)
+                chunk.substring(position, newlineIndex).toString(Charsets.UTF_8)
               )
               currentRecordSize = recordSizeBuffer.toString().toInt()
               recordSizeBuffer.clear()
               recordBuffer = ByteString.newOutput(currentRecordSize)
               position = newlineIndex + 1
             } else {
-              recordSizeBuffer.append(chunkByteArray.toString(Charsets.UTF_8))
+              recordSizeBuffer.append(chunk)
               break
             }
           }
           if (currentRecordSize > 0) {
-            val remainingBytes = chunkByteArray.size - position
+            val remainingBytes = chunk.size() - position
             val bytesToRead = minOf(remainingBytes, currentRecordSize - recordBuffer.size())
 
             if (bytesToRead > 0) {
-              recordBuffer.write(chunkByteArray.sliceArray(position until position + bytesToRead))
+              val inputStream = chunk.substring(position, position + bytesToRead).newInput()
+              inputStream.copyTo(recordBuffer)
               position += bytesToRead
             }
             if (recordBuffer.size() == currentRecordSize) {
@@ -163,7 +166,6 @@ class MesosRecordIoStorageClient(private val storageClient: StorageClient) : Sto
   }
 
   companion object {
-    private const val RECORD_DELIMITER = "\n"
     private val logger = Logger.getLogger(this::class.java.name)
   }
 }
