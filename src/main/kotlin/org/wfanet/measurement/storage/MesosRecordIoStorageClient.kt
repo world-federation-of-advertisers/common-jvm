@@ -38,8 +38,6 @@ class MesosRecordIoStorageClient(
   private val recordDelimiter: ByteString = "\n".toByteStringUtf8(),
 ) : StorageClient {
 
-  // private val recordDelimiterBytes = recordDelimiter.toByteArray()
-
   /**
    * Writes RecordIO rows to storage using the RecordIO format.
    *
