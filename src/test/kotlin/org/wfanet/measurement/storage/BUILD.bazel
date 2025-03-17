@@ -2,8 +2,8 @@ load("@wfa_rules_kotlin_jvm//kotlin:defs.bzl", "kt_jvm_test")
 
 kt_jvm_test(
     name = "MesosRecordIoStorageClientTest",
-    srcs = ["MesosRecordIoStorageClientTest.kt"],
     timeout = "short",
+    srcs = ["MesosRecordIoStorageClientTest.kt"],
     deps = [
         "//imports/java/com/google/common/truth",
         "//imports/java/org/junit",
