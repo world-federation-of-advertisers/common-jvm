@@ -15,15 +15,18 @@
 package org.wfanet.measurement.storage
 
 import com.google.cloud.storage.StorageOptions
+import com.google.protobuf.ByteString
 import java.io.File
 import java.net.URI
-import org.wfanet.measurement.gcloud.gcs.GcsStorageClient
-import com.google.protobuf.ByteString
-import org.wfanet.measurement.storage.filesystem.FileSystemStorageClient
 import kotlinx.coroutines.flow.Flow
+import org.wfanet.measurement.gcloud.gcs.GcsStorageClient
+import org.wfanet.measurement.storage.filesystem.FileSystemStorageClient
+
+// Data class to store parsed information
+data class BlobUri(val scheme: String, val bucket: String, val key: String)
 
 /*
- * Builds a [StorageClient] from a blob uri. Currently only supports Google Cloud Storage and File System.
+ * A [StorageClient] from a blob uri. Currently only supports Google Cloud Storage and File System.
  * If file system storage should be supported, input a root File were data should be written/read.
  * @param blobUri - the [BlobUri] from which a StorageClient can be built
  * @param rootDirectory - only needed for file system storage clients
@@ -33,9 +36,13 @@ class SelectedStorageClient(
   private val blobUri: BlobUri,
   private val rootDirectory: File? = null,
   private val projectId: String? = null,
-): StorageClient {
+) : StorageClient {
 
-  constructor(url: String, rootDirectory: File) : this(parseBlobUri(url), rootDirectory)
+  constructor(
+    url: String,
+    rootDirectory: File? = null,
+    projectId: String? = null,
+  ) : this(parseBlobUri(url), rootDirectory, projectId)
 
   val underlyingClient: StorageClient =
     when (blobUri.scheme) {
@@ -49,29 +56,24 @@ class SelectedStorageClient(
         GcsStorageClient(storageOptions.service, requireNotNull(blobUri.bucket))
       }
       "file" -> {
-        FileSystemStorageClient(checkNotNull(rootDirectory).toPath().resolve(blobUri.bucket).toFile())
+        FileSystemStorageClient(
+          checkNotNull(rootDirectory).toPath().resolve(blobUri.bucket).toFile()
+        )
       }
       else -> throw IllegalArgumentException("Unsupported blobUrl: $blobUri")
     }
 
-
-  override suspend fun writeBlob(key: String, content: Flow<ByteString>): StorageClient.Blob {
-    val blobUri = parseBlobUri(url)
-    return underlyingClient.writeBlob(key, content)
+  override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
+    val path = File(blobUri.key, blobKey).path
+    return underlyingClient.writeBlob(path, content)
   }
 
-  suspend fun getBlob(url: String, rootDirectory: File?= null, projectId: String?= null): StorageClient.Blob {
-    val blobUri = parseBlobUri(url)
-    val client = StorageClientFactory(blobUri, rootDirectory, projectId).build()
-    return client.getBlob(blobUri.key)
+  override suspend fun getBlob(blobKey: String): StorageClient.Blob? {
+    val path = File(blobUri.key, blobKey).path
+    return underlyingClient.getBlob(path)
   }
-
 
   companion object {
-
-
-    // Data class to store parsed information
-    data class BlobUri(val scheme: String, val bucket: String, val key: String)
 
     private fun parseBlobUri(url: String): BlobUri {
       val uri = URI.create(url)
@@ -90,6 +92,5 @@ class SelectedStorageClient(
         else -> throw IllegalArgumentException("Unable to parse blob uri $url")
       }
     }
-
   }
 }

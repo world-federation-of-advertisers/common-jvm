@@ -13,14 +13,14 @@ kt_jvm_test(
 )
 
 kt_jvm_test(
-    name = "StorageClientFactoryTest",
+    name = "SelectedStorageClientTest",
     srcs = ["SelectedStorageClientTest.kt"],
-    test_class = "org.wfanet.measurement.storage.StorageClientFactoryTest",
+    test_class = "org.wfanet.measurement.storage.SelectedStorageClientTest",
     deps = [
         "//imports/java/com/google/common/truth",
         "//imports/java/org/junit",
         "//imports/kotlin/kotlin/test",
-        "//src/main/kotlin/org/wfanet/measurement/storage:storage_client_factory",
+        "//src/main/kotlin/org/wfanet/measurement/storage:selected_storage_client",
         "//src/main/kotlin/org/wfanet/measurement/storage/testing",
     ],
 )

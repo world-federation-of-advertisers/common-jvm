@@ -36,7 +36,7 @@ kt_jvm_library(
 )
 
 kt_jvm_library(
-    name = "storage_client_factory",
+    name = "selected_storage_client",
     srcs = ["SelectedStorageClient.kt"],
     deps = [
         ":client",

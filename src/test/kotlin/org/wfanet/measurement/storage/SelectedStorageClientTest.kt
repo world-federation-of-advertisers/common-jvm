@@ -17,86 +17,73 @@
 package org.wfanet.measurement.storage
 
 import com.google.common.truth.Truth.assertThat
+import com.google.protobuf.kotlin.toByteStringUtf8
 import java.nio.file.Files
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertThrows
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
-import org.wfanet.measurement.gcloud.gcs.GcsStorageClient
-import org.wfanet.measurement.storage.filesystem.FileSystemStorageClient
-import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.map
-import com.google.protobuf.kotlin.toByteStringUtf8
-import kotlinx.coroutines.runBlocking
 import org.wfanet.measurement.common.flatten
+import org.wfanet.measurement.storage.filesystem.FileSystemStorageClient
 
 @RunWith(JUnit4::class)
 class SelectedStorageClientTest {
   @Test
   fun `parseBlobUri throws IllegalArgumentException when scheme is s3`() {
     val s3Url = "s3://bucket.s3.us-west-2.amazonaws.com/path/to/file"
-    assertThrows(IllegalArgumentException::class.java) { StorageClientFactory.parseBlobUri(s3Url) }
-    val blobUri = BlobUri("s3", "bucket", "path/to/file")
-    assertThrows(IllegalArgumentException::class.java) {
-      StorageClientFactory(blobUri, Files.createTempDirectory(null).toFile()).build()
-    }
+    assertThrows(IllegalArgumentException::class.java) { SelectedStorageClient(s3Url) }
   }
 
   @Test
-  fun `able to parse google cloud storage uri`() {
-    val gcsUrl = "gs://bucket/path/to/file?project"
-    val blobUri = StorageClientFactory.parseBlobUri(gcsUrl)
-    assertThat(blobUri).isEqualTo(BlobUri("gs", "bucket", "path/to/file"))
-  }
-
-  @Test
-  fun `gs uri returns google cloud storage client`() {
+  fun `gs scheme returns client`() {
     val blobUri = BlobUri("gs", "bucket", "path/to/file")
-    val storageClient =
-      StorageClientFactory(blobUri, rootDirectory = null, projectId = "project-id").build()
-    assertThat(storageClient is GcsStorageClient)
-  }
-
-  @Test
-  fun `able to parse file system uri`() {
-    val fileUri = "file://bucket/path/to/file"
-    val blobUri = StorageClientFactory.parseBlobUri(fileUri)
-    assertThat(blobUri).isEqualTo(BlobUri("file", "bucket", "path/to/file"))
-  }
-
-  @Test
-  fun `file system uri returns file system storage client`() {
-    val blobUri = BlobUri("file", "bucket", "path/to/file")
-
-    val storageClient =
-      StorageClientFactory(blobUri, Files.createTempDirectory(null).toFile()).build()
-    assertThat(storageClient is FileSystemStorageClient)
+    SelectedStorageClient(blobUri)
   }
 
   @Test
   fun `throws null if root directory is not present and scheme is file`() {
     val blobUri = BlobUri("file", "bucket", "path/to/file")
 
-    assertThrows(IllegalStateException::class.java) {
-      StorageClientFactory(blobUri).build()
-    }
+    assertThrows(IllegalStateException::class.java) { SelectedStorageClient(blobUri) }
   }
 
   @Test
-  fun `able to read blob from filesystem`() = runBlocking {
-    val fileUri = "file://bucket/path/to/file"
-    val content = flowOf( "a", "b", "c").map{ it.toByteStringUtf8() }
+  fun `able to write blob from filesystem`() = runBlocking {
+    val fileUri = "file://bucket/path/to"
+    val content = flowOf("a", "b", "c").map { it.toByteStringUtf8() }
     val tmpPath = Files.createTempDirectory(null).toFile()
-    StorageClientFactory.writeBlob(fileUri, content, tmpPath)
+    Files.createDirectories(tmpPath.resolve("bucket/path/to").toPath())
+    val client = SelectedStorageClient(fileUri, tmpPath)
+    client.writeBlob("file", content)
     val fileSystemStorageClient = FileSystemStorageClient(tmpPath)
-    assertThat(fileSystemStorageClient.getBlob("bucket/path/to/file")!!.flatten()).isEqualTo(StorageClientFactory.getBlob())
+    assertThat(fileSystemStorageClient.getBlob("bucket/path/to/file")!!.read().flatten())
+      .isEqualTo(content.flatten())
   }
 
   @Test
-  fun `able to read and write blob to filesystem`() {
-    val fileUrl = "file://bucket/path/to/file"
-    val content = flowOf( "a", "b", "c").map{ it.toByteStringUtf8() }
-    StorageClientFactory.writeBlob
-    assertThat(blobUri).isEqualTo(BlobUri("file", "bucket", "path/to/file"))
+  fun `able to write and read blob to filesystem`() = runBlocking {
+    val fileUri = "file://bucket/path/to"
+    val content = flowOf("a", "b", "c").map { it.toByteStringUtf8() }
+    val tmpPath = Files.createTempDirectory(null).toFile()
+    Files.createDirectories(tmpPath.resolve("bucket/path/to").toPath())
+    val client = SelectedStorageClient(fileUri, tmpPath)
+    client.writeBlob("file", content)
+    val blob = client.getBlob("file")
+    assertThat(blob!!.read().flatten()).isEqualTo(content.flatten())
+  }
+
+  @Test
+  fun `able to write and read blob with full file path to filesystem`() = runBlocking {
+    val fileUri = "file://bucket/path/to/file"
+    val content = flowOf("a", "b", "c").map { it.toByteStringUtf8() }
+    val tmpPath = Files.createTempDirectory(null).toFile()
+    Files.createDirectories(tmpPath.resolve("bucket/path/to").toPath())
+    val client = SelectedStorageClient(fileUri, tmpPath)
+    client.writeBlob("", content)
+    val blob = client.getBlob("")
+    assertThat(blob!!.read().flatten()).isEqualTo(content.flatten())
   }
 }
