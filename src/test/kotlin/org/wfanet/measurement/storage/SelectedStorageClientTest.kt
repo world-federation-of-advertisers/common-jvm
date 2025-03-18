@@ -32,7 +32,7 @@ import org.wfanet.measurement.storage.filesystem.FileSystemStorageClient
 @RunWith(JUnit4::class)
 class SelectedStorageClientTest {
   @Test
-  fun `parseBlobUri throws IllegalArgumentException when scheme is s3`() {
+  fun `s3 scheme throws IllegalArgumentException`() {
     val s3Url = "s3://bucket.s3.us-west-2.amazonaws.com/path/to/file"
     assertThrows(IllegalArgumentException::class.java) { SelectedStorageClient(s3Url) }
   }
