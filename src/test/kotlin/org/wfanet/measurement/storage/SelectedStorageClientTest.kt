@@ -52,7 +52,7 @@ class SelectedStorageClientTest {
 
   @Test
   fun `able to write blob from filesystem`() = runBlocking {
-    val fileUri = "file://bucket/path/to"
+    val fileUri = "file:///bucket/path/to"
     val content = flowOf("a", "b", "c").map { it.toByteStringUtf8() }
     val tmpPath = Files.createTempDirectory(null).toFile()
     Files.createDirectories(tmpPath.resolve("bucket/path/to").toPath())
@@ -65,7 +65,7 @@ class SelectedStorageClientTest {
 
   @Test
   fun `able to write and read blob to filesystem`() = runBlocking {
-    val fileUri = "file://bucket/path/to"
+    val fileUri = "file:///bucket/path/to"
     val content = flowOf("a", "b", "c").map { it.toByteStringUtf8() }
     val tmpPath = Files.createTempDirectory(null).toFile()
     Files.createDirectories(tmpPath.resolve("bucket/path/to").toPath())
@@ -77,7 +77,7 @@ class SelectedStorageClientTest {
 
   @Test
   fun `able to write and read blob with full file path to filesystem`() = runBlocking {
-    val fileUri = "file://bucket/path/to/file"
+    val fileUri = "file:///bucket/path/to/file"
     val content = flowOf("a", "b", "c").map { it.toByteStringUtf8() }
     val tmpPath = Files.createTempDirectory(null).toFile()
     Files.createDirectories(tmpPath.resolve("bucket/path/to").toPath())

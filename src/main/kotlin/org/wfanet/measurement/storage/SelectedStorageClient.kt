@@ -77,16 +77,17 @@ class SelectedStorageClient(
 
     private fun parseBlobUri(url: String): BlobUri {
       val uri = URI.create(url)
-      val bucket = uri.host
-      val key = uri.path.removePrefix("/")
       return when (uri.scheme) {
         "s3" -> {
           throw IllegalArgumentException("S3 is not currently supported")
         }
         "gs" -> {
+          val bucket = uri.host
+          val key = uri.path.removePrefix("/")
           BlobUri(scheme = "gs", bucket = bucket, key = key)
         }
         "file" -> {
+          val (bucket, key) = uri.path.removePrefix("/").split("/", limit = 2)
           BlobUri(scheme = "file", bucket = bucket, key = key)
         }
         else -> throw IllegalArgumentException("Unable to parse blob uri $url")
