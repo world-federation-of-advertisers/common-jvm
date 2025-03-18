@@ -14,7 +14,7 @@ kt_jvm_test(
 
 kt_jvm_test(
     name = "StorageClientFactoryTest",
-    srcs = ["StorageClientFactoryTest.kt"],
+    srcs = ["SelectedStorageClientTest.kt"],
     test_class = "org.wfanet.measurement.storage.StorageClientFactoryTest",
     deps = [
         "//imports/java/com/google/common/truth",
