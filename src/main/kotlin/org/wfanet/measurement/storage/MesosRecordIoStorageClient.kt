@@ -32,10 +32,7 @@ import kotlinx.coroutines.flow.flow
  */
 // TODO(@marcopremier): Refactor into MesosRecordIoStore<T : Message> to handle proto message
 // serialization internally and make current StorageClient implementation private.
-class MesosRecordIoStorageClient(
-  private val storageClient: StorageClient,
-  private val recordDelimiter: ByteString = "\n".toByteStringUtf8(),
-) : StorageClient {
+class MesosRecordIoStorageClient(private val storageClient: StorageClient) : StorageClient {
 
   /**
    * Writes RecordIO rows to storage using the RecordIO format.
@@ -59,7 +56,7 @@ class MesosRecordIoStorageClient(
       content.collect { recordData: ByteString ->
         val recordSize = recordData.size().toString().toByteStringUtf8()
         recordsWritten++
-        emit(recordSize.concat(recordDelimiter).concat(recordData))
+        emit(recordSize.concat(RECORD_DELIMITER).concat(recordData))
       }
     }
 
@@ -125,7 +122,7 @@ class MesosRecordIoStorageClient(
         while (position < chunk.size()) {
           if (currentRecordSize == -1) {
 
-            val newlineIndex = chunk.indexOf(recordDelimiter, position)
+            val newlineIndex = chunk.indexOf(RECORD_DELIMITER, position)
             if (newlineIndex != -1) {
               require(newlineIndex != position)
               recordSizeBuffer.append(
@@ -163,6 +160,7 @@ class MesosRecordIoStorageClient(
   }
 
   companion object {
+    private val RECORD_DELIMITER = "\n".toByteStringUtf8()
     private val logger = Logger.getLogger(this::class.java.name)
   }
 }
