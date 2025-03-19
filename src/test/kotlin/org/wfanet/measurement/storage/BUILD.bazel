@@ -4,11 +4,25 @@ kt_jvm_test(
     name = "MesosRecordIoStorageClientTest",
     timeout = "short",
     srcs = ["MesosRecordIoStorageClientTest.kt"],
+    test_class = "org.wfanet.measurement.storage.MesosRecordIoStorageClientTest",
     deps = [
         "//imports/java/com/google/common/truth",
         "//imports/java/org/junit",
         "//src/main/kotlin/org/wfanet/measurement/storage:mesos_recordio_storage_client",
         "//src/main/kotlin/org/wfanet/measurement/storage/testing",
         "//src/main/proto/wfa/measurement/storage/testing:complex_message_kt_jvm_proto",
+    ],
+)
+
+kt_jvm_test(
+    name = "SelectedStorageClientTest",
+    srcs = ["SelectedStorageClientTest.kt"],
+    test_class = "org.wfanet.measurement.storage.SelectedStorageClientTest",
+    deps = [
+        "//imports/java/com/google/common/truth",
+        "//imports/java/org/junit",
+        "//imports/kotlin/kotlin/test",
+        "//src/main/kotlin/org/wfanet/measurement/storage:selected_storage_client",
+        "//src/main/kotlin/org/wfanet/measurement/storage/testing",
     ],
 )
