@@ -52,12 +52,12 @@ class SelectedStorageClientTest {
 
   @Test
   fun `able to write blob from filesystem`() = runBlocking {
-    val fileUri = "file:///bucket/path/to"
+    val fileUri = "file:///bucket/path/to/file"
     val content = flowOf("a", "b", "c").map { it.toByteStringUtf8() }
     val tmpPath = Files.createTempDirectory(null).toFile()
     Files.createDirectories(tmpPath.resolve("bucket/path/to").toPath())
     val client = SelectedStorageClient(fileUri, tmpPath)
-    client.writeBlob("file", content)
+    client.writeBlob("path/to/file", content)
     val fileSystemStorageClient = FileSystemStorageClient(tmpPath)
     assertThat(fileSystemStorageClient.getBlob("bucket/path/to/file")!!.read().flatten())
       .isEqualTo(content.flatten())
@@ -65,25 +65,13 @@ class SelectedStorageClientTest {
 
   @Test
   fun `able to write and read blob to filesystem`() = runBlocking {
-    val fileUri = "file:///bucket/path/to"
-    val content = flowOf("a", "b", "c").map { it.toByteStringUtf8() }
-    val tmpPath = Files.createTempDirectory(null).toFile()
-    Files.createDirectories(tmpPath.resolve("bucket/path/to").toPath())
-    val client = SelectedStorageClient(fileUri, tmpPath)
-    client.writeBlob("file", content)
-    val blob = client.getBlob("file")
-    assertThat(blob!!.read().flatten()).isEqualTo(content.flatten())
-  }
-
-  @Test
-  fun `able to write and read blob with full file path to filesystem`() = runBlocking {
     val fileUri = "file:///bucket/path/to/file"
     val content = flowOf("a", "b", "c").map { it.toByteStringUtf8() }
     val tmpPath = Files.createTempDirectory(null).toFile()
     Files.createDirectories(tmpPath.resolve("bucket/path/to").toPath())
     val client = SelectedStorageClient(fileUri, tmpPath)
-    client.writeBlob("", content)
-    val blob = client.getBlob("")
+    client.writeBlob("path/to/file", content)
+    val blob = client.getBlob("path/to/file")
     assertThat(blob!!.read().flatten()).isEqualTo(content.flatten())
   }
 }

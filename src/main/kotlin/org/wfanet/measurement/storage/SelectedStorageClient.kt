@@ -64,13 +64,11 @@ class SelectedStorageClient(
     }
 
   override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
-    val path = File(blobUri.key, blobKey).path
-    return underlyingClient.writeBlob(path, content)
+    return underlyingClient.writeBlob(blobKey, content)
   }
 
   override suspend fun getBlob(blobKey: String): StorageClient.Blob? {
-    val path = File(blobUri.key, blobKey).path
-    return underlyingClient.getBlob(path)
+    return underlyingClient.getBlob(blobKey)
   }
 
   companion object {
