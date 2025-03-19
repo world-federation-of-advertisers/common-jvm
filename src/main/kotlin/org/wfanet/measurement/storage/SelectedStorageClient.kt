@@ -64,10 +64,12 @@ class SelectedStorageClient(
     }
 
   override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
+    check(blobUri.key == blobKey)
     return underlyingClient.writeBlob(blobKey, content)
   }
 
   override suspend fun getBlob(blobKey: String): StorageClient.Blob? {
+    check(blobUri.key == blobKey)
     return underlyingClient.getBlob(blobKey)
   }
 

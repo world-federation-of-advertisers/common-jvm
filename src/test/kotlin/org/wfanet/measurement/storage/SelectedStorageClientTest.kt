@@ -74,4 +74,27 @@ class SelectedStorageClientTest {
     val blob = client.getBlob("path/to/file")
     assertThat(blob!!.read().flatten()).isEqualTo(content.flatten())
   }
+
+  @Test
+  fun `read to invalid blob key throws error`() {
+    val fileUri = "file:///bucket/path/to/file"
+    val tmpPath = Files.createTempDirectory(null).toFile()
+    Files.createDirectories(tmpPath.resolve("bucket/path/to").toPath())
+    val client = SelectedStorageClient(fileUri, tmpPath)
+    assertThrows(IllegalStateException::class.java) {
+      runBlocking { client.getBlob("other-path/to/file") }
+    }
+  }
+
+  @Test
+  fun `write to invalid blob key throws error`() {
+    val fileUri = "file:///bucket/path/to/file"
+    val content = flowOf("a", "b", "c").map { it.toByteStringUtf8() }
+    val tmpPath = Files.createTempDirectory(null).toFile()
+    Files.createDirectories(tmpPath.resolve("bucket/path/to").toPath())
+    val client = SelectedStorageClient(fileUri, tmpPath)
+    assertThrows(IllegalStateException::class.java) {
+      runBlocking { client.writeBlob("other-path/to/file", content) }
+    }
+  }
 }
