@@ -38,7 +38,7 @@ class SelectedStorageClientTest {
   }
 
   @Test
-  fun `gs scheme returns client`() {
+  fun `constructor for gs scheme does not throw error`() {
     val blobUri = BlobUri("gs", "bucket", "path/to/file")
     SelectedStorageClient(blobUri)
   }
@@ -51,7 +51,7 @@ class SelectedStorageClientTest {
   }
 
   @Test
-  fun `able to write blob from filesystem`() = runBlocking {
+  fun `writeBlob writes file when uri is file scheme`() = runBlocking {
     val fileUri = "file:///bucket/path/to/file"
     val content = flowOf("a", "b", "c").map { it.toByteStringUtf8() }
     val tmpPath = Files.createTempDirectory(null).toFile()
@@ -64,7 +64,7 @@ class SelectedStorageClientTest {
   }
 
   @Test
-  fun `able to write and read blob to filesystem`() = runBlocking {
+  fun `readBlob reads samd file when uri is file scheme`() = runBlocking {
     val fileUri = "file:///bucket/path/to/file"
     val content = flowOf("a", "b", "c").map { it.toByteStringUtf8() }
     val tmpPath = Files.createTempDirectory(null).toFile()
@@ -76,7 +76,7 @@ class SelectedStorageClientTest {
   }
 
   @Test
-  fun `read to invalid blob key throws error`() {
+  fun `readBlob throws exception with invalid blob key for file scheme`() {
     val fileUri = "file:///bucket/path/to/file"
     val tmpPath = Files.createTempDirectory(null).toFile()
     Files.createDirectories(tmpPath.resolve("bucket/path/to").toPath())
@@ -87,7 +87,7 @@ class SelectedStorageClientTest {
   }
 
   @Test
-  fun `write to invalid blob key throws error`() {
+  fun `writeBlob throws exception with invalid blob key for file scheme`() {
     val fileUri = "file:///bucket/path/to/file"
     val content = flowOf("a", "b", "c").map { it.toByteStringUtf8() }
     val tmpPath = Files.createTempDirectory(null).toFile()
@@ -99,14 +99,14 @@ class SelectedStorageClientTest {
   }
 
   @Test
-  fun `able to parse gs scheme url`() {
+  fun `parseBlobUri returns parsed GCS URI`() {
     val uri = "gs://some-bucket/path/to/file"
     val blobUri = SelectedStorageClient.parseBlobUri(uri)
     assertThat(blobUri).isEqualTo(BlobUri("gs", "some-bucket", "path/to/file"))
   }
 
   @Test
-  fun `able to parse file scheme url`() {
+  fun `parseBlobUri returns parsed File URI`() {
     val uri = "file:///some-bucket/path/to/file"
     val blobUri = SelectedStorageClient.parseBlobUri(uri)
     assertThat(blobUri).isEqualTo(BlobUri("file", "some-bucket", "path/to/file"))
