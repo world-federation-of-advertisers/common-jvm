@@ -75,7 +75,7 @@ class SelectedStorageClient(
 
   companion object {
 
-    private fun parseBlobUri(url: String): BlobUri {
+    fun parseBlobUri(url: String): BlobUri {
       val uri = URI.create(url)
       return when (uri.scheme) {
         "s3" -> {
@@ -93,5 +93,6 @@ class SelectedStorageClient(
         else -> throw IllegalArgumentException("Unable to parse blob uri $url")
       }
     }
+
   }
 }

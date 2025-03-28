@@ -97,4 +97,18 @@ class SelectedStorageClientTest {
       runBlocking { client.writeBlob("other-path/to/file", content) }
     }
   }
+
+  @Test
+  fun `able to parse gs scheme url`() {
+    val uri = "gs://some-bucket/path/to/file"
+    val blobUri = SelectedStorageClient.parseBlobUri(uri)
+    assertThat(blobUri).isEqualTo(BlobUri("gs", "some-bucket", "path/to/file"))
+  }
+
+  @Test
+  fun `able to parse file scheme url`() {
+    val uri = "file:///some-bucket/path/to/file"
+    val blobUri = SelectedStorageClient.parseBlobUri(uri)
+    assertThat(blobUri).isEqualTo(BlobUri("file", "some-bucket", "path/to/file"))
+  }
 }
