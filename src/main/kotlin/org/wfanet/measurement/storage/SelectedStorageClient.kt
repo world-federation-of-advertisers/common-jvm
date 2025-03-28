@@ -93,6 +93,5 @@ class SelectedStorageClient(
         else -> throw IllegalArgumentException("Unable to parse blob uri $url")
       }
     }
-
   }
 }
