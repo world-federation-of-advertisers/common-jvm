@@ -30,6 +30,12 @@ import org.wfanet.measurement.storage.StorageClient
 
 data class WrappedStorageConfig(val kekUri: String, val encryptedDek: String, val aesMode: String)
 
+/*
+ * Used to decrypt data given an encrypted data encryption key.
+ * 1. Decrypts the data encryption key using a kms
+ * 2. Uses that data encryption key to construct an decrypting/encrypting storage client
+ * Currently only supported Streaming AEAD storage client.
+ */
 class WrappedKeysStorageClient(
   private val storageClient: StorageClient,
   private val kmsClient: KmsClient,
