@@ -191,6 +191,26 @@ def java_image(
         **kwargs
     )
 
+def java_debug_image(
+        name,
+        binary,
+        base = None,
+        labels = None,
+        cmd_args = None,
+        env = None,
+        visibility = None,
+        **kwargs):
+    java_image(
+        name = name,
+        binary = binary,
+        base = base or DEFAULT_JAVA_DEBUG_IMAGE_BASE,
+        labels = labels,
+        cmd_args = cmd_args,
+        env = env,
+        visibility = visibility,
+        **kwargs
+    )
+
 def container_push(
         name,
         image,
