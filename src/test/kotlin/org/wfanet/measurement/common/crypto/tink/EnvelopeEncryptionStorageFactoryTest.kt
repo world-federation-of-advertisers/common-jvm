@@ -19,20 +19,22 @@ package org.wfanet.measurement.common.crypto.tink
 import com.google.crypto.tink.Aead
 import com.google.crypto.tink.KeyTemplates
 import com.google.crypto.tink.KeysetHandle
-import com.google.crypto.tink.TinkJsonProtoKeysetFormat
+import com.google.crypto.tink.TinkProtoKeysetFormat
 import com.google.crypto.tink.aead.AeadConfig
 import com.google.crypto.tink.streamingaead.StreamingAeadConfig
 import com.google.protobuf.ByteString
+import java.util.Base64
 import org.junit.Before
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 import org.wfanet.measurement.common.crypto.tink.testing.FakeKmsClient
 import org.wfanet.measurement.common.size
+import org.wfanet.measurement.storage.StorageClient
 import org.wfanet.measurement.storage.testing.AbstractStorageClientTest
 import org.wfanet.measurement.storage.testing.InMemoryStorageClient
 
 @RunWith(JUnit4::class)
-class WrappedKeysStorageClientTest : AbstractStorageClientTest<WrappedKeysStorageClient>() {
+class EnvelopeEncryptionStorageFactoryTest : AbstractStorageClientTest<StorageClient>() {
 
   override fun computeStoredBlobSize(content: ByteString, blobKey: String): Int {
     // See https://github.com/google/tink/blob/master/docs/WIRE-FORMAT.md
@@ -55,19 +57,20 @@ class WrappedKeysStorageClientTest : AbstractStorageClientTest<WrappedKeysStorag
     val wrappedStorageClient = InMemoryStorageClient()
 
     val serializedEncryptionKey =
-      TinkJsonProtoKeysetFormat.serializeEncryptedKeyset(
+      TinkProtoKeysetFormat.serializeEncryptedKeyset(
         keyEncryptionHandle,
         kmsClient.getAead(kekUri),
         byteArrayOf(),
       )
     val config =
-      WrappedStorageConfig(
+      EnvelopeEncryptedStorageFactory.StorageConfig(
         kekUri = kekUri,
         aesMode = aesMode,
-        encryptedDek = serializedEncryptionKey,
+        encryptedDek = Base64.getEncoder().encodeToString(serializedEncryptionKey),
       )
     storageClient =
-      WrappedKeysStorageClient(storageClient = wrappedStorageClient, kmsClient, config)
+      EnvelopeEncryptedStorageFactory(storageClient = wrappedStorageClient, kmsClient, config)
+        .build()
   }
 
   init {

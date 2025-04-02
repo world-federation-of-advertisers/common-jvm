@@ -65,8 +65,8 @@ kt_jvm_test(
 )
 
 kt_jvm_test(
-    name = "WrappedKeysStorageClientTest",
-    srcs = ["WrappedKeysStorageClientTest.kt"],
+    name = "EnvelopeEncryptionStorageFactoryTest",
+    srcs = ["EnvelopeEncryptionStorageFactoryTest.kt"],
     deps = [
         "//imports/java/com/google/common/truth",
         "//imports/java/com/google/crypto/tink",
