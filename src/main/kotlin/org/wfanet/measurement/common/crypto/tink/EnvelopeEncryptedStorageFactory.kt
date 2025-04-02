@@ -46,7 +46,7 @@ class EnvelopeEncryptedStorageFactory(
   /*
    * Encryption information needed to read the storage
    */
-  data class StorageConfig(val kekUri: String, val encryptedDek: String, val aesMode: String)
+  data class StorageConfig(val kekUri: String, val encryptedDek: String)
 
   private val kekAead = kmsClient.getAead(config.kekUri)
   private val handle: KeysetHandle = runBlocking {

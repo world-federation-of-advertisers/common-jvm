@@ -51,8 +51,8 @@ class EnvelopeEncryptionStorageFactoryTest : AbstractStorageClientTest<StorageCl
     kmsClient.setAead(kekUri, kmsKeyHandle.getPrimitive(Aead::class.java))
 
     // Set up streaming encryption
-    val aesMode = "AES128_GCM_HKDF_1MB"
-    val aeadKeyTemplate = KeyTemplates.get(aesMode)
+    val tink_key_template_type = "AES128_GCM_HKDF_1MB"
+    val aeadKeyTemplate = KeyTemplates.get(tink_key_template_type)
     val keyEncryptionHandle = KeysetHandle.generateNew(aeadKeyTemplate)
     val wrappedStorageClient = InMemoryStorageClient()
 
@@ -65,7 +65,6 @@ class EnvelopeEncryptionStorageFactoryTest : AbstractStorageClientTest<StorageCl
     val config =
       EnvelopeEncryptedStorageFactory.StorageConfig(
         kekUri = kekUri,
-        aesMode = aesMode,
         encryptedDek = Base64.getEncoder().encodeToString(serializedEncryptionKey),
       )
     storageClient =
