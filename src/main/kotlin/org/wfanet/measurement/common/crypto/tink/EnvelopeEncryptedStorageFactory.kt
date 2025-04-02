@@ -78,7 +78,7 @@ class EnvelopeEncryptedStorageFactory(
           streamingAeadContext = aeadContext,
         )
       }
-      else -> throw IllegalArgumentException("Unsupported AES Mode $keyType")
+      else -> throw IllegalArgumentException("Unsupported Key Type: $keyType")
     }
   }
 }
