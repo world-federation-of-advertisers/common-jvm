@@ -16,6 +16,7 @@
 
 package org.wfanet.measurement.common.crypto.tink
 
+import com.google.common.truth.Truth.assertThat
 import com.google.crypto.tink.Aead
 import com.google.crypto.tink.KeyTemplates
 import com.google.crypto.tink.KeysetHandle
@@ -23,30 +24,19 @@ import com.google.crypto.tink.TinkProtoKeysetFormat
 import com.google.crypto.tink.aead.AeadConfig
 import com.google.crypto.tink.streamingaead.StreamingAeadConfig
 import com.google.protobuf.ByteString
-import java.util.Base64
 import kotlin.test.assertFailsWith
 import kotlinx.coroutines.runBlocking
-import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 import org.wfanet.measurement.common.crypto.tink.testing.FakeKmsClient
-import org.wfanet.measurement.common.size
-import org.wfanet.measurement.storage.StorageClient
-import org.wfanet.measurement.storage.testing.AbstractStorageClientTest
 import org.wfanet.measurement.storage.testing.InMemoryStorageClient
 
 @RunWith(JUnit4::class)
-class WithEnvelopeEncryptionTest : AbstractStorageClientTest<StorageClient>() {
+class WithEnvelopeEncryptionTest() {
 
-  override fun computeStoredBlobSize(content: ByteString, blobKey: String): Int {
-    // See https://github.com/google/tink/blob/master/docs/WIRE-FORMAT.md
-    // AES_128_GCM ciphertext is same size as plaintext.
-    return TOTAL_OVERHEAD_BYTES + content.size
-  }
-
-  @Before
-  fun initStorageClient() {
+  @Test
+  fun `returns encrypted streaming AEAD storage client`() {
     // Set up KMS
     val kmsClient = FakeKmsClient()
     val kekUri = FakeKmsClient.KEY_URI_PREFIX + "key1"
@@ -60,13 +50,16 @@ class WithEnvelopeEncryptionTest : AbstractStorageClientTest<StorageClient>() {
     val wrappedStorageClient = InMemoryStorageClient()
 
     val serializedEncryptionKey =
-      TinkProtoKeysetFormat.serializeEncryptedKeyset(
-        keyEncryptionHandle,
-        kmsClient.getAead(kekUri),
-        byteArrayOf(),
+      ByteString.copyFrom(
+        TinkProtoKeysetFormat.serializeEncryptedKeyset(
+          keyEncryptionHandle,
+          kmsClient.getAead(kekUri),
+          byteArrayOf(),
+        )
       )
-    val encryptedDek = Base64.getEncoder().encodeToString(serializedEncryptionKey)
-    storageClient = wrappedStorageClient.withEnvelopeEncryption(kmsClient, kekUri, encryptedDek)
+    val storageClient =
+      wrappedStorageClient.withEnvelopeEncryption(kmsClient, kekUri, serializedEncryptionKey)
+    assertThat(storageClient).isInstanceOf(StreamingAeadStorageClient::class.java)
   }
 
   @Test
@@ -83,14 +76,15 @@ class WithEnvelopeEncryptionTest : AbstractStorageClientTest<StorageClient>() {
       val wrappedStorageClient = InMemoryStorageClient()
 
       val serializedEncryptionKey =
-        TinkProtoKeysetFormat.serializeEncryptedKeyset(
-          keyEncryptionHandle,
-          kmsClient.getAead(kekUri),
-          byteArrayOf(),
+        ByteString.copyFrom(
+          TinkProtoKeysetFormat.serializeEncryptedKeyset(
+            keyEncryptionHandle,
+            kmsClient.getAead(kekUri),
+            byteArrayOf(),
+          )
         )
-      val encryptedDek = Base64.getEncoder().encodeToString(serializedEncryptionKey)
       assertFailsWith<IllegalArgumentException> {
-        wrappedStorageClient.withEnvelopeEncryption(kmsClient, kekUri, encryptedDek)
+        wrappedStorageClient.withEnvelopeEncryption(kmsClient, kekUri, serializedEncryptionKey)
       }
     }
   }

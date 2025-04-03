@@ -21,7 +21,7 @@ import com.google.crypto.tink.StreamingAead
 import com.google.crypto.tink.TinkProtoKeysetFormat
 import com.google.crypto.tink.streamingaead.StreamingAeadConfig
 import com.google.crypto.tink.streamingaead.StreamingAeadKey
-import java.util.Base64
+import com.google.protobuf.ByteString
 import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.Dispatchers
 import org.jetbrains.annotations.BlockingExecutor
@@ -31,24 +31,20 @@ import org.wfanet.measurement.storage.StorageClient
  * Wraps this [StorageClient] in one that provides envelope encryption.
  * Currently only supported Streaming AEAD storage client.
  * @param kmsClient the Tink [KmsClient] that is used
- * @param kekUri the kms uri
+ * @param kekUri the uri of the kek
  * @param encryptedDek base 64 encoded tink key
  * @aeadContext the context the encrypted storage client will use
  */
 fun StorageClient.withEnvelopeEncryption(
   kmsClient: KmsClient,
   kekUri: String,
-  encryptedDek: String,
+  encryptedDek: ByteString,
   aeadContext: @BlockingExecutor CoroutineContext = Dispatchers.IO,
 ): StorageClient {
   val storageClient = this
   val kekAead = kmsClient.getAead(kekUri)
   val handle: KeysetHandle =
-    TinkProtoKeysetFormat.parseEncryptedKeyset(
-      Base64.getDecoder().decode(encryptedDek),
-      kekAead,
-      byteArrayOf(),
-    )
+    TinkProtoKeysetFormat.parseEncryptedKeyset(encryptedDek.toByteArray(), kekAead, byteArrayOf())
   return when (val primaryKey: Key = handle.primary.key) {
     is StreamingAeadKey -> {
 
