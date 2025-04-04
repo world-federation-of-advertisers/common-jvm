@@ -31,8 +31,8 @@ import org.wfanet.measurement.storage.StorageClient
  * Wraps this [StorageClient] in one that provides envelope encryption.
  * Currently only supported Streaming AEAD storage client.
  * @param kmsClient the Tink [KmsClient] that is used
- * @param kekUri the uri of the kek
- * @param encryptedDek base 64 encoded tink key
+ * @param kekUri the uri of the key encryption key (kek)
+ * @param encrypted data encryption key (DEK) in Tink binary format
  * @aeadContext the context the encrypted storage client will use
  */
 fun StorageClient.withEnvelopeEncryption(
