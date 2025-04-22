@@ -65,7 +65,7 @@ class TransportSecurityTest {
   private lateinit var server: CommonServer
 
   private val port: Int
-    get() = server.server.port
+    get() = server.port
 
   private fun startCommonServer(clientAuth: ClientAuth) {
     check(!this::server.isInitialized) { "Server already started" }
@@ -81,15 +81,12 @@ class TransportSecurityTest {
         )
         .start()
     healthStatusManager.setStatus(SERVICE, HealthCheckResponse.ServingStatus.SERVING)
-
-    grpcCleanup.register(server.server)
   }
 
   @After
-  fun shutDownCommonServer() {
+  fun closeCommonServer() {
     if (this::server.isInitialized) {
-      server.shutdown()
-      server.blockUntilShutdown()
+      server.close()
     }
   }
 
@@ -141,7 +138,6 @@ class TransportSecurityTest {
 
   @Test
   fun `TLS RPC succeeds`() {
-
     startCommonServer(ClientAuth.NONE)
 
     val channel =

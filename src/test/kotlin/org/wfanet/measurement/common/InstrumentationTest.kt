@@ -61,25 +61,23 @@ class InstrumentationTest {
   }
 
   @Test
-  fun `instrumented instruments thread pool`() {
+  fun `instrumentThreadPool instruments thread pool`() {
     val poolName = "thread-pool"
     val poolSize = 2
-    val executor =
+    val threadPool =
       ThreadPoolExecutor(poolSize, poolSize, 1L, TimeUnit.DAYS, LinkedBlockingQueue())
-        .instrumented(poolName)
-    // Guarantee that executor is shut down by end of test method.
-    AutoCloseable { executor.shutdownNow() }
-      .use {
-        repeat(poolSize) {
-          executor.execute {
-            // No-op
-          }
+    val handle: Instrumentation.Handle = Instrumentation.instrumentThreadPool(poolName, threadPool)
+    handle.use {
+      repeat(poolSize) {
+        threadPool.execute {
+          // No-op
         }
-        executor.execute { Thread.sleep(Long.MAX_VALUE) }
-
-        // Trigger recording of values.
-        metricReader.forceFlush()
       }
+      threadPool.execute { Thread.sleep(Long.MAX_VALUE) }
+
+      // Trigger recording of values.
+      metricReader.forceFlush()
+    }
 
     val metricData: List<MetricData> = metricExporter.finishedMetricItems
     assertThat(metricData).hasSize(2)
@@ -93,37 +91,40 @@ class InstrumentationTest {
   }
 
   @Test
-  fun `instrumented does not record after shut down`() {
+  fun `instrumentThreadPool does not record after handle closed`() {
     val poolName = "thread-pool"
     val poolSize = 2
-    val executor =
+    val threadPool =
       ThreadPoolExecutor(poolSize, poolSize, 1L, TimeUnit.DAYS, LinkedBlockingQueue())
-        .instrumented(poolName)
-    AutoCloseable { executor.shutdownNow() }
-      .use {
-        repeat(poolSize) {
-          executor.execute {
-            // No-op
-          }
+    val handle: Instrumentation.Handle = Instrumentation.instrumentThreadPool(poolName, threadPool)
+    handle.use {
+      repeat(poolSize) {
+        threadPool.execute {
+          // No-op
         }
       }
+    }
 
-    // Trigger recording of values after shutdown.
+    // Trigger recording of values after handle closed.
     metricReader.forceFlush()
 
     assertThat(metricExporter.finishedMetricItems).isEmpty()
   }
 
   @Test
-  fun `instrumented throws on duplicate pool name`() {
+  fun `instrumentThreadPool throws on duplicate pool name`() {
     val poolName = "thread-pool"
     val poolSize = 2
-    ThreadPoolExecutor(poolSize, poolSize, 1L, TimeUnit.DAYS, LinkedBlockingQueue())
-      .instrumented(poolName)
+    Instrumentation.instrumentThreadPool(
+      poolName,
+      ThreadPoolExecutor(poolSize, poolSize, 1L, TimeUnit.DAYS, LinkedBlockingQueue()),
+    )
 
     assertFailsWith<IllegalStateException> {
-      ThreadPoolExecutor(poolSize, poolSize, 1L, TimeUnit.DAYS, LinkedBlockingQueue())
-        .instrumented(poolName)
+      Instrumentation.instrumentThreadPool(
+        poolName,
+        ThreadPoolExecutor(poolSize, poolSize, 1L, TimeUnit.DAYS, LinkedBlockingQueue()),
+      )
     }
   }
 
