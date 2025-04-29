@@ -24,7 +24,6 @@ import io.grpc.protobuf.services.ProtoReflectionServiceV1
 import io.netty.handler.ssl.ClientAuth
 import io.netty.handler.ssl.SslContext
 import java.io.IOException
-import java.util.concurrent.ExecutorService
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
@@ -32,9 +31,9 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.logging.Level
 import java.util.logging.Logger
 import kotlin.properties.Delegates
-import org.jetbrains.annotations.VisibleForTesting
+import org.jetbrains.annotations.Blocking
+import org.wfanet.measurement.common.Instrumentation
 import org.wfanet.measurement.common.crypto.SigningCerts
-import org.wfanet.measurement.common.instrumented
 import picocli.CommandLine
 
 class CommonServer
@@ -43,17 +42,18 @@ private constructor(
   port: Int,
   healthPort: Int,
   threadPoolSize: Int,
+  private val shutdownGracePeriodSeconds: Int,
   verboseGrpcLogging: Boolean,
   services: Iterable<ServerServiceDefinition>,
   sslContext: SslContext?,
-) {
+) : AutoCloseable {
   init {
     require(threadPoolSize > 1)
   }
 
-  private val executor: ExecutorService =
+  private val executor =
     ThreadPoolExecutor(1, threadPoolSize, 60L, TimeUnit.SECONDS, LinkedBlockingQueue())
-      .instrumented(nameForLogging)
+  private lateinit var instrumentationHandle: Instrumentation.Handle
   private val healthStatusManager = HealthStatusManager()
   private val started = AtomicBoolean(false)
 
@@ -63,13 +63,7 @@ private constructor(
   val healthPort: Int
     get() = healthServer.port
 
-  /**
-   * Internal [Server].
-   *
-   * Visible only for testing.
-   */
-  @get:VisibleForTesting
-  internal val server: Server by lazy {
+  private val server: Server by lazy {
     logger.info { "$nameForLogging thread pool size: $threadPoolSize" }
     if (verboseGrpcLogging) {
       logger.info { "$nameForLogging verbose gRPC server logging enabled" }
@@ -101,10 +95,11 @@ private constructor(
       .build()
   }
 
-  @Throws(IOException::class)
   @Synchronized
+  @Throws(IOException::class)
   fun start(): CommonServer {
     check(!started.get()) { "$nameForLogging already started" }
+    instrumentationHandle = Instrumentation.instrumentThreadPool(nameForLogging, executor)
     server.start()
     server.services.forEach {
       healthStatusManager.setStatus(it.serviceDescriptor.name, ServingStatus.SERVING)
@@ -118,8 +113,16 @@ private constructor(
           override fun run() {
             // Use stderr here since the logger may have been reset by its JVM shutdown hook.
             System.err.println("*** $nameForLogging shutting down...")
-            this@CommonServer.shutdown()
-            blockUntilShutdown()
+
+            shutdown()
+            try {
+              // Wait for in-flight RPCs to complete.
+              server.awaitTermination(shutdownGracePeriodSeconds.toLong(), TimeUnit.SECONDS)
+            } catch (e: InterruptedException) {
+              currentThread().interrupt()
+            }
+            shutdownNow()
+
             System.err.println("*** $nameForLogging shut down")
           }
         }
@@ -135,9 +138,18 @@ private constructor(
 
     healthServer.shutdown()
     server.shutdown()
-    executor.shutdown()
   }
 
+  private fun shutdownNow() {
+    if (!started.get()) {
+      return
+    }
+
+    healthServer.shutdownNow()
+    server.shutdownNow()
+  }
+
+  @Blocking
   @Throws(InterruptedException::class)
   fun blockUntilShutdown() {
     if (!started.get()) {
@@ -146,7 +158,34 @@ private constructor(
 
     server.awaitTermination()
     healthServer.awaitTermination()
-    executor.awaitTermination(Long.MAX_VALUE, TimeUnit.MILLISECONDS)
+  }
+
+  private val terminated: Boolean
+    get() = server.isTerminated && healthServer.isTerminated
+
+  override fun close() {
+    if (!started.get()) {
+      return
+    }
+
+    var interrupted = false
+    shutdown()
+    while (!terminated) {
+      try {
+        blockUntilShutdown()
+        instrumentationHandle.close()
+      } catch (e: InterruptedException) {
+        if (!interrupted) {
+          shutdownNow()
+          interrupted = true
+        }
+      }
+    }
+
+    if (interrupted) {
+      instrumentationHandle.close()
+      Thread.currentThread().interrupt()
+    }
   }
 
   class Flags {
@@ -192,11 +231,20 @@ private constructor(
     )
     var debugVerboseGrpcLogging by Delegates.notNull<Boolean>()
       private set
+
+    @set:CommandLine.Option(
+      names = ["--shutdown-grace-period-seconds"],
+      description = ["Duration of the \"grace period\" for graceful shutdown in seconds"],
+      defaultValue = DEFAULT_SHUTDOWN_GRACE_PERIOD_SECONDS.toString(),
+    )
+    var shutdownGracePeriodSeconds by Delegates.notNull<Int>()
+      private set
   }
 
   companion object {
     private val logger = Logger.getLogger(this::class.java.name)
 
+    const val DEFAULT_SHUTDOWN_GRACE_PERIOD_SECONDS = 25
     val DEFAULT_THREAD_POOL_SIZE = Runtime.getRuntime().availableProcessors() * 2
 
     /** Constructs a [CommonServer] from parameters. */
@@ -209,12 +257,14 @@ private constructor(
       port: Int = 0,
       healthPort: Int = 0,
       threadPoolSize: Int = DEFAULT_THREAD_POOL_SIZE,
+      shutdownGracePeriodSeconds: Int = DEFAULT_SHUTDOWN_GRACE_PERIOD_SECONDS,
     ): CommonServer {
       return CommonServer(
         nameForLogging,
         port,
         healthPort,
         threadPoolSize,
+        shutdownGracePeriodSeconds,
         verboseGrpcLogging,
         services,
         certs?.toServerTlsContext(clientAuth),
@@ -236,6 +286,7 @@ private constructor(
         flags.port,
         flags.healthPort,
         flags.threadPoolSize,
+        flags.shutdownGracePeriodSeconds,
       )
     }
 

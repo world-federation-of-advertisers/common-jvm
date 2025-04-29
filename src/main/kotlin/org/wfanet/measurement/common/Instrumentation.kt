@@ -23,10 +23,12 @@ import io.opentelemetry.api.common.Attributes
 import io.opentelemetry.api.metrics.BatchCallback
 import io.opentelemetry.api.metrics.Meter
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.ExecutorService
 import java.util.concurrent.ThreadPoolExecutor
 
-private interface InstrumentationInterface {
+interface Instrumentation {
+  /** Instrumentation handle which cleans up instrumentation on [close]. */
+  interface Handle : AutoCloseable
+
   /** Singleton [OpenTelemetry] instance which may be initialized by the Java agent. */
   val openTelemetry: OpenTelemetry
 
@@ -34,15 +36,50 @@ private interface InstrumentationInterface {
   val meter: Meter
 
   /**
-   * Instruments the [ThreadPoolExecutor].
+   * Instruments [threadPool] as [poolName].
    *
-   * @return the instrumented [ExecutorService]
+   * @return a [Handle] for cleaning up instrumentation
+   * @throws IllegalStateException if a thread pool with [poolName] has already been instrumented by
+   *   this instance
    */
-  fun instrumentThreadPool(poolName: String, threadPool: ThreadPoolExecutor): ExecutorService
+  fun instrumentThreadPool(poolName: String, threadPool: ThreadPoolExecutor): Handle
+
+  companion object : Instrumentation {
+    /** Root namespace. */
+    const val ROOT_NAMESPACE = "halo_cmm"
+
+    private val instance = invalidatableLazy {
+      // Delayed instantiation to avoid accessing global OpenTelemetry instance before it's ready.
+      InstrumentationImpl(GlobalOpenTelemetry.get())
+    }
+
+    override val openTelemetry: OpenTelemetry
+      get() = instance.value.openTelemetry
+
+    override val meter: Meter
+      get() = instance.value.meter
+
+    override fun instrumentThreadPool(poolName: String, threadPool: ThreadPoolExecutor) =
+      instance.value.instrumentThreadPool(poolName, threadPool)
+
+    /**
+     * Resets [Instrumentation].
+     *
+     * This should only be used for tests.
+     */
+    fun resetForTest() {
+      if (!instance.isInitialized()) {
+        return
+      }
+
+      instance.value.close()
+      instance.invalidate()
+    }
+  }
 }
 
-class Instrumentation internal constructor(override val openTelemetry: OpenTelemetry) :
-  InstrumentationInterface {
+private class InstrumentationImpl(override val openTelemetry: OpenTelemetry) :
+  Instrumentation, AutoCloseable {
   override val meter: Meter = openTelemetry.getMeter(this::class.java.name)
 
   private val threadPools = ThreadPools(meter)
@@ -50,7 +87,11 @@ class Instrumentation internal constructor(override val openTelemetry: OpenTelem
   override fun instrumentThreadPool(
     poolName: String,
     threadPool: ThreadPoolExecutor,
-  ): ExecutorService = threadPools.instrument(poolName, threadPool)
+  ): Instrumentation.Handle = threadPools.instrument(poolName, threadPool)
+
+  override fun close() {
+    threadPools.close()
+  }
 
   private class ThreadPools(meter: Meter) : AutoCloseable {
     private val threadPoolsByName = ConcurrentHashMap<String, ThreadPoolExecutor>()
@@ -69,10 +110,10 @@ class Instrumentation internal constructor(override val openTelemetry: OpenTelem
       meter.batchCallback(::record, sizeCounter, activeCounter)
 
     /** Registers the specified thread pool for instrumentation. */
-    fun instrument(poolName: String, threadPool: ThreadPoolExecutor): ExecutorService {
+    fun instrument(poolName: String, threadPool: ThreadPoolExecutor): Instrumentation.Handle {
       val previousRegistration = threadPoolsByName.putIfAbsent(poolName, threadPool)
       check(previousRegistration == null) { "Thread pool $poolName already instrumented" }
-      return InstrumentedExecutorService(poolName, threadPool)
+      return ThreadPoolHandle(poolName)
     }
 
     private fun record() {
@@ -88,70 +129,17 @@ class Instrumentation internal constructor(override val openTelemetry: OpenTelem
       threadPoolsByName.clear()
     }
 
-    /** Instrumented [ExecutorService] */
-    private inner class InstrumentedExecutorService(
-      private val poolName: String,
-      private val delegate: ExecutorService,
-    ) : ExecutorService by delegate {
-      override fun shutdown() {
+    inner class ThreadPoolHandle(private val poolName: String) : Instrumentation.Handle {
+      override fun close() {
         threadPoolsByName.remove(poolName)
-        delegate.shutdown()
-      }
-
-      override fun shutdownNow(): MutableList<Runnable> {
-        threadPoolsByName.remove(poolName)
-        return delegate.shutdownNow()
       }
     }
 
     companion object {
-      private const val NAMESPACE = "$ROOT_NAMESPACE.thread_pool"
+      private const val NAMESPACE = "${Instrumentation.ROOT_NAMESPACE}.thread_pool"
       /** Attribute key for thread pool name. */
       private val THREAD_POOL_NAME_ATTRIBUTE_KEY: AttributeKey<String> =
         AttributeKey.stringKey("$NAMESPACE.name")
     }
   }
-
-  companion object : InstrumentationInterface {
-    /** Root namespace. */
-    const val ROOT_NAMESPACE = "halo_cmm"
-
-    private val instance = invalidatableLazy {
-      // Delayed instantiation to avoid accessing global OpenTelemetry instance before it's ready.
-      Instrumentation(GlobalOpenTelemetry.get())
-    }
-
-    override val openTelemetry: OpenTelemetry
-      get() = instance.value.openTelemetry
-
-    override val meter: Meter
-      get() = instance.value.meter
-
-    override fun instrumentThreadPool(
-      poolName: String,
-      threadPool: ThreadPoolExecutor,
-    ): ExecutorService = instance.value.instrumentThreadPool(poolName, threadPool)
-
-    /**
-     * Unsets [Instrumentation].
-     *
-     * This should only be used for tests.
-     */
-    fun resetForTest() {
-      if (!instance.isInitialized()) {
-        return
-      }
-
-      instance.value.threadPools.close()
-      instance.invalidate()
-    }
-  }
 }
-
-/**
- * Instruments the [ThreadPoolExecutor].
- *
- * @return the instrumented [ExecutorService]
- */
-fun ThreadPoolExecutor.instrumented(poolName: String): ExecutorService =
-  Instrumentation.instrumentThreadPool(poolName, this)
