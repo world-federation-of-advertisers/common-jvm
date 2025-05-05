@@ -15,17 +15,16 @@
 package org.wfanet.measurement.common.grpc
 
 import com.google.common.truth.Truth.assertThat
-import io.grpc.health.v1.HealthCheckRequest
 import io.grpc.health.v1.HealthCheckResponse
-import io.grpc.health.v1.HealthGrpcKt.HealthCoroutineStub
+import io.grpc.health.v1.HealthGrpc
+import io.grpc.health.v1.HealthGrpc.HealthBlockingStub
+import io.grpc.health.v1.healthCheckRequest
 import io.grpc.protobuf.services.HealthStatusManager
 import io.grpc.testing.GrpcCleanupRule
 import io.netty.handler.ssl.ClientAuth
 import java.io.File
 import java.util.logging.Logger
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.runInterruptible
-import org.junit.After
+import org.jetbrains.annotations.Blocking
 import org.junit.BeforeClass
 import org.junit.ClassRule
 import org.junit.Rule
@@ -62,14 +61,8 @@ class TransportSecurityTest {
 
   @get:Rule val grpcCleanup = GrpcCleanupRule()
 
-  private lateinit var server: CommonServer
-
-  private val port: Int
-    get() = server.server.port
-
-  private fun startCommonServer(clientAuth: ClientAuth) {
-    check(!this::server.isInitialized) { "Server already started" }
-    server =
+  private fun startCommonServer(clientAuth: ClientAuth): CommonServer {
+    val server =
       CommonServer.fromParameters(
           port = 0, // Bind to an unused port.
           healthPort = 0, // Bind to an unused port.
@@ -81,29 +74,18 @@ class TransportSecurityTest {
         )
         .start()
     healthStatusManager.setStatus(SERVICE, HealthCheckResponse.ServingStatus.SERVING)
-
-    grpcCleanup.register(server.server)
-  }
-
-  @After
-  fun shutDownCommonServer() {
-    if (this::server.isInitialized) {
-      server.shutdown()
-      server.blockUntilShutdown()
-    }
+    return server
   }
 
   @Test
   fun `TLS server valid`() {
-    startCommonServer(ClientAuth.NONE)
-
-    // Verify server using openssl s_client.
-    runBlocking {
+    startCommonServer(ClientAuth.NONE).use { server ->
+      // Verify server using openssl s_client.
       runCommand(
         "openssl",
         "s_client",
         "-connect",
-        "$HOSTNAME:$port",
+        "$HOSTNAME:${server.port}",
         "-verify_return_error",
         "-CAfile",
         "server-root.pem",
@@ -116,15 +98,13 @@ class TransportSecurityTest {
 
   @Test
   fun `mTLS server valid`() {
-    startCommonServer(ClientAuth.REQUIRE)
-
-    // Verify server using openssl s_client.
-    runBlocking {
+    startCommonServer(ClientAuth.REQUIRE).use { server ->
+      // Verify server using openssl s_client.
       runCommand(
         "openssl",
         "s_client",
         "-connect",
-        "$HOSTNAME:$port",
+        "$HOSTNAME:${server.port}",
         "-verify_return_error",
         "-cert",
         "client.pem",
@@ -141,31 +121,30 @@ class TransportSecurityTest {
 
   @Test
   fun `TLS RPC succeeds`() {
+    val response: HealthCheckResponse =
+      startCommonServer(ClientAuth.NONE).use { server ->
+        val channel =
+          grpcCleanup.register(
+            buildTlsChannel("$HOSTNAME:${server.port}", clientCerts.trustedCertificates.values)
+          )
+        val client: HealthBlockingStub = HealthGrpc.newBlockingStub(channel)
 
-    startCommonServer(ClientAuth.NONE)
-
-    val channel =
-      grpcCleanup.register(
-        buildTlsChannel("$HOSTNAME:$port", clientCerts.trustedCertificates.values)
-      )
-    val client = HealthCoroutineStub(channel)
-
-    val response = runBlocking {
-      client.check(HealthCheckRequest.newBuilder().apply { service = SERVICE }.build())
-    }
+        client.check(healthCheckRequest { service = SERVICE })
+      }
 
     assertThat(response.status).isEqualTo(HealthCheckResponse.ServingStatus.SERVING)
   }
 
   @Test
   fun `mTLS RPC succeeds`() {
-    startCommonServer(ClientAuth.REQUIRE)
-    val channel = grpcCleanup.register(buildMutualTlsChannel("$HOSTNAME:$port", clientCerts))
-    val client = HealthCoroutineStub(channel)
+    val response: HealthCheckResponse =
+      startCommonServer(ClientAuth.REQUIRE).use { server ->
+        val channel =
+          grpcCleanup.register(buildMutualTlsChannel("$HOSTNAME:${server.port}", clientCerts))
+        val client: HealthBlockingStub = HealthGrpc.newBlockingStub(channel)
 
-    val response = runBlocking {
-      client.check(HealthCheckRequest.newBuilder().apply { service = SERVICE }.build())
-    }
+        client.check(healthCheckRequest { service = SERVICE })
+      }
 
     assertThat(response.status).isEqualTo(HealthCheckResponse.ServingStatus.SERVING)
   }
@@ -182,7 +161,7 @@ class TransportSecurityTest {
      */
     @JvmStatic
     @BeforeClass
-    fun generateCerts() = runBlocking {
+    fun generateCerts() {
       val extFile = temporaryFolder.root.resolve("san.ext")
       extFile.writeText(SUBJECT_ALT_NAME_EXT)
 
@@ -195,7 +174,7 @@ class TransportSecurityTest {
       signCertificate("client", "client-root")
     }
 
-    private suspend fun generateRootCert(name: String, subject: String) {
+    private fun generateRootCert(name: String, subject: String) {
       runCommand(
         "openssl",
         "req",
@@ -219,7 +198,7 @@ class TransportSecurityTest {
       )
     }
 
-    private suspend fun generateSigningRequest(name: String, subject: String) {
+    private fun generateSigningRequest(name: String, subject: String) {
       runCommand(
         "openssl",
         "req",
@@ -240,7 +219,7 @@ class TransportSecurityTest {
       )
     }
 
-    private suspend fun signCertificate(name: String, rootCertName: String) {
+    private fun signCertificate(name: String, rootCertName: String) {
       runCommand(
         "openssl",
         "x509",
@@ -259,14 +238,14 @@ class TransportSecurityTest {
       )
     }
 
-    private suspend fun runCommand(vararg command: String) {
+    @Blocking
+    private fun runCommand(vararg command: String) {
       logger.info("Running `${command.joinToString(" ")}`")
-      @Suppress("BlockingMethodInNonBlockingContext")
-      val process =
+      val process: Process =
         ProcessBuilder(*command).directory(temporaryFolder.root).redirectErrorStream(true).start()
 
-      val exitCode = runInterruptible { process.waitFor() }
-      val output = process.inputStream.use { it.bufferedReader().readText() }
+      val exitCode: Int = process.waitFor()
+      val output: String = process.inputStream.use { it.bufferedReader().readText() }
       if (exitCode == 0) {
         logger.info(output)
       } else {

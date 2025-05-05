@@ -34,7 +34,6 @@ kt_jvm_test(
         "//imports/java/org/junit",
         "//imports/kotlin/io/grpc/health/v1:health_kt_jvm_grpc_proto",
         "//imports/kotlin/kotlin/test",
-        "//imports/kotlin/kotlinx/coroutines:core",
         "//src/main/kotlin/org/wfanet/measurement/common/crypto:signing_certs",
     ],
 )
