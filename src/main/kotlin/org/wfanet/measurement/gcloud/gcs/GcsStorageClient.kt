@@ -116,7 +116,8 @@ class GcsStorageClient(
     return blob?.let { ClientBlob(blob) }
   }
 
-  /** List file and folder names.
+  /**
+   * List file and folder names.
    *
    * When prefix and delimiter options are not specified, all file names (blob keys) are returned.
    * The prefix option filters out the file or folder names that do not match the prefix. The
@@ -124,32 +125,23 @@ class GcsStorageClient(
    * specified, the function returns full blob name for items that are directly under the current
    * prefix and do not contain another instance of the delimiter after the prefix part.
    */
-  suspend fun listBlobNames(
-    prefix: String? = null,
-    delimiter: String? = null,
-  ): List<String> {
+  suspend fun listBlobNames(prefix: String? = null, delimiter: String? = null): List<String> {
     val options = mutableListOf<Storage.BlobListOption>()
 
-    prefix?.let {
-      options.add(Storage.BlobListOption.prefix(it))
-    }
+    prefix?.let { options.add(Storage.BlobListOption.prefix(it)) }
 
-    delimiter?.let {
-      options.add(Storage.BlobListOption.delimiter(it))
-    }
+    delimiter?.let { options.add(Storage.BlobListOption.delimiter(it)) }
 
     val blobs = mutableListOf<String>()
 
-    val blobList: Page<Blob> = try {
-      withContext(blockingContext + CoroutineName("listBlobs")) {
-        storage.list(
-          bucketName,
-          *options.toTypedArray()
-        )
+    val blobList: Page<Blob> =
+      try {
+        withContext(blockingContext + CoroutineName("listBlobs")) {
+          storage.list(bucketName, *options.toTypedArray())
+        }
+      } catch (e: GcsStorageException) {
+        throw StorageException("Fail to list blobs.", e)
       }
-    } catch (e: GcsStorageException) {
-      throw StorageException("Fail to list blobs.", e)
-    }
 
     for (blob: Blob in blobList.iterateAll()) {
       blobs.add(blob.name)
