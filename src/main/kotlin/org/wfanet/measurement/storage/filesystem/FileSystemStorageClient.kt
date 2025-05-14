@@ -64,10 +64,10 @@ class FileSystemStorageClient(
     }
   }
 
-  override suspend fun listBlobNames(prefix: String, delimiter: String): List<String> {
+  override suspend fun listBlobNames(prefix: String?, delimiter: String?): List<String> {
     val regex: Regex? =
-      if (prefix.isNotEmpty()) {
-        if (delimiter.isNotEmpty()) {
+      if (!prefix.isNullOrEmpty()) {
+        if (!delimiter.isNullOrEmpty()) {
           val escapedDelimiter = delimiter.replace("\\", "\\\\")
           Regex(
             "($prefix)(?!$escapedDelimiter).*$escapedDelimiter|($prefix)(?!$escapedDelimiter).*"
@@ -75,7 +75,7 @@ class FileSystemStorageClient(
         } else {
           Regex("($prefix).*")
         }
-      } else if (delimiter.isNotEmpty()) {
+      } else if (!delimiter.isNullOrEmpty()) {
         val escapedDelimiter = delimiter.replace("\\", "\\\\")
         Regex("(?!$escapedDelimiter).*$escapedDelimiter")
       } else null
@@ -100,7 +100,7 @@ class FileSystemStorageClient(
                 val matchResult: MatchResult? = regex.find(relativePath)
                 if (matchResult != null) {
                   add(matchResult.value)
-                } else if (prefix.isEmpty() && delimiter.isNotEmpty()) {
+                } else if (prefix.isNullOrEmpty() && !delimiter.isNullOrEmpty()) {
                   add(relativePath)
                 }
               }

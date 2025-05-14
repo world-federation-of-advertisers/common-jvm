@@ -71,12 +71,16 @@ class ForwardedStorageClient(private val storageStub: ForwardedStorageCoroutineS
     return Blob(blobKey, blobSize)
   }
 
-  override suspend fun listBlobNames(prefix: String, delimiter: String): List<String> {
+  override suspend fun listBlobNames(prefix: String?, delimiter: String?): List<String> {
     val listBlobNamesResponse =
       storageStub.listBlobNames(
         listBlobNamesRequest {
-          this.prefix = prefix
-          this.delimiter = delimiter
+          if (prefix != null) {
+            this.prefix = prefix
+          }
+          if (delimiter != null) {
+            this.delimiter = delimiter
+          }
         }
       )
 

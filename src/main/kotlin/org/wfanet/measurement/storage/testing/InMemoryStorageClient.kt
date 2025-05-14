@@ -43,10 +43,10 @@ class InMemoryStorageClient : StorageClient {
     return storageMap[blobKey]
   }
 
-  override suspend fun listBlobNames(prefix: String, delimiter: String): List<String> {
+  override suspend fun listBlobNames(prefix: String?, delimiter: String?): List<String> {
     val regex: Regex? =
-      if (prefix.isNotEmpty()) {
-        if (delimiter.isNotEmpty()) {
+      if (!prefix.isNullOrEmpty()) {
+        if (!delimiter.isNullOrEmpty()) {
           val escapedDelimiter = delimiter.replace("\\", "\\\\")
           Regex(
             "($prefix)(?!$escapedDelimiter).*$escapedDelimiter|($prefix)(?!$escapedDelimiter).*"
@@ -54,7 +54,7 @@ class InMemoryStorageClient : StorageClient {
         } else {
           Regex("($prefix).*")
         }
-      } else if (delimiter.isNotEmpty()) {
+      } else if (!delimiter.isNullOrEmpty()) {
         val escapedDelimiter = delimiter.replace("\\", "\\\\")
         Regex("(?!$escapedDelimiter).*$escapedDelimiter")
       } else null
@@ -68,7 +68,7 @@ class InMemoryStorageClient : StorageClient {
               val matchResult: MatchResult? = regex.find(it)
               if (matchResult != null) {
                 matchResult.value
-              } else if (prefix.isEmpty() && delimiter.isNotEmpty()) {
+              } else if (prefix.isNullOrEmpty() && !delimiter.isNullOrEmpty()) {
                 it
               } else null
             }

@@ -114,14 +114,15 @@ abstract class AbstractStorageClientTest<T : StorageClient> {
     }
 
   @Test
-  fun `listBlobNames with only prefix gets blob keys that match the prefix`() = runBlocking {
-    prepareStorage()
-    val blobKeys = storageClient.listBlobNames(prefix = "dir1", "")
-    assertThat(blobKeys).isEqualTo(listOf(BLOB_KEY_1))
-  }
+  fun `listBlobNames with prefix and prefix delimiter gets blob keys that match the prefix`() =
+    runBlocking {
+      prepareStorage()
+      val blobKeys = storageClient.listBlobNames(prefix = "dir1", "")
+      assertThat(blobKeys).isEqualTo(listOf(BLOB_KEY_1))
+    }
 
   @Test
-  fun `listBlobNames with only delimiter gets all first level file and folder names`() =
+  fun `listBlobNames with delimiter and empty prefix gets all first level file and folder names`() =
     runBlocking {
       prepareStorage()
       val blobKeys = storageClient.listBlobNames(prefix = "", delimiter = "/")
@@ -129,9 +130,31 @@ abstract class AbstractStorageClientTest<T : StorageClient> {
     }
 
   @Test
-  fun `listBlobNames without prefix nor delimiter gets all blob keys`() = runBlocking {
+  fun `listBlobNames with empty prefix and delimiter gets all blob keys`() = runBlocking {
     prepareStorage()
     val blobKeys = storageClient.listBlobNames("", "")
+    assertThat(blobKeys.sorted()).isEqualTo(listOf(BLOB_KEY_1, BLOB_KEY_2, BLOB_KEY_3))
+  }
+
+  @Test
+  fun `listBlobNames with only prefix gets blob keys that match the prefix`() = runBlocking {
+    prepareStorage()
+    val blobKeys = storageClient.listBlobNames(prefix = "dir1")
+    assertThat(blobKeys).isEqualTo(listOf(BLOB_KEY_1))
+  }
+
+  @Test
+  fun `listBlobNames with only delimiter gets all first level file and folder names`() =
+    runBlocking {
+      prepareStorage()
+      val blobKeys = storageClient.listBlobNames(delimiter = "/")
+      assertThat(blobKeys.sorted()).isEqualTo(listOf("dir1/", "dir2/", "file3.textproto"))
+    }
+
+  @Test
+  fun `listBlobNames with no arguments gets all blob keys`() = runBlocking {
+    prepareStorage()
+    val blobKeys = storageClient.listBlobNames()
     assertThat(blobKeys.sorted()).isEqualTo(listOf(BLOB_KEY_1, BLOB_KEY_2, BLOB_KEY_3))
   }
 

@@ -116,13 +116,13 @@ class GcsStorageClient(
     return blob?.let { ClientBlob(blob) }
   }
 
-  override suspend fun listBlobNames(prefix: String, delimiter: String): List<String> {
+  override suspend fun listBlobNames(prefix: String?, delimiter: String?): List<String> {
     val options = mutableListOf<Storage.BlobListOption>()
 
-    if (prefix.isNotEmpty()) {
+    if (!prefix.isNullOrEmpty()) {
       options.add(Storage.BlobListOption.prefix(prefix))
     }
-    if (delimiter.isNotEmpty()) {
+    if (!delimiter.isNullOrEmpty()) {
       options.add(Storage.BlobListOption.delimiter(delimiter))
     }
 

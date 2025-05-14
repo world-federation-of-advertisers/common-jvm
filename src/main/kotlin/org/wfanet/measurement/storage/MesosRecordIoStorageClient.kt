@@ -75,7 +75,7 @@ class MesosRecordIoStorageClient(private val storageClient: StorageClient) : Sto
     return blob?.let { Blob(it, blobKey) }
   }
 
-  override suspend fun listBlobNames(prefix: String, delimiter: String): List<String> {
+  override suspend fun listBlobNames(prefix: String?, delimiter: String?): List<String> {
     return storageClient.listBlobNames(prefix, delimiter)
   }
 

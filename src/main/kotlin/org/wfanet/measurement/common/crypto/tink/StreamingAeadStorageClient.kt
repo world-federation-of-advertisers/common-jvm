@@ -99,7 +99,7 @@ class StreamingAeadStorageClient(
     return blob?.let { EncryptedBlob(it, blobKey) }
   }
 
-  override suspend fun listBlobNames(prefix: String, delimiter: String): List<String> {
+  override suspend fun listBlobNames(prefix: String?, delimiter: String?): List<String> {
     return storageClient.listBlobNames(prefix, delimiter)
   }
 

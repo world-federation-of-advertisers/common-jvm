@@ -70,7 +70,7 @@ internal constructor(
     return blob?.let { AeadBlob(it, blobKey) }
   }
 
-  override suspend fun listBlobNames(prefix: String, delimiter: String): List<String> {
+  override suspend fun listBlobNames(prefix: String?, delimiter: String?): List<String> {
     return storageClient.listBlobNames(prefix, delimiter)
   }
 
