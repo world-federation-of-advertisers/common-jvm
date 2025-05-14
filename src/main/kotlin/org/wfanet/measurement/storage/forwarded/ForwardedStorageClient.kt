@@ -72,10 +72,6 @@ class ForwardedStorageClient(private val storageStub: ForwardedStorageCoroutineS
   }
 
   override suspend fun listBlobNames(prefix: String, delimiter: String): List<String> {
-    if (prefix.isEmpty()) {
-      throw IllegalArgumentException("Prefix must not be empty")
-    }
-
     val listBlobNamesResponse =
       storageStub.listBlobNames(
         listBlobNamesRequest {

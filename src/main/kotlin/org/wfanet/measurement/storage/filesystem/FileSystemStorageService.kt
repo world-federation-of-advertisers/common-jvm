@@ -75,10 +75,6 @@ class FileSystemStorageService(
   }
 
   override suspend fun listBlobNames(request: ListBlobNamesRequest): ListBlobNamesResponse {
-    if (request.prefix.isEmpty()) {
-      throw Status.INVALID_ARGUMENT.withDescription("prefix is missing").asRuntimeException()
-    }
-
     return listBlobNamesResponse {
       blobNames +=
         storageClient.listBlobNames(prefix = request.prefix, delimiter = request.delimiter)

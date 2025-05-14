@@ -115,17 +115,19 @@ abstract class AbstractStorageClientTest<T : StorageClient> {
     }
 
   @Test
-  fun `listBlobNames with prefix options gets blob keys that match the prefix`() = runBlocking {
+  fun `listBlobNames with only prefix gets blob keys that match the prefix`() = runBlocking {
     prepareStorage()
     val blobKeys = storageClient.listBlobNames(prefix = "dir1", "")
     assertThat(blobKeys).isEqualTo(listOf(BLOB_KEY_1))
   }
 
   @Test
-  fun `listBlobNames with empty prefix throws IllegalArgumentException`(): Unit = runBlocking {
-    prepareStorage()
-    assertFailsWith<IllegalArgumentException> { storageClient.listBlobNames("", delimiter = "/") }
-  }
+  fun `listBlobNames with only delimiter gets all first level file and folder names`() =
+    runBlocking {
+      prepareStorage()
+      val blobKeys = storageClient.listBlobNames(prefix = "", delimiter = "/")
+      assertThat(blobKeys.sorted()).isEqualTo(listOf("dir1/", "dir2/", "file3.textproto"))
+    }
 
   private fun prepareStorage() {
     runBlocking {

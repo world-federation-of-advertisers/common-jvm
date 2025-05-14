@@ -65,19 +65,22 @@ class FileSystemStorageClient(
   }
 
   override suspend fun listBlobNames(prefix: String, delimiter: String): List<String> {
-    if (prefix.isEmpty()) {
-      throw IllegalArgumentException("Prefix must not be empty")
-    }
-
-    val regex =
-      if (delimiter.isNotEmpty()) {
+    val regex: Regex? =
+      if (prefix.isNotEmpty()) {
+        if (delimiter.isNotEmpty()) {
+          val escapedDelimiter = delimiter.replace("\\", "\\\\")
+          Regex(
+            "($prefix)(?!$escapedDelimiter).*$escapedDelimiter|($prefix)(?!$escapedDelimiter).*"
+          )
+        } else {
+          Regex("($prefix).*")
+        }
+      } else if (delimiter.isNotEmpty()) {
         val escapedDelimiter = delimiter.replace("\\", "\\\\")
         Regex(
-          "($prefix)((?!$escapedDelimiter).)*$escapedDelimiter|($prefix)((?!$escapedDelimiter).)*"
+          "(?!$escapedDelimiter).*$escapedDelimiter"
         )
-      } else {
-        Regex("($prefix).*")
-      }
+      } else null
 
     val visitedDirectoryPathSet = mutableSetOf<String>()
     val directoryToVisitList = mutableListOf(directory)
@@ -92,9 +95,16 @@ class FileSystemStorageClient(
                 directoryToVisitList.add(file)
               }
             } else {
-              val matchResult: MatchResult? = regex.find(file.path)
-              if (matchResult != null) {
-                add(matchResult.value)
+              if (regex == null) {
+                add(file.name)
+              } else {
+                val relativePath = directory.toPath().relativize(file.toPath()).toString()
+                val matchResult: MatchResult? = regex.find(relativePath)
+                if (matchResult != null) {
+                  add(matchResult.value)
+                } else if (prefix.isEmpty() && delimiter.isNotEmpty()) {
+                  add(relativePath)
+                }
               }
             }
           }

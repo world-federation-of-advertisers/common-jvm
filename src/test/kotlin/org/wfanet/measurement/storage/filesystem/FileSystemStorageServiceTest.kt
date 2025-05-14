@@ -33,7 +33,6 @@ import org.wfanet.measurement.internal.testing.DeleteBlobRequest
 import org.wfanet.measurement.internal.testing.ForwardedStorageGrpcKt.ForwardedStorageCoroutineStub
 import org.wfanet.measurement.internal.testing.GetBlobMetadataRequest
 import org.wfanet.measurement.internal.testing.ReadBlobRequest
-import org.wfanet.measurement.internal.testing.listBlobNamesRequest
 import org.wfanet.measurement.storage.forwarded.ForwardedStorageClient
 import org.wfanet.measurement.storage.testing.AbstractStorageClientTest
 
@@ -94,14 +93,5 @@ class FileSystemStorageServiceTest : AbstractStorageClientTest<ForwardedStorageC
         }
       }
     assertThat(e.status.code).isEqualTo(Status.Code.NOT_FOUND)
-  }
-
-  @Test
-  fun `listBlobNames returns INVALID_ARGUMENT when prefix not set`() {
-    val e =
-      assertThrows(StatusException::class.java) {
-        runBlocking { storageStub.listBlobNames(listBlobNamesRequest {}) }
-      }
-    assertThat(e.status.code).isEqualTo(Status.Code.INVALID_ARGUMENT)
   }
 }

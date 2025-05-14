@@ -50,12 +50,11 @@ interface StorageClient {
   /**
    * List file and folder names.
    *
+   * When prefix and delimiter options are empty, all file names (blob keys) are returned.
    * The prefix option filters out the file or folder names that do not match the prefix. The
    * delimiter option (e.g. "/") are used with prefix to emulate hierarchy. When delimiter option is
-   * specified, the function returns full blob name for items that are directly under the current
-   * prefix and do not contain an instance of the delimiter after the prefix part.
-   *
-   * @throws IllegalArgumentException when prefix is empty.
+   * not empty, the function returns full blob name for items that are directly under the current
+   * prefix and do not contain another instance of the delimiter after the prefix part.
    */
   suspend fun listBlobNames(prefix: String, delimiter: String): List<String>
 

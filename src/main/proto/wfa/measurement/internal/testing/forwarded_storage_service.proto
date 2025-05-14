@@ -76,7 +76,6 @@ message DeleteBlobResponse {
 }
 
 message ListBlobNamesRequest {
-  // Required
   string prefix = 1;
   string delimiter = 2;
 }

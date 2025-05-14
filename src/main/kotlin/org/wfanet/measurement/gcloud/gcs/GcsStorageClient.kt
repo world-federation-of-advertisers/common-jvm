@@ -117,13 +117,11 @@ class GcsStorageClient(
   }
 
   override suspend fun listBlobNames(prefix: String, delimiter: String): List<String> {
-    if (prefix.isEmpty()) {
-      throw IllegalArgumentException("Prefix must not be empty")
-    }
-
     val options = mutableListOf<Storage.BlobListOption>()
 
-    options.add(Storage.BlobListOption.prefix(prefix))
+    if (prefix.isNotEmpty()) {
+      options.add(Storage.BlobListOption.prefix(prefix))
+    }
     if (delimiter.isNotEmpty()) {
       options.add(Storage.BlobListOption.delimiter(delimiter))
     }

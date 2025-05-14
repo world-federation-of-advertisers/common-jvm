@@ -155,10 +155,6 @@ class S3StorageClient(private val s3: S3AsyncClient, private val bucketName: Str
   }
 
   override suspend fun listBlobNames(prefix: String, delimiter: String): List<String> {
-    if (prefix.isEmpty()) {
-      throw IllegalArgumentException("Prefix must not be empty")
-    }
-
     return try {
       var truncated = true
       var continuationToken: String? = null
@@ -168,7 +164,9 @@ class S3StorageClient(private val s3: S3AsyncClient, private val bucketName: Str
             s3
               .listObjectsV2 {
                 it.bucket(bucketName)
-                it.prefix(prefix)
+                if (prefix.isNotEmpty()) {
+                  it.prefix(prefix)
+                }
                 if (delimiter.isNotEmpty()) {
                   it.delimiter(delimiter)
                 }
