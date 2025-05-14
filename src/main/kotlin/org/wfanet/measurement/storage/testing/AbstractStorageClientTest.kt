@@ -122,11 +122,10 @@ abstract class AbstractStorageClientTest<T : StorageClient> {
   }
 
   @Test
-  fun `listBlobNames with empty prefix throws IllegalArgumentException`(): Unit =
-    runBlocking {
-      prepareStorage()
-      assertFailsWith<IllegalArgumentException> { storageClient.listBlobNames("", delimiter = "/") }
-    }
+  fun `listBlobNames with empty prefix throws IllegalArgumentException`(): Unit = runBlocking {
+    prepareStorage()
+    assertFailsWith<IllegalArgumentException> { storageClient.listBlobNames("", delimiter = "/") }
+  }
 
   private fun prepareStorage() {
     runBlocking {

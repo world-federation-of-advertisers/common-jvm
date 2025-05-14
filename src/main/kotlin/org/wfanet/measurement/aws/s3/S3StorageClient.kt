@@ -164,28 +164,26 @@ class S3StorageClient(private val s3: S3AsyncClient, private val bucketName: Str
       var continuationToken: String? = null
       buildList {
         while (truncated) {
-          val listObjectsV2Response: ListObjectsV2Response = s3.listObjectsV2 {
-            it.bucket(bucketName)
-            it.prefix(prefix)
-            if (delimiter.isNotEmpty()) {
-              it.delimiter(delimiter)
-            }
-            if (continuationToken != null) {
-              it.continuationToken(continuationToken)
-            }
-          }
-            .await()
+          val listObjectsV2Response: ListObjectsV2Response =
+            s3
+              .listObjectsV2 {
+                it.bucket(bucketName)
+                it.prefix(prefix)
+                if (delimiter.isNotEmpty()) {
+                  it.delimiter(delimiter)
+                }
+                if (continuationToken != null) {
+                  it.continuationToken(continuationToken)
+                }
+              }
+              .await()
 
           truncated = listObjectsV2Response.isTruncated
           continuationToken = listObjectsV2Response.nextContinuationToken()
 
-          addAll(listObjectsV2Response.contents().map {
-            it.key()
-          })
+          addAll(listObjectsV2Response.contents().map { it.key() })
 
-          addAll(listObjectsV2Response.commonPrefixes().map {
-            it.prefix()
-          })
+          addAll(listObjectsV2Response.commonPrefixes().map { it.prefix() })
         }
       }
     } catch (e: CompletionException) {

@@ -76,10 +76,13 @@ class ForwardedStorageClient(private val storageStub: ForwardedStorageCoroutineS
       throw IllegalArgumentException("Prefix must not be empty")
     }
 
-    val listBlobNamesResponse = storageStub.listBlobNames(listBlobNamesRequest {
-      this.prefix = prefix
-      this.delimiter = delimiter
-    })
+    val listBlobNamesResponse =
+      storageStub.listBlobNames(
+        listBlobNamesRequest {
+          this.prefix = prefix
+          this.delimiter = delimiter
+        }
+      )
 
     return listBlobNamesResponse.blobNamesList
   }

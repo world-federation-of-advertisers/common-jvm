@@ -100,11 +100,7 @@ class FileSystemStorageServiceTest : AbstractStorageClientTest<ForwardedStorageC
   fun `listBlobNames returns INVALID_ARGUMENT when prefix not set`() {
     val e =
       assertThrows(StatusException::class.java) {
-        runBlocking {
-          storageStub.listBlobNames(
-            listBlobNamesRequest {  }
-          )
-        }
+        runBlocking { storageStub.listBlobNames(listBlobNamesRequest {}) }
       }
     assertThat(e.status.code).isEqualTo(Status.Code.INVALID_ARGUMENT)
   }

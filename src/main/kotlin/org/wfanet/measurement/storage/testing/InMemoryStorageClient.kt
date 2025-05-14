@@ -51,16 +51,15 @@ class InMemoryStorageClient : StorageClient {
     val regex =
       if (delimiter.isNotEmpty()) {
         val escapedDelimiter = delimiter.replace("\\", "\\\\")
-        Regex("($prefix)((?!$escapedDelimiter).)*$escapedDelimiter|($prefix)((?!$escapedDelimiter).)*")
+        Regex(
+          "($prefix)((?!$escapedDelimiter).)*$escapedDelimiter|($prefix)((?!$escapedDelimiter).)*"
+        )
       } else {
         Regex("($prefix).*")
       }
 
-    return buildSet {
-      addAll(storageMap.keys().toList().mapNotNull {
-        regex.find(it)?.value
-      })
-    }.toList()
+    return buildSet { addAll(storageMap.keys().toList().mapNotNull { regex.find(it)?.value }) }
+      .toList()
   }
 
   private inner class Blob(private val blobKey: String, private val content: ByteString) :
