@@ -77,9 +77,7 @@ class FileSystemStorageClient(
         }
       } else if (delimiter.isNotEmpty()) {
         val escapedDelimiter = delimiter.replace("\\", "\\\\")
-        Regex(
-          "(?!$escapedDelimiter).*$escapedDelimiter"
-        )
+        Regex("(?!$escapedDelimiter).*$escapedDelimiter")
       } else null
 
     val visitedDirectoryPathSet = mutableSetOf<String>()

@@ -19,7 +19,6 @@ import com.google.protobuf.ByteString
 import com.google.protobuf.kotlin.toByteString
 import com.google.protobuf.kotlin.toByteStringUtf8
 import kotlin.random.Random
-import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.runBlocking

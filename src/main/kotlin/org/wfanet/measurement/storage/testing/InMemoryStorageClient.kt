@@ -56,19 +56,20 @@ class InMemoryStorageClient : StorageClient {
         }
       } else if (delimiter.isNotEmpty()) {
         val escapedDelimiter = delimiter.replace("\\", "\\\\")
-        Regex(
-          "(?!$escapedDelimiter).*$escapedDelimiter"
-        )
+        Regex("(?!$escapedDelimiter).*$escapedDelimiter")
       } else null
 
-    return buildSet { addAll(storageMap.keys().toList().mapNotNull {
-      if (regex == null) {
-        it
-      } else {
-        regex.find(it)?.value
+    return buildSet {
+        addAll(
+          storageMap.keys().toList().mapNotNull {
+            if (regex == null) {
+              it
+            } else {
+              regex.find(it)?.value
+            }
+          }
+        )
       }
-    })
-    }
       .toList()
   }
 
