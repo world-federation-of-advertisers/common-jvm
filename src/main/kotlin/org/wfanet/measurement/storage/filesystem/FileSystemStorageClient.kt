@@ -93,10 +93,10 @@ class FileSystemStorageClient(
                 directoryToVisitList.add(file)
               }
             } else {
+              val relativePath = directory.toPath().relativize(file.toPath()).toString()
               if (regex == null) {
-                add(file.name)
+                add(relativePath)
               } else {
-                val relativePath = directory.toPath().relativize(file.toPath()).toString()
                 val matchResult: MatchResult? = regex.find(relativePath)
                 if (matchResult != null) {
                   add(matchResult.value)

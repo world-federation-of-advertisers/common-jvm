@@ -65,7 +65,12 @@ class InMemoryStorageClient : StorageClient {
             if (regex == null) {
               it
             } else {
-              regex.find(it)?.value
+              val matchResult: MatchResult? = regex.find(it)
+              if (matchResult != null) {
+                matchResult.value
+              } else if (prefix.isEmpty() && delimiter.isNotEmpty()) {
+                it
+              } else null
             }
           }
         )

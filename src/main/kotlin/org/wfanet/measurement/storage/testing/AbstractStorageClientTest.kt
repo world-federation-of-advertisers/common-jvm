@@ -128,6 +128,14 @@ abstract class AbstractStorageClientTest<T : StorageClient> {
       assertThat(blobKeys.sorted()).isEqualTo(listOf("dir1/", "dir2/", "file3.textproto"))
     }
 
+  @Test
+  fun `listBlobNames without prefix nor delimiter gets all blob keys`() = runBlocking {
+    prepareStorage()
+    val blobKeys = storageClient.listBlobNames("", "")
+    assertThat(blobKeys.sorted()).isEqualTo(listOf(BLOB_KEY_1, BLOB_KEY_2, BLOB_KEY_3))
+  }
+
+
   private fun prepareStorage() {
     runBlocking {
       storageClient.writeBlob(BLOB_KEY_1, "content1".toByteStringUtf8())
