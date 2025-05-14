@@ -47,6 +47,18 @@ interface StorageClient {
   /** Returns a [Blob] for the specified key, or `null` if it cannot be found. */
   suspend fun getBlob(blobKey: String): Blob?
 
+  /**
+   * List file and folder names.
+   *
+   * The prefix option filters out the file or folder names that do not match the prefix. The
+   * delimiter option (e.g. "/") are used with prefix to emulate hierarchy. When delimiter option is
+   * specified, the function returns full blob name for items that are directly under the current
+   * prefix and do not contain an instance of the delimiter after the prefix part.
+   *
+   * @throws IllegalArgumentException when prefix is empty.
+   */
+  suspend fun listBlobNames(prefix: String, delimiter: String): List<String>
+
   /** Reference to a blob in a storage system. */
   interface Blob {
     /** The [StorageClient] from which this [Blob] was obtained. */

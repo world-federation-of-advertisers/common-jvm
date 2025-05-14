@@ -70,6 +70,10 @@ internal constructor(
     return blob?.let { AeadBlob(it, blobKey) }
   }
 
+  override suspend fun listBlobNames(prefix: String, delimiter: String): List<String> {
+    return storageClient.listBlobNames(prefix, delimiter)
+  }
+
   /** A blob that will decrypt the content when read */
   private inner class AeadBlob(private val blob: StorageClient.Blob, private val blobKey: String) :
     StorageClient.Blob {

@@ -25,6 +25,7 @@ import org.wfanet.measurement.internal.testing.ForwardedStorageGrpcKt.ForwardedS
 import org.wfanet.measurement.internal.testing.WriteBlobRequest
 import org.wfanet.measurement.internal.testing.deleteBlobRequest
 import org.wfanet.measurement.internal.testing.getBlobMetadataRequest
+import org.wfanet.measurement.internal.testing.listBlobNamesRequest
 import org.wfanet.measurement.internal.testing.readBlobRequest
 import org.wfanet.measurement.storage.StorageClient
 
@@ -68,6 +69,19 @@ class ForwardedStorageClient(private val storageStub: ForwardedStorageCoroutineS
       }
 
     return Blob(blobKey, blobSize)
+  }
+
+  override suspend fun listBlobNames(prefix: String, delimiter: String): List<String> {
+    if (prefix.isEmpty()) {
+      throw IllegalArgumentException("Prefix must not be empty")
+    }
+
+    val listBlobNamesResponse = storageStub.listBlobNames(listBlobNamesRequest {
+      this.prefix = prefix
+      this.delimiter = delimiter
+    })
+
+    return listBlobNamesResponse.blobNamesList
   }
 
   private inner class Blob(private val blobKey: String, override val size: Long) :

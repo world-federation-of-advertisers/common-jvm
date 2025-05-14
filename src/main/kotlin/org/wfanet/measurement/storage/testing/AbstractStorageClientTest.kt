@@ -19,6 +19,7 @@ import com.google.protobuf.ByteString
 import com.google.protobuf.kotlin.toByteString
 import com.google.protobuf.kotlin.toByteStringUtf8
 import kotlin.random.Random
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.runBlocking
@@ -102,9 +103,46 @@ abstract class AbstractStorageClientTest<T : StorageClient> {
     assertThat(blob).contentEqualTo(ByteString.EMPTY)
   }
 
+  @Test
+  fun `listBlobNames with both options list names directly under the dir containing prefix`() =
+    runBlocking {
+      prepareStorage()
+      val blobKeys1 = storageClient.listBlobNames(prefix = "dir", delimiter = "/")
+      assertThat(blobKeys1.sorted()).isEqualTo(listOf("dir1/", "dir2/"))
+
+      val blobKeys2 = storageClient.listBlobNames(prefix = "dir1/", delimiter = "/")
+      assertThat(blobKeys2).isEqualTo(listOf("dir1/file1.textproto"))
+    }
+
+  @Test
+  fun `listBlobNames with prefix options gets blob keys that match the prefix`() = runBlocking {
+    prepareStorage()
+    val blobKeys = storageClient.listBlobNames(prefix = "dir1", "")
+    assertThat(blobKeys).isEqualTo(listOf(BLOB_KEY_1))
+  }
+
+  @Test
+  fun `listBlobNames with empty prefix throws IllegalArgumentException`(): Unit =
+    runBlocking {
+      prepareStorage()
+      assertFailsWith<IllegalArgumentException> { storageClient.listBlobNames("", delimiter = "/") }
+    }
+
+  private fun prepareStorage() {
+    runBlocking {
+      storageClient.writeBlob(BLOB_KEY_1, "content1".toByteStringUtf8())
+      storageClient.writeBlob(BLOB_KEY_2, "content2".toByteStringUtf8())
+      storageClient.writeBlob(BLOB_KEY_3, "content3".toByteStringUtf8())
+    }
+  }
+
   companion object {
     private val random = Random.Default
     private val testBlobContent: ByteString =
       random.nextBytes(random.nextInt(BYTES_PER_MIB * 3, BYTES_PER_MIB * 4)).toByteString()
+
+    private const val BLOB_KEY_1 = "dir1/file1.textproto"
+    private const val BLOB_KEY_2 = "dir2/file2.textproto"
+    private const val BLOB_KEY_3 = "file3.textproto"
   }
 }

@@ -64,6 +64,42 @@ class FileSystemStorageClient(
     }
   }
 
+  override suspend fun listBlobNames(prefix: String, delimiter: String): List<String> {
+    if (prefix.isEmpty()) {
+      throw IllegalArgumentException("Prefix must not be empty")
+    }
+
+    val regex =
+      if (delimiter.isNotEmpty()) {
+        val escapedDelimiter = delimiter.replace("\\", "\\\\")
+        Regex("($prefix)((?!$escapedDelimiter).)*$escapedDelimiter|($prefix)((?!$escapedDelimiter).)*")
+      } else {
+        Regex("($prefix).*")
+      }
+
+    val visitedDirectoryPathSet = mutableSetOf<String>()
+    val directoryToVisitList = mutableListOf(directory)
+    return buildSet {
+      while (directoryToVisitList.isNotEmpty()) {
+        val curDirectory = directoryToVisitList.removeFirst()
+        visitedDirectoryPathSet.add(curDirectory.path)
+
+        for (file in curDirectory.listFiles()!!) {
+          if (file.isDirectory) {
+            if (!visitedDirectoryPathSet.contains(file.path)) {
+              directoryToVisitList.add(file)
+            }
+          } else {
+            val matchResult: MatchResult? = regex.find(file.path)
+            if (matchResult != null) {
+              add(matchResult.value)
+            }
+          }
+        }
+      }
+    }.toList()
+  }
+
   private fun resolvePath(blobKey: String): File {
     val relativePath =
       if (File.separatorChar == '/') {

@@ -75,6 +75,10 @@ class MesosRecordIoStorageClient(private val storageClient: StorageClient) : Sto
     return blob?.let { Blob(it, blobKey) }
   }
 
+  override suspend fun listBlobNames(prefix: String, delimiter: String): List<String> {
+    return storageClient.listBlobNames(prefix, delimiter)
+  }
+
   /** A blob that will read the content in RecordIO format */
   private inner class Blob(private val blob: StorageClient.Blob, private val blobKey: String) :
     StorageClient.Blob {

@@ -14,6 +14,7 @@
 
 package org.wfanet.measurement.gcloud.gcs
 
+import com.google.api.gax.paging.Page
 import com.google.cloud.storage.Blob
 import com.google.cloud.storage.BlobInfo
 import com.google.cloud.storage.Storage
@@ -113,6 +114,36 @@ class GcsStorageClient(
     val blob: Blob? =
       withContext(blockingContext + CoroutineName("getBlob")) { storage.get(bucketName, blobKey) }
     return blob?.let { ClientBlob(blob) }
+  }
+
+  override suspend fun listBlobNames(prefix: String, delimiter: String): List<String> {
+    if (prefix.isEmpty()) {
+      throw IllegalArgumentException("Prefix must not be empty")
+    }
+
+    val options = mutableListOf<Storage.BlobListOption>()
+
+    options.add(Storage.BlobListOption.prefix(prefix))
+    if (delimiter.isNotEmpty()) {
+      options.add(Storage.BlobListOption.delimiter(delimiter))
+    }
+
+    val blobs = mutableListOf<String>()
+
+    val blobList: Page<Blob> =
+      try {
+        withContext(blockingContext + CoroutineName("listBlobs")) {
+          storage.list(bucketName, *options.toTypedArray())
+        }
+      } catch (e: GcsStorageException) {
+        throw StorageException("Fail to list blobs.", e)
+      }
+
+    for (blob: Blob in blobList.iterateAll()) {
+      blobs.add(blob.name)
+    }
+
+    return blobs
   }
 
   /** [StorageClient.Blob] implementation for [GcsStorageClient]. */

@@ -19,6 +19,7 @@ import com.google.protobuf.kotlin.toByteString
 import java.security.MessageDigest
 import java.util.Base64
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CompletionException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
@@ -43,6 +44,7 @@ import software.amazon.awssdk.services.s3.model.CreateMultipartUploadRequest
 import software.amazon.awssdk.services.s3.model.CreateMultipartUploadResponse
 import software.amazon.awssdk.services.s3.model.GetObjectResponse
 import software.amazon.awssdk.services.s3.model.HeadObjectResponse
+import software.amazon.awssdk.services.s3.model.ListObjectsV2Response
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException
 import software.amazon.awssdk.services.s3.model.UploadPartRequest
 import software.amazon.awssdk.services.s3.model.UploadPartResponse
@@ -149,6 +151,45 @@ class S3StorageClient(private val s3: S3AsyncClient, private val bucketName: Str
         .await()
     } catch (notFound: NoSuchKeyException) {
       null
+    }
+  }
+
+  override suspend fun listBlobNames(prefix: String, delimiter: String): List<String> {
+    if (prefix.isEmpty()) {
+      throw IllegalArgumentException("Prefix must not be empty")
+    }
+
+    return try {
+      var truncated = true
+      var continuationToken: String? = null
+      buildList {
+        while (truncated) {
+          val listObjectsV2Response: ListObjectsV2Response = s3.listObjectsV2 {
+            it.bucket(bucketName)
+            it.prefix(prefix)
+            if (delimiter.isNotEmpty()) {
+              it.delimiter(delimiter)
+            }
+            if (continuationToken != null) {
+              it.continuationToken(continuationToken)
+            }
+          }
+            .await()
+
+          truncated = listObjectsV2Response.isTruncated
+          continuationToken = listObjectsV2Response.nextContinuationToken()
+
+          addAll(listObjectsV2Response.contents().map {
+            it.key()
+          })
+
+          addAll(listObjectsV2Response.commonPrefixes().map {
+            it.prefix()
+          })
+        }
+      }
+    } catch (e: CompletionException) {
+      throw e.cause!!
     }
   }
 

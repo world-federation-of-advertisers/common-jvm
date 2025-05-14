@@ -29,9 +29,12 @@ import org.wfanet.measurement.internal.testing.DeleteBlobRequest
 import org.wfanet.measurement.internal.testing.DeleteBlobResponse
 import org.wfanet.measurement.internal.testing.ForwardedStorageGrpcKt.ForwardedStorageCoroutineImplBase as ForwardedStorageCoroutineService
 import org.wfanet.measurement.internal.testing.GetBlobMetadataRequest
+import org.wfanet.measurement.internal.testing.ListBlobNamesRequest
+import org.wfanet.measurement.internal.testing.ListBlobNamesResponse
 import org.wfanet.measurement.internal.testing.ReadBlobRequest
 import org.wfanet.measurement.internal.testing.ReadBlobResponse
 import org.wfanet.measurement.internal.testing.WriteBlobRequest
+import org.wfanet.measurement.internal.testing.listBlobNamesResponse
 import org.wfanet.measurement.internal.testing.readBlobResponse
 
 /** [ForwardedStorageCoroutineService] implementation that uses [FileSystemStorageClient]. */
@@ -69,6 +72,17 @@ class FileSystemStorageService(
   override suspend fun deleteBlob(request: DeleteBlobRequest): DeleteBlobResponse {
     getBlob(request.blobKey).delete()
     return DeleteBlobResponse.getDefaultInstance()
+  }
+
+  override suspend fun listBlobNames(request: ListBlobNamesRequest): ListBlobNamesResponse {
+    if (request.prefix.isEmpty()) {
+      throw Status.INVALID_ARGUMENT.withDescription("prefix is missing")
+        .asRuntimeException()
+    }
+
+    return listBlobNamesResponse {
+      blobNames += storageClient.listBlobNames(prefix = request.prefix, delimiter = request.delimiter)
+    }
   }
 
   private suspend fun getBlob(blobKey: String) =
