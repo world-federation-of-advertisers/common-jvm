@@ -107,26 +107,21 @@ class GcsStorageClient(
           }
         }
       }
-      ClientBlob(blob.reload())
+      ClientBlob(blob.reload(), blobKey)
     }
 
   override suspend fun getBlob(blobKey: String): StorageClient.Blob? {
     val blob: Blob? =
       withContext(blockingContext + CoroutineName("getBlob")) { storage.get(bucketName, blobKey) }
-    return blob?.let { ClientBlob(blob) }
+    return blob?.let { ClientBlob(blob, blobKey) }
   }
 
-  override suspend fun listBlobNames(prefix: String?, delimiter: String?): List<String> {
+  override suspend fun listBlobs(prefix: String?): List<StorageClient.Blob> {
     val options = mutableListOf<Storage.BlobListOption>()
 
     if (!prefix.isNullOrEmpty()) {
       options.add(Storage.BlobListOption.prefix(prefix))
     }
-    if (!delimiter.isNullOrEmpty()) {
-      options.add(Storage.BlobListOption.delimiter(delimiter))
-    }
-
-    val blobs = mutableListOf<String>()
 
     val blobList: Page<Blob> =
       try {
@@ -137,15 +132,17 @@ class GcsStorageClient(
         throw StorageException("Fail to list blobs.", e)
       }
 
-    for (blob: Blob in blobList.iterateAll()) {
-      blobs.add(blob.name)
+    return buildList {
+      for (blob: Blob in blobList.iterateAll()) {
+        add(ClientBlob(blob, blob.name))
+      }
     }
-
-    return blobs
   }
 
   /** [StorageClient.Blob] implementation for [GcsStorageClient]. */
-  private inner class ClientBlob(private val blob: Blob) : StorageClient.Blob {
+  private inner class ClientBlob(private val blob: Blob,
+                                 override val blobKey: String
+  ) : StorageClient.Blob {
     override val storageClient: StorageClient
       get() = this@GcsStorageClient
 

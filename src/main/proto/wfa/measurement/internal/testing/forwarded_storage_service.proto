@@ -25,20 +25,16 @@ service ForwardedStorage {
   rpc GetBlobMetadata(GetBlobMetadataRequest) returns (BlobMetadata) {}
   rpc ReadBlob(ReadBlobRequest) returns (stream ReadBlobResponse) {}
   rpc DeleteBlob(DeleteBlobRequest) returns (DeleteBlobResponse) {}
-  // List file and folder names.
-  //
-  // The prefix option filters out the file or folder names that do not match
-  // the prefix. The delimiter option (e.g. "/") are used with prefix to
-  // emulate hierarchy. When delimiter option is specified, the function
-  // returns full blob name for items that are directly under the current
-  // prefix and do not contain an instance of the delimiter after the prefix
-  // part.
-  //
-  rpc ListBlobNames(ListBlobNamesRequest) returns (ListBlobNamesResponse) {}
+  // When prefix is not specified, metadata for all blobs is returned. When
+  // prefix is specified, it filters out blobs with blob keys that do not match
+  // the prefix.
+  rpc ListBlobMetadata(ListBlobMetadataRequest)
+      returns (ListBlobMetadataResponse) {}
 }
 
 message BlobMetadata {
   int64 size = 1;
+  string blob_key = 2;
 }
 
 message WriteBlobRequest {
@@ -75,11 +71,10 @@ message DeleteBlobResponse {
   // Deliberately empty
 }
 
-message ListBlobNamesRequest {
+message ListBlobMetadataRequest {
   string prefix = 1;
-  string delimiter = 2;
 }
 
-message ListBlobNamesResponse {
-  repeated string blob_names = 1;
+message ListBlobMetadataResponse {
+  repeated BlobMetadata blob_metadata = 1;
 }

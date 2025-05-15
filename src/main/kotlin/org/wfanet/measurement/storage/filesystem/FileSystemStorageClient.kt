@@ -54,35 +54,25 @@ class FileSystemStorageClient(
         }
     }
 
-    return Blob(file)
+    return Blob(file, blobKey)
   }
 
   override suspend fun getBlob(blobKey: String): StorageClient.Blob? {
     val file: File = resolvePath(blobKey)
     return withContext(coroutineContext + CoroutineName(::getBlob.name)) {
-      if (file.exists()) Blob(file) else null
+      if (file.exists()) Blob(file, blobKey) else null
     }
   }
 
-  override suspend fun listBlobNames(prefix: String?, delimiter: String?): List<String> {
+  override suspend fun listBlobs(prefix: String?): List<StorageClient.Blob> {
     val regex: Regex? =
       if (!prefix.isNullOrEmpty()) {
-        if (!delimiter.isNullOrEmpty()) {
-          val escapedDelimiter = delimiter.replace("\\", "\\\\")
-          Regex(
-            "($prefix)(?!$escapedDelimiter).*$escapedDelimiter|($prefix)(?!$escapedDelimiter).*"
-          )
-        } else {
-          Regex("($prefix).*")
-        }
-      } else if (!delimiter.isNullOrEmpty()) {
-        val escapedDelimiter = delimiter.replace("\\", "\\\\")
-        Regex("(?!$escapedDelimiter).*$escapedDelimiter")
+        Regex("^($prefix).*")
       } else null
 
     val visitedDirectoryPathSet = mutableSetOf<String>()
     val directoryToVisitList = mutableListOf(directory)
-    return buildSet {
+    return buildList {
         while (directoryToVisitList.isNotEmpty()) {
           val curDirectory = directoryToVisitList.removeFirst()
           visitedDirectoryPathSet.add(curDirectory.path)
@@ -95,20 +85,17 @@ class FileSystemStorageClient(
             } else {
               val relativePath = directory.toPath().relativize(file.toPath()).toString()
               if (regex == null) {
-                add(relativePath)
+                add(Blob(file, relativePath))
               } else {
                 val matchResult: MatchResult? = regex.find(relativePath)
                 if (matchResult != null) {
-                  add(matchResult.value)
-                } else if (prefix.isNullOrEmpty() && !delimiter.isNullOrEmpty()) {
-                  add(relativePath)
+                  add(Blob(file, relativePath))
                 }
               }
             }
           }
         }
       }
-      .toList()
   }
 
   private fun resolvePath(blobKey: String): File {
@@ -121,7 +108,7 @@ class FileSystemStorageClient(
     return directory.resolve(relativePath)
   }
 
-  private inner class Blob(private val file: File) : StorageClient.Blob {
+  private inner class Blob(private val file: File, override val blobKey: String) : StorageClient.Blob {
     override val storageClient: StorageClient
       get() = this@FileSystemStorageClient
 

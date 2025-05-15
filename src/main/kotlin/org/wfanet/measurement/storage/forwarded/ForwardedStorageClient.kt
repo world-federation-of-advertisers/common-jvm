@@ -25,7 +25,7 @@ import org.wfanet.measurement.internal.testing.ForwardedStorageGrpcKt.ForwardedS
 import org.wfanet.measurement.internal.testing.WriteBlobRequest
 import org.wfanet.measurement.internal.testing.deleteBlobRequest
 import org.wfanet.measurement.internal.testing.getBlobMetadataRequest
-import org.wfanet.measurement.internal.testing.listBlobNamesRequest
+import org.wfanet.measurement.internal.testing.listBlobMetadataRequest
 import org.wfanet.measurement.internal.testing.readBlobRequest
 import org.wfanet.measurement.storage.StorageClient
 
@@ -71,23 +71,22 @@ class ForwardedStorageClient(private val storageStub: ForwardedStorageCoroutineS
     return Blob(blobKey, blobSize)
   }
 
-  override suspend fun listBlobNames(prefix: String?, delimiter: String?): List<String> {
-    val listBlobNamesResponse =
-      storageStub.listBlobNames(
-        listBlobNamesRequest {
+  override suspend fun listBlobs(prefix: String?): List<StorageClient.Blob> {
+    val listBlobMetadataResponse =
+      storageStub.listBlobMetadata(
+        listBlobMetadataRequest {
           if (prefix != null) {
             this.prefix = prefix
-          }
-          if (delimiter != null) {
-            this.delimiter = delimiter
           }
         }
       )
 
-    return listBlobNamesResponse.blobNamesList
+    return listBlobMetadataResponse.blobMetadataList.map {
+      Blob(it.blobKey, it.size)
+    }
   }
 
-  private inner class Blob(private val blobKey: String, override val size: Long) :
+  private inner class Blob(override val blobKey: String, override val size: Long) :
     StorageClient.Blob {
     override val storageClient: StorageClient
       get() = this@ForwardedStorageClient

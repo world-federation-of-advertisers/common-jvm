@@ -43,42 +43,29 @@ class InMemoryStorageClient : StorageClient {
     return storageMap[blobKey]
   }
 
-  override suspend fun listBlobNames(prefix: String?, delimiter: String?): List<String> {
+  override suspend fun listBlobs(prefix: String?): List<StorageClient.Blob> {
     val regex: Regex? =
       if (!prefix.isNullOrEmpty()) {
-        if (!delimiter.isNullOrEmpty()) {
-          val escapedDelimiter = delimiter.replace("\\", "\\\\")
-          Regex(
-            "($prefix)(?!$escapedDelimiter).*$escapedDelimiter|($prefix)(?!$escapedDelimiter).*"
-          )
-        } else {
-          Regex("($prefix).*")
-        }
-      } else if (!delimiter.isNullOrEmpty()) {
-        val escapedDelimiter = delimiter.replace("\\", "\\\\")
-        Regex("(?!$escapedDelimiter).*$escapedDelimiter")
+        Regex("^($prefix).*")
       } else null
 
-    return buildSet {
+    return buildList {
         addAll(
           storageMap.keys().toList().mapNotNull {
             if (regex == null) {
-              it
+              storageMap[it]
             } else {
               val matchResult: MatchResult? = regex.find(it)
               if (matchResult != null) {
-                matchResult.value
-              } else if (prefix.isNullOrEmpty() && !delimiter.isNullOrEmpty()) {
-                it
+                storageMap[it]
               } else null
             }
           }
         )
       }
-      .toList()
   }
 
-  private inner class Blob(private val blobKey: String, private val content: ByteString) :
+  private inner class Blob(override val blobKey: String, private val content: ByteString) :
     StorageClient.Blob {
 
     override val size: Long

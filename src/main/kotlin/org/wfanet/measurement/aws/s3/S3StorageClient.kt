@@ -138,7 +138,7 @@ class S3StorageClient(private val s3: S3AsyncClient, private val bucketName: Str
 
   override suspend fun getBlob(blobKey: String): StorageClient.Blob? {
     val head = head(blobKey) ?: return null
-    return Blob(blobKey, head)
+    return Blob(blobKey, head.contentLength())
   }
 
   private suspend fun head(blobKey: String): HeadObjectResponse? {
@@ -154,7 +154,7 @@ class S3StorageClient(private val s3: S3AsyncClient, private val bucketName: Str
     }
   }
 
-  override suspend fun listBlobNames(prefix: String?, delimiter: String?): List<String> {
+  override suspend fun listBlobs(prefix: String?): List<StorageClient.Blob> {
     return try {
       var truncated = true
       var continuationToken: String? = null
@@ -167,9 +167,6 @@ class S3StorageClient(private val s3: S3AsyncClient, private val bucketName: Str
                 if (!prefix.isNullOrEmpty()) {
                   it.prefix(prefix)
                 }
-                if (!delimiter.isNullOrEmpty()) {
-                  it.delimiter(delimiter)
-                }
                 if (continuationToken != null) {
                   it.continuationToken(continuationToken)
                 }
@@ -179,9 +176,9 @@ class S3StorageClient(private val s3: S3AsyncClient, private val bucketName: Str
           truncated = listObjectsV2Response.isTruncated
           continuationToken = listObjectsV2Response.nextContinuationToken()
 
-          addAll(listObjectsV2Response.contents().map { it.key() })
-
-          addAll(listObjectsV2Response.commonPrefixes().map { it.prefix() })
+          addAll(listObjectsV2Response.contents().map {
+            Blob(it.key(), it.size())
+          })
         }
       }
     } catch (e: CompletionException) {
@@ -189,12 +186,12 @@ class S3StorageClient(private val s3: S3AsyncClient, private val bucketName: Str
     }
   }
 
-  inner class Blob internal constructor(private val blobKey: String, head: HeadObjectResponse) :
+  inner class Blob internal constructor(override val blobKey: String, contentLength: Long) :
     StorageClient.Blob {
     override val storageClient: StorageClient
       get() = this@S3StorageClient
 
-    override val size: Long = head.contentLength()
+    override val size: Long = contentLength
 
     override fun read(): Flow<ByteString> {
       val responseFuture: CompletableFuture<ResponsePublisher<GetObjectResponse>> =

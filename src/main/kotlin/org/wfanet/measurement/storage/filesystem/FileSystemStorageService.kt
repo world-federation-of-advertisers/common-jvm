@@ -29,12 +29,13 @@ import org.wfanet.measurement.internal.testing.DeleteBlobRequest
 import org.wfanet.measurement.internal.testing.DeleteBlobResponse
 import org.wfanet.measurement.internal.testing.ForwardedStorageGrpcKt.ForwardedStorageCoroutineImplBase as ForwardedStorageCoroutineService
 import org.wfanet.measurement.internal.testing.GetBlobMetadataRequest
-import org.wfanet.measurement.internal.testing.ListBlobNamesRequest
-import org.wfanet.measurement.internal.testing.ListBlobNamesResponse
+import org.wfanet.measurement.internal.testing.ListBlobMetadataRequest
+import org.wfanet.measurement.internal.testing.ListBlobMetadataResponse
 import org.wfanet.measurement.internal.testing.ReadBlobRequest
 import org.wfanet.measurement.internal.testing.ReadBlobResponse
 import org.wfanet.measurement.internal.testing.WriteBlobRequest
-import org.wfanet.measurement.internal.testing.listBlobNamesResponse
+import org.wfanet.measurement.internal.testing.blobMetadata
+import org.wfanet.measurement.internal.testing.listBlobMetadataResponse
 import org.wfanet.measurement.internal.testing.readBlobResponse
 
 /** [ForwardedStorageCoroutineService] implementation that uses [FileSystemStorageClient]. */
@@ -62,8 +63,12 @@ class FileSystemStorageService(
     return BlobMetadata.newBuilder().setSize(blob.size).build()
   }
 
-  override suspend fun getBlobMetadata(request: GetBlobMetadataRequest): BlobMetadata =
-    BlobMetadata.newBuilder().setSize(getBlob(request.blobKey).size).build()
+  override suspend fun getBlobMetadata(request: GetBlobMetadataRequest): BlobMetadata {
+    return blobMetadata {
+      size = getBlob(request.blobKey).size
+      blobKey = request.blobKey
+    }
+  }
 
   override fun readBlob(request: ReadBlobRequest): Flow<ReadBlobResponse> = flow {
     emitAll(getBlob(request.blobKey).read().map { readBlobResponse { chunk = it } })
@@ -74,10 +79,15 @@ class FileSystemStorageService(
     return DeleteBlobResponse.getDefaultInstance()
   }
 
-  override suspend fun listBlobNames(request: ListBlobNamesRequest): ListBlobNamesResponse {
-    return listBlobNamesResponse {
-      blobNames +=
-        storageClient.listBlobNames(prefix = request.prefix, delimiter = request.delimiter)
+  override suspend fun listBlobMetadata(request: ListBlobMetadataRequest): ListBlobMetadataResponse {
+    return listBlobMetadataResponse {
+      blobMetadata +=
+        storageClient.listBlobs(prefix = request.prefix).map {
+          blobMetadata {
+            blobKey = it.blobKey
+            size = it.size
+          }
+        }
     }
   }
 

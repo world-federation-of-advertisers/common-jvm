@@ -99,14 +99,14 @@ class StreamingAeadStorageClient(
     return blob?.let { EncryptedBlob(it, blobKey) }
   }
 
-  override suspend fun listBlobNames(prefix: String?, delimiter: String?): List<String> {
-    return storageClient.listBlobNames(prefix, delimiter)
+  override suspend fun listBlobs(prefix: String?): List<StorageClient.Blob> {
+    return storageClient.listBlobs(prefix)
   }
 
   /** A blob that will decrypt the content when read */
   private inner class EncryptedBlob(
     private val blob: StorageClient.Blob,
-    private val blobKey: String,
+    override val blobKey: String,
   ) : StorageClient.Blob {
     override val storageClient = this@StreamingAeadStorageClient.storageClient
 

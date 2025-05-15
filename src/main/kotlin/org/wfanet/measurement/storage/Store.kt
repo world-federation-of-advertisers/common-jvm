@@ -44,7 +44,7 @@ abstract class Store<in T> protected constructor(private val storageClient: Stor
    */
   protected abstract fun deriveBlobKey(context: T): String
 
-  class Blob(val blobKey: String, clientBlob: StorageClient.Blob) :
+  class Blob(override val blobKey: String, clientBlob: StorageClient.Blob) :
     StorageClient.Blob by clientBlob
 
   /**

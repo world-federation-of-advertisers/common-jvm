@@ -21,6 +21,7 @@ import com.google.protobuf.kotlin.toByteStringUtf8
 import kotlin.random.Random
 import kotlin.test.assertNotNull
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Test
 import org.wfanet.measurement.common.BYTES_PER_MIB
@@ -103,59 +104,34 @@ abstract class AbstractStorageClientTest<T : StorageClient> {
   }
 
   @Test
-  fun `listBlobNames with both options list names directly under the dir containing prefix`() =
+  fun `listBlobs with prefix gets blobs with blob keys that match the prefix`() =
     runBlocking {
       prepareStorage()
-      val blobKeys1 = storageClient.listBlobNames(prefix = "dir", delimiter = "/")
-      assertThat(blobKeys1.sorted()).isEqualTo(listOf("dir1/", "dir2/"))
-
-      val blobKeys2 = storageClient.listBlobNames(prefix = "dir1/", delimiter = "/")
-      assertThat(blobKeys2).isEqualTo(listOf("dir1/file1.textproto"))
+      val blobs = storageClient.listBlobs(prefix = "dir1",)
+      assertThat(blobs).hasSize(1)
+      assertThat(blobs.first().blobKey).isEqualTo(BLOB_KEY_1)
     }
 
   @Test
-  fun `listBlobNames with prefix and prefix delimiter gets blob keys that match the prefix`() =
+  fun `listBlobs with prefix does not match middle of blob key`() =
     runBlocking {
       prepareStorage()
-      val blobKeys = storageClient.listBlobNames(prefix = "dir1", "")
-      assertThat(blobKeys).isEqualTo(listOf(BLOB_KEY_1))
+      val blobs = storageClient.listBlobs(prefix = "file2")
+      assertThat(blobs).hasSize(0)
     }
 
   @Test
-  fun `listBlobNames with delimiter and empty prefix gets all first level file and folder names`() =
-    runBlocking {
-      prepareStorage()
-      val blobKeys = storageClient.listBlobNames(prefix = "", delimiter = "/")
-      assertThat(blobKeys.sorted()).isEqualTo(listOf("dir1/", "dir2/", "file3.textproto"))
-    }
-
-  @Test
-  fun `listBlobNames with empty prefix and delimiter gets all blob keys`() = runBlocking {
+  fun `listBlobs with empty prefix gets all blobs`() = runBlocking {
     prepareStorage()
-    val blobKeys = storageClient.listBlobNames("", "")
-    assertThat(blobKeys.sorted()).isEqualTo(listOf(BLOB_KEY_1, BLOB_KEY_2, BLOB_KEY_3))
+    val blobs = storageClient.listBlobs(prefix = "")
+    assertThat(blobs).hasSize(3)
   }
 
   @Test
-  fun `listBlobNames with only prefix gets blob keys that match the prefix`() = runBlocking {
+  fun `listBlobs with no arguments gets all blobs`() = runBlocking {
     prepareStorage()
-    val blobKeys = storageClient.listBlobNames(prefix = "dir1")
-    assertThat(blobKeys).isEqualTo(listOf(BLOB_KEY_1))
-  }
-
-  @Test
-  fun `listBlobNames with only delimiter gets all first level file and folder names`() =
-    runBlocking {
-      prepareStorage()
-      val blobKeys = storageClient.listBlobNames(delimiter = "/")
-      assertThat(blobKeys.sorted()).isEqualTo(listOf("dir1/", "dir2/", "file3.textproto"))
-    }
-
-  @Test
-  fun `listBlobNames with no arguments gets all blob keys`() = runBlocking {
-    prepareStorage()
-    val blobKeys = storageClient.listBlobNames()
-    assertThat(blobKeys.sorted()).isEqualTo(listOf(BLOB_KEY_1, BLOB_KEY_2, BLOB_KEY_3))
+    val blobs = storageClient.listBlobs()
+    assertThat(blobs).hasSize(3)
   }
 
   private fun prepareStorage() {

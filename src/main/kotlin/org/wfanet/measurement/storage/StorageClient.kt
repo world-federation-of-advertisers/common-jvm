@@ -48,20 +48,19 @@ interface StorageClient {
   suspend fun getBlob(blobKey: String): Blob?
 
   /**
-   * List file and folder names.
+   * List Blobs
    *
-   * When prefix and delimiter options are not specified, all file names (blob keys) are returned.
-   * The prefix option filters out the file or folder names that do not match the prefix. The
-   * delimiter option (e.g. "/") are used with prefix to emulate hierarchy. When delimiter option is
-   * not specified, the function returns full blob name for items that are directly under the
-   * current prefix and do not contain another instance of the delimiter after the prefix part.
+   * When prefix is not specified, all blobs are returned. When prefix is specified, it filters
+   * out blobs with blob keys that do not match the prefix.
    */
-  suspend fun listBlobNames(prefix: String? = null, delimiter: String? = null): List<String>
+  suspend fun listBlobs(prefix: String? = null): List<Blob>
 
   /** Reference to a blob in a storage system. */
   interface Blob {
     /** The [StorageClient] from which this [Blob] was obtained. */
     val storageClient: StorageClient
+
+    val blobKey: String
 
     /** Size of the blob in bytes. */
     val size: Long
