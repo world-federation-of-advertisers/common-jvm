@@ -81,9 +81,7 @@ class ForwardedStorageClient(private val storageStub: ForwardedStorageCoroutineS
         }
       )
 
-    return listBlobMetadataResponse.blobMetadataList.map {
-      Blob(it.blobKey, it.size)
-    }
+    return listBlobMetadataResponse.blobMetadataList.map { Blob(it.blobKey, it.size) }
   }
 
   private inner class Blob(override val blobKey: String, override val size: Long) :

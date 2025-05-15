@@ -104,21 +104,19 @@ abstract class AbstractStorageClientTest<T : StorageClient> {
   }
 
   @Test
-  fun `listBlobs with prefix gets blobs with blob keys that match the prefix`() =
-    runBlocking {
-      prepareStorage()
-      val blobs = storageClient.listBlobs(prefix = "dir1",)
-      assertThat(blobs).hasSize(1)
-      assertThat(blobs.first().blobKey).isEqualTo(BLOB_KEY_1)
-    }
+  fun `listBlobs with prefix gets blobs with blob keys that match the prefix`() = runBlocking {
+    prepareStorage()
+    val blobs = storageClient.listBlobs(prefix = "dir1")
+    assertThat(blobs).hasSize(1)
+    assertThat(blobs.first().blobKey).isEqualTo(BLOB_KEY_1)
+  }
 
   @Test
-  fun `listBlobs with prefix does not match middle of blob key`() =
-    runBlocking {
-      prepareStorage()
-      val blobs = storageClient.listBlobs(prefix = "file2")
-      assertThat(blobs).hasSize(0)
-    }
+  fun `listBlobs with prefix does not match middle of blob key`() = runBlocking {
+    prepareStorage()
+    val blobs = storageClient.listBlobs(prefix = "file2")
+    assertThat(blobs).hasSize(0)
+  }
 
   @Test
   fun `listBlobs with empty prefix gets all blobs`() = runBlocking {

@@ -176,9 +176,7 @@ class S3StorageClient(private val s3: S3AsyncClient, private val bucketName: Str
           truncated = listObjectsV2Response.isTruncated
           continuationToken = listObjectsV2Response.nextContinuationToken()
 
-          addAll(listObjectsV2Response.contents().map {
-            Blob(it.key(), it.size())
-          })
+          addAll(listObjectsV2Response.contents().map { Blob(it.key(), it.size()) })
         }
       }
     } catch (e: CompletionException) {

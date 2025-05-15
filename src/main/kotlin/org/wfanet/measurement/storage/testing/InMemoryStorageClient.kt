@@ -50,19 +50,19 @@ class InMemoryStorageClient : StorageClient {
       } else null
 
     return buildList {
-        addAll(
-          storageMap.keys().toList().mapNotNull {
-            if (regex == null) {
+      addAll(
+        storageMap.keys().toList().mapNotNull {
+          if (regex == null) {
+            storageMap[it]
+          } else {
+            val matchResult: MatchResult? = regex.find(it)
+            if (matchResult != null) {
               storageMap[it]
-            } else {
-              val matchResult: MatchResult? = regex.find(it)
-              if (matchResult != null) {
-                storageMap[it]
-              } else null
-            }
+            } else null
           }
-        )
-      }
+        }
+      )
+    }
   }
 
   private inner class Blob(override val blobKey: String, private val content: ByteString) :

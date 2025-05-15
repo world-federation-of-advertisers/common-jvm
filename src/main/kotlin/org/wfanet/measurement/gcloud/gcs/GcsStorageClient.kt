@@ -140,9 +140,8 @@ class GcsStorageClient(
   }
 
   /** [StorageClient.Blob] implementation for [GcsStorageClient]. */
-  private inner class ClientBlob(private val blob: Blob,
-                                 override val blobKey: String
-  ) : StorageClient.Blob {
+  private inner class ClientBlob(private val blob: Blob, override val blobKey: String) :
+    StorageClient.Blob {
     override val storageClient: StorageClient
       get() = this@GcsStorageClient
 

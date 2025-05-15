@@ -79,7 +79,9 @@ class FileSystemStorageService(
     return DeleteBlobResponse.getDefaultInstance()
   }
 
-  override suspend fun listBlobMetadata(request: ListBlobMetadataRequest): ListBlobMetadataResponse {
+  override suspend fun listBlobMetadata(
+    request: ListBlobMetadataRequest
+  ): ListBlobMetadataResponse {
     return listBlobMetadataResponse {
       blobMetadata +=
         storageClient.listBlobs(prefix = request.prefix).map {

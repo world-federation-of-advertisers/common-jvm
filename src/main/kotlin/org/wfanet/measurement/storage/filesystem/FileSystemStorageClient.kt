@@ -73,29 +73,29 @@ class FileSystemStorageClient(
     val visitedDirectoryPathSet = mutableSetOf<String>()
     val directoryToVisitList = mutableListOf(directory)
     return buildList {
-        while (directoryToVisitList.isNotEmpty()) {
-          val curDirectory = directoryToVisitList.removeFirst()
-          visitedDirectoryPathSet.add(curDirectory.path)
+      while (directoryToVisitList.isNotEmpty()) {
+        val curDirectory = directoryToVisitList.removeFirst()
+        visitedDirectoryPathSet.add(curDirectory.path)
 
-          for (file in curDirectory.listFiles()!!) {
-            if (file.isDirectory) {
-              if (!visitedDirectoryPathSet.contains(file.path)) {
-                directoryToVisitList.add(file)
-              }
+        for (file in curDirectory.listFiles()!!) {
+          if (file.isDirectory) {
+            if (!visitedDirectoryPathSet.contains(file.path)) {
+              directoryToVisitList.add(file)
+            }
+          } else {
+            val relativePath = directory.toPath().relativize(file.toPath()).toString()
+            if (regex == null) {
+              add(Blob(file, relativePath))
             } else {
-              val relativePath = directory.toPath().relativize(file.toPath()).toString()
-              if (regex == null) {
+              val matchResult: MatchResult? = regex.find(relativePath)
+              if (matchResult != null) {
                 add(Blob(file, relativePath))
-              } else {
-                val matchResult: MatchResult? = regex.find(relativePath)
-                if (matchResult != null) {
-                  add(Blob(file, relativePath))
-                }
               }
             }
           }
         }
       }
+    }
   }
 
   private fun resolvePath(blobKey: String): File {
@@ -108,7 +108,8 @@ class FileSystemStorageClient(
     return directory.resolve(relativePath)
   }
 
-  private inner class Blob(private val file: File, override val blobKey: String) : StorageClient.Blob {
+  private inner class Blob(private val file: File, override val blobKey: String) :
+    StorageClient.Blob {
     override val storageClient: StorageClient
       get() = this@FileSystemStorageClient
 
