@@ -29,6 +29,8 @@ import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.channels.produce
 import kotlinx.coroutines.channels.trySendBlocking
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import org.jetbrains.annotations.BlockingExecutor
 import org.threeten.bp.Duration
 import org.wfanet.measurement.queue.MessageConsumer
@@ -62,18 +64,34 @@ class Subscriber(
           subscriptionId = subscriptionId,
           ackExtensionPeriod = Duration.ofHours(6),
         ) { message, consumer ->
+          logger.info("~~~~~~~~~~~~~ RECEIVED MESSAGE")
           val parsedMessage = parser.parseFrom(message.data.toByteArray())
           val queueMessage =
             QueueSubscriber.QueueMessage(
               body = parsedMessage,
               consumer = PubSubMessageConsumer(consumer),
             )
-
+          logger.info("~~~~~~~~~~~~~ SENDING MESSAGE")
           val result = trySendBlocking(queueMessage)
+          logger.info("~~~~~~~~~~~~~ result: ${result}")
           if (result.isClosed) {
             throw ClosedSendChannelException("Channel is closed. Cannot send message.")
           }
         }
+
+      scope.launch {
+        while (true) {
+          try {
+            logger.info("~~~~~~~~~~~~~ checking FAILURE")
+            val err: Throwable = subscriber.failureCause()
+            logger.severe("❌ Pub/Sub subscriber failed: ${err}")
+            this@produce.channel.close(err)
+          } catch (e: Exception) {
+            logger.severe("~~~~ exception while checking failure: ${e}")
+          }
+          delay(Duration.ofSeconds(10).toMillis())
+        }
+      }
 
       subscriber.startAsync().awaitRunning()
       logger.info("Subscriber started for subscription: $subscriptionId")
@@ -81,6 +99,7 @@ class Subscriber(
       awaitClose {
         subscriber.stopAsync()
         subscriber.awaitTerminated()
+        logger.info("~~~~~~~~~~~~~~ CLOSING SUBSCRIPTION")
       }
     }
 
