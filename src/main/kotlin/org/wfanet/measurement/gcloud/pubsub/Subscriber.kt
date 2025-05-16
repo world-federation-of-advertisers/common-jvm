@@ -58,26 +58,27 @@ class Subscriber(
     parser: Parser<T>,
   ): ReceiveChannel<QueueSubscriber.QueueMessage<T>> =
     scope.produce(capacity = Channel.RENDEZVOUS) {
-      val subscriber =
-        googlePubSubClient.buildSubscriber(
-          projectId = projectId,
-          subscriptionId = subscriptionId,
-          ackExtensionPeriod = Duration.ofHours(6),
-        ) { message, consumer ->
-          logger.info("~~~~~~~~~~~~~ RECEIVED MESSAGE")
-          val parsedMessage = parser.parseFrom(message.data.toByteArray())
-          val queueMessage =
-            QueueSubscriber.QueueMessage(
-              body = parsedMessage,
-              consumer = PubSubMessageConsumer(consumer),
-            )
-          logger.info("~~~~~~~~~~~~~ SENDING MESSAGE")
-          val result = trySendBlocking(queueMessage)
-          logger.info("~~~~~~~~~~~~~ result: ${result}")
-          if (result.isClosed) {
-            throw ClosedSendChannelException("Channel is closed. Cannot send message.")
+      try {
+        val subscriber =
+          googlePubSubClient.buildSubscriber(
+            projectId = projectId,
+            subscriptionId = subscriptionId,
+            ackExtensionPeriod = Duration.ofHours(6),
+          ) { message, consumer ->
+            logger.info("~~~~~~~~~~~~~ RECEIVED MESSAGE")
+            val parsedMessage = parser.parseFrom(message.data.toByteArray())
+            val queueMessage =
+              QueueSubscriber.QueueMessage(
+                body = parsedMessage,
+                consumer = PubSubMessageConsumer(consumer),
+              )
+            logger.info("~~~~~~~~~~~~~ SENDING MESSAGE")
+            val result = trySendBlocking(queueMessage)
+            logger.info("~~~~~~~~~~~~~ result: ${result}")
+            if (result.isClosed) {
+              throw ClosedSendChannelException("Channel is closed. Cannot send message.")
+            }
           }
-        }
 
 //      scope.launch {
 //        while (true) {
@@ -93,15 +94,18 @@ class Subscriber(
 //        }
 //      }
 
-      logger.info("~~~~~~~~~~ google pub sub client: ${googlePubSubClient}")
-      logger.info("Using client: ${googlePubSubClient::class.java.name}")
-      subscriber.startAsync().awaitRunning()
-      logger.info("-Subscriber started for subscription: $subscriptionId")
+        logger.info("~~~~~~~~~~ google pub sub client: ${googlePubSubClient}")
+        logger.info("Using client: ${googlePubSubClient::class.java.name}")
+        subscriber.startAsync().awaitRunning()
+        logger.info("-Subscriber started for subscription: $subscriptionId")
 
-      awaitClose {
-        logger.info("~~~~~~~~~~~~~~ CLOSING SUBSCRIPTION")
-        subscriber.stopAsync()
-        subscriber.awaitTerminated()
+        awaitClose {
+          logger.info("~~~~~~~~~~~~~~ CLOSING SUBSCRIPTION")
+          subscriber.stopAsync()
+          subscriber.awaitTerminated()
+        }
+      }catch (e: Exception) {
+        logger.severe("~~~~~~~~~~~~~~~~~~~~~ exception happened: ${e}")
       }
     }
 
