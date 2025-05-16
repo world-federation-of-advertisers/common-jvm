@@ -18,11 +18,15 @@ import com.google.cloud.pubsub.v1.AckReplyConsumer
 import com.google.cloud.pubsub.v1.MessageReceiver
 import com.google.cloud.pubsub.v1.Publisher as GooglePublisher
 import com.google.cloud.pubsub.v1.Subscriber as GoogleSubscriber
+import com.google.api.core.ApiService.Listener
+import com.google.api.core.ApiService.State
 import com.google.cloud.pubsub.v1.TopicAdminClient
 import com.google.cloud.pubsub.v1.TopicAdminSettings
+import com.google.common.util.concurrent.MoreExecutors
 import com.google.pubsub.v1.ProjectSubscriptionName
 import com.google.pubsub.v1.PubsubMessage
 import com.google.pubsub.v1.TopicName
+import java.util.logging.Logger
 import org.threeten.bp.Duration
 
 class DefaultGooglePubSubClient : GooglePubSubClient() {
@@ -43,11 +47,27 @@ class DefaultGooglePubSubClient : GooglePubSubClient() {
       GoogleSubscriber.newBuilder(subscriptionName, messageReceiver)
         .setMaxAckExtensionPeriod(ackExtensionPeriod)
 
-    return subscriberBuilder.build()
+    val subscriber =  subscriberBuilder.build()
+
+    subscriber.addListener(
+      object : Listener() {
+        override fun failed(from: State?, failure: Throwable) {
+          logger.severe("~~~~~~~~~~~~~~ subscriber failed: ${from}, failure: ${failure}")
+        }
+      },
+      MoreExecutors.directExecutor()
+    )
+
+    return subscriber
   }
 
   override fun buildPublisher(projectId: String, topicId: String): GooglePublisher {
     val topicName = TopicName.of(projectId, topicId)
     return GooglePublisher.newBuilder(topicName).build()
   }
+
+  companion object {
+    private val logger = Logger.getLogger(this::class.java.name)
+  }
+
 }

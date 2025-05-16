@@ -79,19 +79,19 @@ class Subscriber(
           }
         }
 
-      scope.launch {
-        while (true) {
-          try {
-            logger.info("~~~~~~~~~~~~~ checking FAILURE")
-            val err: Throwable = subscriber.failureCause()
-            logger.severe("❌ Pub/Sub subscriber failed: ${err}")
-            this@produce.channel.close(err)
-          } catch (e: Exception) {
-            logger.severe("~~~~ exception while checking failure: ${e}")
-          }
-          delay(Duration.ofSeconds(10).toMillis())
-        }
-      }
+//      scope.launch {
+//        while (true) {
+//          try {
+//            logger.info("~~~~~~~~~~~~~ checking FAILURE")
+//            val err: Throwable = subscriber.failureCause()
+//            logger.severe("❌ Pub/Sub subscriber failed: ${err}")
+//            this@produce.channel.close(err)
+//          } catch (e: Exception) {
+//            logger.severe("~~~~ exception while checking failure: ${e}")
+//          }
+//          delay(Duration.ofSeconds(10).toMillis())
+//        }
+//      }
 
       subscriber.startAsync().awaitRunning()
       logger.info("-Subscriber started for subscription: $subscriptionId")
