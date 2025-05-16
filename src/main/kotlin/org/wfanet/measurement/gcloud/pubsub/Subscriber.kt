@@ -93,6 +93,8 @@ class Subscriber(
 //        }
 //      }
 
+      logger.info("~~~~~~~~~~ google pub sub client: ${googlePubSubClient}")
+      logger.info("Using client: ${googlePubSubClient::class.java.name}")
       subscriber.startAsync().awaitRunning()
       logger.info("-Subscriber started for subscription: $subscriptionId")
 

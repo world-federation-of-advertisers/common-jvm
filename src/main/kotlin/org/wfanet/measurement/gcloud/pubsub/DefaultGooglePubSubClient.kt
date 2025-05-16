@@ -41,7 +41,9 @@ class DefaultGooglePubSubClient : GooglePubSubClient() {
     messageHandler: (PubsubMessage, AckReplyConsumer) -> Unit,
   ): GoogleSubscriber {
 
+    logger.severe("~~~~~~~~ creating subscription: ${projectId}, ${subscriptionId}")
     val subscriptionName = ProjectSubscriptionName.format(projectId, subscriptionId)
+    logger.info("~~~~~~~~~~~ subscriptoin name: ${subscriptionName}")
     val messageReceiver = MessageReceiver { message, consumer -> messageHandler(message, consumer) }
     val subscriberBuilder =
       GoogleSubscriber.newBuilder(subscriptionName, messageReceiver)
