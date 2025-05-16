@@ -18,6 +18,7 @@ import com.google.cloud.pubsub.v1.AckReplyConsumer
 import com.google.cloud.pubsub.v1.stub.GrpcSubscriberStub
 import com.google.cloud.pubsub.v1.MessageReceiver
 import com.google.cloud.pubsub.v1.Publisher as GooglePublisher
+import com.google.auth.oauth2.GoogleCredentials
 import com.google.cloud.pubsub.v1.Subscriber as GoogleSubscriber
 import com.google.cloud.pubsub.v1.stub.SubscriberStubSettings
 import com.google.cloud.pubsub.v1.stub.SubscriberStub
@@ -26,6 +27,7 @@ import com.google.pubsub.v1.PullRequest
 import com.google.pubsub.v1.PullResponse
 import com.google.api.core.ApiService.Listener
 import com.google.api.core.ApiService.State
+import com.google.api.gax.core.FixedCredentialsProvider
 import com.google.cloud.pubsub.v1.TopicAdminClient
 import com.google.cloud.pubsub.v1.TopicAdminSettings
 import com.google.common.util.concurrent.MoreExecutors
@@ -71,9 +73,16 @@ class DefaultGooglePubSubClient : GooglePubSubClient() {
 
   fun testSingleMessage() {
     try {
-      val subscriberStubSettings = SubscriberStubSettings.newBuilder().build()
+      logger.info("~~~~~~~~~ getting credentials")
+      val credentials = GoogleCredentials.getApplicationDefault()
+      logger.info("~~~~~~~~~ building settings")
+      val subscriberStubSettings = SubscriberStubSettings.newBuilder()
+        .setCredentialsProvider(FixedCredentialsProvider.create(credentials))
+        .build()
+      logger.info("~~~~~~~~~ building subscriber")
       val subscriber = GrpcSubscriberStub.create(subscriberStubSettings)
       try {
+        logger.info("~~~~~~~~~ make request")
         val pullRequest = PullRequest.newBuilder()
           .setMaxMessages(1)
           .setSubscription("projects/halo-cmm-dev/subscriptions/requisition-fulfiller-subscription")
