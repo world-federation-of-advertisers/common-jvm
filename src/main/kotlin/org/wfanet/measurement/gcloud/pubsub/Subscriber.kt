@@ -94,7 +94,7 @@ class Subscriber(
       }
 
       subscriber.startAsync().awaitRunning()
-      logger.info("Subscriber started for subscription: $subscriptionId")
+      logger.info("-Subscriber started for subscription: $subscriptionId")
 
       awaitClose {
         subscriber.stopAsync()
