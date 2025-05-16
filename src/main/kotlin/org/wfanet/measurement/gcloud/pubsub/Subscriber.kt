@@ -99,9 +99,9 @@ class Subscriber(
       logger.info("-Subscriber started for subscription: $subscriptionId")
 
       awaitClose {
+        logger.info("~~~~~~~~~~~~~~ CLOSING SUBSCRIPTION")
         subscriber.stopAsync()
         subscriber.awaitTerminated()
-        logger.info("~~~~~~~~~~~~~~ CLOSING SUBSCRIPTION")
       }
     }
 
