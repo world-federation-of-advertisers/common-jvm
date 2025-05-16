@@ -15,9 +15,15 @@
 package org.wfanet.measurement.gcloud.pubsub
 
 import com.google.cloud.pubsub.v1.AckReplyConsumer
+import com.google.cloud.pubsub.v1.stub.GrpcSubscriberStub
 import com.google.cloud.pubsub.v1.MessageReceiver
 import com.google.cloud.pubsub.v1.Publisher as GooglePublisher
 import com.google.cloud.pubsub.v1.Subscriber as GoogleSubscriber
+import com.google.cloud.pubsub.v1.stub.SubscriberStubSettings
+import com.google.cloud.pubsub.v1.stub.SubscriberStub
+import com.google.pubsub.v1.AcknowledgeRequest
+import com.google.pubsub.v1.PullRequest
+import com.google.pubsub.v1.PullResponse
 import com.google.api.core.ApiService.Listener
 import com.google.api.core.ApiService.State
 import com.google.cloud.pubsub.v1.TopicAdminClient
@@ -59,8 +65,43 @@ class DefaultGooglePubSubClient : GooglePubSubClient() {
       },
       MoreExecutors.directExecutor()
     )
-
+    testSingleMessage()
     return subscriber
+  }
+
+  fun testSingleMessage() {
+    try {
+      val subscriberStubSettings = SubscriberStubSettings.newBuilder().build()
+      val subscriber = GrpcSubscriberStub.create(subscriberStubSettings)
+      try {
+        val pullRequest = PullRequest.newBuilder()
+          .setMaxMessages(1)
+          .setSubscription("projects/halo-cmm-dev/subscriptions/requisition-fulfiller-subscription")
+          .build()
+
+        val pullResponse = subscriber.pullCallable().call(pullRequest)
+
+        for (receivedMessage in pullResponse.receivedMessagesList) {
+          val message = receivedMessage.message
+          println("Received message: ${message.data.toStringUtf8()}")
+
+          val ackRequest = AcknowledgeRequest.newBuilder()
+            .setSubscription("projects/halo-cmm-dev/subscriptions/requisition-fulfiller-subscription")
+            .addAckIds(receivedMessage.ackId)
+            .build()
+
+          subscriber.acknowledgeCallable().call(ackRequest)
+        }
+      } catch (e: Exception){
+        logger.severe("~~~~~~~~~~~~~~~~~~~ error1 with single message: ${e}")
+      }finally {
+        subscriber.shutdownNow()
+        subscriber.awaitTermination(1, java.util.concurrent.TimeUnit.MINUTES)
+      }
+    }catch (e: Exception ) {
+      logger.severe("~~~~~~~~~~~~~~~~~~~ error with single message: ${e}")
+    }
+
   }
 
   override fun buildPublisher(projectId: String, topicId: String): GooglePublisher {
