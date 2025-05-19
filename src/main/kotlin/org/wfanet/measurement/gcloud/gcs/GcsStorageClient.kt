@@ -25,6 +25,7 @@ import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.time.delay
 import kotlinx.coroutines.withContext
@@ -116,7 +117,7 @@ class GcsStorageClient(
     return blob?.let { ClientBlob(blob, blobKey) }
   }
 
-  override suspend fun listBlobs(prefix: String?): List<StorageClient.Blob> {
+  override suspend fun listBlobs(prefix: String?): Flow<StorageClient.Blob> {
     val options = mutableListOf<Storage.BlobListOption>()
 
     if (!prefix.isNullOrEmpty()) {
@@ -132,9 +133,9 @@ class GcsStorageClient(
         throw StorageException("Fail to list blobs.", e)
       }
 
-    return buildList {
+    return flow {
       for (blob: Blob in blobList.iterateAll()) {
-        add(ClientBlob(blob, blob.name))
+        emit(ClientBlob(blob, blob.name))
       }
     }
   }

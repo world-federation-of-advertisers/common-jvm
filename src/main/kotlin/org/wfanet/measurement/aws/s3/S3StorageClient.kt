@@ -154,11 +154,11 @@ class S3StorageClient(private val s3: S3AsyncClient, private val bucketName: Str
     }
   }
 
-  override suspend fun listBlobs(prefix: String?): List<StorageClient.Blob> {
-    return try {
-      var truncated = true
-      var continuationToken: String? = null
-      buildList {
+  override suspend fun listBlobs(prefix: String?): Flow<StorageClient.Blob> {
+    return flow {
+      try {
+        var truncated = true
+        var continuationToken: String? = null
         while (truncated) {
           val listObjectsV2Response: ListObjectsV2Response =
             s3
@@ -176,11 +176,13 @@ class S3StorageClient(private val s3: S3AsyncClient, private val bucketName: Str
           truncated = listObjectsV2Response.isTruncated
           continuationToken = listObjectsV2Response.nextContinuationToken()
 
-          addAll(listObjectsV2Response.contents().map { Blob(it.key(), it.size()) })
+          listObjectsV2Response.contents().map { Blob(it.key(), it.size()) }.forEach {
+            emit(it)
+          }
         }
+      } catch (e: CompletionException) {
+        throw e.cause!!
       }
-    } catch (e: CompletionException) {
-      throw e.cause!!
     }
   }
 

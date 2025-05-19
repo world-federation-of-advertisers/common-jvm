@@ -28,6 +28,7 @@ import org.wfanet.measurement.internal.testing.BlobMetadata
 import org.wfanet.measurement.internal.testing.DeleteBlobRequest
 import org.wfanet.measurement.internal.testing.DeleteBlobResponse
 import org.wfanet.measurement.internal.testing.ForwardedStorageGrpcKt.ForwardedStorageCoroutineImplBase as ForwardedStorageCoroutineService
+import kotlinx.coroutines.flow.transform
 import org.wfanet.measurement.internal.testing.GetBlobMetadataRequest
 import org.wfanet.measurement.internal.testing.ListBlobMetadataRequest
 import org.wfanet.measurement.internal.testing.ListBlobMetadataResponse
@@ -83,9 +84,9 @@ class FileSystemStorageService(
     request: ListBlobMetadataRequest
   ): ListBlobMetadataResponse {
     return listBlobMetadataResponse {
-      blobMetadata +=
-        storageClient.listBlobs(prefix = request.prefix).map {
-          blobMetadata {
+        storageClient.listBlobs(prefix = request.prefix).collect {
+          blobMetadata +=
+            blobMetadata {
             blobKey = it.blobKey
             size = it.size
           }

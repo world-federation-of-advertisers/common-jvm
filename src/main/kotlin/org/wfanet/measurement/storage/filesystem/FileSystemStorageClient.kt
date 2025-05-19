@@ -21,6 +21,7 @@ import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.withContext
 import org.jetbrains.annotations.BlockingExecutor
 import org.wfanet.measurement.common.asFlow
@@ -64,15 +65,10 @@ class FileSystemStorageClient(
     }
   }
 
-  override suspend fun listBlobs(prefix: String?): List<StorageClient.Blob> {
-    val regex: Regex? =
-      if (!prefix.isNullOrEmpty()) {
-        Regex("^($prefix).*")
-      } else null
-
+  override suspend fun listBlobs(prefix: String?): Flow<StorageClient.Blob> {
     val visitedDirectoryPathSet = mutableSetOf<String>()
     val directoryToVisitList = mutableListOf(directory)
-    return buildList {
+    return flow {
       while (directoryToVisitList.isNotEmpty()) {
         val curDirectory = directoryToVisitList.removeFirst()
         visitedDirectoryPathSet.add(curDirectory.path)
@@ -84,13 +80,11 @@ class FileSystemStorageClient(
             }
           } else {
             val relativePath = directory.toPath().relativize(file.toPath()).toString()
-            if (regex == null) {
-              add(Blob(file, relativePath))
+            if (prefix.isNullOrEmpty()) {
+              emit(Blob(file, relativePath))
             } else {
-              val matchResult: MatchResult? = regex.find(relativePath)
-              if (matchResult != null) {
-                add(Blob(file, relativePath))
-              }
+              if (relativePath.startsWith(prefix = prefix, ignoreCase = true))
+                emit(Blob(file, relativePath))
             }
           }
         }

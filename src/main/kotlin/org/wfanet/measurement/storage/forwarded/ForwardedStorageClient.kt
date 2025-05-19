@@ -18,6 +18,7 @@ import com.google.protobuf.ByteString
 import io.grpc.Status
 import io.grpc.StatusException
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.asFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
 import org.wfanet.measurement.common.asBufferedFlow
@@ -71,7 +72,7 @@ class ForwardedStorageClient(private val storageStub: ForwardedStorageCoroutineS
     return Blob(blobKey, blobSize)
   }
 
-  override suspend fun listBlobs(prefix: String?): List<StorageClient.Blob> {
+  override suspend fun listBlobs(prefix: String?): Flow<StorageClient.Blob> {
     val listBlobMetadataResponse =
       storageStub.listBlobMetadata(
         listBlobMetadataRequest {
@@ -81,7 +82,7 @@ class ForwardedStorageClient(private val storageStub: ForwardedStorageCoroutineS
         }
       )
 
-    return listBlobMetadataResponse.blobMetadataList.map { Blob(it.blobKey, it.size) }
+    return listBlobMetadataResponse.blobMetadataList.map { Blob(it.blobKey, it.size) }.asFlow()
   }
 
   private inner class Blob(override val blobKey: String, override val size: Long) :

@@ -17,6 +17,7 @@ package org.wfanet.measurement.storage.testing
 import com.google.protobuf.ByteString
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import org.wfanet.measurement.common.flatten
 import org.wfanet.measurement.storage.StorageClient
@@ -43,25 +44,16 @@ class InMemoryStorageClient : StorageClient {
     return storageMap[blobKey]
   }
 
-  override suspend fun listBlobs(prefix: String?): List<StorageClient.Blob> {
-    val regex: Regex? =
-      if (!prefix.isNullOrEmpty()) {
-        Regex("^($prefix).*")
-      } else null
-
-    return buildList {
-      addAll(
-        storageMap.keys().toList().mapNotNull {
-          if (regex == null) {
-            storageMap[it]
-          } else {
-            val matchResult: MatchResult? = regex.find(it)
-            if (matchResult != null) {
-              storageMap[it]
-            } else null
-          }
+  override suspend fun listBlobs(prefix: String?): Flow<StorageClient.Blob> {
+    return flow {
+      for (key in storageMap.keys().toList()) {
+        if (prefix.isNullOrEmpty()) {
+          emit(storageMap.getValue(key))
+        } else {
+          if (key.startsWith(prefix = prefix, ignoreCase = true))
+            emit(storageMap.getValue(key))
         }
-      )
+      }
     }
   }
 

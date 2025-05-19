@@ -22,6 +22,7 @@ import kotlin.random.Random
 import kotlin.test.assertNotNull
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import org.junit.Test
 import org.wfanet.measurement.common.BYTES_PER_MIB
@@ -106,7 +107,7 @@ abstract class AbstractStorageClientTest<T : StorageClient> {
   @Test
   fun `listBlobs with prefix gets blobs with blob keys that match the prefix`() = runBlocking {
     prepareStorage()
-    val blobs = storageClient.listBlobs(prefix = "dir1")
+    val blobs = storageClient.listBlobs(prefix = "dir1").toList()
     assertThat(blobs).hasSize(1)
     assertThat(blobs.first().blobKey).isEqualTo(BLOB_KEY_1)
   }
@@ -114,21 +115,21 @@ abstract class AbstractStorageClientTest<T : StorageClient> {
   @Test
   fun `listBlobs with prefix does not match middle of blob key`() = runBlocking {
     prepareStorage()
-    val blobs = storageClient.listBlobs(prefix = "file2")
+    val blobs = storageClient.listBlobs(prefix = "file2").toList()
     assertThat(blobs).hasSize(0)
   }
 
   @Test
   fun `listBlobs with empty prefix gets all blobs`() = runBlocking {
     prepareStorage()
-    val blobs = storageClient.listBlobs(prefix = "")
+    val blobs = storageClient.listBlobs(prefix = "").toList()
     assertThat(blobs).hasSize(3)
   }
 
   @Test
   fun `listBlobs with no arguments gets all blobs`() = runBlocking {
     prepareStorage()
-    val blobs = storageClient.listBlobs()
+    val blobs = storageClient.listBlobs().toList()
     assertThat(blobs).hasSize(3)
   }
 

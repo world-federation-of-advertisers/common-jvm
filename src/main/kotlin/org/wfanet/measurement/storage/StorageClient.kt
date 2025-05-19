@@ -53,7 +53,7 @@ interface StorageClient {
    * When prefix is not specified, all blobs are returned. When prefix is specified, it filters out
    * blobs with blob keys that do not match the prefix.
    */
-  suspend fun listBlobs(prefix: String? = null): List<Blob>
+  suspend fun listBlobs(prefix: String? = null): Flow<Blob>
 
   /** Reference to a blob in a storage system. */
   interface Blob {

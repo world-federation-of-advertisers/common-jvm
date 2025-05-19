@@ -75,7 +75,7 @@ class MesosRecordIoStorageClient(private val storageClient: StorageClient) : Sto
     return blob?.let { Blob(it, blobKey) }
   }
 
-  override suspend fun listBlobs(prefix: String?): List<StorageClient.Blob> {
+  override suspend fun listBlobs(prefix: String?): Flow<StorageClient.Blob> {
     return storageClient.listBlobs(prefix)
   }
 
