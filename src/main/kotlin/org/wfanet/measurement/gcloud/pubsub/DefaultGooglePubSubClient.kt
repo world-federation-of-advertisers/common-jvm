@@ -121,7 +121,8 @@ class DefaultGooglePubSubClient : GooglePubSubClient() {
       val resp = HttpClient.newHttpClient().send(httpRequest, HttpResponse.BodyHandlers.ofString())
       logger.info("REST pull → HTTP ${resp.statusCode()} → ${resp.body()}")
     }catch (e: Exception) {
-      logger.severe ("~~~~~~~~~~~~ AAA: ${e}")
+//      logger.severe ("~~~~~~~~~~~~ AAA: ${e}")
+      logger.severe ("~~~~~~~~~~~~ AAA: ${e}, ${e.stackTrace}, ${e.message}, $e")
     }
     //logger.severe ("~~~~~~~~~~~~ AAA: ${e}, ${e.stackTrace}, ${e.message}, $e")
   }
