@@ -19,6 +19,8 @@ import com.google.cloud.pubsub.v1.Subscriber as GoogleSubscriber
 import com.google.api.core.ApiService.Listener
 import com.google.api.core.ApiService.State
 import com.google.api.gax.core.FixedCredentialsProvider
+import com.google.api.gax.rpc.FixedHeaderProvider
+import com.google.api.gax.rpc.TransportChannelProvider
 import com.google.auth.oauth2.GoogleCredentials
 import com.google.cloud.pubsub.v1.AckReplyConsumer
 import com.google.cloud.pubsub.v1.MessageReceiver
@@ -44,6 +46,7 @@ import java.util.concurrent.TimeUnit
 import java.util.logging.Logger
 import org.threeten.bp.Duration
 import com.google.cloud.pubsub.v1.SubscriptionAdminClient
+import com.google.api.gax.grpc.InstantiatingGrpcChannelProvider
 import com.google.cloud.pubsub.v1.SubscriptionAdminSettings
 
 class DefaultGooglePubSubClient : GooglePubSubClient() {
@@ -57,10 +60,10 @@ class DefaultGooglePubSubClient : GooglePubSubClient() {
     ackExtensionPeriod: Duration,
     messageHandler: (PubsubMessage, AckReplyConsumer) -> Unit,
   ): GoogleSubscriber {
-    testMetadata()
-    listAllSubscriptions("halo-cmm-dev")
+//    testMetadata()
     testHttp()
-    testSingleMessageNoGrpc()
+    listAllSubscriptions("halo-cmm-dev")
+//    testSingleMessageNoGrpc()
     testSingleMessage()
     logger.severe("~~~~~~~~ creating subscription: ${projectId}, ${subscriptionId}")
     val subscriptionName = ProjectSubscriptionName.format(projectId, subscriptionId)
@@ -189,15 +192,26 @@ class DefaultGooglePubSubClient : GooglePubSubClient() {
     val logger = Logger.getLogger("PubSubLogger")
 
     try {
+      logger.info("~~~~~~~~~~~~ LISTING SUBSCRIPTIONS")
       logger.info("Fetching application default credentials...")
-      val credentials = GoogleCredentials.getApplicationDefault().apply {
-        refreshIfExpired()
-        logger.info("Access token (first 20 chars)… ${accessToken.tokenValue.take(20)}…")
-      }
+      val credentials = GoogleCredentials.getApplicationDefault()
+      credentials.refreshIfExpired()
+      val token: String = credentials.accessToken.tokenValue
+      logger.info("~~~~~~~~~~~~ token listsub: ${token}")
+
+      val header = mapOf("x-goog-api-key" to token)
+      val headerProvider = FixedHeaderProvider.create(header)
+      val transportChannelProvider: TransportChannelProvider = InstantiatingGrpcChannelProvider.newBuilder()
+        .setHeaderProvider(headerProvider)
+        .build()
+
 
       val subscriptionAdminSettings = SubscriptionAdminSettings.newBuilder()
-        .setCredentialsProvider(FixedCredentialsProvider.create(credentials))
+//        .setCredentialsProvider(FixedCredentialsProvider.create(credentials))
+        .setTransportChannelProvider(transportChannelProvider)
         .build()
+
+
 
       SubscriptionAdminClient.create(subscriptionAdminSettings).use { client ->
         val projectName = ProjectName.of(projectId)
@@ -213,7 +227,8 @@ class DefaultGooglePubSubClient : GooglePubSubClient() {
       }
 
     } catch (e: Exception) {
-      logger.severe("Error listing subscriptions: $e")
+      logger.severe("Error listing subscriptions: $e,,,, ${e.stackTrace}")
+      e.printStackTrace()
     }
   }
 
@@ -295,6 +310,7 @@ class DefaultGooglePubSubClient : GooglePubSubClient() {
         }
       } catch (e: Exception){
         logger.severe("~~~~~~~~~~~~~~~~~~~ error1 with single message: ${e},,,, ${e.stackTrace}")
+        e.printStackTrace()
       }finally {
         subscriber.shutdownNow()
         subscriber.awaitTermination(1, java.util.concurrent.TimeUnit.MINUTES)
