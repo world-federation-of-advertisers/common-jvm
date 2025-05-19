@@ -216,7 +216,7 @@ class DefaultGooglePubSubClient : GooglePubSubClient() {
     }
   }
 
-  fun singleHttpMessage(){
+ /* fun singleHttpMessage(){
     try {
       val credentials = GoogleCredentials.getApplicationDefault().apply {
       refreshIfExpired()
@@ -249,7 +249,7 @@ class DefaultGooglePubSubClient : GooglePubSubClient() {
     } catch (e: Exception) {
       e.printStackTrace()
     }
-  }
+  }*/
   fun testSingleMessage() {
     try {
       logger.info("~~~~~~~~~ getting credentials")
