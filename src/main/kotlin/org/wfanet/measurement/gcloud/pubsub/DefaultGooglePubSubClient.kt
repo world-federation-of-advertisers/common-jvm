@@ -122,7 +122,6 @@ class DefaultGooglePubSubClient : GooglePubSubClient() {
       logger.info("REST pull → HTTP ${resp.statusCode()} → ${resp.body()}")
     }catch (e: Exception) {
       logger.severe ("~~~~~~~~~~~~ AAA: ${e}, ${e.stackTrace}, ${e.message}")
-      e.printStackTrace()
     }
   }
 
