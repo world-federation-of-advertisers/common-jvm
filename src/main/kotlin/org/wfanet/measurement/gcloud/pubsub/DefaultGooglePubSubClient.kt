@@ -178,8 +178,7 @@ class DefaultGooglePubSubClient : GooglePubSubClient() {
         }
 
       } catch (e: Exception) {
-        logger.severe("Error while pulling message: ${e.message}")
-        e.printStackTrace()
+        logger.severe("Error while pulling message: ${e.message}, ${e.stackTrace}")
       }
   }
 
@@ -246,7 +245,7 @@ class DefaultGooglePubSubClient : GooglePubSubClient() {
         println("Response body: ${response.body?.string()}")
       }
     } catch (e: Exception) {
-      e.printStackTrace()
+      logger.severe("errp: ${e.stackTrace}")
     }
   }
   fun testSingleMessage() {
