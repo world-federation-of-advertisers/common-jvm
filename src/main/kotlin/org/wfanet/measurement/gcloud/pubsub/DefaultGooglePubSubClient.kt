@@ -294,7 +294,7 @@ class DefaultGooglePubSubClient : GooglePubSubClient() {
           subscriber.acknowledgeCallable().call(ackRequest)
         }
       } catch (e: Exception){
-        logger.severe("~~~~~~~~~~~~~~~~~~~ error1 with single message: ${e}")
+        logger.severe("~~~~~~~~~~~~~~~~~~~ error1 with single message: ${e},,,, ${e.stackTrace}")
       }finally {
         subscriber.shutdownNow()
         subscriber.awaitTermination(1, java.util.concurrent.TimeUnit.MINUTES)
