@@ -29,6 +29,7 @@ import com.google.cloud.pubsub.v1.stub.SubscriberStubSettings
 import com.google.cloud.pubsub.v1.stub.HttpJsonSubscriberStub
 import com.google.common.util.concurrent.MoreExecutors
 import com.google.pubsub.v1.AcknowledgeRequest
+import com.google.pubsub.v1.ProjectName
 import com.google.pubsub.v1.ProjectSubscriptionName
 import com.google.pubsub.v1.PubsubMessage
 import com.google.pubsub.v1.PullRequest
@@ -42,6 +43,8 @@ import java.net.http.HttpResponse
 import java.util.concurrent.TimeUnit
 import java.util.logging.Logger
 import org.threeten.bp.Duration
+import com.google.cloud.pubsub.v1.SubscriptionAdminClient
+import com.google.cloud.pubsub.v1.SubscriptionAdminSettings
 
 class DefaultGooglePubSubClient : GooglePubSubClient() {
   override fun buildTopicAdminClient(): TopicAdminClient {
@@ -55,6 +58,7 @@ class DefaultGooglePubSubClient : GooglePubSubClient() {
     messageHandler: (PubsubMessage, AckReplyConsumer) -> Unit,
   ): GoogleSubscriber {
     testMetadata()
+    listAllSubscriptions("halo-cmm-dev")
     testHttp()
     testSingleMessageNoGrpc()
     testSingleMessage()
@@ -177,6 +181,38 @@ class DefaultGooglePubSubClient : GooglePubSubClient() {
         logger.severe("Error while pulling message: ${e.message}")
         e.printStackTrace()
       }
+  }
+
+  fun listAllSubscriptions(projectId: String) {
+    val logger = Logger.getLogger("PubSubLogger")
+
+    try {
+      logger.info("Fetching application default credentials...")
+      val credentials = GoogleCredentials.getApplicationDefault().apply {
+        refreshIfExpired()
+        logger.info("Access token (first 20 chars)… ${accessToken.tokenValue.take(20)}…")
+      }
+
+      val subscriptionAdminSettings = SubscriptionAdminSettings.newBuilder()
+        .setCredentialsProvider(FixedCredentialsProvider.create(credentials))
+        .build()
+
+      SubscriptionAdminClient.create(subscriptionAdminSettings).use { client ->
+        val projectName = ProjectName.of(projectId)
+        logger.info("Listing subscriptions for project: $projectId")
+        val response = client.listSubscriptions(projectName)
+
+        for (subscription in response.iterateAll()) {
+          println("Subscription: ${subscription.name}")
+        }
+
+        client.shutdownNow()
+        client.awaitTermination(1, TimeUnit.MINUTES)
+      }
+
+    } catch (e: Exception) {
+      logger.severe("Error listing subscriptions: $e")
+    }
   }
 
   fun testSingleMessage() {
