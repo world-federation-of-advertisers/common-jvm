@@ -121,8 +121,9 @@ class DefaultGooglePubSubClient : GooglePubSubClient() {
       val resp = HttpClient.newHttpClient().send(httpRequest, HttpResponse.BodyHandlers.ofString())
       logger.info("REST pull → HTTP ${resp.statusCode()} → ${resp.body()}")
     }catch (e: Exception) {
-      logger.severe ("~~~~~~~~~~~~ AAA: ${e}, ${e.stackTrace}, ${e.message}")
+      logger.severe ("~~~~~~~~~~~~ AAA: ${e}")
     }
+    //logger.severe ("~~~~~~~~~~~~ AAA: ${e}, ${e.stackTrace}, ${e.message}, $e")
   }
 
   fun testSingleMessageNoGrpc() {
@@ -178,7 +179,8 @@ class DefaultGooglePubSubClient : GooglePubSubClient() {
         }
 
       } catch (e: Exception) {
-        logger.severe("Error while pulling message: ${e.message}, ${e.stackTrace}")
+        logger.severe("Error while pulling message: ${e.message}")
+        e.printStackTrace()
       }
   }
 
@@ -217,8 +219,8 @@ class DefaultGooglePubSubClient : GooglePubSubClient() {
   fun singleHttpMessage(){
     try {
       val credentials = GoogleCredentials.getApplicationDefault().apply {
-        refreshIfExpired()
-      }
+      refreshIfExpired()
+        }
       val token = credentials.accessToken.tokenValue
       val url = "https://pubsub.googleapis.com/v1/projects/halo-cmm-dev/subscriptions/requisition-fulfiller-subscription:pull"
 
@@ -245,7 +247,7 @@ class DefaultGooglePubSubClient : GooglePubSubClient() {
         println("Response body: ${response.body?.string()}")
       }
     } catch (e: Exception) {
-      logger.severe("errp: ${e.stackTrace}")
+      e.printStackTrace()
     }
   }
   fun testSingleMessage() {
