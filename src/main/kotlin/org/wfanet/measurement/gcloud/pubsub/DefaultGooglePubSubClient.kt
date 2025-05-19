@@ -38,6 +38,8 @@ import java.net.HttpURLConnection
 import java.net.URI
 import java.net.URL
 import java.net.http.HttpRequest
+import java.net.http.HttpClient
+import java.net.http.HttpResponse
 import java.util.logging.Logger
 import org.threeten.bp.Duration
 
@@ -110,7 +112,7 @@ class DefaultGooglePubSubClient : GooglePubSubClient() {
         .POST(HttpRequest.BodyPublishers.ofString("""{"maxMessages":1}"""))
         .build()
 
-      val resp = HttpClient.newHttpClient().send(httpRequest, BodyHandlers.ofString())
+      val resp = HttpClient.newHttpClient().send(httpRequest, HttpResponse.BodyHandlers.ofString())
       logger.info("REST pull → HTTP ${resp.statusCode()} → ${resp.body()}")
     }catch (e: Exception) {
       logger.severe ("~~~~~~~~~~~~ AAA: ${e}")
