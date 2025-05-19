@@ -34,6 +34,10 @@ import com.google.common.util.concurrent.MoreExecutors
 import com.google.pubsub.v1.ProjectSubscriptionName
 import com.google.pubsub.v1.PubsubMessage
 import com.google.pubsub.v1.TopicName
+import java.net.HttpURLConnection
+import java.net.URI
+import java.net.URL
+import java.net.http.HttpRequest
 import java.util.logging.Logger
 import org.threeten.bp.Duration
 
@@ -48,7 +52,9 @@ class DefaultGooglePubSubClient : GooglePubSubClient() {
     ackExtensionPeriod: Duration,
     messageHandler: (PubsubMessage, AckReplyConsumer) -> Unit,
   ): GoogleSubscriber {
-
+    testMetadata()
+    testHttp()
+    testSingleMessage()
     logger.severe("~~~~~~~~ creating subscription: ${projectId}, ${subscriptionId}")
     val subscriptionName = ProjectSubscriptionName.format(projectId, subscriptionId)
     logger.info("~~~~~~~~~~~ subscriptoin name: ${subscriptionName}")
@@ -67,8 +73,48 @@ class DefaultGooglePubSubClient : GooglePubSubClient() {
       },
       MoreExecutors.directExecutor()
     )
-    testSingleMessage()
+
     return subscriber
+  }
+
+  fun testMetadata(){
+    try {
+      val metadataUrl = "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token"
+      try {
+        val conn = URL(metadataUrl).openConnection() as HttpURLConnection
+        conn.setRequestProperty("Metadata-Flavor", "Google")
+        conn.requestMethod = "GET"
+        conn.connectTimeout = 2_000
+        conn.readTimeout = 2_000
+
+        val code = conn.responseCode
+        val body = conn.inputStream.bufferedReader().readText()
+        logger.info("METADATA SERVER → HTTP $code → $body")
+      } catch (e: Exception) {
+        logger.severe("Cannot reach metadata server: ${e.message} \n\n ${e}")
+      }
+    }catch (e: Exception){
+      logger.severe("Cannot reach metadata server2: ${e.message} \n\n ${e}")
+    }
+  }
+
+  fun testHttp() {
+    try{
+      val credentials = GoogleCredentials.getApplicationDefault()
+      val project = "halo-cmm-dev"
+      val subName = "requisition-fulfiller-subscription"
+      val httpRequest = HttpRequest.newBuilder()
+        .uri(URI.create("https://pubsub.googleapis.com/v1/projects/$project/subscriptions/$subName:pull"))
+        .header("Content-Type", "application/json")
+        .header("Authorization", "Bearer ${credentials.accessToken.tokenValue}")
+        .POST(HttpRequest.BodyPublishers.ofString("""{"maxMessages":1}"""))
+        .build()
+
+      val resp = HttpClient.newHttpClient().send(httpRequest, BodyHandlers.ofString())
+      logger.info("REST pull → HTTP ${resp.statusCode()} → ${resp.body()}")
+    }catch (e: Exception) {
+      logger.severe ("~~~~~~~~~~~~ AAA: ${e}")
+    }
   }
 
   fun testSingleMessage() {
@@ -76,6 +122,12 @@ class DefaultGooglePubSubClient : GooglePubSubClient() {
       logger.info("~~~~~~~~~ getting credentials")
       val credentials = GoogleCredentials.getApplicationDefault()
       logger.info("~~~~~~~~~ building settings")
+      try {
+        credentials.refreshIfExpired()
+        logger.info("Access token (first 20 chars)… ${credentials.accessToken.tokenValue.take(20)}…")
+      }catch (e: Exception){
+        logger.severe("~~~~~~~~~~~ error dumping credentials: ${e}")
+      }
       val subscriberStubSettings = SubscriberStubSettings.newBuilder()
         .setCredentialsProvider(FixedCredentialsProvider.create(credentials))
         .build()
@@ -87,9 +139,9 @@ class DefaultGooglePubSubClient : GooglePubSubClient() {
           .setMaxMessages(1)
           .setSubscription("projects/halo-cmm-dev/subscriptions/requisition-fulfiller-subscription")
           .build()
-
+        logger.info("~~~~~~~~~ make request2")
         val pullResponse = subscriber.pullCallable().call(pullRequest)
-
+        logger.info("~~~~~~~~~ make request3")
         for (receivedMessage in pullResponse.receivedMessagesList) {
           val message = receivedMessage.message
           println("Received message: ${message.data.toStringUtf8()}")
