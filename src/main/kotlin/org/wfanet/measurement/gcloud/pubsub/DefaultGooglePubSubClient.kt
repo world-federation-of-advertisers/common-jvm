@@ -121,7 +121,8 @@ class DefaultGooglePubSubClient : GooglePubSubClient() {
       val resp = HttpClient.newHttpClient().send(httpRequest, HttpResponse.BodyHandlers.ofString())
       logger.info("REST pull → HTTP ${resp.statusCode()} → ${resp.body()}")
     }catch (e: Exception) {
-      logger.severe ("~~~~~~~~~~~~ AAA: ${e}")
+      logger.severe ("~~~~~~~~~~~~ AAA: ${e}, ${e.stackTrace}, ${e.message}")
+      e.printStackTrace()
     }
   }
 
@@ -215,9 +216,44 @@ class DefaultGooglePubSubClient : GooglePubSubClient() {
     }
   }
 
+  fun singleHttpMessage(){
+    try {
+      val credentials = GoogleCredentials.getApplicationDefault().apply {
+        refreshIfExpired()
+      }
+      val token = credentials.accessToken.tokenValue
+      val url = "https://pubsub.googleapis.com/v1/projects/halo-cmm-dev/subscriptions/requisition-fulfiller-subscription:pull"
+
+      val json = """{"maxMessages":1}"""
+      val mediaType = "application/json".toMediaType()
+      val body = json.toRequestBody(mediaType)
+
+      val client = OkHttpClient.Builder()
+        .build()
+
+      val request = Request.Builder()
+        .url(url)
+        .post(body)
+        .addHeader("Authorization", "Bearer $token")
+        .addHeader("Content-Type", "application/json")
+        .build()
+
+      client.newCall(request).execute().use { response ->
+        if (!response.isSuccessful) {
+          throw IOException("Unexpected code $response")
+        }
+
+        println("Response code: ${response.code}")
+        println("Response body: ${response.body?.string()}")
+      }
+    } catch (e: Exception) {
+      e.printStackTrace()
+    }
+  }
   fun testSingleMessage() {
     try {
       logger.info("~~~~~~~~~ getting credentials")
+      println("~~~~~ Java version: " + System.getProperty("java.version"))
       val credentials = GoogleCredentials.getApplicationDefault()
       logger.info("~~~~~~~~~ building settings")
       try {
