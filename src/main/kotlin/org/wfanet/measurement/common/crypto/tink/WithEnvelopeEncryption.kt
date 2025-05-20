@@ -22,6 +22,7 @@ import com.google.crypto.tink.TinkProtoKeysetFormat
 import com.google.crypto.tink.streamingaead.StreamingAeadConfig
 import com.google.crypto.tink.streamingaead.StreamingAeadKey
 import com.google.protobuf.ByteString
+import java.util.logging.Logger
 import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.Dispatchers
 import org.jetbrains.annotations.BlockingExecutor
@@ -42,9 +43,20 @@ fun StorageClient.withEnvelopeEncryption(
   aeadContext: @BlockingExecutor CoroutineContext = Dispatchers.IO,
 ): StorageClient {
   val storageClient = this
+  val logger = Logger.getLogger(this::class.java.name)
+  logger.info("~~~~~~~~~~~~~~~~~~~~~~~~~ with env encryption, kek-uri: ${kekUri}")
   val kekAead = kmsClient.getAead(kekUri)
+  logger.info("~~~~~~~~~~~~~~~~~~~~~~~~~ kekAead: ${kekAead}")
   val handle: KeysetHandle =
     TinkProtoKeysetFormat.parseEncryptedKeyset(encryptedDek.toByteArray(), kekAead, byteArrayOf())
+  try {
+    logger.info("~~~~~~~~~~~~~~~~~~~~~~~~~ handle: ${handle}")
+    logger.info("~~~~~~~~~~~~~~~~~~~~~~~~~ handle2: ${handle.primary}")
+    logger.info("~~~~~~~~~~~~~~~~~~~~~~~~~ handle3: ${handle.primary.key}")
+    logger.info("~~~~~~~~~~~~~~~~~~~~~~~~~ handle4: ${handle.primary.key.parameters}")
+  }catch (e: Exception){
+    logger.severe("~~~~ ERRORS WITH ENV ENC: ${e}, ${e.stackTrace}")
+  }
   return when (val primaryKey: Key = handle.primary.key) {
     is StreamingAeadKey -> {
 
