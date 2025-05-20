@@ -18,6 +18,7 @@ import com.google.cloud.storage.StorageOptions
 import com.google.protobuf.ByteString
 import java.io.File
 import java.net.URI
+import java.util.logging.Logger
 import kotlinx.coroutines.flow.Flow
 import org.wfanet.measurement.gcloud.gcs.GcsStorageClient
 import org.wfanet.measurement.storage.filesystem.FileSystemStorageClient
@@ -69,12 +70,16 @@ class SelectedStorageClient(
   }
 
   override suspend fun getBlob(blobKey: String): StorageClient.Blob? {
+    logger.info("~~~~~~~~~~~~~~~~~ checking uri")
+    logger.info("blobKey: ${blobKey}")
+    logger.info("blobUri.key: ${blobUri.key}")
     check(blobUri.key == blobKey)
     return underlyingClient.getBlob(blobKey)
   }
 
   companion object {
 
+    private val logger = Logger.getLogger(this::class.java.name)
     fun parseBlobUri(url: String): BlobUri {
       val uri = URI.create(url)
       return when (uri.scheme) {
