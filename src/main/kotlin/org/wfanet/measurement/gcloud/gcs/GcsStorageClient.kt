@@ -124,7 +124,7 @@ class GcsStorageClient(
       options.add(Storage.BlobListOption.prefix(prefix))
     }
 
-    val blobList: Page<Blob> =
+    val blobPage: Page<Blob> =
       try {
         withContext(blockingContext + CoroutineName("listBlobs")) {
           storage.list(bucketName, *options.toTypedArray())
@@ -134,8 +134,16 @@ class GcsStorageClient(
       }
 
     return flow {
-      for (blob: Blob in blobList.iterateAll()) {
+      for (blob: Blob in blobPage.iterateAll()) {
         emit(ClientBlob(blob, blob.name))
+      }
+
+      var nextPage: Page<Blob>? = blobPage.nextPage
+      while (nextPage != null) {
+        for (blob: Blob in nextPage.iterateAll()) {
+          emit(ClientBlob(blob, blob.name))
+        }
+        nextPage = nextPage.nextPage
       }
     }
   }

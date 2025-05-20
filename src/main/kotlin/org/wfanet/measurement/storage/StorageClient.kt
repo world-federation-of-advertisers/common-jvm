@@ -48,10 +48,10 @@ interface StorageClient {
   suspend fun getBlob(blobKey: String): Blob?
 
   /**
-   * List Blobs
+   * Lists Blobs
    *
-   * When prefix is not specified, all blobs are returned. When prefix is specified, it filters out
-   * blobs with blob keys that do not match the prefix.
+   * @param prefix When not specified, all blobs are returned. When specified, it filters out blobs
+   * with blob keys that do not match the prefix.
    */
   suspend fun listBlobs(prefix: String? = null): Flow<Blob>
 
