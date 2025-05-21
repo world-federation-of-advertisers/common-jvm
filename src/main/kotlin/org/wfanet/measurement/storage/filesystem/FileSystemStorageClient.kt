@@ -23,16 +23,15 @@ import java.nio.file.Path
 import java.nio.file.SimpleFileVisitor
 import java.nio.file.attribute.BasicFileAttributes
 import kotlin.coroutines.CoroutineContext
-import kotlin.io.path.pathString
 import kotlin.io.path.relativeTo
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.trySendBlocking
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import org.jetbrains.annotations.BlockingExecutor
 import org.wfanet.measurement.common.asFlow
@@ -77,6 +76,7 @@ class FileSystemStorageClient(
   }
 
   override suspend fun listBlobs(prefix: String?): Flow<StorageClient.Blob> {
+    // Optimization to traverse less files if possible
     val pathStart: Path =
       if (prefix.isNullOrEmpty()) {
         directory.toPath()
@@ -100,13 +100,11 @@ class FileSystemStorageClient(
           pathStart,
           object : SimpleFileVisitor<Path>() {
             override fun visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult {
-              runBlocking {
+              if (attrs.isRegularFile) {
                 val relativePath = file.relativeTo(directory.toPath())
-                if (relativePath.toString().isNotEmpty()) {
-                  val blobKey = relativePath.toString().toBlobKey()
-                  if (prefix.isNullOrEmpty() || blobKey.startsWith(prefix)) {
-                    send(Blob(file.toFile(), blobKey))
-                  }
+                val blobKey = relativePath.toBlobKey()
+                if (prefix.isNullOrEmpty() || blobKey.startsWith(prefix)) {
+                  trySendBlocking(Blob(file.toFile(), blobKey))
                 }
               }
               return FileVisitResult.CONTINUE
@@ -114,7 +112,7 @@ class FileSystemStorageClient(
           },
         )
       }
-      .flowOn(Dispatchers.IO)
+      .flowOn(coroutineContext)
   }
 
   private fun resolvePath(blobKey: String): File {
@@ -127,11 +125,11 @@ class FileSystemStorageClient(
     return directory.resolve(relativePath)
   }
 
-  private fun String.toBlobKey(): String {
+  private fun Path.toBlobKey(): String {
     return if (File.separatorChar == '/') {
-      this
+      this.toString()
     } else {
-      this.replace(File.separatorChar, '/')
+      this.toString().replace(File.separatorChar, '/')
     }
   }
 
