@@ -51,7 +51,7 @@ interface StorageClient {
    * Lists Blobs
    *
    * @param prefix A blob key prefix. When not specified, all blobs are returned. When specified, it
-   *    filters out blobs with blob keys that do not match the prefix.
+   *   filters out blobs with blob keys that do not match the prefix.
    */
   suspend fun listBlobs(prefix: String? = null): Flow<Blob>
 

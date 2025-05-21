@@ -37,7 +37,6 @@ import org.jetbrains.annotations.BlockingExecutor
 import org.wfanet.measurement.common.asFlow
 import org.wfanet.measurement.storage.StorageClient
 
-
 private const val READ_BUFFER_SIZE = 1024 * 4 // 4 KiB
 
 /** [StorageClient] implementation that stores blobs as files under [directory]. */
@@ -96,18 +95,21 @@ class FileSystemStorageClient(
       }
 
     return channelFlow<StorageClient.Blob> {
-      Files.walkFileTree(pathStart, object : SimpleFileVisitor<Path>() {
-        override fun visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult {
-          runBlocking {
-            val blobKey = file.relativeTo(directory.toPath()).toString().toBlobKey()
-            if (prefix.isNullOrEmpty() || blobKey.startsWith(prefix)) {
-              send(Blob(file.toFile(), blobKey))
+        Files.walkFileTree(
+          pathStart,
+          object : SimpleFileVisitor<Path>() {
+            override fun visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult {
+              runBlocking {
+                val blobKey = file.relativeTo(directory.toPath()).toString().toBlobKey()
+                if (prefix.isNullOrEmpty() || blobKey.startsWith(prefix)) {
+                  send(Blob(file.toFile(), blobKey))
+                }
+              }
+              return FileVisitResult.CONTINUE
             }
-          }
-          return FileVisitResult.CONTINUE
-        }
-      })
-    }
+          },
+        )
+      }
       .flowOn(Dispatchers.IO)
   }
 

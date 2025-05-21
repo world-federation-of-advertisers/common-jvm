@@ -133,18 +133,19 @@ class GcsStorageClient(
       }
 
     return flow {
-      for (blob: Blob in blobPage.iterateAll()) {
-        emit(ClientBlob(blob, blob.name))
-      }
-
-      var nextPage: Page<Blob>? = blobPage.nextPage
-      while (nextPage != null) {
-        for (blob: Blob in nextPage.iterateAll()) {
+        for (blob: Blob in blobPage.iterateAll()) {
           emit(ClientBlob(blob, blob.name))
         }
-        nextPage = nextPage.nextPage
+
+        var nextPage: Page<Blob>? = blobPage.nextPage
+        while (nextPage != null) {
+          for (blob: Blob in nextPage.iterateAll()) {
+            emit(ClientBlob(blob, blob.name))
+          }
+          nextPage = nextPage.nextPage
+        }
       }
-    }.flowOn(blockingContext + CoroutineName("listBlobs"))
+      .flowOn(blockingContext + CoroutineName("listBlobs"))
   }
 
   /** [StorageClient.Blob] implementation for [GcsStorageClient]. */
