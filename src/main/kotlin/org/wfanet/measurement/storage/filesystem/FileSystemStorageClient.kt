@@ -17,15 +17,26 @@ package org.wfanet.measurement.storage.filesystem
 import com.google.protobuf.ByteString
 import java.io.File
 import java.nio.channels.Channels
+import java.nio.file.FileVisitResult
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.SimpleFileVisitor
+import java.nio.file.attribute.BasicFileAttributes
 import kotlin.coroutines.CoroutineContext
+import kotlin.io.path.relativeTo
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import org.jetbrains.annotations.BlockingExecutor
 import org.wfanet.measurement.common.asFlow
 import org.wfanet.measurement.storage.StorageClient
+
 
 private const val READ_BUFFER_SIZE = 1024 * 4 // 4 KiB
 
@@ -66,30 +77,38 @@ class FileSystemStorageClient(
   }
 
   override suspend fun listBlobs(prefix: String?): Flow<StorageClient.Blob> {
-    val visitedDirectoryPathSet = mutableSetOf<String>()
-    val directoryToVisitList = mutableListOf(directory)
-    return flow {
-      while (directoryToVisitList.isNotEmpty()) {
-        val curDirectory = directoryToVisitList.removeFirst()
-        visitedDirectoryPathSet.add(curDirectory.path)
+    val pathStart: Path =
+      if (prefix.isNullOrEmpty()) {
+        directory.toPath()
+      } else {
+        if (Path.of(prefix).isAbsolute) {
+          return emptyFlow()
+        }
 
-        for (file in curDirectory.listFiles()!!) {
-          if (file.isDirectory) {
-            if (!visitedDirectoryPathSet.contains(file.path)) {
-              directoryToVisitList.add(file)
-            }
-          } else {
-            val relativePath = directory.toPath().relativize(file.toPath()).toString()
-            if (prefix.isNullOrEmpty()) {
-              emit(Blob(file, relativePath))
-            } else {
-              if (relativePath.startsWith(prefix = prefix, ignoreCase = true))
-                emit(Blob(file, relativePath))
-            }
-          }
+        val prefixFile = File(directory, prefix)
+        if (!prefixFile.exists()) {
+          directory.toPath()
+        } else if (prefixFile.isFile) {
+          return flowOf(Blob(prefixFile, prefix))
+        } else {
+          prefixFile.toPath()
         }
       }
+
+    return channelFlow<StorageClient.Blob> {
+      Files.walkFileTree(pathStart, object : SimpleFileVisitor<Path>() {
+        override fun visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult {
+          runBlocking {
+            val blobKey = file.relativeTo(directory.toPath()).toString().toBlobKey()
+            if (prefix.isNullOrEmpty() || blobKey.startsWith(prefix)) {
+              send(Blob(file.toFile(), blobKey))
+            }
+          }
+          return FileVisitResult.CONTINUE
+        }
+      })
     }
+      .flowOn(Dispatchers.IO)
   }
 
   private fun resolvePath(blobKey: String): File {
@@ -100,6 +119,14 @@ class FileSystemStorageClient(
         blobKey.replace('/', File.separatorChar)
       }
     return directory.resolve(relativePath)
+  }
+
+  private fun String.toBlobKey(): String {
+    return if (File.separatorChar == '/') {
+      this
+    } else {
+      this.replace(File.separatorChar, '/')
+    }
   }
 
   private inner class Blob(private val file: File, override val blobKey: String) :

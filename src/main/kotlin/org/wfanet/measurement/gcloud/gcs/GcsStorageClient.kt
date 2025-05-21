@@ -26,6 +26,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.time.delay
 import kotlinx.coroutines.withContext
@@ -126,9 +127,7 @@ class GcsStorageClient(
 
     val blobPage: Page<Blob> =
       try {
-        withContext(blockingContext + CoroutineName("listBlobs")) {
-          storage.list(bucketName, *options.toTypedArray())
-        }
+        storage.list(bucketName, *options.toTypedArray())
       } catch (e: GcsStorageException) {
         throw StorageException("Fail to list blobs.", e)
       }
@@ -145,7 +144,7 @@ class GcsStorageClient(
         }
         nextPage = nextPage.nextPage
       }
-    }
+    }.flowOn(blockingContext + CoroutineName("listBlobs"))
   }
 
   /** [StorageClient.Blob] implementation for [GcsStorageClient]. */
