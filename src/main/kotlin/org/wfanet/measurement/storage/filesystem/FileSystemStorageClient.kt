@@ -23,6 +23,7 @@ import java.nio.file.Path
 import java.nio.file.SimpleFileVisitor
 import java.nio.file.attribute.BasicFileAttributes
 import kotlin.coroutines.CoroutineContext
+import kotlin.io.path.pathString
 import kotlin.io.path.relativeTo
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.Dispatchers
@@ -100,9 +101,12 @@ class FileSystemStorageClient(
           object : SimpleFileVisitor<Path>() {
             override fun visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult {
               runBlocking {
-                val blobKey = file.relativeTo(directory.toPath()).toString().toBlobKey()
-                if (prefix.isNullOrEmpty() || blobKey.startsWith(prefix)) {
-                  send(Blob(file.toFile(), blobKey))
+                val relativePath = file.relativeTo(directory.toPath())
+                if (relativePath.toString().isNotEmpty()) {
+                  val blobKey = relativePath.toString().toBlobKey()
+                  if (prefix.isNullOrEmpty() || blobKey.startsWith(prefix)) {
+                    send(Blob(file.toFile(), blobKey))
+                  }
                 }
               }
               return FileVisitResult.CONTINUE
