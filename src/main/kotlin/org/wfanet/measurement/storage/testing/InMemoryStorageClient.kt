@@ -50,7 +50,7 @@ class InMemoryStorageClient : StorageClient {
         if (prefix.isNullOrEmpty()) {
           emit(storageMap.getValue(key))
         } else {
-          if (key.startsWith(prefix = prefix, ignoreCase = true)) emit(storageMap.getValue(key))
+          if (key.startsWith(prefix = prefix, ignoreCase = false)) emit(storageMap.getValue(key))
         }
       }
     }

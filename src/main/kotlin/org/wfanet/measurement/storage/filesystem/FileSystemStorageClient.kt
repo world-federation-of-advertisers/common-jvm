@@ -76,7 +76,7 @@ class FileSystemStorageClient(
   }
 
   override suspend fun listBlobs(prefix: String?): Flow<StorageClient.Blob> {
-    // Optimization to traverse less files if possible
+    // Optimization to traverse fewer files if possible
     val pathStart: Path =
       if (prefix.isNullOrEmpty()) {
         directory.toPath()
