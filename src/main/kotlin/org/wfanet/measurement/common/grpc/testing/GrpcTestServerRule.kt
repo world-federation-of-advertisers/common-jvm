@@ -27,12 +27,14 @@ import org.junit.runner.Description
 import org.junit.runners.model.Statement
 import org.wfanet.measurement.common.grpc.ErrorLoggingServerInterceptor
 import org.wfanet.measurement.common.grpc.LoggingServerInterceptor
+import org.wfanet.measurement.common.grpc.ProtobufServiceConfig
+import org.wfanet.measurement.common.grpc.ServiceConfig
 
 class GrpcTestServerRule(
   customServerName: String? = null,
   private val logAllRequests: Boolean = false,
   private val executor: Executor? = null,
-  defaultServiceConfig: Map<String, *>? = null,
+  defaultServiceConfig: ServiceConfig = ProtobufServiceConfig.DEFAULT,
   private val addServices: Builder.() -> Unit,
 ) : TestRule {
   class Builder(val channel: Channel, private val serverBuilder: InProcessServerBuilder) {
@@ -53,9 +55,7 @@ class GrpcTestServerRule(
       InProcessChannelBuilder.forName(serverName)
         .apply {
           directExecutor()
-          if (defaultServiceConfig != null) {
-            defaultServiceConfig(defaultServiceConfig)
-          }
+          defaultServiceConfig(defaultServiceConfig.asMap())
         }
         .build()
     )
