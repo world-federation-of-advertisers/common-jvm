@@ -96,92 +96,92 @@ class GcsStorageClient(
     blobKey: String,
     content: Flow<ByteString>,
   ): StorageClient.Blob =
-    withContext(blockingContext + CoroutineName("writeBlob")) {
-          // 1) pre‐batch your encrypted rows into ~batchSize‐byte ByteStrings
-          val batchSize = 50 * 1024 * 1024    // 50 MB
-          val batches = content
-            .batchRecords(maxBatchBytes = batchSize, maxBatchCount = Int.MAX_VALUE)
-
-          // 2) in parallel, upload each batch as a .part blob
-      val partNames = Collections.synchronizedList(mutableListOf<String>())
-          val indexCounter = AtomicInteger(0)
-          coroutineScope {
-              // launch one coroutine per batch, track them in a list of jobs
-              val jobs = mutableListOf<Job>()
-              batches.collect { batch ->
-                  val idx = indexCounter.getAndIncrement()
-                  val job = launch(Dispatchers.IO) {
-                      val partName = "$blobKey.part${idx.toString().padStart(4, '0')}"
-                      val info = BlobInfo.newBuilder(bucketName, partName).build()
-                      storage.writer(info).use { ch ->
-                          Channels.newOutputStream(ch)
-                            .buffered(batchSize)
-                            .use { it.write(batch.toByteArray()) }
-                        }
-                      partNames += partName
-                    }
-                  jobs += job
-                }
-              // wait for all part‐uploads to finish
-              jobs.joinAll()
-            }
-
-          // 3) compose all the parts into the final blob
-          val composeReq = Storage.ComposeRequest.newBuilder()
-            .setTarget(BlobInfo.newBuilder(bucketName, blobKey).build())
-            .also { b ->
-                partNames.forEach { b.addSource(bucketName, it) }
-              }
-            .build()
-          val composed = storage.compose(composeReq)
-
-          // 4) (optional) clean up the part blobs
-          partNames.forEach { storage.delete(bucketName, it) }
-
-        ClientBlob(composed)
-        }
-
 //    withContext(blockingContext + CoroutineName("writeBlob")) {
-//      val blob = storage.create(BlobInfo.newBuilder(bucketName, blobKey).build())
+//          // 1) pre‐batch your encrypted rows into ~batchSize‐byte ByteStrings
+//          val batchSize = 50 * 1024 * 1024    // 50 MB
+//          val batches = content
+//            .batchRecords(maxBatchBytes = batchSize, maxBatchCount = Int.MAX_VALUE)
 //
-//      blob.writer().use { byteChannel ->
-//        content.collect { bytes ->
-//          for (buffer in bytes.asReadOnlyByteBufferList()) {
-//            while (buffer.hasRemaining() && currentCoroutineContext().isActive) {
-//              // Writer has its own internal buffering, so we can just use whatever buffers we
-//              // already have.
-//              if (byteChannel.write(buffer) == 0) {
-//                // Nothing was written, so we may have a non-blocking channel that nothing can be
-//                // written to right now. Suspend this coroutine to avoid monopolizing the thread.
-//                yield()
-//              }
+//          // 2) in parallel, upload each batch as a .part blob
+//      val partNames = Collections.synchronizedList(mutableListOf<String>())
+//          val indexCounter = AtomicInteger(0)
+//          coroutineScope {
+//              // launch one coroutine per batch, track them in a list of jobs
+//              val jobs = mutableListOf<Job>()
+//              batches.collect { batch ->
+//                  val idx = indexCounter.getAndIncrement()
+//                  val job = launch(Dispatchers.IO) {
+//                      val partName = "$blobKey.part${idx.toString().padStart(4, '0')}"
+//                      val info = BlobInfo.newBuilder(bucketName, partName).build()
+//                      storage.writer(info).use { ch ->
+//                          Channels.newOutputStream(ch)
+//                            .buffered(batchSize)
+//                            .use { it.write(batch.toByteArray()) }
+//                        }
+//                      partNames += partName
+//                    }
+//                  jobs += job
+//                }
+//              // wait for all part‐uploads to finish
+//              jobs.joinAll()
 //            }
-//          }
+//
+//          // 3) compose all the parts into the final blob
+//          val composeReq = Storage.ComposeRequest.newBuilder()
+//            .setTarget(BlobInfo.newBuilder(bucketName, blobKey).build())
+//            .also { b ->
+//                partNames.forEach { b.addSource(bucketName, it) }
+//              }
+//            .build()
+//          val composed = storage.compose(composeReq)
+//
+//          // 4) (optional) clean up the part blobs
+//          partNames.forEach { storage.delete(bucketName, it) }
+//
+//        ClientBlob(composed)
 //        }
-//      }
-//      ClientBlob(blob.reload())
-//    }
 
-private fun Flow<ByteString>.batchRecords(
-    maxBatchBytes: Int,
-    maxBatchCount: Int
-  ): Flow<ByteString> = flow {
-    val buf = mutableListOf<ByteString>()
-    var bytesSoFar = 0
-    suspend fun flush() {
-        if (buf.isNotEmpty()) {
-            emit(buf.reduce { a, b -> a.concat(b) })
-            buf.clear()
-            bytesSoFar = 0
+    withContext(blockingContext + CoroutineName("writeBlob")) {
+      val blob = storage.create(BlobInfo.newBuilder(bucketName, blobKey).build())
+
+      blob.writer().use { byteChannel ->
+        content.collect { bytes ->
+          for (buffer in bytes.asReadOnlyByteBufferList()) {
+            while (buffer.hasRemaining() && currentCoroutineContext().isActive) {
+              // Writer has its own internal buffering, so we can just use whatever buffers we
+              // already have.
+              if (byteChannel.write(buffer) == 0) {
+                // Nothing was written, so we may have a non-blocking channel that nothing can be
+                // written to right now. Suspend this coroutine to avoid monopolizing the thread.
+                yield()
+              }
+            }
           }
+        }
       }
-    collect { rec ->
-        if (buf.size >= maxBatchCount || bytesSoFar + rec.size() > maxBatchBytes) flush()
-        buf += rec
-        bytesSoFar += rec.size()
-      }
-    flush()
-  }
+      ClientBlob(blob.reload())
+    }
+
+//private fun Flow<ByteString>.batchRecords(
+//    maxBatchBytes: Int,
+//    maxBatchCount: Int
+//  ): Flow<ByteString> = flow {
+//    val buf = mutableListOf<ByteString>()
+//    var bytesSoFar = 0
+//    suspend fun flush() {
+//        if (buf.isNotEmpty()) {
+//            emit(buf.reduce { a, b -> a.concat(b) })
+//            buf.clear()
+//            bytesSoFar = 0
+//          }
+//      }
+//    collect { rec ->
+//        if (buf.size >= maxBatchCount || bytesSoFar + rec.size() > maxBatchBytes) flush()
+//        buf += rec
+//        bytesSoFar += rec.size()
+//      }
+//    flush()
+//  }
   override suspend fun getBlob(blobKey: String): StorageClient.Blob? {
     val blob: Blob? =
       withContext(blockingContext + CoroutineName("getBlob")) { storage.get(bucketName, blobKey) }
