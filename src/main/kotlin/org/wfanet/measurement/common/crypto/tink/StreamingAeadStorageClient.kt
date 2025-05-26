@@ -65,84 +65,29 @@ class StreamingAeadStorageClient(
    * @throws ClosedChannelException if the channel is closed before all data is written.
    */
   override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
-    // 1) encrypt each row into a stream of ByteString ciphertext chunks
-    val encryptedChunks: Flow<ByteString> = channelFlow {
-      val writable = CoroutineWritableByteChannel(channel)
-      streamingAead
-        .newEncryptingChannel(writable, blobKey.encodeToByteArray())
-        .use { cipherCh ->
-          content.collect { plainBs ->
-            plainBs.asReadOnlyByteBufferList().forEach { buf ->
-              while (buf.hasRemaining()) {
-                val written = cipherCh.write(buf)
-                if (written == 0) {
-                  yield()
-                }
+    val encryptedContent = channelFlow {
+      val writableChannel = CoroutineWritableByteChannel(channel)
+
+      streamingAead.newEncryptingChannel(writableChannel, blobKey.encodeToByteArray()).use {
+        ciphertextChannel ->
+        content.collect { byteString ->
+          byteString.asReadOnlyByteBufferList().forEach { buffer ->
+            while (buffer.hasRemaining()) {
+              val bytesWritten = ciphertextChannel.write(buffer)
+              if (bytesWritten == 0) {
+                yield()
+                continue
               }
             }
           }
         }
+      }
     }
 
-    // 2) batch those ciphertext chunks into multi-MB blobs
-    val batched: Flow<ByteString> = encryptedChunks.batchRecords(5 * 1024 * 1024, 1_000)
-
-    // 3) hand the batched ciphertext to the underlying GCS client
-    val wrappedBlob = storageClient.writeBlob(blobKey, batched)
+    val wrappedBlob: StorageClient.Blob = storageClient.writeBlob(blobKey, encryptedContent)
     logger.fine { "Wrote encrypted content to storage with blobKey: $blobKey" }
     return EncryptedBlob(wrappedBlob, blobKey)
   }
-
-  private fun Flow<ByteString>.batchRecords(
-    maxBatchBytes: Int,
-    maxBatchCount: Int
-  ): Flow<ByteString> = flow {
-    val buf = mutableListOf<ByteString>()
-    var sizeSoFar = 0
-
-    suspend fun flush() {
-      if (buf.isNotEmpty()) {
-        // concatenate into one big ByteString
-        val batch = buf.reduce { a, b -> a.concat(b) }
-        emit(batch)
-        buf.clear()
-        sizeSoFar = 0
-      }
-    }
-
-    collect { chunk ->
-      if (buf.size >= maxBatchCount || sizeSoFar + chunk.size() > maxBatchBytes) {
-        flush()
-      }
-      buf += chunk
-      sizeSoFar += chunk.size()
-    }
-    flush()
-  }
-//  override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
-//    val encryptedContent = channelFlow {
-//      val writableChannel = CoroutineWritableByteChannel(channel)
-//
-//      streamingAead.newEncryptingChannel(writableChannel, blobKey.encodeToByteArray()).use {
-//        ciphertextChannel ->
-//        content.collect { byteString ->
-//          byteString.asReadOnlyByteBufferList().forEach { buffer ->
-//            while (buffer.hasRemaining()) {
-//              val bytesWritten = ciphertextChannel.write(buffer)
-//              if (bytesWritten == 0) {
-//                yield()
-//                continue
-//              }
-//            }
-//          }
-//        }
-//      }
-//    }
-//
-//    val wrappedBlob: StorageClient.Blob = storageClient.writeBlob(blobKey, encryptedContent)
-//    logger.fine { "Wrote encrypted content to storage with blobKey: $blobKey" }
-//    return EncryptedBlob(wrappedBlob, blobKey)
-//  }
 
   /**
    * Returns a [StorageClient.Blob] with specified blob key, or `null` if not found.

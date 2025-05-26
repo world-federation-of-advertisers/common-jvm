@@ -19,6 +19,7 @@ import com.google.cloud.storage.BlobInfo
 import com.google.cloud.storage.Storage
 import com.google.cloud.storage.StorageException as GcsStorageException
 import com.google.protobuf.ByteString
+import java.nio.channels.Channels
 import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.Dispatchers
@@ -89,25 +90,47 @@ class GcsStorageClient(
     content: Flow<ByteString>,
   ): StorageClient.Blob =
     withContext(blockingContext + CoroutineName("writeBlob")) {
-      val blob = storage.create(BlobInfo.newBuilder(bucketName, blobKey).build())
+          val blobInfo = BlobInfo.newBuilder(bucketName, blobKey).build()
 
-      blob.writer().use { byteChannel ->
-        content.collect { bytes ->
-          for (buffer in bytes.asReadOnlyByteBufferList()) {
-            while (buffer.hasRemaining() && currentCoroutineContext().isActive) {
-              // Writer has its own internal buffering, so we can just use whatever buffers we
-              // already have.
-              if (byteChannel.write(buffer) == 0) {
-                // Nothing was written, so we may have a non-blocking channel that nothing can be
-                // written to right now. Suspend this coroutine to avoid monopolizing the thread.
-                yield()
+          // directly open a WriteChannel and bump HTTP chunk size to 8 MiB
+          val writeChannel = storage
+            .writer(blobInfo)
+            .apply { setChunkSize(8 * 1024 * 1024) }
+
+          // wrap it in a buffered OutputStream for big, efficient writes
+          Channels.newOutputStream(writeChannel)
+            .buffered(8 * 1024 * 1024)
+            .use { out ->
+                content.collect { bs ->
+                    // each ByteString is already in memory—just write it out
+                    out.write(bs.toByteArray())
+                  }
               }
-            }
-          }
+
+          // close + reload for final Blob metadata
+          writeChannel.close()
+          ClientBlob(storage.get(bucketName, blobKey)!!)
         }
-      }
-      ClientBlob(blob.reload())
-    }
+//    withContext(blockingContext + CoroutineName("writeBlob")) {
+//      val blob = storage.create(BlobInfo.newBuilder(bucketName, blobKey).build())
+//
+//      blob.writer().use { byteChannel ->
+//        content.collect { bytes ->
+//          for (buffer in bytes.asReadOnlyByteBufferList()) {
+//            while (buffer.hasRemaining() && currentCoroutineContext().isActive) {
+//              // Writer has its own internal buffering, so we can just use whatever buffers we
+//              // already have.
+//              if (byteChannel.write(buffer) == 0) {
+//                // Nothing was written, so we may have a non-blocking channel that nothing can be
+//                // written to right now. Suspend this coroutine to avoid monopolizing the thread.
+//                yield()
+//              }
+//            }
+//          }
+//        }
+//      }
+//      ClientBlob(blob.reload())
+//    }
 
   override suspend fun getBlob(blobKey: String): StorageClient.Blob? {
     val blob: Blob? =
