@@ -20,12 +20,19 @@ import com.google.cloud.storage.Storage
 import com.google.cloud.storage.StorageException as GcsStorageException
 import com.google.protobuf.ByteString
 import java.nio.channels.Channels
+import java.util.*
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.time.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.yield
@@ -90,27 +97,50 @@ class GcsStorageClient(
     content: Flow<ByteString>,
   ): StorageClient.Blob =
     withContext(blockingContext + CoroutineName("writeBlob")) {
-          val blobInfo = BlobInfo.newBuilder(bucketName, blobKey).build()
+          // 1) pre‐batch your encrypted rows into ~batchSize‐byte ByteStrings
+          val batchSize = 50 * 1024 * 1024    // 50 MB
+          val batches = content
+            .batchRecords(maxBatchBytes = batchSize, maxBatchCount = Int.MAX_VALUE)
 
-          // directly open a WriteChannel and bump HTTP chunk size to 8 MiB
-          val writeChannel = storage
-            .writer(blobInfo)
-            .apply { setChunkSize(20 * 1024 * 1024) }
+          // 2) in parallel, upload each batch as a .part blob
+      val partNames = Collections.synchronizedList(mutableListOf<String>())
+          val indexCounter = AtomicInteger(0)
+          coroutineScope {
+              // launch one coroutine per batch, track them in a list of jobs
+              val jobs = mutableListOf<Job>()
+              batches.collect { batch ->
+                  val idx = indexCounter.getAndIncrement()
+                  val job = launch(Dispatchers.IO) {
+                      val partName = "$blobKey.part${idx.toString().padStart(4, '0')}"
+                      val info = BlobInfo.newBuilder(bucketName, partName).build()
+                      storage.writer(info).use { ch ->
+                          Channels.newOutputStream(ch)
+                            .buffered(batchSize)
+                            .use { it.write(batch.toByteArray()) }
+                        }
+                      partNames += partName
+                    }
+                  jobs += job
+                }
+              // wait for all part‐uploads to finish
+              jobs.joinAll()
+            }
 
-          // wrap it in a buffered OutputStream for big, efficient writes
-          Channels.newOutputStream(writeChannel)
-            .buffered(20 * 1024 * 1024)
-            .use { out ->
-                content.collect { bs ->
-                    // each ByteString is already in memory—just write it out
-                    out.write(bs.toByteArray())
-                  }
+          // 3) compose all the parts into the final blob
+          val composeReq = Storage.ComposeRequest.newBuilder()
+            .setTarget(BlobInfo.newBuilder(bucketName, blobKey).build())
+            .also { b ->
+                partNames.forEach { b.addSource(bucketName, it) }
               }
+            .build()
+          val composed = storage.compose(composeReq)
 
-          // close + reload for final Blob metadata
-          writeChannel.close()
-          ClientBlob(storage.get(bucketName, blobKey)!!)
+          // 4) (optional) clean up the part blobs
+          partNames.forEach { storage.delete(bucketName, it) }
+
+        ClientBlob(composed)
         }
+
 //    withContext(blockingContext + CoroutineName("writeBlob")) {
 //      val blob = storage.create(BlobInfo.newBuilder(bucketName, blobKey).build())
 //
@@ -132,6 +162,26 @@ class GcsStorageClient(
 //      ClientBlob(blob.reload())
 //    }
 
+private fun Flow<ByteString>.batchRecords(
+    maxBatchBytes: Int,
+    maxBatchCount: Int
+  ): Flow<ByteString> = flow {
+    val buf = mutableListOf<ByteString>()
+    var bytesSoFar = 0
+    suspend fun flush() {
+        if (buf.isNotEmpty()) {
+            emit(buf.reduce { a, b -> a.concat(b) })
+            buf.clear()
+            bytesSoFar = 0
+          }
+      }
+    collect { rec ->
+        if (buf.size >= maxBatchCount || bytesSoFar + rec.size() > maxBatchBytes) flush()
+        buf += rec
+        bytesSoFar += rec.size()
+      }
+    flush()
+  }
   override suspend fun getBlob(blobKey: String): StorageClient.Blob? {
     val blob: Blob? =
       withContext(blockingContext + CoroutineName("getBlob")) { storage.get(bucketName, blobKey) }
