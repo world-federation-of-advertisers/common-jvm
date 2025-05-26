@@ -95,11 +95,11 @@ class GcsStorageClient(
           // directly open a WriteChannel and bump HTTP chunk size to 8 MiB
           val writeChannel = storage
             .writer(blobInfo)
-            .apply { setChunkSize(8 * 1024 * 1024) }
+            .apply { setChunkSize(20 * 1024 * 1024) }
 
           // wrap it in a buffered OutputStream for big, efficient writes
           Channels.newOutputStream(writeChannel)
-            .buffered(8 * 1024 * 1024)
+            .buffered(20 * 1024 * 1024)
             .use { out ->
                 content.collect { bs ->
                     // each ByteString is already in memory—just write it out
