@@ -28,12 +28,13 @@ import org.wfanet.measurement.common.crypto.SigningCerts
  *   server certificates.
  * @param hostName the expected DNS hostname from the Subject Alternative Name (SAN) of the server's
  *   certificate
+ * @param defaultServiceConfig [ServiceConfig] to use when none is provided by the name resolver.
  */
 fun buildMutualTlsChannel(
   target: String,
   clientCerts: SigningCerts,
   hostName: String? = null,
-  defaultServiceConfig: Map<String, *>? = null,
+  defaultServiceConfig: ServiceConfig = ProtobufServiceConfig.DEFAULT,
 ): ManagedChannel {
   return NettyChannelBuilder.forTarget(target)
     .apply {
@@ -42,9 +43,7 @@ fun buildMutualTlsChannel(
       if (hostName != null) {
         overrideAuthority(hostName)
       }
-      if (defaultServiceConfig != null) {
-        defaultServiceConfig(defaultServiceConfig)
-      }
+      defaultServiceConfig(defaultServiceConfig.asMap())
     }
     .build()
 }
@@ -56,21 +55,24 @@ fun buildMutualTlsChannel(
  * @param trustedServerCerts trusted server certificates.
  * @param hostName the expected DNS hostname from the Subject Alternative Name (SAN) of the server's
  *   certificate
+ * @param defaultServiceConfig [ServiceConfig] to use when none is provided by the name resolver.
  */
 fun buildTlsChannel(
   target: String,
   trustedServerCerts: Collection<X509Certificate>,
   hostName: String? = null,
+  defaultServiceConfig: ServiceConfig = ProtobufServiceConfig.DEFAULT,
 ): ManagedChannel {
-  val channelBuilder =
-    NettyChannelBuilder.forTarget(target)
-      .directExecutor() // See https://github.com/grpc/grpc-kotlin/issues/263
-      .sslContext(trustedServerCerts.toClientTlsContext())
-  return if (hostName == null) {
-    channelBuilder.build()
-  } else {
-    channelBuilder.overrideAuthority(hostName).build()
-  }
+  return NettyChannelBuilder.forTarget(target)
+    .apply {
+      directExecutor() // See https://github.com/grpc/grpc-kotlin/issues/263
+      sslContext(trustedServerCerts.toClientTlsContext())
+      if (hostName != null) {
+        overrideAuthority(hostName)
+      }
+      defaultServiceConfig(defaultServiceConfig.asMap())
+    }
+    .build()
 }
 
 /** Add shutdownHook to a managedChannel */
