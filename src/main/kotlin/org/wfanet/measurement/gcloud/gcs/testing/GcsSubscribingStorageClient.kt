@@ -71,6 +71,10 @@ class GcsSubscribingStorageClient(
     return storageClient.getBlob(blobKey)
   }
 
+  override suspend fun listBlobs(prefix: String?): Flow<StorageClient.Blob> {
+    return storageClient.listBlobs(prefix)
+  }
+
   fun subscribe(function: CloudEventsFunction) {
     subscribingFunctions.add(function)
   }

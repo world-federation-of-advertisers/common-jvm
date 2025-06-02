@@ -47,10 +47,20 @@ interface StorageClient {
   /** Returns a [Blob] for the specified key, or `null` if it cannot be found. */
   suspend fun getBlob(blobKey: String): Blob?
 
+  /**
+   * Lists Blobs
+   *
+   * @param prefix A blob key prefix. When not specified, all blobs are returned. When specified, it
+   *   filters out blobs with blob keys that do not match the prefix.
+   */
+  suspend fun listBlobs(prefix: String? = null): Flow<Blob>
+
   /** Reference to a blob in a storage system. */
   interface Blob {
     /** The [StorageClient] from which this [Blob] was obtained. */
     val storageClient: StorageClient
+
+    val blobKey: String
 
     /** Size of the blob in bytes. */
     val size: Long

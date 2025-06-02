@@ -73,6 +73,10 @@ class SelectedStorageClient(
     return underlyingClient.getBlob(blobKey)
   }
 
+  override suspend fun listBlobs(prefix: String?): Flow<StorageClient.Blob> {
+    return underlyingClient.listBlobs(prefix)
+  }
+
   companion object {
 
     fun parseBlobUri(url: String): BlobUri {

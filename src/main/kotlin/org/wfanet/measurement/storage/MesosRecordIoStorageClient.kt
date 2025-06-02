@@ -75,8 +75,12 @@ class MesosRecordIoStorageClient(private val storageClient: StorageClient) : Sto
     return blob?.let { Blob(it, blobKey) }
   }
 
+  override suspend fun listBlobs(prefix: String?): Flow<StorageClient.Blob> {
+    return storageClient.listBlobs(prefix)
+  }
+
   /** A blob that will read the content in RecordIO format */
-  private inner class Blob(private val blob: StorageClient.Blob, private val blobKey: String) :
+  private inner class Blob(private val blob: StorageClient.Blob, override val blobKey: String) :
     StorageClient.Blob {
     override val storageClient = this@MesosRecordIoStorageClient.storageClient
 

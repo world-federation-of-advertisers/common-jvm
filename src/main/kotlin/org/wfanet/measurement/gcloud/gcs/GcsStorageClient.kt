@@ -14,6 +14,7 @@
 
 package org.wfanet.measurement.gcloud.gcs
 
+import com.google.api.gax.paging.Page
 import com.google.cloud.storage.Blob
 import com.google.cloud.storage.BlobInfo
 import com.google.cloud.storage.Storage
@@ -24,6 +25,8 @@ import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.time.delay
 import kotlinx.coroutines.withContext
@@ -106,17 +109,48 @@ class GcsStorageClient(
           }
         }
       }
-      ClientBlob(blob.reload())
+      ClientBlob(blob.reload(), blobKey)
     }
 
   override suspend fun getBlob(blobKey: String): StorageClient.Blob? {
     val blob: Blob? =
       withContext(blockingContext + CoroutineName("getBlob")) { storage.get(bucketName, blobKey) }
-    return blob?.let { ClientBlob(blob) }
+    return blob?.let { ClientBlob(blob, blobKey) }
+  }
+
+  override suspend fun listBlobs(prefix: String?): Flow<StorageClient.Blob> {
+    val options = mutableListOf<Storage.BlobListOption>()
+
+    if (!prefix.isNullOrEmpty()) {
+      options.add(Storage.BlobListOption.prefix(prefix))
+    }
+
+    val blobPage: Page<Blob> =
+      try {
+        storage.list(bucketName, *options.toTypedArray())
+      } catch (e: GcsStorageException) {
+        throw StorageException("Fail to list blobs.", e)
+      }
+
+    return flow {
+        for (blob: Blob in blobPage.iterateAll()) {
+          emit(ClientBlob(blob, blob.name))
+        }
+
+        var nextPage: Page<Blob>? = blobPage.nextPage
+        while (nextPage != null) {
+          for (blob: Blob in nextPage.iterateAll()) {
+            emit(ClientBlob(blob, blob.name))
+          }
+          nextPage = nextPage.nextPage
+        }
+      }
+      .flowOn(blockingContext + CoroutineName("listBlobs"))
   }
 
   /** [StorageClient.Blob] implementation for [GcsStorageClient]. */
-  private inner class ClientBlob(private val blob: Blob) : StorageClient.Blob {
+  private inner class ClientBlob(private val blob: Blob, override val blobKey: String) :
+    StorageClient.Blob {
     override val storageClient: StorageClient
       get() = this@GcsStorageClient
 

@@ -19,6 +19,7 @@ import com.google.protobuf.kotlin.toByteString
 import java.security.MessageDigest
 import java.util.Base64
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CompletionException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
@@ -43,6 +44,7 @@ import software.amazon.awssdk.services.s3.model.CreateMultipartUploadRequest
 import software.amazon.awssdk.services.s3.model.CreateMultipartUploadResponse
 import software.amazon.awssdk.services.s3.model.GetObjectResponse
 import software.amazon.awssdk.services.s3.model.HeadObjectResponse
+import software.amazon.awssdk.services.s3.model.ListObjectsV2Response
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException
 import software.amazon.awssdk.services.s3.model.UploadPartRequest
 import software.amazon.awssdk.services.s3.model.UploadPartResponse
@@ -136,7 +138,7 @@ class S3StorageClient(private val s3: S3AsyncClient, private val bucketName: Str
 
   override suspend fun getBlob(blobKey: String): StorageClient.Blob? {
     val head = head(blobKey) ?: return null
-    return Blob(blobKey, head)
+    return Blob(blobKey, head.contentLength())
   }
 
   private suspend fun head(blobKey: String): HeadObjectResponse? {
@@ -152,12 +154,42 @@ class S3StorageClient(private val s3: S3AsyncClient, private val bucketName: Str
     }
   }
 
-  inner class Blob internal constructor(private val blobKey: String, head: HeadObjectResponse) :
+  override suspend fun listBlobs(prefix: String?): Flow<StorageClient.Blob> {
+    return flow {
+      try {
+        var truncated = true
+        var continuationToken: String? = null
+        while (truncated) {
+          val listObjectsV2Response: ListObjectsV2Response =
+            s3
+              .listObjectsV2 {
+                it.bucket(bucketName)
+                if (!prefix.isNullOrEmpty()) {
+                  it.prefix(prefix)
+                }
+                if (continuationToken != null) {
+                  it.continuationToken(continuationToken)
+                }
+              }
+              .await()
+
+          truncated = listObjectsV2Response.isTruncated
+          continuationToken = listObjectsV2Response.nextContinuationToken()
+
+          listObjectsV2Response.contents().map { Blob(it.key(), it.size()) }.forEach { emit(it) }
+        }
+      } catch (e: CompletionException) {
+        throw e.cause!!
+      }
+    }
+  }
+
+  inner class Blob internal constructor(override val blobKey: String, contentLength: Long) :
     StorageClient.Blob {
     override val storageClient: StorageClient
       get() = this@S3StorageClient
 
-    override val size: Long = head.contentLength()
+    override val size: Long = contentLength
 
     override fun read(): Flow<ByteString> {
       val responseFuture: CompletableFuture<ResponsePublisher<GetObjectResponse>> =

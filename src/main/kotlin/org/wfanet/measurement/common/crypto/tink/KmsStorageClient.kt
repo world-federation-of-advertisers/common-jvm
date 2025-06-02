@@ -70,8 +70,12 @@ internal constructor(
     return blob?.let { AeadBlob(it, blobKey) }
   }
 
+  override suspend fun listBlobs(prefix: String?): Flow<StorageClient.Blob> {
+    return storageClient.listBlobs(prefix)
+  }
+
   /** A blob that will decrypt the content when read */
-  private inner class AeadBlob(private val blob: StorageClient.Blob, private val blobKey: String) :
+  private inner class AeadBlob(private val blob: StorageClient.Blob, override val blobKey: String) :
     StorageClient.Blob {
     override val storageClient = this@KmsStorageClient.storageClient
 
