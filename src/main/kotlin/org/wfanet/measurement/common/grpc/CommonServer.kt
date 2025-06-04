@@ -24,15 +24,12 @@ import io.grpc.protobuf.services.ProtoReflectionServiceV1
 import io.netty.handler.ssl.ClientAuth
 import io.netty.handler.ssl.SslContext
 import java.io.IOException
-import java.util.concurrent.LinkedBlockingQueue
-import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.logging.Level
 import java.util.logging.Logger
 import kotlin.properties.Delegates
 import org.jetbrains.annotations.Blocking
-import org.wfanet.measurement.common.Instrumentation
 import org.wfanet.measurement.common.crypto.SigningCerts
 import picocli.CommandLine
 
@@ -41,19 +38,11 @@ private constructor(
   private val nameForLogging: String,
   port: Int,
   healthPort: Int,
-  threadPoolSize: Int,
   private val shutdownGracePeriodSeconds: Int,
   verboseGrpcLogging: Boolean,
   services: Iterable<ServerServiceDefinition>,
   sslContext: SslContext?,
 ) : AutoCloseable {
-  init {
-    require(threadPoolSize > 1)
-  }
-
-  private val executor =
-    ThreadPoolExecutor(1, threadPoolSize, 60L, TimeUnit.SECONDS, LinkedBlockingQueue())
-  private lateinit var instrumentationHandle: Instrumentation.Handle
   private val healthStatusManager = HealthStatusManager()
   private val started = AtomicBoolean(false)
 
@@ -64,14 +53,13 @@ private constructor(
     get() = healthServer.port
 
   private val server: Server by lazy {
-    logger.info { "$nameForLogging thread pool size: $threadPoolSize" }
     if (verboseGrpcLogging) {
       logger.info { "$nameForLogging verbose gRPC server logging enabled" }
     }
 
     NettyServerBuilder.forPort(port)
       .apply {
-        executor(executor)
+        directExecutor()
         if (sslContext != null) {
           sslContext(sslContext)
         }
@@ -90,8 +78,10 @@ private constructor(
 
   private val healthServer: Server by lazy {
     NettyServerBuilder.forPort(healthPort)
-      .executor(executor)
-      .apply { addService(healthStatusManager.healthService) }
+      .apply {
+        directExecutor()
+        addService(healthStatusManager.healthService)
+      }
       .build()
   }
 
@@ -118,7 +108,6 @@ private constructor(
   @Throws(IOException::class)
   fun start(): CommonServer {
     check(!started.get()) { "$nameForLogging already started" }
-    instrumentationHandle = Instrumentation.instrumentThreadPool(nameForLogging, executor)
     server.start()
     server.services.forEach {
       healthStatusManager.setStatus(it.serviceDescriptor.name, ServingStatus.SERVING)
@@ -183,7 +172,6 @@ private constructor(
       }
     }
 
-    instrumentationHandle.close()
     if (interrupted) {
       Thread.currentThread().interrupt()
     }
@@ -218,13 +206,6 @@ private constructor(
     var healthPort by Delegates.notNull<Int>()
       private set
 
-    @CommandLine.Option(
-      names = ["--grpc-thread-pool-size"],
-      description = ["Size of thread pool for gRPC server.", "Defaults to number of cores * 2."],
-    )
-    var threadPoolSize: Int = DEFAULT_THREAD_POOL_SIZE
-      private set
-
     @set:CommandLine.Option(
       names = ["--debug-verbose-grpc-server-logging"],
       description = ["Debug mode: log ALL gRPC requests and responses"],
@@ -246,7 +227,6 @@ private constructor(
     private val logger = Logger.getLogger(this::class.java.name)
 
     const val DEFAULT_SHUTDOWN_GRACE_PERIOD_SECONDS = 25
-    val DEFAULT_THREAD_POOL_SIZE = Runtime.getRuntime().availableProcessors() * 2
 
     /** Constructs a [CommonServer] from parameters. */
     fun fromParameters(
@@ -257,14 +237,12 @@ private constructor(
       services: Iterable<ServerServiceDefinition>,
       port: Int = 0,
       healthPort: Int = 0,
-      threadPoolSize: Int = DEFAULT_THREAD_POOL_SIZE,
       shutdownGracePeriodSeconds: Int = DEFAULT_SHUTDOWN_GRACE_PERIOD_SECONDS,
     ): CommonServer {
       return CommonServer(
         nameForLogging,
         port,
         healthPort,
-        threadPoolSize,
         shutdownGracePeriodSeconds,
         verboseGrpcLogging,
         services,
@@ -286,7 +264,6 @@ private constructor(
         services,
         flags.port,
         flags.healthPort,
-        flags.threadPoolSize,
         flags.shutdownGracePeriodSeconds,
       )
     }
