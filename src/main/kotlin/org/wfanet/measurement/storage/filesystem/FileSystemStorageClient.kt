@@ -65,12 +65,15 @@ class FileSystemStorageClient(
   }
 
   private fun resolvePath(blobKey: String): File {
+    println("~~~~~~~~~~~~~~~~~~~~~~~~~~~~ resolvePath, bk: ${blobKey}")
+    println("~~~~~~~~~~~~~~~~~~~~~~~~~~~~ resolvePath, directory: ${directory}")
     val relativePath =
       if (File.separatorChar == '/') {
         blobKey
       } else {
         blobKey.replace('/', File.separatorChar)
       }
+    println("~~~~~~~~~~~~~~~~~~~~~~~~~~~~ resolvePath, rp: ${relativePath}")
     return directory.resolve(relativePath)
   }
 
