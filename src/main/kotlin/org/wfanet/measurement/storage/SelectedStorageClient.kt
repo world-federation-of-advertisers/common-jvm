@@ -56,6 +56,8 @@ class SelectedStorageClient(
         GcsStorageClient(storageOptions.service, requireNotNull(blobUri.bucket))
       }
       "file" -> {
+        println("~~~~~~~~~~~~~~~~~~~~~~~~~~ ROOT DIR1: ${rootDirectory}")
+        println("~~~~~~~~~~~~~~~~~~~~~~~~~~ ROOT DIR1: ${blobUri.bucket}")
         FileSystemStorageClient(
           checkNotNull(rootDirectory).toPath().resolve(blobUri.bucket).toFile()
         )
