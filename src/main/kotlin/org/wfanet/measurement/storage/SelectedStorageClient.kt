@@ -81,6 +81,7 @@ class SelectedStorageClient(
 
     fun parseBlobUri(url: String): BlobUri {
       val uri = URI.create(url)
+      println("~~~~~~~~~~~~~~~~~~~~~~~~~~ SSC, URL: ${url}")
       println("~~~~~~~~~~~~~~~~~~~~~~~~~~ SSC, URI: ${uri}")
       println("~~~~~~~~~~~~~~~~~~~~~~~~~~ SSC, URI2:")
       println("~~~~~~~~~~~~~~~~~~~~~~~~~~ SSC, URI schema: ${uri.scheme}")
