@@ -71,6 +71,8 @@ class SelectedStorageClient(
   }
 
   override suspend fun getBlob(blobKey: String): StorageClient.Blob? {
+    println("~~~~~~~~~~~~~~~~~~~~ blobUri.key: ${blobUri.key}")
+    println("~~~~~~~~~~~~~~~~~~~~ blobKey: ${blobKey}")
     check(blobUri.key == blobKey)
     return underlyingClient.getBlob(blobKey)
   }
