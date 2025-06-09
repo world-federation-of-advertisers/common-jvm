@@ -77,6 +77,7 @@ class SelectedStorageClient(
 
     fun parseBlobUri(url: String): BlobUri {
       val uri = URI.create(url)
+      println("~~~~~~~~~~~~~~~~~~~~~~~~~~ SSC, URI: ${uri}")
       return when (uri.scheme) {
         "s3" -> {
           throw IllegalArgumentException("S3 is not currently supported")
