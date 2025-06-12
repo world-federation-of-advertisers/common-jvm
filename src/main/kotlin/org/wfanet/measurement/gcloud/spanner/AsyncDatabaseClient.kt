@@ -52,13 +52,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asExecutor
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ProducerScope
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.singleOrNull
 import kotlinx.coroutines.launch
@@ -255,15 +253,12 @@ private class ReadContextImpl(private val delegate: ReadContext) :
       delegate.executeQueryAsync(statement, *options)
     }
 
-  private fun flowFrom(executeQuery: () -> AsyncResultSet): Flow<Struct> {
-    return callbackFlow {
-        // Defer executing the query until we're in the producer scope.
-        val resultSet: AsyncResultSet = executeQuery()
+  private fun flowFrom(executeQuery: () -> AsyncResultSet): Flow<Struct> = callbackFlow {
+    // Defer executing the query until we're in the producer scope.
+    val resultSet: AsyncResultSet = executeQuery()
 
-        resultSet.setCallback(underlyingExecutor, ::readyCallback)
-        awaitClose { resultSet.cancel() }
-      }
-      .buffer(Channel.RENDEZVOUS)
+    resultSet.setCallback(underlyingExecutor, ::readyCallback)
+    awaitClose { resultSet.cancel() }
   }
 }
 
@@ -371,22 +366,20 @@ private class TransactionManagerImpl(private val delegate: AsyncTransactionManag
         txn.executeQueryAsync(statement, *options)
       }
 
-    private fun flowFrom(read: (TransactionContext) -> AsyncResultSet): Flow<Struct> {
-      return callbackFlow {
-          val future = SettableApiFuture.create<Unit>()
-          var resultSet: AsyncResultSet? = null
+    private fun flowFrom(read: (TransactionContext) -> AsyncResultSet): Flow<Struct> =
+      callbackFlow {
+        val future = SettableApiFuture.create<Unit>()
+        var resultSet: AsyncResultSet? = null
 
-          manager.runInTransaction { txn ->
-            resultSet = read(txn).also { it.setCallback(underlyingExecutor, ::readyCallback) }
-            future
-          }
-          awaitClose {
-            resultSet?.cancel()
-            future.set(Unit)
-          }
+        manager.runInTransaction { txn ->
+          resultSet = read(txn).also { it.setCallback(underlyingExecutor, ::readyCallback) }
+          future
         }
-        .buffer(Channel.RENDEZVOUS)
-    }
+        awaitClose {
+          resultSet?.cancel()
+          future.set(Unit)
+        }
+      }
   }
 }
 
