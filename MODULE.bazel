@@ -287,14 +287,14 @@ oci = use_extension("@rules_oci//oci:extensions.bzl", "oci")
 oci.pull(
     name = "java_image_base",
     # Digest of nonroot tag.
-    digest = "sha256:2db4acff2603088acaf67dac414462c9fcc3e2cc3ff9a642d5af9c7cff2b5fe9",
+    digest = "sha256:b7e27d71997c35000b0097c1c2ffc58e2f00a614804e5c9eb28fa480d540bbc0",
     image = "gcr.io/distroless/java17-debian12",
     platforms = ["linux/amd64"],
 )
 oci.pull(
     name = "java_debug_image_base",
     # Digest of debug-nonroot tag.
-    digest = "sha256:ba4e9fa14e71499ec20b70599d0528a1636941b04c54ab08b3bc69468c1837c8",
+    digest = "sha256:3b3eed40edb1ee75d9da5363177e38eb329c5f6231e86cdc9ae0384049ea82fd",
     image = "gcr.io/distroless/java17-debian12",
     platforms = ["linux/amd64"],
 )
