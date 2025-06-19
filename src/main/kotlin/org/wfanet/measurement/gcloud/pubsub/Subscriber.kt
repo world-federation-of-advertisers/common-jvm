@@ -62,15 +62,18 @@ class Subscriber(
           subscriptionId = subscriptionId,
           ackExtensionPeriod = Duration.ofHours(6),
         ) { message, consumer ->
+          logger.info("~~~~~~~~~~~~~~~~~~~~~~~ got message")
           val parsedMessage = parser.parseFrom(message.data.toByteArray())
+          logger.info("~~~~~~~~~~~~~~~~~~~~~~~ parsed message")
           val queueMessage =
             QueueSubscriber.QueueMessage(
               body = parsedMessage,
               consumer = PubSubMessageConsumer(consumer),
             )
-
+          logger.info("~~~~~~~~~~~~~~~~~~~~~~~ sending message")
           val result = trySendBlocking(queueMessage)
           if (result.isClosed) {
+            logger.info("~~~~~~~~~~~~~~~~~~~~~~~ channel closed")
             throw ClosedSendChannelException("Channel is closed. Cannot send message.")
           }
         }
@@ -79,12 +82,16 @@ class Subscriber(
       logger.info("Subscriber started for subscription: $subscriptionId")
 
       awaitClose {
+        logger.info("~~~~~~~~~~~~~~~~~~~~~~~ calling await close!!")
         subscriber.stopAsync()
+        logger.info("~~~~~~~~~~~~~~~~~~~~~~~ calling await close!!2")
         subscriber.awaitTerminated()
+        logger.info("~~~~~~~~~~~~~~~~~~~~~~~ calling await close!!3")
       }
     }
 
   override fun close() {
+    logger.info("~~~~~~~~~~~~~~~~~~~~~~~ CALLING CLOSE FUNCTION")
     scope.cancel()
   }
 
