@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 The Cross-Media Measurement Authors
+ * Copyright 2025 The Cross-Media Measurement Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,18 @@ import io.grpc.ServerServiceDefinition
 import io.grpc.inprocess.InProcessServerBuilder
 import java.util.concurrent.TimeUnit
 
+/**
+ * Utility methods for creating and managing in-process gRPC servers.
+ */
 object InProcessServersMethods {
+  /**
+   * Starts an in-process gRPC server with the specified service.
+   *
+   * @param serverName the name of the in-process server
+   * @param commonServerFlags common server configuration flags
+   * @param service the gRPC service definition to add to the server
+   * @return the started [Server] instance
+   */
   fun startInProcessServerWithService(
     serverName: String,
     commonServerFlags: CommonServer.Flags,
