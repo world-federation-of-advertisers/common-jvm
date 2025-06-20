@@ -21,9 +21,7 @@ import io.grpc.ServerServiceDefinition
 import io.grpc.inprocess.InProcessServerBuilder
 import java.util.concurrent.TimeUnit
 
-/**
- * Utility methods for creating and managing in-process gRPC servers.
- */
+/** Utility methods for creating and managing in-process gRPC servers. */
 object InProcessServersMethods {
   /**
    * Starts an in-process gRPC server with the specified service.
@@ -34,41 +32,40 @@ object InProcessServersMethods {
    * @return the started [Server] instance
    */
   fun startInProcessServerWithService(
-    serverName: String,
-    commonServerFlags: CommonServer.Flags,
-    service: ServerServiceDefinition,
+      serverName: String,
+      commonServerFlags: CommonServer.Flags,
+      service: ServerServiceDefinition,
   ): Server {
     val server: Server =
-      InProcessServerBuilder.forName(serverName)
-        .apply {
-          directExecutor()
-          addService(service)
-          if (commonServerFlags.debugVerboseGrpcLogging) {
-            intercept(LoggingServerInterceptor)
-          } else {
-            intercept(ErrorLoggingServerInterceptor)
-          }
-        }
-        .build()
+        InProcessServerBuilder.forName(serverName)
+            .apply {
+              directExecutor()
+              addService(service)
+              if (commonServerFlags.debugVerboseGrpcLogging) {
+                intercept(LoggingServerInterceptor)
+              } else {
+                intercept(ErrorLoggingServerInterceptor)
+              }
+            }
+            .build()
 
     Runtime.getRuntime()
-      .addShutdownHook(
-        object : Thread() {
-          override fun run() {
-            server.shutdown()
-            try {
-              // Wait for in-flight RPCs to complete.
-              server.awaitTermination(
-                commonServerFlags.shutdownGracePeriodSeconds.toLong(),
-                TimeUnit.SECONDS,
-              )
-            } catch (e: InterruptedException) {
-              currentThread().interrupt()
-            }
-            server.shutdownNow()
-          }
-        }
-      )
+        .addShutdownHook(
+            object : Thread() {
+              override fun run() {
+                server.shutdown()
+                try {
+                  // Wait for in-flight RPCs to complete.
+                  server.awaitTermination(
+                      commonServerFlags.shutdownGracePeriodSeconds.toLong(),
+                      TimeUnit.SECONDS,
+                  )
+                } catch (e: InterruptedException) {
+                  currentThread().interrupt()
+                }
+                server.shutdownNow()
+              }
+            })
 
     return server.start()
   }
