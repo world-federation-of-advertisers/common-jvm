@@ -119,13 +119,9 @@ class MesosRecordIoStorageClient(private val storageClient: StorageClient) : Sto
       val recordSizeBuffer = StringBuilder()
       var currentRecordSize = -1
       var recordBuffer = ByteString.newOutput()
+      var counter = 0
 
       blob.read().collect { chunk: ByteString ->
-        try {
-          println("~~~~~~ CHUNK: ${chunk.toString(Charsets.UTF_8)}")
-        }catch (e: Exception) {
-          logger.severe(e.message)
-        }
         var position = 0
 
         while (position < chunk.size()) {
@@ -138,8 +134,14 @@ class MesosRecordIoStorageClient(private val storageClient: StorageClient) : Sto
                 chunk.substring(position, newlineIndex).toString(Charsets.UTF_8)
               )
               val sizeStr = recordSizeBuffer.toString()
-              logger.warning("~~~~~~~~ Parsing record size from: '$sizeStr'")
-              currentRecordSize = recordSizeBuffer.toString().toInt()
+              try {
+                currentRecordSize = recordSizeBuffer.toString().toInt()
+                counter++
+              } catch (e: Exception) {
+                logger.info("~~~~~~~~ Erroring while parsing record size from: '$sizeStr', counter: $counter")
+                logger.severe(e.message)
+                throw e
+              }
               recordSizeBuffer.clear()
               recordBuffer = ByteString.newOutput(currentRecordSize)
               position = newlineIndex + 1
