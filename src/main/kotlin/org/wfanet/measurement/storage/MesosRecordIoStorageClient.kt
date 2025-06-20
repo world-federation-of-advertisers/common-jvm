@@ -146,7 +146,10 @@ class MesosRecordIoStorageClient(private val storageClient: StorageClient) : Sto
               recordBuffer = ByteString.newOutput(currentRecordSize)
               position = newlineIndex + 1
             } else {
-              recordSizeBuffer.append(chunk)
+//              recordSizeBuffer.append(chunk)
+              val trailing: ByteString = chunk.substring(position, chunk.size())
+              val textPart: String = trailing.toStringUtf8()
+              recordSizeBuffer.append(textPart)
               break
             }
           }
