@@ -19,8 +19,6 @@ import com.google.crypto.tink.KeysetHandle
 import com.google.crypto.tink.KmsClient
 import com.google.crypto.tink.StreamingAead
 import com.google.crypto.tink.TinkProtoKeysetFormat
-import com.google.crypto.tink.aead.AeadConfig
-import com.google.crypto.tink.streamingaead.StreamingAeadConfig
 import com.google.crypto.tink.streamingaead.StreamingAeadKey
 import com.google.protobuf.ByteString
 import kotlin.coroutines.CoroutineContext
@@ -42,9 +40,6 @@ fun StorageClient.withEnvelopeEncryption(
   encryptedDek: ByteString,
   aeadContext: @BlockingExecutor CoroutineContext = Dispatchers.IO,
 ): StorageClient {
-
-  AeadConfig.register()
-  StreamingAeadConfig.register()
 
   val storageClient = this
   val kekAead = kmsClient.getAead(kekUri)

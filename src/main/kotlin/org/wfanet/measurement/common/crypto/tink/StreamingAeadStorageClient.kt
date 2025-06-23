@@ -34,6 +34,8 @@ import org.wfanet.measurement.common.CoroutineReadableByteChannel
 import org.wfanet.measurement.common.CoroutineWritableByteChannel
 import org.wfanet.measurement.common.asFlow
 import org.wfanet.measurement.storage.StorageClient
+import com.google.crypto.tink.aead.AeadConfig
+import com.google.crypto.tink.streamingaead.StreamingAeadConfig
 
 /**
  * A wrapper class for the [StorageClient] interface that leverages Tink AEAD encryption/decryption
@@ -142,5 +144,11 @@ class StreamingAeadStorageClient(
 
   companion object {
     private val logger = Logger.getLogger(this::class.java.name)
+
+    init {
+      AeadConfig.register()
+      StreamingAeadConfig.register()
+    }
+
   }
 }
