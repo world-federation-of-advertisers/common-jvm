@@ -146,7 +146,6 @@ class StreamingAeadStorageClient(
     private val logger = Logger.getLogger(this::class.java.name)
 
     init {
-      AeadConfig.register()
       StreamingAeadConfig.register()
     }
   }
