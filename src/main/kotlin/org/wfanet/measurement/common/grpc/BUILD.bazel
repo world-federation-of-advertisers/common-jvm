@@ -11,6 +11,7 @@ kt_jvm_library(
         "//imports/java/com/google/protobuf",
         "//imports/java/io/grpc:api",
         "//imports/java/io/grpc:context",
+        "//imports/java/io/grpc/inprocess",
         "//imports/java/io/grpc/netty",
         "//imports/java/io/grpc/protobuf/services",
         "//imports/java/io/netty/handler",
