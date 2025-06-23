@@ -15,6 +15,8 @@
 package org.wfanet.measurement.common.crypto.tink
 
 import com.google.crypto.tink.StreamingAead
+import com.google.crypto.tink.aead.AeadConfig
+import com.google.crypto.tink.streamingaead.StreamingAeadConfig
 import com.google.protobuf.ByteString
 import java.nio.channels.ClosedChannelException
 import java.util.logging.Logger
@@ -34,8 +36,6 @@ import org.wfanet.measurement.common.CoroutineReadableByteChannel
 import org.wfanet.measurement.common.CoroutineWritableByteChannel
 import org.wfanet.measurement.common.asFlow
 import org.wfanet.measurement.storage.StorageClient
-import com.google.crypto.tink.aead.AeadConfig
-import com.google.crypto.tink.streamingaead.StreamingAeadConfig
 
 /**
  * A wrapper class for the [StorageClient] interface that leverages Tink AEAD encryption/decryption
@@ -149,6 +149,5 @@ class StreamingAeadStorageClient(
       AeadConfig.register()
       StreamingAeadConfig.register()
     }
-
   }
 }
