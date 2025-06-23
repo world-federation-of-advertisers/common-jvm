@@ -15,7 +15,6 @@
 package org.wfanet.measurement.common.crypto.tink
 
 import com.google.crypto.tink.StreamingAead
-import com.google.crypto.tink.aead.AeadConfig
 import com.google.crypto.tink.streamingaead.StreamingAeadConfig
 import com.google.protobuf.ByteString
 import java.nio.channels.ClosedChannelException
