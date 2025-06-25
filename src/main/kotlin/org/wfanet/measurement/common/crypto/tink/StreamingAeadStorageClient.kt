@@ -15,6 +15,7 @@
 package org.wfanet.measurement.common.crypto.tink
 
 import com.google.crypto.tink.StreamingAead
+import com.google.crypto.tink.streamingaead.StreamingAeadConfig
 import com.google.protobuf.ByteString
 import java.nio.channels.ClosedChannelException
 import java.util.logging.Logger
@@ -142,5 +143,9 @@ class StreamingAeadStorageClient(
 
   companion object {
     private val logger = Logger.getLogger(this::class.java.name)
+
+    init {
+      StreamingAeadConfig.register()
+    }
   }
 }
