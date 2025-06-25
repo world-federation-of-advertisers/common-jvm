@@ -16,13 +16,18 @@ package org.wfanet.measurement.gcloud.gcs
 
 import com.google.cloud.storage.Storage
 import com.google.cloud.storage.StorageOptions
+import org.wfanet.measurement.common.Instrumentation
 import picocli.CommandLine
 
 /** Client access provider for Google Cloud Storage (GCS) via command-line flags. */
 class GcsFromFlags(private val flags: Flags) {
 
   private val storageOptions: StorageOptions by lazy {
-    StorageOptions.newBuilder().setProjectId(flags.projectName).build()
+    StorageOptions.grpc()
+      .setOpenTelemetry(Instrumentation.openTelemetry)
+      .setEnableGrpcClientMetrics(true)
+      .setProjectId(flags.projectName)
+      .build()
   }
 
   val storage: Storage

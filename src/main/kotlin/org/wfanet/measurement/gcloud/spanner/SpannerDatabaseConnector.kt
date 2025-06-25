@@ -29,10 +29,11 @@ class SpannerDatabaseConnector(
   instanceName: String,
   databaseName: String,
   private val readyTimeout: Duration,
+  asyncThreadPoolSize: Int,
   emulatorHost: String?,
 ) : AutoCloseable {
   private val spanner: Spanner =
-    buildSpanner(projectName, emulatorHost).also {
+    buildSpanner(projectName, emulatorHost, asyncThreadPoolSize).also {
       Runtime.getRuntime()
         .addShutdownHook(
           Thread {
@@ -92,6 +93,7 @@ private fun SpannerFlags.toSpannerDatabaseConnector(): SpannerDatabaseConnector 
     instanceName = instanceName,
     databaseName = databaseName,
     readyTimeout = readyTimeout,
+    asyncThreadPoolSize = asyncThreadPoolSize,
     emulatorHost = emulatorHost,
   )
 }

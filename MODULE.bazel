@@ -264,7 +264,7 @@ maven.install(
         "org.jetbrains.kotlinx:kotlinx-coroutines-bom:" + KOTLINX_COROUTINES_VERSION,
         "com.google.protobuf:protobuf-bom:" + PROTOBUF_JAVA_VERSION,
         "io.grpc:grpc-bom:" + GRPC_JAVA_VERSION,
-        "com.google.cloud:libraries-bom:26.45.0",
+        "com.google.cloud:libraries-bom:26.62.0",
         "software.amazon.awssdk:bom:" + AWS_JAVA_SDK_VERSION,
         "io.opentelemetry:opentelemetry-bom:1.42.1",
         "org.testcontainers:testcontainers-bom:1.19.3",
