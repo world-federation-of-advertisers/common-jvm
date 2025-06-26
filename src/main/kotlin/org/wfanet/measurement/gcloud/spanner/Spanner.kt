@@ -21,7 +21,11 @@ import com.google.cloud.spanner.Spanner
 import com.google.cloud.spanner.SpannerException
 import com.google.cloud.spanner.SpannerOptions
 import com.google.cloud.spanner.Statement
+import java.util.concurrent.ScheduledThreadPoolExecutor
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import org.wfanet.measurement.common.Instrumentation
+import org.wfanet.measurement.common.NamedThreadFactory
 
 /**
  * Convenience function for appending without worrying about whether the last [append] had
@@ -34,8 +38,23 @@ fun Mutation.bufferTo(transactionContext: AsyncDatabaseClient.TransactionContext
   transactionContext.buffer(this)
 }
 
+private val spannerCount = AtomicInteger()
+
 /** Constructs a [Spanner]. */
-fun buildSpanner(projectName: String, spannerEmulatorHost: String? = null): Spanner {
+fun buildSpanner(
+  projectName: String,
+  spannerEmulatorHost: String? = null,
+  asyncThreadPoolSize: Int = 8,
+): Spanner {
+  val poolName = "spanner-${spannerCount.incrementAndGet()}-async"
+  val threadFactory =
+    NamedThreadFactory({ task -> Thread(task).apply { isDaemon = true } }, poolName)
+  val asyncExecutor =
+    ScheduledThreadPoolExecutor(asyncThreadPoolSize, threadFactory).apply {
+      setKeepAliveTime(60L, TimeUnit.SECONDS)
+    }
+  Instrumentation.instrumentThreadPool(poolName, asyncExecutor)
+
   SpannerOptions.enableOpenTelemetryMetrics()
   SpannerOptions.enableOpenTelemetryTraces()
   return SpannerOptions.newBuilder()
@@ -46,6 +65,7 @@ fun buildSpanner(projectName: String, spannerEmulatorHost: String? = null): Span
       }
       setSessionPoolOption(SessionPoolOptions.newBuilder().setWarnIfInactiveTransactions().build())
       setOpenTelemetry(Instrumentation.openTelemetry)
+      setAsyncExecutorProvider(SpannerOptions.FixedCloseableExecutorProvider.create(asyncExecutor))
     }
     .build()
     .service

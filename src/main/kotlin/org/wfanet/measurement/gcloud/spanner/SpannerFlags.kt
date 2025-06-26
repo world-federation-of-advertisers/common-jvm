@@ -15,6 +15,7 @@
 package org.wfanet.measurement.gcloud.spanner
 
 import java.time.Duration
+import kotlin.properties.Delegates
 import picocli.CommandLine
 
 /** Common command-line flags for connecting to a single Spanner database. */
@@ -57,6 +58,14 @@ class SpannerFlags {
     required = false,
   )
   var emulatorHost: String? = null
+    private set
+
+  @set:CommandLine.Option(
+    names = ["--spanner-async-thread-pool-size"],
+    description = ["Size of the thread pool for Spanner async operations."],
+    defaultValue = "8",
+  )
+  var asyncThreadPoolSize: Int by Delegates.notNull()
     private set
 
   val jdbcConnectionString: String
