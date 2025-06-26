@@ -86,8 +86,8 @@ class SpannerDatabaseConnector(
   }
 }
 
-/** Builds a [SpannerDatabaseConnector] from these flags. */
-private fun SpannerFlags.toSpannerDatabaseConnector(): SpannerDatabaseConnector {
+/** Builds a [SpannerDatabaseConnector] from these params. */
+private fun SpannerParams.toSpannerDatabaseConnector(): SpannerDatabaseConnector {
   return SpannerDatabaseConnector(
     projectName = projectName,
     instanceName = instanceName,
@@ -102,7 +102,7 @@ private fun SpannerFlags.toSpannerDatabaseConnector(): SpannerDatabaseConnector 
  * Executes [block] with a [SpannerDatabaseConnector] resource once it's ready, ensuring that the
  * resource is closed.
  */
-suspend fun <R> SpannerFlags.usingSpanner(
+suspend fun <R> SpannerParams.usingSpanner(
   block: suspend (spanner: SpannerDatabaseConnector) -> R
 ): R {
   return toSpannerDatabaseConnector().usingSpanner(block)
