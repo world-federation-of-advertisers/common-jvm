@@ -18,55 +18,13 @@ import java.time.Duration
 import kotlin.properties.Delegates
 import picocli.CommandLine
 
-/** Common command-line flags for connecting to a single Spanner database. */
-class SpannerFlags {
-  @CommandLine.Option(
-    names = ["--spanner-project"],
-    description = ["Name of the Spanner project."],
-    required = true,
-  )
-  lateinit var projectName: String
-    private set
-
-  @CommandLine.Option(
-    names = ["--spanner-instance"],
-    description = ["Name of the Spanner instance."],
-    required = true,
-  )
-  lateinit var instanceName: String
-    private set
-
-  @CommandLine.Option(
-    names = ["--spanner-database"],
-    description = ["Name of the Spanner database."],
-    required = true,
-  )
-  lateinit var databaseName: String
-    private set
-
-  @CommandLine.Option(
-    names = ["--spanner-ready-timeout"],
-    description = ["How long to wait for Spanner to be ready."],
-    defaultValue = "10s",
-  )
-  lateinit var readyTimeout: Duration
-    private set
-
-  @CommandLine.Option(
-    names = ["--spanner-emulator-host"],
-    description = ["Host name and port of the spanner emulator."],
-    required = false,
-  )
-  var emulatorHost: String? = null
-    private set
-
-  @set:CommandLine.Option(
-    names = ["--spanner-async-thread-pool-size"],
-    description = ["Size of the thread pool for Spanner async operations."],
-    defaultValue = "8",
-  )
-  var asyncThreadPoolSize: Int by Delegates.notNull()
-    private set
+interface SpannerParams {
+  val projectName: String
+  val instanceName: String
+  val databaseName: String
+  val readyTimeout: Duration
+  val asyncThreadPoolSize: Int
+  val emulatorHost: String?
 
   val jdbcConnectionString: String
     get() {
@@ -77,4 +35,55 @@ class SpannerFlags {
         "jdbc:cloudspanner://$emulatorHost/$databasePath;usePlainText=true;autoConfigEmulator=true"
       }
     }
+}
+
+/** Common command-line flags for connecting to a single Spanner database. */
+class SpannerFlags : SpannerParams {
+  @CommandLine.Option(
+    names = ["--spanner-project"],
+    description = ["Name of the Spanner project."],
+    required = true,
+  )
+  override lateinit var projectName: String
+    private set
+
+  @CommandLine.Option(
+    names = ["--spanner-instance"],
+    description = ["Name of the Spanner instance."],
+    required = true,
+  )
+  override lateinit var instanceName: String
+    private set
+
+  @CommandLine.Option(
+    names = ["--spanner-database"],
+    description = ["Name of the Spanner database."],
+    required = true,
+  )
+  override lateinit var databaseName: String
+    private set
+
+  @CommandLine.Option(
+    names = ["--spanner-ready-timeout"],
+    description = ["How long to wait for Spanner to be ready."],
+    defaultValue = "10s",
+  )
+  override lateinit var readyTimeout: Duration
+    private set
+
+  @CommandLine.Option(
+    names = ["--spanner-emulator-host"],
+    description = ["Host name and port of the spanner emulator."],
+    required = false,
+  )
+  override var emulatorHost: String? = null
+    private set
+
+  @set:CommandLine.Option(
+    names = ["--spanner-async-thread-pool-size"],
+    description = ["Size of the thread pool for Spanner async operations."],
+    defaultValue = "8",
+  )
+  override var asyncThreadPoolSize: Int by Delegates.notNull()
+    private set
 }
