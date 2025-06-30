@@ -128,7 +128,9 @@ class MesosRecordIoStorageClient(private val storageClient: StorageClient) : Sto
 
             val newlineIndex = chunk.indexOf(RECORD_DELIMITER, position)
             if (newlineIndex != -1) {
-              require(newlineIndex != position)
+              require(recordSizeBuffer.isNotEmpty() || newlineIndex > position) {
+                "Record size is missing."
+              }
               recordSizeBuffer.append(
                 chunk.substring(position, newlineIndex).toString(Charsets.UTF_8)
               )
@@ -137,7 +139,7 @@ class MesosRecordIoStorageClient(private val storageClient: StorageClient) : Sto
               recordBuffer = ByteString.newOutput(currentRecordSize)
               position = newlineIndex + 1
             } else {
-              recordSizeBuffer.append(chunk)
+              recordSizeBuffer.append(chunk.substring(position, chunk.size()).toStringUtf8())
               break
             }
           }

@@ -201,4 +201,55 @@ class MesosRecordIoStorageClientTest {
       assertThat(testData).isEqualTo(ComplexMessage.parseFrom(record))
     }
   }
+
+  @Test
+  fun `test reading blob when record size and record delimiter are splitted across two chunks`() =
+    runBlocking {
+      val payload = "my-payload"
+      val sizeStr = payload.length.toString()
+      val chunk1 = ByteString.copyFromUtf8(sizeStr)
+      val chunk2 = ByteString.copyFromUtf8("\n" + payload)
+      val client = makeClientWithChunks(chunk1, chunk2)
+      val blob = client.getBlob("fake-blob-key")!!
+      val records = blob.read().toList()
+      assertThat(records).hasSize(1)
+      assertThat(records[0].toStringUtf8()).isEqualTo(payload)
+    }
+
+  @Test
+  fun `test reading blob when record size is splitted across two chunks`() = runBlocking {
+    val payload = "my-payload"
+    val sizeStr = payload.length.toString()
+    val chunk1 = ByteString.copyFromUtf8(sizeStr.take(2))
+    val chunk2 = ByteString.copyFromUtf8(sizeStr.drop(2) + "\n" + payload)
+    val client = makeClientWithChunks(chunk1, chunk2)
+    val blob = client.getBlob("fake-blob-key")!!
+    val records = blob.read().toList()
+    assertThat(records).hasSize(1)
+    assertThat(records[0].toStringUtf8()).isEqualTo(payload)
+  }
+
+  private fun makeClientWithChunks(vararg chunks: ByteString) =
+    MesosRecordIoStorageClient(
+      object : StorageClient {
+        override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>) =
+          throw UnsupportedOperationException("not used")
+
+        override suspend fun getBlob(blobKey: String) = FakeBlob(chunks.toList())
+
+        override suspend fun listBlobs(prefix: String?) =
+          throw UnsupportedOperationException("not used")
+      }
+    )
+
+  private class FakeBlob(private val chunks: List<ByteString>) : StorageClient.Blob {
+    override val blobKey: String = "fake"
+    override val size: Long = chunks.sumOf { it.size().toLong() }
+    override val storageClient: StorageClient
+      get() = throw UnsupportedOperationException("n/a")
+
+    override fun read(): Flow<ByteString> = flow { for (c in chunks) emit(c) }
+
+    override suspend fun delete() = Unit
+  }
 }
