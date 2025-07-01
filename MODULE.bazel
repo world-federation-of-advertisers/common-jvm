@@ -39,7 +39,7 @@ bazel_dep(
 )
 bazel_dep(
     name = "cloud-spanner-emulator-bin",
-    version = "1.5.23",
+    version = "1.5.37",
     repo_name = "cloud_spanner_emulator",
 )
 
@@ -47,7 +47,7 @@ bazel_dep(
 
 bazel_dep(
     name = "platforms",
-    version = "0.0.10",
+    version = "1.0.0",
 )
 bazel_dep(
     name = "bazel_skylib",
@@ -242,9 +242,9 @@ maven.install(
 
         # Liquibase.
         "org.yaml:snakeyaml:2.2",
-        "org.liquibase:liquibase-core:4.26.0",
-        "com.google.cloudspannerecosystem:liquibase-spanner:4.25.1",
-        "org.liquibase.ext:liquibase-postgresql:4.11.0",
+        "org.liquibase:liquibase-core:4.32.0",
+        "com.google.cloudspannerecosystem:liquibase-spanner:4.32.0",
+        "org.liquibase.ext:liquibase-postgresql:4.32.0",
 
         # Math library.
         "org.apache.commons:commons-math3:3.6.1",
