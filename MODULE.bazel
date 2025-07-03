@@ -4,11 +4,11 @@ module(
     repo_name = "wfa_common_jvm",
 )
 
-KOTLINX_COROUTINES_VERSION = "1.10.2"  # Compatible with rules_kotlin_jvm version.
+KOTLINX_COROUTINES_VERSION = "1.11.0"  # Compatible with rules_kotlin_jvm version.
 
-PROTOBUF_JAVA_VERSION = "4.33.1"  # Compatible with rules_kotlin_jvm version.
+PROTOBUF_JAVA_VERSION = "4.35.1"  # Compatible with rules_kotlin_jvm version.
 
-GRPC_JAVA_VERSION = "1.77.0"  # Compatible with rules_kotlin_jvm version.
+GRPC_JAVA_VERSION = "1.82.0"  # Compatible with rules_kotlin_jvm version.
 
 GRPC_KOTLIN_VERSION = "1.5.0"  # Compatible with rules_kotlin_jvm version.
 
@@ -32,6 +32,12 @@ bazel_dep(
     version = "0.14.0",
     repo_name = "wfa_rules_kotlin_jvm",
 )
+# DO_NOT_SUBMIT: use release version
+git_override(
+    module_name = "rules_kotlin_jvm",
+    commit = "df267d621f75989e481e56d773dbb313c9e6d627",
+    remote = "https://github.com/world-federation-of-advertisers/rules_kotlin_jvm.git",
+)
 bazel_dep(
     name = "cloud-spanner-emulator-bin",
     version = "1.5.52",
@@ -42,11 +48,11 @@ bazel_dep(
 
 bazel_dep(
     name = "platforms",
-    version = "1.0.0",
+    version = "1.1.0",
 )
 bazel_dep(
     name = "bazel_skylib",
-    version = "1.8.1",
+    version = "1.9.0",
 )
 bazel_dep(
     name = "rules_proto",
@@ -54,23 +60,23 @@ bazel_dep(
 )
 bazel_dep(
     name = "rules_pkg",
-    version = "1.0.1",
+    version = "1.2.0",
 )
 bazel_dep(
     name = "rules_java",
-    version = "8.15.2",
+    version = "9.6.1",
 )
 bazel_dep(
     name = "rules_kotlin",
-    version = "2.1.10",
+    version = "2.4.0",
 )
 bazel_dep(
     name = "rules_multirun",
-    version = "0.6.1",
+    version = "0.14.0",
 )
 bazel_dep(
     name = "protobuf",
-    version = "33.1",
+    version = "35.1",
     repo_name = "com_google_protobuf",
 )
 bazel_dep(
@@ -80,75 +86,14 @@ bazel_dep(
 )
 bazel_dep(
     name = "rules_jvm_external",
-    version = "6.8",
+    version = "6.9",
 )
 bazel_dep(
     name = "rules_oci",
-    version = "2.0.0",
+    version = "2.3.0",
 )
 
 maven = use_extension("@rules_jvm_external//:extensions.bzl", "maven")
-maven.artifact(
-    testonly = True,
-    artifact = "mockito-core",
-    group = "org.mockito",
-    version = "5.12.0",
-)
-maven.artifact(
-    testonly = True,
-    artifact = "mockito-kotlin",
-    group = "org.mockito.kotlin",
-    version = "5.4.0",
-)
-maven.artifact(
-    testonly = True,
-    artifact = "truth",
-    group = "com.google.truth",
-    version = TRUTH_VERSION,
-)
-maven.artifact(
-    testonly = True,
-    artifact = "truth-java8-extension",
-    group = "com.google.truth.extensions",
-    version = TRUTH_VERSION,
-)
-maven.artifact(
-    testonly = True,
-    artifact = "truth-proto-extension",
-    group = "com.google.truth.extensions",
-    version = TRUTH_VERSION,
-)
-maven.artifact(
-    testonly = True,
-    artifact = "truth-liteproto-extension",
-    group = "com.google.truth.extensions",
-    version = TRUTH_VERSION,
-)
-maven.artifact(
-    testonly = True,
-    artifact = "testcontainers",
-    group = "org.testcontainers",
-)
-maven.artifact(
-    testonly = True,
-    artifact = "testcontainers-database-commons",
-    group = "org.testcontainers",
-)
-maven.artifact(
-    testonly = True,
-    artifact = "testcontainers-jdbc",
-    group = "org.testcontainers",
-)
-maven.artifact(
-    testonly = True,
-    artifact = "testcontainers-postgresql",
-    group = "org.testcontainers",
-)
-maven.artifact(
-    testonly = True,
-    artifact = "testcontainers-gcloud",
-    group = "org.testcontainers",
-)
 maven.artifact(
     testonly = True,
     artifact = "s3mock-junit4",
@@ -160,12 +105,60 @@ maven.artifact(
     version = "3.3.0",
 )
 maven.artifact(
-    testonly = True,
+    artifact = "mockito-core",
+    group = "org.mockito",
+    version = "5.12.0",
+)
+maven.artifact(
+    artifact = "mockito-kotlin",
+    group = "org.mockito.kotlin",
+    version = "5.4.0",
+)
+maven.artifact(
+    artifact = "truth",
+    group = "com.google.truth",
+    version = TRUTH_VERSION,
+)
+maven.artifact(
+    artifact = "truth-java8-extension",
+    group = "com.google.truth.extensions",
+    version = TRUTH_VERSION,
+)
+maven.artifact(
+    artifact = "truth-proto-extension",
+    group = "com.google.truth.extensions",
+    version = TRUTH_VERSION,
+)
+maven.artifact(
+    artifact = "truth-liteproto-extension",
+    group = "com.google.truth.extensions",
+    version = TRUTH_VERSION,
+)
+maven.artifact(
+    artifact = "testcontainers",
+    group = "org.testcontainers",
+)
+maven.artifact(
+    artifact = "testcontainers-database-commons",
+    group = "org.testcontainers",
+)
+maven.artifact(
+    artifact = "testcontainers-jdbc",
+    group = "org.testcontainers",
+)
+maven.artifact(
+    artifact = "testcontainers-postgresql",
+    group = "org.testcontainers",
+)
+maven.artifact(
+    artifact = "testcontainers-gcloud",
+    group = "org.testcontainers",
+)
+maven.artifact(
     artifact = "grpc-testing",
     group = "io.grpc",
 )
 maven.artifact(
-    testonly = True,
     artifact = "opentelemetry-sdk-testing",
     group = "io.opentelemetry",
 )
@@ -310,7 +303,6 @@ maven.install(
     fail_if_repin_required = True,
     fetch_sources = True,
     known_contributing_modules = [
-        "bazel_worker_java",
         "common-jvm",
         "protobuf",
         "rules_kotlin_jvm",
