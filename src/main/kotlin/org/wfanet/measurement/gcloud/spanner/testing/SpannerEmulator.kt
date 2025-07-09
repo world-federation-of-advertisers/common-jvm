@@ -86,10 +86,14 @@ class SpannerEmulator(
 
         emulator.errorStream.use { input ->
           input.bufferedReader().use { reader ->
+            val errOutput = StringBuilder()
             do {
               yield()
-              check(emulator.isAlive) { "Emulator stopped unexpectedly" }
               val line = reader.readLine()
+              errOutput.appendLine(line)
+              check(emulator.isAlive) {
+                "Emulator exited unexpectedly with code ${emulator.exitValue()}: $errOutput"
+              }
             } while (!line.contains(readyMessage))
           }
         }

@@ -1,6 +1,12 @@
+load("@rules_java//java:defs.bzl", "java_library")
+
 package(default_visibility = ["//visibility:public"])
 
-alias(
+java_library(
     name = "postgresql",
-    actual = "@maven//:org_liquibase_ext_liquibase_postgresql",
+    exports = [
+        "@maven//:org_liquibase_ext_liquibase_postgresql",
+        # TODO(liquibase/liquibase-postgresql#201): Remove when fixed.
+        "@maven//:org_postgresql_postgresql",
+    ],
 )
