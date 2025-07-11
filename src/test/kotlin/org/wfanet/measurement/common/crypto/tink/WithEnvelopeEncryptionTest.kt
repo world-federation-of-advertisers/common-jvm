@@ -66,7 +66,7 @@ class WithEnvelopeEncryptionTest() {
         kekUri,
         kdfSharedSecret = null,
         encryptedDek = serializedEncryptionKey,
-        generateMac = null,
+        macSign = null,
       )
     assertThat(storageClient).isInstanceOf(StreamingAeadStorageClient::class.java)
   }
@@ -98,7 +98,7 @@ class WithEnvelopeEncryptionTest() {
           kekUri,
           kdfSharedSecret = null,
           encryptedDek = serializedEncryptionKey,
-          generateMac = null,
+          macSign = null,
         )
       }
     }
@@ -120,7 +120,7 @@ class WithEnvelopeEncryptionTest() {
         kekUri,
         kdfSharedSecret = "some-shared-secret".toByteStringUtf8(),
         encryptedDek = null,
-        generateMac = { _: ByteString -> "some-mac".toByteStringUtf8() },
+        macSign = { _: ByteString -> "some-mac".toByteStringUtf8() },
       )
     assertThat(storageClient).isInstanceOf(StreamingAeadStorageClient::class.java)
     runBlocking { storageClient.writeBlob("some-blob-key", "content".toByteStringUtf8()) }
@@ -146,7 +146,7 @@ class WithEnvelopeEncryptionTest() {
         kekUri,
         kdfSharedSecret = "some-shared-secret".toByteStringUtf8(),
         encryptedDek = null,
-        generateMac = { _: ByteString -> "some-mac".toByteStringUtf8() },
+        macSign = { _: ByteString -> "some-mac".toByteStringUtf8() },
       )
     assertThat(storageClient).isInstanceOf(StreamingAeadStorageClient::class.java)
     runBlocking { storageClient.writeBlob("some-blob-key", "content".toByteStringUtf8()) }
@@ -156,7 +156,7 @@ class WithEnvelopeEncryptionTest() {
         kekUri,
         kdfSharedSecret = "some-shared-secret".toByteStringUtf8(),
         encryptedDek = null,
-        generateMac = { _: ByteString -> "some-other-mac".toByteStringUtf8() },
+        macSign = { _: ByteString -> "some-other-mac".toByteStringUtf8() },
       )
     assertFails { runBlocking { storageClient2.getBlob("some-blob-key")!!.read().flatten() } }
   }
