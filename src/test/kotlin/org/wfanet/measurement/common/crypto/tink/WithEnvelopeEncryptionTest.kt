@@ -39,7 +39,7 @@ import org.wfanet.measurement.storage.testing.InMemoryStorageClient
 class WithEnvelopeEncryptionTest() {
 
   @Test
-  fun `returns encrypted streaming AEAD storage client`() {
+  fun `returns encrypted streaming AEAD storage client for proper encryptedDek`() {
     // Set up KMS
     val kmsClient = FakeKmsClient()
     val kekUri = FakeKmsClient.KEY_URI_PREFIX + "key1"
@@ -72,7 +72,7 @@ class WithEnvelopeEncryptionTest() {
   }
 
   @Test
-  fun `unsupported key type throws IllegalArgumentException`() {
+  fun `unsupported key type for encryptedDek throws IllegalArgumentException`() {
     runBlocking {
       val kmsClient = FakeKmsClient()
       val kekUri = FakeKmsClient.KEY_URI_PREFIX + "key1"
@@ -131,7 +131,33 @@ class WithEnvelopeEncryptionTest() {
   }
 
   @Test
-  fun `returns wrong content with invalid macSign`() {
+  fun `content is different without proper macSign`() {
+    // Set up KMS
+    val kmsClient = FakeKmsClient()
+    val kekUri = FakeKmsClient.KEY_URI_PREFIX + "key1"
+    val kmsKeyHandle = KeysetHandle.generateNew(KeyTemplates.get("AES128_GCM"))
+    kmsClient.setAead(kekUri, kmsKeyHandle.getPrimitive(Aead::class.java))
+
+    val wrappedStorageClient = InMemoryStorageClient()
+
+    val storageClient =
+      wrappedStorageClient.withEnvelopeEncryption(
+        kmsClient,
+        kekUri,
+        kdfSharedSecret = "some-shared-secret".toByteStringUtf8(),
+        encryptedDek = null,
+        macSign = { _: ByteString -> "some-mac".toByteStringUtf8() },
+      )
+    assertThat(storageClient).isInstanceOf(StreamingAeadStorageClient::class.java)
+    runBlocking { storageClient.writeBlob("some-blob-key", "content".toByteStringUtf8()) }
+    val content: ByteString = runBlocking {
+      wrappedStorageClient.getBlob("some-blob-key")!!.read().flatten()
+    }
+    assertThat(content).isNotEqualTo("content".toByteStringUtf8())
+  }
+
+  @Test
+  fun `fails with invalid macSign`() {
     // Set up KMS
     val kmsClient = FakeKmsClient()
     val kekUri = FakeKmsClient.KEY_URI_PREFIX + "key1"
