@@ -215,6 +215,7 @@ maven.install(
         "com.google.apis:google-api-services-bigquery:v2-rev20240815-2.0.0",
         "com.google.cloud:google-cloud-core",
         "com.google.cloud:google-cloud-core-grpc",
+        "com.google.cloud:google-cloud-kms",
         "com.google.cloud:google-cloud-storage",
         "com.google.cloud:google-cloud-pubsub",
         "com.google.cloud:google-cloud-nio",
