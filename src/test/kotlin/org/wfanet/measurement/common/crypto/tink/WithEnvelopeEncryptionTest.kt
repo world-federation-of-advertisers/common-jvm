@@ -105,7 +105,7 @@ class WithEnvelopeEncryptionTest() {
   }
 
   @Test
-  fun `returns encrypted streaming AEAD storage client with macSign`() {
+  fun `able to write and read streaming AEAD storage client with macSign`() {
     // Set up KMS
     val kmsClient = FakeKmsClient()
     val kekUri = FakeKmsClient.KEY_URI_PREFIX + "key1"
@@ -124,14 +124,22 @@ class WithEnvelopeEncryptionTest() {
       )
     assertThat(storageClient).isInstanceOf(StreamingAeadStorageClient::class.java)
     runBlocking { storageClient.writeBlob("some-blob-key", "content".toByteStringUtf8()) }
+    val storageClient2 =
+      wrappedStorageClient.withEnvelopeEncryption(
+        kmsClient,
+        kekUri,
+        kdfSharedSecret = "some-shared-secret".toByteStringUtf8(),
+        encryptedDek = null,
+        macSign = { _: ByteString -> "some-mac".toByteStringUtf8() },
+      )
     val content: ByteString = runBlocking {
-      storageClient.getBlob("some-blob-key")!!.read().flatten()
+      storageClient2.getBlob("some-blob-key")!!.read().flatten()
     }
     assertThat(content).isEqualTo("content".toByteStringUtf8())
   }
 
   @Test
-  fun `content is different without proper macSign`() {
+  fun `content is different with macSign`() {
     // Set up KMS
     val kmsClient = FakeKmsClient()
     val kekUri = FakeKmsClient.KEY_URI_PREFIX + "key1"
