@@ -24,12 +24,15 @@ import com.google.crypto.tink.TinkProtoKeysetFormat
 import com.google.crypto.tink.aead.AeadConfig
 import com.google.crypto.tink.streamingaead.StreamingAeadConfig
 import com.google.protobuf.ByteString
+import com.google.protobuf.kotlin.toByteStringUtf8
+import kotlin.test.assertFails
 import kotlin.test.assertFailsWith
 import kotlinx.coroutines.runBlocking
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 import org.wfanet.measurement.common.crypto.tink.testing.FakeKmsClient
+import org.wfanet.measurement.common.flatten
 import org.wfanet.measurement.storage.testing.InMemoryStorageClient
 
 @RunWith(JUnit4::class)
@@ -58,7 +61,13 @@ class WithEnvelopeEncryptionTest() {
         )
       )
     val storageClient =
-      wrappedStorageClient.withEnvelopeEncryption(kmsClient, kekUri, serializedEncryptionKey)
+      wrappedStorageClient.withEnvelopeEncryption(
+        kmsClient,
+        kekUri,
+        kdfSharedSecret = null,
+        encryptedDek = serializedEncryptionKey,
+        generateMac = null,
+      )
     assertThat(storageClient).isInstanceOf(StreamingAeadStorageClient::class.java)
   }
 
@@ -84,30 +93,76 @@ class WithEnvelopeEncryptionTest() {
           )
         )
       assertFailsWith<IllegalArgumentException> {
-        wrappedStorageClient.withEnvelopeEncryption(kmsClient, kekUri, serializedEncryptionKey)
+        wrappedStorageClient.withEnvelopeEncryption(
+          kmsClient,
+          kekUri,
+          kdfSharedSecret = null,
+          encryptedDek = serializedEncryptionKey,
+          generateMac = null,
+        )
       }
     }
+  }
+
+  @Test
+  fun `returns encrypted streaming AEAD storage client with macSign`() {
+    // Set up KMS
+    val kmsClient = FakeKmsClient()
+    val kekUri = FakeKmsClient.KEY_URI_PREFIX + "key1"
+    val kmsKeyHandle = KeysetHandle.generateNew(KeyTemplates.get("AES128_GCM"))
+    kmsClient.setAead(kekUri, kmsKeyHandle.getPrimitive(Aead::class.java))
+
+    val wrappedStorageClient = InMemoryStorageClient()
+
+    val storageClient =
+      wrappedStorageClient.withEnvelopeEncryption(
+        kmsClient,
+        kekUri,
+        kdfSharedSecret = "some-shared-secret".toByteStringUtf8(),
+        encryptedDek = null,
+        generateMac = { _: ByteString -> "some-mac".toByteStringUtf8() },
+      )
+    assertThat(storageClient).isInstanceOf(StreamingAeadStorageClient::class.java)
+    runBlocking { storageClient.writeBlob("some-blob-key", "content".toByteStringUtf8()) }
+    val content: ByteString = runBlocking {
+      storageClient.getBlob("some-blob-key")!!.read().flatten()
+    }
+    assertThat(content).isEqualTo("content".toByteStringUtf8())
+  }
+
+  @Test
+  fun `returns wrong content with invalid macSign`() {
+    // Set up KMS
+    val kmsClient = FakeKmsClient()
+    val kekUri = FakeKmsClient.KEY_URI_PREFIX + "key1"
+    val kmsKeyHandle = KeysetHandle.generateNew(KeyTemplates.get("AES128_GCM"))
+    kmsClient.setAead(kekUri, kmsKeyHandle.getPrimitive(Aead::class.java))
+
+    val wrappedStorageClient = InMemoryStorageClient()
+
+    val storageClient =
+      wrappedStorageClient.withEnvelopeEncryption(
+        kmsClient,
+        kekUri,
+        kdfSharedSecret = "some-shared-secret".toByteStringUtf8(),
+        encryptedDek = null,
+        generateMac = { _: ByteString -> "some-mac".toByteStringUtf8() },
+      )
+    assertThat(storageClient).isInstanceOf(StreamingAeadStorageClient::class.java)
+    runBlocking { storageClient.writeBlob("some-blob-key", "content".toByteStringUtf8()) }
+    val storageClient2 =
+      wrappedStorageClient.withEnvelopeEncryption(
+        kmsClient,
+        kekUri,
+        kdfSharedSecret = "some-shared-secret".toByteStringUtf8(),
+        encryptedDek = null,
+        generateMac = { _: ByteString -> "some-other-mac".toByteStringUtf8() },
+      )
+    assertFails { runBlocking { storageClient2.getBlob("some-blob-key")!!.read().flatten() } }
   }
 
   init {
     AeadConfig.register()
     StreamingAeadConfig.register()
-  }
-
-  companion object {
-    private const val TINK_PREFIX_SIZE_BYTES = 5
-    private const val HEADER_SIZE_BYTES = 1
-    private const val SEGMENT_INFO_SIZE_BYTES = 21
-    private const val FIRST_SEGMENT_HEADER_SIZE = 21
-    private const val SEGMENT_TAG_SIZE_BYTES = 16
-    private const val LAST_SEGMENT_HEADER_SIZE = 24
-
-    private const val TOTAL_OVERHEAD_BYTES =
-      TINK_PREFIX_SIZE_BYTES +
-        HEADER_SIZE_BYTES +
-        SEGMENT_INFO_SIZE_BYTES +
-        FIRST_SEGMENT_HEADER_SIZE +
-        SEGMENT_TAG_SIZE_BYTES +
-        LAST_SEGMENT_HEADER_SIZE
   }
 }

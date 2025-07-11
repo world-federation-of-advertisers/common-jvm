@@ -14,12 +14,12 @@
 
 package org.wfanet.measurement.common.crypto.tink
 
-import com.google.crypto.tink.Key
 import com.google.crypto.tink.KeysetHandle
 import com.google.crypto.tink.KmsClient
 import com.google.crypto.tink.StreamingAead
 import com.google.crypto.tink.TinkProtoKeysetFormat
 import com.google.crypto.tink.aead.AeadConfig
+import com.google.crypto.tink.streamingaead.StreamingAeadConfig
 import com.google.crypto.tink.streamingaead.StreamingAeadKey
 import com.google.protobuf.ByteString
 import kotlin.coroutines.CoroutineContext
@@ -38,25 +38,39 @@ import org.wfanet.measurement.storage.StorageClient
 fun StorageClient.withEnvelopeEncryption(
   kmsClient: KmsClient,
   kekUri: String,
-  encryptedDek: ByteString,
+  kdfSharedSecret: ByteString?,
+  encryptedDek: ByteString?,
+  generateMac: ((data: ByteString) -> ByteString)?,
   aeadContext: @BlockingExecutor CoroutineContext = Dispatchers.IO,
 ): StorageClient {
 
   AeadConfig.register()
+  StreamingAeadConfig.register()
 
   val storageClient = this
-  val kekAead = kmsClient.getAead(kekUri)
   val handle: KeysetHandle =
-    TinkProtoKeysetFormat.parseEncryptedKeyset(encryptedDek.toByteArray(), kekAead, byteArrayOf())
-  return when (val primaryKey: Key = handle.primary.key) {
-    is StreamingAeadKey -> {
-
-      StreamingAeadStorageClient(
-        storageClient = storageClient,
-        streamingAead = handle.getPrimitive(StreamingAead::class.java),
-        streamingAeadContext = aeadContext,
-      )
+    if (encryptedDek != null) {
+      val kekAead = kmsClient.getAead(kekUri)
+      val handle: KeysetHandle =
+        TinkProtoKeysetFormat.parseEncryptedKeyset(
+          encryptedDek.toByteArray(),
+          kekAead,
+          byteArrayOf(),
+        )
+      require(handle.primary.key is StreamingAeadKey) {
+        "Unsupported Key Type: ${handle.primary.key::class.simpleName}"
+      }
+      handle
+    } else {
+      check(kdfSharedSecret != null) { "EncryptedDek and kdfSharedSecret cannot both be null" }
+      require(generateMac != null) { "generateMac must be set if kdfSharedSecret is set" }
+      val macResponse = generateMac(kdfSharedSecret)
+      KeyDerivation.deriveStreamingAeadKeysetHandleWithHKDF(macResponse, null, kdfSharedSecret)
     }
-    else -> throw IllegalArgumentException("Unsupported Key Type: ${primaryKey::class.simpleName}")
-  }
+  val streamingAead = handle.getPrimitive(StreamingAead::class.java)
+  return StreamingAeadStorageClient(
+    storageClient = storageClient,
+    streamingAead = streamingAead,
+    streamingAeadContext = aeadContext,
+  )
 }
