@@ -40,7 +40,7 @@ fun StorageClient.withEnvelopeEncryption(
   kekUri: String,
   kdfSharedSecret: ByteString?,
   encryptedDek: ByteString?,
-  generateMac: ((data: ByteString) -> ByteString)?,
+  macSign: ((data: ByteString) -> ByteString)?,
   aeadContext: @BlockingExecutor CoroutineContext = Dispatchers.IO,
 ): StorageClient {
 
@@ -63,8 +63,8 @@ fun StorageClient.withEnvelopeEncryption(
       handle
     } else {
       check(kdfSharedSecret != null) { "EncryptedDek and kdfSharedSecret cannot both be null" }
-      require(generateMac != null) { "generateMac must be set if kdfSharedSecret is set" }
-      val macResponse = generateMac(kdfSharedSecret)
+      require(macSign != null) { "generateMac must be set if kdfSharedSecret is set" }
+      val macResponse = macSign(kdfSharedSecret)
       KeyDerivation.deriveStreamingAeadKeysetHandleWithHKDF(macResponse, null, kdfSharedSecret)
     }
   val streamingAead = handle.getPrimitive(StreamingAead::class.java)
