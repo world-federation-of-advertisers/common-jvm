@@ -15,6 +15,7 @@
 """Defs for rules_oci."""
 
 load("@bazel_skylib//lib:dicts.bzl", "dicts")
+load("@bazel_skylib//rules:common_settings.bzl", "string_flag")
 load("@rules_multirun//:defs.bzl", "command", "multirun")
 load("@rules_oci//oci:defs.bzl", "oci_image", "oci_push_rule")
 load("@rules_pkg//pkg:mappings.bzl", "pkg_files")
@@ -300,4 +301,48 @@ def container_push_all(
         ],
         visibility = visibility,
         **kwargs
+    )
+
+def maven_deploy(
+        name,
+        jar,
+        group_id,
+        artifact_id,
+        version,
+        repository_url,
+        repository_id = "github",
+        username = None,
+        password = None):
+    """Publishes a single JAR with mvn deploy:deploy-file."""
+    cmd = """
+      mvn deploy:deploy-file \
+        -Dfile=$(location {jar}) \
+        -DgroupId={group} \
+        -DartifactId={artifact} \
+        -Dversion={version} \
+        -Dpackaging=jar \
+        -DrepositoryId={repo_id} \
+        -Durl={repo_url} \
+        -DretryFailedDeploymentCount=3 \
+    """.format(
+        jar = jar.label.name,
+        group = group_id,
+        artifact = artifact_id,
+        version = version,
+        repo_id = repository_id,
+        repo_url = repository_url,
+    )
+
+    if username:
+        cmd += " -Dusername=$$MAVEN_USERNAME"
+    if password:
+        cmd += " -Dpassword=$$MAVEN_PASSWORD"
+
+    native.genrule(
+        name = name,
+        srcs = [jar],
+        outs = [],
+        tools = [],
+        cmd = cmd,
+        executable = True,
     )
