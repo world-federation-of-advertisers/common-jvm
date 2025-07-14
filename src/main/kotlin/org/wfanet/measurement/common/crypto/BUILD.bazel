@@ -20,6 +20,16 @@ kt_jvm_library(
 )
 
 kt_jvm_library(
+    name = "key_material_generator",
+    srcs = [
+        "KeyMaterialGenerator.kt",
+    ],
+    deps = [
+        "//imports/java/com/google/protobuf",
+    ],
+)
+
+kt_jvm_library(
     name = "key_storage",
     srcs = [
         "KeyHandle.kt",

@@ -3,10 +3,11 @@ load("@wfa_rules_kotlin_jvm//kotlin:defs.bzl", "kt_jvm_library")
 package(default_visibility = ["//visibility:public"])
 
 kt_jvm_library(
-    name = "kms",
-    srcs = ["Kms.kt"],
+    name = "google_kms_kdf",
+    srcs = ["GoogleKmsKdf.kt"],
     deps = [
         "//imports/java/com/google/cloud/kms",
         "//imports/kotlin/kotlinx/coroutines:core",
+        "//src/main/kotlin/org/wfanet/measurement/common/crypto:key_material_generator",
     ],
 )

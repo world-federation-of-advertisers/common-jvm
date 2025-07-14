@@ -25,6 +25,7 @@ import com.google.protobuf.ByteString
 import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.Dispatchers
 import org.jetbrains.annotations.BlockingExecutor
+import org.wfanet.measurement.common.crypto.KeyMaterialGenerator
 import org.wfanet.measurement.storage.StorageClient
 
 /*
@@ -38,9 +39,7 @@ import org.wfanet.measurement.storage.StorageClient
 fun StorageClient.withEnvelopeEncryption(
   kmsClient: KmsClient,
   kekUri: String,
-  kdfSharedSecret: ByteString?,
-  encryptedDek: ByteString?,
-  macSign: ((data: ByteString) -> ByteString)?,
+  encryptedDek: ByteString,
   aeadContext: @BlockingExecutor CoroutineContext = Dispatchers.IO,
 ): StorageClient {
 
@@ -48,25 +47,35 @@ fun StorageClient.withEnvelopeEncryption(
   StreamingAeadConfig.register()
 
   val storageClient = this
+
+  val kekAead = kmsClient.getAead(kekUri)
   val handle: KeysetHandle =
-    if (encryptedDek != null) {
-      val kekAead = kmsClient.getAead(kekUri)
-      val handle: KeysetHandle =
-        TinkProtoKeysetFormat.parseEncryptedKeyset(
-          encryptedDek.toByteArray(),
-          kekAead,
-          byteArrayOf(),
-        )
-      require(handle.primary.key is StreamingAeadKey) {
-        "Unsupported Key Type: ${handle.primary.key::class.simpleName}"
-      }
-      handle
-    } else {
-      check(kdfSharedSecret != null) { "EncryptedDek and kdfSharedSecret cannot both be null" }
-      require(macSign != null) { "generateMac must be set if kdfSharedSecret is set" }
-      val macResponse = macSign(kdfSharedSecret)
-      KeyDerivation.deriveStreamingAeadKeysetHandleWithHKDF(macResponse, null, kdfSharedSecret)
-    }
+    TinkProtoKeysetFormat.parseEncryptedKeyset(encryptedDek.toByteArray(), kekAead, byteArrayOf())
+  require(handle.primary.key is StreamingAeadKey) {
+    "Unsupported Key Type: ${handle.primary.key::class.simpleName}"
+  }
+
+  val streamingAead = handle.getPrimitive(StreamingAead::class.java)
+  return StreamingAeadStorageClient(
+    storageClient = storageClient,
+    streamingAead = streamingAead,
+    streamingAeadContext = aeadContext,
+  )
+}
+
+fun StorageClient.withEnvelopeEncryption(
+  kdfSharedSecret: ByteString,
+  keyMaterialGenerator: KeyMaterialGenerator,
+  aeadContext: @BlockingExecutor CoroutineContext = Dispatchers.IO,
+): StorageClient {
+
+  AeadConfig.register()
+  StreamingAeadConfig.register()
+
+  val storageClient = this
+  val keyMaterial = keyMaterialGenerator.generateKeyMaterial(kdfSharedSecret)
+  val handle: KeysetHandle = KeySetParser.toStreamingAesKey(keyMaterial)
+
   val streamingAead = handle.getPrimitive(StreamingAead::class.java)
   return StreamingAeadStorageClient(
     storageClient = storageClient,
