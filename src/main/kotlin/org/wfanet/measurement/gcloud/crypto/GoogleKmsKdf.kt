@@ -25,14 +25,14 @@ import org.wfanet.measurement.common.crypto.KeyMaterialGenerator
  * Implementation of [KeyMaterialGenerator] that derives key material by using Google Cloud KMS's
  * MAC (Message Authentication Code) signing operation.
  *
- * This class uses a specified Google Cloud KMS CryptoKeyVersion to generate a cryptographically
- * secure, deterministic key material from the given input.
+ * This class uses a specified Google Cloud KMS CryptoKeyVersion to generate a cryptographically secure,
+ * deterministic key material from the given input.
  *
- * The input to [generateKeyMaterial] is signed using the KMS MAC operation, and the resulting MAC
- * bytes are returned as the derived key material.
+ * The input to [generateKeyMaterial] is signed using the KMS MAC operation, and the resulting MAC bytes
+ * are returned as the derived key material.
  *
- * This approach leverages Google Cloud KMS to securely perform the cryptographic operation,
- * ensuring that the key material generation is backed by a managed, secure key.
+ * This approach leverages Google Cloud KMS to securely perform the cryptographic operation, ensuring
+ * that the key material generation is backed by a managed, secure key.
  *
  * @property projectId The Google Cloud project ID containing the KMS key.
  * @property locationId The location ID of the KMS key (e.g., "us-central1").
@@ -51,8 +51,7 @@ class GoogleKmsKdf(
    * Generates key material by signing the input data using Google Cloud KMS MAC operation.
    *
    * @param input The input data to be signed. This input is NOT assumed to be secret.
-   * @return A [ByteString] containing the MAC signature bytes, which serve as the derived key
-   *   material.
+   * @return A [ByteString] containing the MAC signature bytes, which serve as the derived key material.
    *
    * This method creates a KMS client, builds a MAC sign request for the specified CryptoKeyVersion,
    * and returns the MAC bytes from the response.

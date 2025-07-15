@@ -1,18 +1,4 @@
-// Copyright 2025 The Cross-Media Measurement Authors
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
-package org.wfanet.measurement.common.crypto.tink
+package org.wfanet.measurement.common.crypto.tink.testing
 
 import com.google.crypto.tink.subtle.Hkdf
 import com.google.protobuf.ByteString
@@ -25,10 +11,8 @@ import org.wfanet.measurement.common.crypto.KeyMaterialGenerator
  * This class uses input keying material (IKM), an optional salt, and an info parameter to
  * deterministically generate key material of a specified size.
  *
- * The input keying material (ikm) is typically obtained from a secure source such as a Key
- * Management System (KMS) or a Message Authentication Code (MAC). The salt is optional but
- * recommended to add randomness. The info parameter provided to [generateKeyMaterial] is used as
- * context and should not be assumed secret.
+ * The info parameter provided to [generateKeyMaterial] is used as context and should not be assumed
+ * secret.
  *
  * The derived key size defaults to 32 bytes, suitable for AES-256-GCM encryption keys.
  *

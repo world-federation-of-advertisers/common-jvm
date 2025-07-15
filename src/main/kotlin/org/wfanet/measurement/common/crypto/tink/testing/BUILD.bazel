@@ -11,5 +11,6 @@ kt_jvm_library(
     associates = ["//src/main/kotlin/org/wfanet/measurement/common/crypto/tink"],
     deps = [
         "//imports/java/com/google/crypto/tink",
+        "//src/main/kotlin/org/wfanet/measurement/common/crypto:key_material_generator",
     ],
 )
