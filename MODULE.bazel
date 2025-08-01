@@ -29,7 +29,7 @@ CLOUD_SQL_CONNECTOR_VERSION = "1.12.0"
 # See https://github.com/bazelbuild/bazel/discussions/23075.
 bazel_dep(
     name = "rules_kotlin_jvm",
-    version = "0.7.0",
+    version = "0.6.0",
     repo_name = "wfa_rules_kotlin_jvm",
 )
 bazel_dep(
@@ -67,7 +67,7 @@ bazel_dep(
 )
 bazel_dep(
     name = "rules_kotlin",
-    version = "2.1.8",
+    version = "2.1.0",
 )
 bazel_dep(
     name = "rules_multirun",
@@ -80,7 +80,7 @@ bazel_dep(
 )
 bazel_dep(
     name = "rules_jvm_external",
-    version = "6.8",
+    version = "6.6",
 )
 bazel_dep(
     name = "rules_oci",
