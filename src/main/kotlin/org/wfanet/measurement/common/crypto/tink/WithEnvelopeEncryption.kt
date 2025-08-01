@@ -14,7 +14,6 @@
 
 package org.wfanet.measurement.common.crypto.tink
 
-import com.google.crypto.tink.Key
 import com.google.crypto.tink.KeysetHandle
 import com.google.crypto.tink.KmsClient
 import com.google.crypto.tink.StreamingAead
@@ -26,6 +25,7 @@ import com.google.protobuf.ByteString
 import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.Dispatchers
 import org.jetbrains.annotations.BlockingExecutor
+import org.wfanet.measurement.common.crypto.KeyMaterialGenerator
 import org.wfanet.measurement.storage.StorageClient
 
 /*
@@ -47,18 +47,39 @@ fun StorageClient.withEnvelopeEncryption(
   StreamingAeadConfig.register()
 
   val storageClient = this
+
   val kekAead = kmsClient.getAead(kekUri)
   val handle: KeysetHandle =
     TinkProtoKeysetFormat.parseEncryptedKeyset(encryptedDek.toByteArray(), kekAead, byteArrayOf())
-  return when (val primaryKey: Key = handle.primary.key) {
-    is StreamingAeadKey -> {
-
-      StreamingAeadStorageClient(
-        storageClient = storageClient,
-        streamingAead = handle.getPrimitive(StreamingAead::class.java),
-        streamingAeadContext = aeadContext,
-      )
-    }
-    else -> throw IllegalArgumentException("Unsupported Key Type: ${primaryKey::class.simpleName}")
+  require(handle.primary.key is StreamingAeadKey) {
+    "Unsupported Key Type: ${handle.primary.key::class.simpleName}"
   }
+
+  val streamingAead = handle.getPrimitive(StreamingAead::class.java)
+  return StreamingAeadStorageClient(
+    storageClient = storageClient,
+    streamingAead = streamingAead,
+    streamingAeadContext = aeadContext,
+  )
+}
+
+fun StorageClient.withEnvelopeEncryption(
+  kdfSharedSecret: ByteString,
+  keyMaterialGenerator: KeyMaterialGenerator,
+  aeadContext: @BlockingExecutor CoroutineContext = Dispatchers.IO,
+): StorageClient {
+
+  AeadConfig.register()
+  StreamingAeadConfig.register()
+
+  val storageClient = this
+  val keyMaterial = keyMaterialGenerator.generateKeyMaterial(kdfSharedSecret)
+  val handle: KeysetHandle = KeySetParser.toStreamingAesKey(keyMaterial)
+
+  val streamingAead = handle.getPrimitive(StreamingAead::class.java)
+  return StreamingAeadStorageClient(
+    storageClient = storageClient,
+    streamingAead = streamingAead,
+    streamingAeadContext = aeadContext,
+  )
 }

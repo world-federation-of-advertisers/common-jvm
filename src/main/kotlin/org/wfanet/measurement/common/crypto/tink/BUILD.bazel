@@ -12,6 +12,7 @@ kt_jvm_library(
         "//imports/kotlin/kotlinx/coroutines:core",
         "//src/main/kotlin/org/wfanet/measurement/common",
         "//src/main/kotlin/org/wfanet/measurement/common/crypto:hashing",
+        "//src/main/kotlin/org/wfanet/measurement/common/crypto:key_material_generator",
         "//src/main/kotlin/org/wfanet/measurement/common/crypto:key_storage",
         "//src/main/kotlin/org/wfanet/measurement/storage:client",
         "//src/main/kotlin/org/wfanet/measurement/storage:store",
