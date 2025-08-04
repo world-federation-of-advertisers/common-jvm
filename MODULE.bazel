@@ -224,7 +224,7 @@ maven.install(
         "com.google.cloud:google-cloudevent-types:0.16.0",
         "com.google.auth:google-auth-library-oauth2-http",
         "com.google.auth:google-auth-library-credentials",
-        "com.google.crypto.tink:tink-gcpkms:1.10.0",
+        "com.google.crypto.tink:tink-gcpkms:1.9.0",
 
         # Cloud Functions
         "io.cloudevents:cloudevents-core",
