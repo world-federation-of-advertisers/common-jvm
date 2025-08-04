@@ -17,23 +17,25 @@ package org.wfanet.measurement.common.crypto.tink
 import com.google.crypto.tink.KmsClient
 import java.security.GeneralSecurityException
 
+/** A sealed interface for Workload Identity Federation (WIF) configurations. */
+sealed interface WifCredentials
+
 /**
- * Configuration for creating credentials using Workload Identity Federation (WIF) and service
+ * Configuration for creating credentials using GCP's Workload Identity Federation (WIF) and service
  * account impersonation.
- *
- * audience The audience for the WIF token exchange. subjectTokenType The type of the token being
- * presented (e.g., an OIDC token type). tokenUrl The Security Token Service (STS) token endpoint
- * URL. credentialSourceFilePath The file path to the subject token (e.g., an attestation token).
- * serviceAccountImpersonationUrl The URL to impersonate a service account to get a final access
- * token.
  */
-data class WifCredentialsConfig(
+data class GcpWifCredentials(
+  /** The audience for the WIF token exchange. */
   val audience: String,
+  /** The type of the token being presented (e.g., an OIDC token type). */
   val subjectTokenType: String,
+  /** The Security Token Service (STS) token endpoint URL. */
   val tokenUrl: String,
+  /** The file path to the subject token (e.g., an attestation token). */
   val credentialSourceFilePath: String,
+  /** The URL to impersonate a service account to get a final access token. */
   val serviceAccountImpersonationUrl: String,
-)
+) : WifCredentials
 
 /** Factory for creating [KmsClient] instances. */
 interface KmsClientFactory {
@@ -41,6 +43,7 @@ interface KmsClientFactory {
    * Returns a [KmsClient] instance using Workload Identity Federation credentials.
    *
    * @param config The configuration for WIF and service account impersonation.
+   * @throws GeneralSecurityException if the client cannot be initialized.
    */
-  @Throws(GeneralSecurityException::class) fun getKmsClient(config: WifCredentialsConfig): KmsClient
+  fun getKmsClient(config: WifCredentials): KmsClient
 }

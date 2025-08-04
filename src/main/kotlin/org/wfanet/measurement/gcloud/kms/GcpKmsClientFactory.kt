@@ -21,8 +21,9 @@ import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import java.io.IOException
 import java.security.GeneralSecurityException
+import org.wfanet.measurement.common.crypto.tink.GcpWifCredentials
 import org.wfanet.measurement.common.crypto.tink.KmsClientFactory
-import org.wfanet.measurement.common.crypto.tink.WifCredentialsConfig
+import org.wfanet.measurement.common.crypto.tink.WifCredentials
 
 /** A [KmsClientFactory] for creating Tink [KmsClient] instances for Google Cloud KMS. */
 class GcpKmsClientFactory : KmsClientFactory {
@@ -34,13 +35,15 @@ class GcpKmsClientFactory : KmsClientFactory {
    * environments like Confidential Space where a short-lived token from a file needs to be
    * exchanged for a GCP access token.
    *
-   * @param config The WIF and impersonation configuration.
+   * @param config The WIF and impersonation configuration. Must be an instance of
+   *   [GcpWifCredentials].
    * @return An initialized [GcpKmsClient].
-   * @throws GeneralSecurityException if the client cannot be initialized with the provided
-   *   credentials.
+   * @throws GeneralSecurityException if the client cannot be initialized.
    */
-  @Throws(GeneralSecurityException::class)
-  override fun getKmsClient(config: WifCredentialsConfig): KmsClient {
+  override fun getKmsClient(config: WifCredentials): KmsClient {
+    require(config is GcpWifCredentials) {
+      "GcpKmsClientFactory requires a GcpWifCredentials configuration, but received ${config::class.simpleName}"
+    }
     val wifConfigJson =
       JsonObject().run {
         addProperty("type", "external_account")
