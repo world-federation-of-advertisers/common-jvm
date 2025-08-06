@@ -222,6 +222,9 @@ maven.install(
         "com.google.cloud:google-cloud-bigquery",
         "com.google.cloud.functions:functions-framework-api:1.1.0",
         "com.google.cloud:google-cloudevent-types:0.16.0",
+        "com.google.auth:google-auth-library-oauth2-http",
+        "com.google.auth:google-auth-library-credentials",
+        "com.google.crypto.tink:tink-gcpkms:1.9.0",
 
         # Cloud Functions
         "io.cloudevents:cloudevents-core",
