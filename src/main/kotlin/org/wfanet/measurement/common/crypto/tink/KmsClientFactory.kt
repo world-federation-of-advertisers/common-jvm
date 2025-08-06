@@ -24,7 +24,7 @@ sealed interface WifCredentials
  * Configuration for creating credentials using GCP's Workload Identity Federation (WIF) and service
  * account impersonation.
  */
-data class GcpWifCredentials(
+data class GCloudWifCredentials(
   /** The audience for the WIF token exchange. */
   val audience: String,
   /** The type of the token being presented (e.g., an OIDC token type). */
@@ -37,13 +37,18 @@ data class GcpWifCredentials(
   val serviceAccountImpersonationUrl: String,
 ) : WifCredentials
 
-/** Factory for creating [KmsClient] instances. */
-interface KmsClientFactory {
+/**
+ * Factory for creating [KmsClient] instances.
+ *
+ * @param T The specific type of [WifCredentials] this factory supports.
+ */
+interface KmsClientFactory<T : WifCredentials> {
   /**
-   * Returns a [KmsClient] instance using Workload Identity Federation credentials.
+   * Returns a [KmsClient] instance for a specific [WifCredentials] configuration.
    *
-   * @param config The configuration for WIF and service account impersonation.
+   * @param config The WIF configuration.
+   * @return An initialized [KmsClient].
    * @throws GeneralSecurityException if the client cannot be initialized.
    */
-  fun getKmsClient(config: WifCredentials): KmsClient
+  fun getKmsClient(config: T): KmsClient
 }
