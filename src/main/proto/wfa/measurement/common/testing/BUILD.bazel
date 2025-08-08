@@ -33,3 +33,17 @@ kt_jvm_proto_library(
     name = "depends_on_simple_kt_jvm_proto",
     deps = [":depends_on_simple_proto"],
 )
+
+proto_library(
+    name = "contains_any_proto",
+    srcs = ["contains_any.proto"],
+    strip_import_prefix = IMPORT_PREFIX,
+    deps = [
+        "@com_google_protobuf//:any_proto",
+    ],
+)
+
+kt_jvm_proto_library(
+    name = "contains_any_kt_jvm_proto",
+    deps = [":contains_any_proto"],
+)
