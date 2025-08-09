@@ -41,6 +41,17 @@ kt_jvm_test(
 )
 
 kt_jvm_test(
+    name = "StreamingEncryptionTest",
+    srcs = ["StreamingEncryptionTest.kt"],
+    deps = [
+        "//imports/java/com/google/common/truth",
+        "//imports/java/com/google/crypto/tink",
+        "//imports/java/org/junit",
+        "//src/main/kotlin/org/wfanet/measurement/common/crypto/tink",
+    ],
+)
+
+kt_jvm_test(
     name = "SelfIssuedIdTokensTest",
     srcs = ["SelfIssuedIdTokensTest.kt"],
     deps = [
