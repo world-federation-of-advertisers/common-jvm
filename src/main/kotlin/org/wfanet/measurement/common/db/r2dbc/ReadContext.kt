@@ -60,6 +60,10 @@ internal open class ReadContextImpl protected constructor(protected val connecti
     connection.rollbackTransaction().awaitFirstOrNull()
   }
 
+  protected suspend fun finalize() {
+    connection.close().awaitFirstOrNull()
+  }
+
   companion object {
     suspend fun create(
       connection: Connection,
@@ -75,8 +79,6 @@ internal open class ReadContextImpl protected constructor(protected val connecti
       } catch (e: Exception) {
         connection.close().awaitFirstOrNull()
         throw e
-      } finally {
-        connection.close().awaitFirstOrNull()
       }
     }
   }
@@ -92,8 +94,6 @@ internal class SingleUseReadContext private constructor(connection: Connection) 
       } catch (e: Exception) {
         close()
         throw e
-      } finally {
-        close()
       }
     return SingleUseQueryResult(result, ::close)
   }
