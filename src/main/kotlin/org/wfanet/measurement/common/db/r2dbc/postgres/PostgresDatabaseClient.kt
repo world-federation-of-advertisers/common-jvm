@@ -21,6 +21,7 @@ import io.r2dbc.spi.ConnectionFactories
 import io.r2dbc.spi.ConnectionFactory
 import io.r2dbc.spi.ConnectionFactoryOptions
 import io.r2dbc.spi.IsolationLevel
+import java.time.Duration
 import kotlinx.coroutines.reactive.awaitSingle
 import org.wfanet.measurement.common.db.postgres.PostgresFlags
 import org.wfanet.measurement.common.db.r2dbc.ConnectionProvider
@@ -51,6 +52,7 @@ class PostgresDatabaseClient(getConnection: ConnectionProvider) : DatabaseClient
             .option(ConnectionFactoryOptions.USER, flags.user)
             .option(ConnectionFactoryOptions.PASSWORD, flags.password)
             .option(ConnectionFactoryOptions.DATABASE, flags.database)
+            .option(ConnectionFactoryOptions.STATEMENT_TIMEOUT, Duration.ofSeconds(60))
             .build()
         )
 

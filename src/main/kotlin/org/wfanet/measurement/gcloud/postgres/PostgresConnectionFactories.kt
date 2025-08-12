@@ -18,6 +18,7 @@ import com.google.cloud.sql.core.GcpConnectionFactoryProvider
 import io.r2dbc.spi.ConnectionFactories
 import io.r2dbc.spi.ConnectionFactory
 import io.r2dbc.spi.ConnectionFactoryOptions
+import java.time.Duration
 
 object PostgresConnectionFactories {
   @JvmStatic
@@ -32,6 +33,7 @@ object PostgresConnectionFactories {
         .option(ConnectionFactoryOptions.DATABASE, flags.database)
         .option(ConnectionFactoryOptions.HOST, flags.cloudSqlInstance)
         .option(GcpConnectionFactoryProvider.ENABLE_IAM_AUTH, true)
+        .option(ConnectionFactoryOptions.STATEMENT_TIMEOUT, Duration.ofSeconds(60))
         .build()
     )
   }
