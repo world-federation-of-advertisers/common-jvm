@@ -24,18 +24,21 @@ object PostgresConnectionFactories {
   @JvmStatic
   fun buildConnectionFactory(flags: PostgresFlags): ConnectionFactory {
     val connectionFactoryBuilder =
-      ConnectionFactoryOptions.builder().option(ConnectionFactoryOptions.DRIVER, "gcp")
-      .option(ConnectionFactoryOptions.PROTOCOL, "postgresql")
-      .option(ConnectionFactoryOptions.USER, flags.user)
-      // a non-empty password is required, but the value doesn't matter
-      .option(ConnectionFactoryOptions.PASSWORD, "UNUSED")
-      .option(ConnectionFactoryOptions.DATABASE, flags.database)
-      .option(ConnectionFactoryOptions.HOST, flags.cloudSqlInstance)
-      .option(GcpConnectionFactoryProvider.ENABLE_IAM_AUTH, true)
+      ConnectionFactoryOptions.builder()
+        .option(ConnectionFactoryOptions.DRIVER, "gcp")
+        .option(ConnectionFactoryOptions.PROTOCOL, "postgresql")
+        .option(ConnectionFactoryOptions.USER, flags.user)
+        // a non-empty password is required, but the value doesn't matter
+        .option(ConnectionFactoryOptions.PASSWORD, "UNUSED")
+        .option(ConnectionFactoryOptions.DATABASE, flags.database)
+        .option(ConnectionFactoryOptions.HOST, flags.cloudSqlInstance)
+        .option(GcpConnectionFactoryProvider.ENABLE_IAM_AUTH, true)
 
     if (flags.statementTimeout > 0) {
-      connectionFactoryBuilder
-        .option(ConnectionFactoryOptions.STATEMENT_TIMEOUT, Duration.ofSeconds(flags.statementTimeout))
+      connectionFactoryBuilder.option(
+        ConnectionFactoryOptions.STATEMENT_TIMEOUT,
+        Duration.ofSeconds(flags.statementTimeout),
+      )
     }
 
     return ConnectionFactories.get(connectionFactoryBuilder.build())

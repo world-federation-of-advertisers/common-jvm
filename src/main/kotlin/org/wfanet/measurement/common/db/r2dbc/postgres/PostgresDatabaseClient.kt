@@ -53,8 +53,10 @@ class PostgresDatabaseClient(getConnection: ConnectionProvider) : DatabaseClient
           .option(ConnectionFactoryOptions.DATABASE, flags.database)
 
       if (flags.statementTimeout > 0) {
-        connectionFactoryBuilder
-          .option(ConnectionFactoryOptions.STATEMENT_TIMEOUT, Duration.ofSeconds(flags.statementTimeout))
+        connectionFactoryBuilder.option(
+          ConnectionFactoryOptions.STATEMENT_TIMEOUT,
+          Duration.ofSeconds(flags.statementTimeout),
+        )
       }
 
       val connectionFactory = ConnectionFactories.get(connectionFactoryBuilder.build())
