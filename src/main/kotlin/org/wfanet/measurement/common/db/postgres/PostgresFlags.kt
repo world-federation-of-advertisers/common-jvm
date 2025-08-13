@@ -58,6 +58,14 @@ class PostgresFlags {
   lateinit var password: String
     private set
 
+  @CommandLine.Option(
+    names = ["--statement-timeout"],
+    description = ["statement_timeout for connections in seconds."],
+    required = false,
+  )
+  var statementTimeout: Long = 0
+    private set
+
   val jdbcConnectionString: String
     get() {
       return "jdbc:postgresql://$host:$port/$database"

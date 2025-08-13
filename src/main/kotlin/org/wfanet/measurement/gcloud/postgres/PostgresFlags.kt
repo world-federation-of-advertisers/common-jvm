@@ -41,4 +41,12 @@ class PostgresFlags {
   )
   lateinit var user: String
     private set
+
+  @CommandLine.Option(
+    names = ["--statement-timeout"],
+    description = ["statement_timeout for connections in seconds."],
+    required = false,
+  )
+  var statementTimeout: Long = 0
+    private set
 }

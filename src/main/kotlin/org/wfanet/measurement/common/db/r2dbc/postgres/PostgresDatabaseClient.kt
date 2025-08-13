@@ -43,18 +43,21 @@ class PostgresDatabaseClient(getConnection: ConnectionProvider) : DatabaseClient
       PostgresTransactionDefinition.from(isolationLevel).readWrite()
 
     fun fromFlags(flags: PostgresFlags): PostgresDatabaseClient {
-      val connectionFactory =
-        ConnectionFactories.get(
-          ConnectionFactoryOptions.builder()
-            .option(ConnectionFactoryOptions.DRIVER, "postgresql")
-            .option(ConnectionFactoryOptions.HOST, flags.host)
-            .option(ConnectionFactoryOptions.PORT, flags.port)
-            .option(ConnectionFactoryOptions.USER, flags.user)
-            .option(ConnectionFactoryOptions.PASSWORD, flags.password)
-            .option(ConnectionFactoryOptions.DATABASE, flags.database)
-            .option(ConnectionFactoryOptions.STATEMENT_TIMEOUT, Duration.ofSeconds(60))
-            .build()
-        )
+      val connectionFactoryBuilder =
+        ConnectionFactoryOptions.builder()
+          .option(ConnectionFactoryOptions.DRIVER, "postgresql")
+          .option(ConnectionFactoryOptions.HOST, flags.host)
+          .option(ConnectionFactoryOptions.PORT, flags.port)
+          .option(ConnectionFactoryOptions.USER, flags.user)
+          .option(ConnectionFactoryOptions.PASSWORD, flags.password)
+          .option(ConnectionFactoryOptions.DATABASE, flags.database)
+
+      if (flags.statementTimeout > 0) {
+        connectionFactoryBuilder
+          .option(ConnectionFactoryOptions.STATEMENT_TIMEOUT, Duration.ofSeconds(flags.statementTimeout))
+      }
+
+      val connectionFactory = ConnectionFactories.get(connectionFactoryBuilder.build())
 
       return PostgresDatabaseClient { connectionFactory.create().awaitSingle() }
     }
