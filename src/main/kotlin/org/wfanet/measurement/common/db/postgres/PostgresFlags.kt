@@ -14,6 +14,7 @@
 
 package org.wfanet.measurement.common.db.postgres
 
+import java.time.Duration
 import picocli.CommandLine
 
 /** Common command-line flags for connecting to a single Postgres database. */
@@ -60,10 +61,10 @@ class PostgresFlags {
 
   @CommandLine.Option(
     names = ["--statement-timeout"],
-    description = ["statement_timeout for connections in seconds."],
+    description = ["statement_timeout for connections. 0 represents no timeout."],
     required = false,
   )
-  var statementTimeout: Long = 0
+  var statementTimeout: Duration = Duration.ZERO
     private set
 
   val jdbcConnectionString: String

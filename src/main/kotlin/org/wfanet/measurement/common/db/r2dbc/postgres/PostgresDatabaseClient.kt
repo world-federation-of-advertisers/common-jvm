@@ -21,7 +21,6 @@ import io.r2dbc.spi.ConnectionFactories
 import io.r2dbc.spi.ConnectionFactory
 import io.r2dbc.spi.ConnectionFactoryOptions
 import io.r2dbc.spi.IsolationLevel
-import java.time.Duration
 import kotlinx.coroutines.reactive.awaitSingle
 import org.wfanet.measurement.common.db.postgres.PostgresFlags
 import org.wfanet.measurement.common.db.r2dbc.ConnectionProvider
@@ -43,23 +42,18 @@ class PostgresDatabaseClient(getConnection: ConnectionProvider) : DatabaseClient
       PostgresTransactionDefinition.from(isolationLevel).readWrite()
 
     fun fromFlags(flags: PostgresFlags): PostgresDatabaseClient {
-      val connectionFactoryBuilder =
-        ConnectionFactoryOptions.builder()
-          .option(ConnectionFactoryOptions.DRIVER, "postgresql")
-          .option(ConnectionFactoryOptions.HOST, flags.host)
-          .option(ConnectionFactoryOptions.PORT, flags.port)
-          .option(ConnectionFactoryOptions.USER, flags.user)
-          .option(ConnectionFactoryOptions.PASSWORD, flags.password)
-          .option(ConnectionFactoryOptions.DATABASE, flags.database)
-
-      if (flags.statementTimeout > 0) {
-        connectionFactoryBuilder.option(
-          ConnectionFactoryOptions.STATEMENT_TIMEOUT,
-          Duration.ofSeconds(flags.statementTimeout),
+      val connectionFactory =
+        ConnectionFactories.get(
+          ConnectionFactoryOptions.builder()
+            .option(ConnectionFactoryOptions.DRIVER, "postgresql")
+            .option(ConnectionFactoryOptions.HOST, flags.host)
+            .option(ConnectionFactoryOptions.PORT, flags.port)
+            .option(ConnectionFactoryOptions.USER, flags.user)
+            .option(ConnectionFactoryOptions.PASSWORD, flags.password)
+            .option(ConnectionFactoryOptions.DATABASE, flags.database)
+            .option(ConnectionFactoryOptions.STATEMENT_TIMEOUT, flags.statementTimeout)
+            .build()
         )
-      }
-
-      val connectionFactory = ConnectionFactories.get(connectionFactoryBuilder.build())
 
       return PostgresDatabaseClient { connectionFactory.create().awaitSingle() }
     }
