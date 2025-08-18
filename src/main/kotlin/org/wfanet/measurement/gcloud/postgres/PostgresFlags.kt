@@ -47,7 +47,8 @@ class PostgresFlags {
     names = ["--statement-timeout"],
     description = ["statement_timeout for connections. 0 represents no timeout"],
     required = false,
+    defaultValue = "0s",
   )
-  var statementTimeout: Duration = Duration.ZERO
+  lateinit var statementTimeout: Duration
     private set
 }
