@@ -359,6 +359,32 @@ fun String.hexAsByteString(): ByteString {
 }
 
 /**
+ * Copies as many bytes as will fit from [src] to this buffer.
+ *
+ * This behaves the same as [ByteBuffer.put], except that it does not throw a
+ * [java.nio.BufferOverflowException].
+ *
+ * @return the number of bytes copied into this buffer
+ */
+fun ByteBuffer.tryPut(src: ByteBuffer): Int {
+  if (!hasRemaining() || !src.hasRemaining()) {
+    return 0
+  }
+
+  val remainingCapacity: Int = remaining()
+  val srcRemaining: Int = src.remaining()
+  return if (srcRemaining > remainingCapacity) {
+    val slice: ByteBuffer = src.slice().limit(remainingCapacity)
+    put(slice)
+    src.position(src.position() + remainingCapacity)
+    remainingCapacity
+  } else {
+    put(src)
+    srcRemaining
+  }
+}
+
+/**
  * Reads a varint from a ByteBuffer. Varints are variable-width unsigned integers, supporting up to
  * 64-bit integers.
  *

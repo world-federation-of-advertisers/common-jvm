@@ -19,15 +19,28 @@ package org.wfanet.measurement.common.crypto.tink
 import com.google.crypto.tink.Key
 import com.google.crypto.tink.KeysetHandle
 import com.google.crypto.tink.StreamingAead
+import com.google.crypto.tink.streamingaead.AesCtrHmacStreamingKey
 import com.google.crypto.tink.streamingaead.AesGcmHkdfStreamingKey
+import com.google.crypto.tink.streamingaead.StreamingAeadKey
 import com.google.protobuf.ByteString
 import com.google.protobuf.kotlin.toByteString
 import java.nio.ByteBuffer
-import java.nio.channels.ClosedChannelException
 import java.nio.channels.ReadableByteChannel
 import java.nio.channels.WritableByteChannel
-import java.util.concurrent.locks.ReentrantLock
-import kotlin.concurrent.withLock
+import kotlin.coroutines.CoroutineContext
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.ReceiveChannel
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.buffer
+import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.produceIn
+import kotlinx.coroutines.yield
+import org.jetbrains.annotations.BlockingExecutor
+import org.wfanet.measurement.common.CoroutineReadableByteChannel
+import org.wfanet.measurement.common.CoroutineWritableByteChannel
 
 object StreamingEncryption {
   /**
@@ -45,14 +58,14 @@ object StreamingEncryption {
   fun encryptChunked(
     encryptionKey: KeysetHandle,
     plaintext: ByteString,
+    associatedData: ByteString?,
     chunkSizeBytes: Int,
-    associatedData: ByteString? = null,
   ): Sequence<ByteString> = sequence {
     val primaryKey: Key = encryptionKey.primary.key
-    require(primaryKey is AesGcmHkdfStreamingKey) { "Unsupported key type" }
+    require(primaryKey is StreamingAeadKey) { "Unsupported key type" }
     // Ensure a large enough buffer to avoid blocking.
     val pipeBufferSize: Int =
-      chunkSizeBytes.coerceAtLeast(primaryKey.parameters.ciphertextSegmentSizeBytes)
+      chunkSizeBytes.coerceAtLeast(getCiphertextSegmentSizeBytes(primaryKey))
 
     val plaintextSource: ByteBuffer = plaintext.asReadOnlyByteBuffer()
     val streamingAead = encryptionKey.getPrimitive(StreamingAead::class.java)
@@ -85,81 +98,61 @@ object StreamingEncryption {
       }
     }
   }
+
+  private fun getCiphertextSegmentSizeBytes(key: StreamingAeadKey): Int {
+    return when (key) {
+      is AesGcmHkdfStreamingKey -> key.parameters.ciphertextSegmentSizeBytes
+      is AesCtrHmacStreamingKey -> key.parameters.ciphertextSegmentSizeBytes
+      else -> throw IllegalArgumentException("Unsupported key type")
+    }
+  }
 }
 
-/**
- * Similar to [java.nio.channels.Pipe], but with a buffer of known [capacity].
- *
- * The [write][WritableByteChannel.write] method on [sink] should not block while there is enough
- * remaining space in the buffer to complete the write, assuming there is no concurrent reader.
- */
-private class BufferedPipe(capacity: Int) : AutoCloseable {
-  private val buffer = ByteBuffer.allocate(capacity)
-  private val lock = ReentrantLock()
-  private val bufferHasRemaining = lock.newCondition()
-
-  /** A channel representing the readable end of a pipe. */
-  val source =
-    object : ReadableByteChannel {
-      private var closed = false
-
-      override fun read(dst: ByteBuffer): Int {
-        if (!isOpen) {
-          throw ClosedChannelException()
-        }
-
-        lock.withLock {
-          buffer.flip()
-          return dst.tryPut(buffer).also {
-            buffer.compact()
-            if (buffer.hasRemaining()) {
-              bufferHasRemaining.signal()
-            }
+/** Encrypts [plaintext] to a [Flow] of ciphertext chunks. */
+fun StreamingAead.encrypt(
+  plaintext: Flow<ByteString>,
+  associatedData: ByteString?,
+  coroutineContext: @BlockingExecutor CoroutineContext,
+): Flow<ByteString> {
+  return channelFlow {
+      val ciphertextDestination = CoroutineWritableByteChannel.createBlocking(channel)
+      newEncryptingChannel(ciphertextDestination, associatedData?.toByteArray()).use {
+        encryptingChannel: WritableByteChannel ->
+        plaintext.collect { plaintextChunk: ByteString ->
+          for (sourceBuffer: ByteBuffer in plaintextChunk.asReadOnlyByteBufferList()) {
+            encryptingChannel.write(sourceBuffer)
           }
         }
       }
-
-      override fun isOpen(): Boolean = !closed
-
-      override fun close() {
-        closed = true
-      }
     }
+    .buffer(Channel.RENDEZVOUS)
+    .flowOn(coroutineContext)
+}
 
-  /** A channel representing the writable end of a pipe. */
-  val sink =
-    object : WritableByteChannel {
-      private var closed = false
-
-      override fun write(src: ByteBuffer): Int {
-        if (!isOpen) {
-          throw ClosedChannelException()
-        }
-
-        var written = 0
-        lock.withLock {
-          while (src.hasRemaining()) {
-            while (buffer.remaining() < src.remaining()) {
-              bufferHasRemaining.await()
-            }
-            written += buffer.tryPut(src)
+/** Decrypts [ciphertext] to a [Flow] of plaintext chunks. */
+fun StreamingAead.decrypt(
+  ciphertext: Flow<ByteString>,
+  associatedData: ByteString?,
+  chunkSizeBytes: Int,
+): Flow<ByteString> {
+  return flow {
+    coroutineScope {
+      val ciphertextSourceChannel: ReceiveChannel<ByteString> =
+        ciphertext.buffer(Channel.RENDEZVOUS).produceIn(this)
+      val ciphertextSource = CoroutineReadableByteChannel(ciphertextSourceChannel)
+      val outputBuffer = ByteBuffer.allocate(chunkSizeBytes)
+      newDecryptingChannel(ciphertextSource, associatedData?.toByteArray()).use {
+        decryptingChannel: ReadableByteChannel ->
+        do {
+          yield() // Let channel producer run.
+          val readCount: Int = decryptingChannel.read(outputBuffer)
+          if (!outputBuffer.hasRemaining() || readCount == -1) {
+            emit(outputBuffer.flip().toByteString())
+            outputBuffer.clear()
           }
-        }
-
-        return written
-      }
-
-      override fun isOpen(): Boolean = !closed
-
-      override fun close() {
-        closed = true
+        } while (readCount != -1)
       }
     }
-
-  override fun close() {
-    source.close()
-    sink.close()
-    buffer.clear()
   }
 }
 
@@ -172,28 +165,5 @@ private suspend fun SequenceScope<ByteString>.yieldChunked(
       yield(outputBuffer.flip().toByteString())
       outputBuffer.clear()
     }
-  }
-}
-
-/**
- * Copies as many bytes as will fit from [src] to this buffer.
- *
- * @return the number of bytes copied
- */
-private fun ByteBuffer.tryPut(src: ByteBuffer): Int {
-  if (!hasRemaining() || !src.hasRemaining()) {
-    return 0
-  }
-
-  val remainingCapacity: Int = remaining()
-  val srcRemaining: Int = src.remaining()
-  return if (srcRemaining > remainingCapacity) {
-    val slice = src.slice().limit(remainingCapacity)
-    put(slice)
-    src.position(src.position() + remainingCapacity)
-    remainingCapacity
-  } else {
-    put(src)
-    srcRemaining
   }
 }
