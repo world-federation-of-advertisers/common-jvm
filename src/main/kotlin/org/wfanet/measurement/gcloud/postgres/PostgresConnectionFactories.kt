@@ -32,6 +32,7 @@ object PostgresConnectionFactories {
         .option(ConnectionFactoryOptions.DATABASE, flags.database)
         .option(ConnectionFactoryOptions.HOST, flags.cloudSqlInstance)
         .option(GcpConnectionFactoryProvider.ENABLE_IAM_AUTH, true)
+        .option(ConnectionFactoryOptions.STATEMENT_TIMEOUT, flags.statementTimeout)
         .build()
     )
   }

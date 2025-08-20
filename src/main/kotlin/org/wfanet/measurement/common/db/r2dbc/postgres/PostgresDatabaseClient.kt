@@ -51,6 +51,7 @@ class PostgresDatabaseClient(getConnection: ConnectionProvider) : DatabaseClient
             .option(ConnectionFactoryOptions.USER, flags.user)
             .option(ConnectionFactoryOptions.PASSWORD, flags.password)
             .option(ConnectionFactoryOptions.DATABASE, flags.database)
+            .option(ConnectionFactoryOptions.STATEMENT_TIMEOUT, flags.statementTimeout)
             .build()
         )
 
