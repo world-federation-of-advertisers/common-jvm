@@ -23,15 +23,22 @@ import com.google.protobuf.DescriptorProtos
 import com.google.protobuf.Descriptors
 import com.google.protobuf.Timestamp
 import com.google.protobuf.TimestampProto
+import com.google.protobuf.TypeRegistry
 import com.google.protobuf.kotlin.unpack
+import com.google.protobuf.timestamp
 import java.time.Clock
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
+import org.wfa.measurement.common.testing.ContainsAnyOuterClass.ContainsAny
+import org.wfa.measurement.common.testing.containsAny
 import org.wfanet.measurement.common.ProtoReflection.allDependencies
 import org.wfanet.measurement.common.testing.DependsOnSimple
+import org.wfanet.measurement.common.testing.DependsOnSimpleKt
 import org.wfanet.measurement.common.testing.Sibling
 import org.wfanet.measurement.common.testing.Simple
+import org.wfanet.measurement.common.testing.dependsOnSimple
+import org.wfanet.measurement.common.testing.simple
 
 /* Test for [ProtoReflection]. */
 @RunWith(JUnit4::class)
@@ -126,5 +133,117 @@ class ProtoReflectionTest {
     assertThat(typeUrl.split("/"))
       .containsExactly(typeUrlPrefix, "google.protobuf.Timestamp")
       .inOrder()
+  }
+
+  @Test
+  fun `getFieldsRecursive returns fields`() {
+    val embeddedMessage = dependsOnSimple {
+      simple = simple { intValue = 1 }
+      timestamp = timestamp {
+        seconds = 1754011048
+        nanos = 402358122
+      }
+      nested = DependsOnSimpleKt.nested { nestedIntValue = 2 }
+    }
+    val embeddedMessage2 = simple { intValue = 3 }
+    val message = containsAny {
+      anyValue += ProtoAny.pack(embeddedMessage)
+      anyValue += ProtoAny.pack(embeddedMessage2)
+    }
+    val typeRegistry = TypeRegistry.newBuilder().add(DependsOnSimple.getDescriptor()).build()
+
+    val fields: Sequence<ProtoReflection.Field> =
+      ProtoReflection.getFieldsRecursive(message, typeRegistry)
+
+    val anyValuePath =
+      listOf(
+        ProtoReflection.FieldPathSegment(
+          ContainsAny.getDescriptor().findFieldByNumber(ContainsAny.ANY_VALUE_FIELD_NUMBER)
+        )
+      )
+    val embeddedMessagePath = anyValuePath.map { it.withIndex(0) }
+    val dependsOnSimpleDescriptor = DependsOnSimple.getDescriptor()
+    val simplePath =
+      embeddedMessagePath +
+        ProtoReflection.FieldPathSegment(
+          dependsOnSimpleDescriptor.findFieldByNumber(DependsOnSimple.SIMPLE_FIELD_NUMBER)
+        )
+    val intValuePath =
+      simplePath +
+        ProtoReflection.FieldPathSegment(
+          Simple.getDescriptor().findFieldByNumber(Simple.INT_VALUE_FIELD_NUMBER)
+        )
+    val timestampPath =
+      embeddedMessagePath +
+        ProtoReflection.FieldPathSegment(
+          dependsOnSimpleDescriptor.findFieldByNumber(DependsOnSimple.TIMESTAMP_FIELD_NUMBER)
+        )
+    val secondsPath =
+      timestampPath +
+        ProtoReflection.FieldPathSegment(
+          Timestamp.getDescriptor().findFieldByNumber(Timestamp.SECONDS_FIELD_NUMBER)
+        )
+    val nanosPath =
+      timestampPath +
+        ProtoReflection.FieldPathSegment(
+          Timestamp.getDescriptor().findFieldByNumber(Timestamp.NANOS_FIELD_NUMBER)
+        )
+    val nestedPath =
+      embeddedMessagePath +
+        ProtoReflection.FieldPathSegment(
+          dependsOnSimpleDescriptor.findFieldByNumber(DependsOnSimple.NESTED_FIELD_NUMBER)
+        )
+    val nestedIntPath =
+      nestedPath +
+        ProtoReflection.FieldPathSegment(
+          DependsOnSimple.Nested.getDescriptor()
+            .findFieldByNumber(DependsOnSimple.Nested.NESTED_INT_VALUE_FIELD_NUMBER)
+        )
+    val siblingPath =
+      embeddedMessagePath +
+        ProtoReflection.FieldPathSegment(
+          dependsOnSimpleDescriptor.findFieldByNumber(DependsOnSimple.SIBLING_FIELD_NUMBER)
+        )
+    val siblingIntPath =
+      siblingPath +
+        ProtoReflection.FieldPathSegment(
+          Sibling.getDescriptor().findFieldByNumber(Sibling.SIBLING_INT_VALUE_FIELD_NUMBER)
+        )
+    val embeddedMessage2Path = embeddedMessagePath.map { it.withIndex(1) }
+    val int2Path = embeddedMessage2Path + intValuePath.last()
+    assertThat(fields.toList())
+      .containsExactly(
+        ProtoReflection.Field(message, anyValuePath, message.anyValueList),
+        ProtoReflection.Field(embeddedMessage, simplePath, embeddedMessage.simple),
+        ProtoReflection.Field(
+          embeddedMessage.simple,
+          intValuePath,
+          embeddedMessage.simple.intValue,
+        ),
+        ProtoReflection.Field(embeddedMessage, timestampPath, embeddedMessage.timestamp),
+        ProtoReflection.Field(
+          embeddedMessage.timestamp,
+          secondsPath,
+          embeddedMessage.timestamp.seconds,
+        ),
+        ProtoReflection.Field(
+          embeddedMessage.timestamp,
+          nanosPath,
+          embeddedMessage.timestamp.nanos,
+        ),
+        ProtoReflection.Field(embeddedMessage, nestedPath, embeddedMessage.nested),
+        ProtoReflection.Field(
+          embeddedMessage.nested,
+          nestedIntPath,
+          embeddedMessage.nested.nestedIntValue,
+        ),
+        ProtoReflection.Field(embeddedMessage, siblingPath, embeddedMessage.sibling),
+        ProtoReflection.Field(
+          embeddedMessage.sibling,
+          siblingIntPath,
+          embeddedMessage.sibling.siblingIntValue,
+        ),
+        ProtoReflection.Field(embeddedMessage2, int2Path, embeddedMessage2.intValue),
+      )
   }
 }

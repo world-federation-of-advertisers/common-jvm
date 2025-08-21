@@ -157,6 +157,7 @@ kt_jvm_test(
         "//imports/java/com/google/common/truth/extensions/proto",
         "//imports/java/org/junit",
         "//src/main/kotlin/org/wfanet/measurement/common",
+        "//src/main/proto/wfa/measurement/common/testing:contains_any_kt_jvm_proto",
         "//src/main/proto/wfa/measurement/common/testing:depends_on_simple_kt_jvm_proto",
     ],
 )

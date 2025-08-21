@@ -23,12 +23,16 @@ import com.google.protobuf.ApiProto
 import com.google.protobuf.DescriptorProtos
 import com.google.protobuf.Descriptors
 import com.google.protobuf.DurationProto
+import com.google.protobuf.DynamicMessage
 import com.google.protobuf.EmptyProto
+import com.google.protobuf.ExtensionRegistry
+import com.google.protobuf.MapEntry
 import com.google.protobuf.Message
 import com.google.protobuf.ProtocolMessageEnum
 import com.google.protobuf.StructProto
 import com.google.protobuf.TimestampProto
 import com.google.protobuf.TypeProto
+import com.google.protobuf.TypeRegistry
 import com.google.protobuf.WrappersProto
 import com.google.protobuf.fileDescriptorSet
 import com.google.type.CalendarPeriodProto
@@ -49,7 +53,10 @@ import com.google.type.PostalAddressProto
 import com.google.type.QuaternionProto
 import com.google.type.TimeOfDayProto
 import kotlin.reflect.KClass
+import kotlin.reflect.KFunction0
 import kotlin.reflect.full.staticFunctions
+
+private typealias FieldPath = List<ProtoReflection.FieldPathSegment>
 
 /** Utility object for protobuf reflection. */
 object ProtoReflection {
@@ -125,7 +132,7 @@ object ProtoReflection {
     @Suppress("UNCHECKED_CAST") // Guaranteed by predicate.
     val function =
       kClass.staticFunctions.single { it.name == "getDefaultInstance" && it.parameters.isEmpty() }
-        as kotlin.reflect.KFunction0<T>
+        as KFunction0<T>
 
     return function.call()
   }
@@ -137,7 +144,7 @@ object ProtoReflection {
     @Suppress("UNCHECKED_CAST") // Guaranteed by predicate.
     val function =
       kClass.staticFunctions.single { it.name == "getDescriptorForType" && it.parameters.isEmpty() }
-        as kotlin.reflect.KFunction0<Descriptors.EnumDescriptor>
+        as KFunction0<Descriptors.EnumDescriptor>
     return function.call()
   }
 
@@ -146,7 +153,7 @@ object ProtoReflection {
     @Suppress("UNCHECKED_CAST") // Guaranteed by predicate.
     val function =
       kClass.staticFunctions.single { it.name == "getDescriptorForType" && it.parameters.isEmpty() }
-        as kotlin.reflect.KFunction0<Descriptors.Descriptor>
+        as KFunction0<Descriptors.Descriptor>
     return function.call()
   }
 
@@ -292,6 +299,136 @@ object ProtoReflection {
       return WELL_KNOWN_TYPES_BY_NAME
     }
     return associateBy { it.name }
+  }
+
+  data class FieldPathSegment(
+    val descriptor: Descriptors.FieldDescriptor,
+    /**
+     * Optional index for a field with multiple values.
+     *
+     * For a map field, this is the map key for the entry. For a regular repeated field, this is the
+     * [Int] index.
+     */
+    val index: Any? = null,
+  ) {
+    override fun toString(): String {
+      return if (index == null) {
+        descriptor.name
+      } else {
+        "${descriptor.name}[$index]"
+      }
+    }
+
+    fun withIndex(index: Any) = FieldPathSegment(descriptor, index)
+  }
+
+  data class Field(
+    /** Message that contains the field. */
+    val containingMessage: Message,
+    /** Path to the field from the root message. */
+    val path: FieldPath,
+    /** Value of the field, or the default value if not set. */
+    val value: Any,
+  ) {
+    val descriptor: Descriptors.FieldDescriptor
+      get() = path.last().descriptor
+
+    val index: Any?
+      get() = path.last().index
+
+    val pathString: String
+      get() = path.joinToString(".")
+  }
+
+  /**
+   * Returns all of the [Field]s in [root], recursing into message fields.
+   *
+   * This will also recurse into the unpacked value of any [ProtoAny] fields found in
+   * [packedTypeRegistry].
+   */
+  fun getFieldsRecursive(
+    root: Message,
+    packedTypeRegistry: TypeRegistry = TypeRegistry.getEmptyTypeRegistry(),
+    extensionRegistry: ExtensionRegistry = ExtensionRegistry.getEmptyRegistry(),
+  ): Sequence<Field> {
+    return root.getFieldsRecursive(emptyList(), packedTypeRegistry, extensionRegistry)
+  }
+
+  private fun Message.getFieldsRecursive(
+    pathPrefix: FieldPath,
+    packedTypeRegistry: TypeRegistry,
+    extensionRegistry: ExtensionRegistry,
+  ): Sequence<Field> {
+    return sequence {
+      if (this@getFieldsRecursive is ProtoAny && this@getFieldsRecursive.typeUrl.isNotEmpty()) {
+        val unpacked = unpackIfFound(packedTypeRegistry, extensionRegistry)
+        if (unpacked != null) {
+          yieldAll(unpacked.getFieldsRecursive(pathPrefix, packedTypeRegistry, extensionRegistry))
+        }
+        return@sequence
+      }
+
+      for (fieldDescriptor in descriptorForType.fields) {
+        val pathSegment = FieldPathSegment(fieldDescriptor)
+        val field =
+          Field(this@getFieldsRecursive, pathPrefix + pathSegment, getField(fieldDescriptor))
+        yield(field)
+        yieldAll(field.getFieldsRecursive(packedTypeRegistry, extensionRegistry))
+      }
+    }
+  }
+
+  private fun Field.getFieldsRecursive(
+    packedTypeRegistry: TypeRegistry,
+    extensionRegistry: ExtensionRegistry,
+  ): Sequence<Field> {
+    if (descriptor.type != Descriptors.FieldDescriptor.Type.MESSAGE) {
+      return emptySequence()
+    }
+
+    return sequence {
+      if (descriptor.isMapField) {
+        val values = value as List<*>
+        for (element in values) {
+          val entry = element as MapEntry<*, *>
+          val indexedPath = path.withIndex(entry.key)
+          val embeddedMessage = entry.value as Message
+          yieldAll(
+            embeddedMessage.getFieldsRecursive(indexedPath, packedTypeRegistry, extensionRegistry)
+          )
+        }
+      } else if (descriptor.isRepeated) {
+        val values = value as List<*>
+        values.forEachIndexed { elementIndex: Int, element ->
+          val indexedPath = path.withIndex(elementIndex)
+          val embeddedMessage = element as Message
+          yieldAll(
+            embeddedMessage.getFieldsRecursive(indexedPath, packedTypeRegistry, extensionRegistry)
+          )
+        }
+      } else {
+        val embeddedMessage = value as Message
+        yieldAll(embeddedMessage.getFieldsRecursive(path, packedTypeRegistry, extensionRegistry))
+      }
+    }
+  }
+
+  private fun FieldPath.withIndex(index: Any) = mapIndexed { pathIndex, pathSegment ->
+    if (pathIndex == size - 1) {
+      pathSegment.withIndex(index)
+    } else {
+      pathSegment
+    }
+  }
+
+  /** Unpacks this message if its type is found in [typeRegistry], returning `null` if it is not. */
+  private fun ProtoAny.unpackIfFound(
+    typeRegistry: TypeRegistry,
+    extensionRegistry: ExtensionRegistry = ExtensionRegistry.getEmptyRegistry(),
+  ): DynamicMessage? {
+    val knownType: Descriptors.Descriptor =
+      typeRegistry.getDescriptorForTypeUrl(typeUrl) ?: return null
+    return DynamicMessage.parseFrom(knownType, value, extensionRegistry)
   }
 }
 
