@@ -16,6 +16,7 @@ package org.wfanet.measurement.common
 
 import com.google.common.truth.Truth.assertThat
 import com.google.protobuf.ByteString
+import java.io.IOException
 import java.nio.ByteBuffer
 import java.nio.channels.ClosedChannelException
 import kotlin.test.assertFailsWith
@@ -30,65 +31,65 @@ import org.junit.runners.JUnit4
 class CoroutineWritableByteChannelTest {
 
   @Test
-  fun `write - successfully writes data to channel`() = runBlocking {
+  fun `write writes data to channel`() = runBlocking {
     val testData = "hello world"
 
     val channel = Channel<ByteString>()
-    val coroutineWritableByteChannel = CoroutineWritableByteChannel(channel)
-    val buffer = ByteBuffer.wrap(testData.toByteArray())
-    launch {
-      val bytesWritten = coroutineWritableByteChannel.write(buffer)
-      assertThat(bytesWritten).isEqualTo(testData.length)
+    CoroutineWritableByteChannel.createNonBlocking(channel).use { coroutineWritableByteChannel ->
+      val buffer = ByteBuffer.wrap(testData.toByteArray())
+      launch {
+        val bytesWritten = coroutineWritableByteChannel.write(buffer)
+        assertThat(bytesWritten).isEqualTo(testData.length)
+      }
+
+      val received = channel.receive()
+      assertThat(received.toStringUtf8()).isEqualTo(testData)
     }
-
-    val received = channel.receive()
-    assertThat(received.toStringUtf8()).isEqualTo(testData)
-
-    coroutineWritableByteChannel.close()
   }
 
   @Test
-  fun `write - returns zero when no receiver available`(): Unit = runBlocking {
+  fun `write returns zero when delegate channel buffer is full`(): Unit = runBlocking {
     val testData = "test data"
-
     val channel = Channel<ByteString>()
-    val coroutineWritableByteChannel = CoroutineWritableByteChannel(channel)
-    val buffer = ByteBuffer.wrap(testData.toByteArray())
-    val bytesWritten = coroutineWritableByteChannel.write(buffer)
-    assertThat(bytesWritten).isEqualTo(0)
-    assertThat(buffer.position()).isEqualTo(0)
+    CoroutineWritableByteChannel.createNonBlocking(channel).use { coroutineWritableByteChannel ->
+      val buffer = ByteBuffer.wrap(testData.toByteArray())
 
-    coroutineWritableByteChannel.close()
+      val bytesWritten = coroutineWritableByteChannel.write(buffer)
+
+      assertThat(bytesWritten).isEqualTo(0)
+      assertThat(buffer.position()).isEqualTo(0)
+    }
   }
 
   @Test
-  fun `write - throws when channel is closed`(): Unit = runBlocking {
+  fun `write throws when delegate channel is closed`(): Unit = runBlocking {
     val testData = "test data"
-
     val channel = Channel<ByteString>()
-    val coroutineWritableByteChannel = CoroutineWritableByteChannel(channel)
-    val buffer = ByteBuffer.wrap(testData.toByteArray())
+    CoroutineWritableByteChannel.createNonBlocking(channel).use { coroutineWritableByteChannel ->
+      val buffer = ByteBuffer.wrap(testData.toByteArray())
 
-    channel.close()
+      channel.close()
 
-    assertFailsWith(ClosedChannelException::class) { coroutineWritableByteChannel.write(buffer) }
+      val exception = assertFailsWith<IOException> { coroutineWritableByteChannel.write(buffer) }
+      assertThat(exception).hasMessageThat().contains("closed")
+    }
   }
 
   @Test
-  fun `isOpen - returns false when channel is closed`() = runBlocking {
+  fun `write throws when closed`(): Unit = runBlocking {
+    val testData = "test data"
+    val sourceBuffer = ByteBuffer.wrap(testData.toByteArray())
     val channel = Channel<ByteString>()
-    val coroutineWritableByteChannel = CoroutineWritableByteChannel(channel)
-    assertThat(coroutineWritableByteChannel.isOpen()).isTrue()
+    val coroutineWritableByteChannel = CoroutineWritableByteChannel.createNonBlocking(channel)
+    coroutineWritableByteChannel.close()
 
-    channel.close()
-
-    assertThat(coroutineWritableByteChannel.isOpen()).isFalse()
+    assertFailsWith<ClosedChannelException> { coroutineWritableByteChannel.write(sourceBuffer) }
   }
 
   @Test
-  fun `write - handles large data correctly`() = runBlocking {
+  fun `write handles large data correctly`() = runBlocking {
     val channel = Channel<ByteString>()
-    val coroutineWritableByteChannel = CoroutineWritableByteChannel(channel)
+    val coroutineWritableByteChannel = CoroutineWritableByteChannel.createNonBlocking(channel)
     val testData = ByteArray(1024) { it.toByte() }
     val buffer = ByteBuffer.wrap(testData)
     launch {
@@ -102,22 +103,21 @@ class CoroutineWritableByteChannelTest {
   }
 
   @Test
-  fun `write - maintains buffer position`() = runBlocking {
+  fun `write maintains buffer position`() = runBlocking {
     val testData = "hello world"
-
     val channel = Channel<ByteString>()
-    val coroutineWritableByteChannel = CoroutineWritableByteChannel(channel)
     val buffer = ByteBuffer.wrap(testData.toByteArray())
     buffer.position(6)
 
-    launch {
-      val bytesWritten = coroutineWritableByteChannel.write(buffer)
-      assertThat(bytesWritten).isEqualTo(5)
-      assertThat(buffer.position()).isEqualTo(11)
-    }
-    val received = channel.receive()
-    assertThat(received.toStringUtf8()).isEqualTo("world")
+    CoroutineWritableByteChannel.createNonBlocking(channel).use { coroutineWritableByteChannel ->
+      launch {
+        val bytesWritten = coroutineWritableByteChannel.write(buffer)
+        assertThat(bytesWritten).isEqualTo(5)
+        assertThat(buffer.position()).isEqualTo(11)
+      }
 
-    coroutineWritableByteChannel.close()
+      val received = channel.receive()
+      assertThat(received.toStringUtf8()).isEqualTo("world")
+    }
   }
 }

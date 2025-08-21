@@ -15,54 +15,76 @@
 package org.wfanet.measurement.common
 
 import com.google.protobuf.ByteString
+import java.io.IOException
 import java.nio.ByteBuffer
 import java.nio.channels.ClosedChannelException
 import java.nio.channels.WritableByteChannel
-import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.channels.ChannelResult
 import kotlinx.coroutines.channels.SendChannel
+import kotlinx.coroutines.channels.trySendBlocking
 
 /**
- * A non-blocking [WritableByteChannel] that writes data to a [SendChannel] of [ByteString]. This
- * class enables coroutine-friendly, asynchronous writes by delegating write operations to a
- * coroutine channel.
+ * A [WritableByteChannel] that writes data to [delegate].
  *
- * @property delegate The [SendChannel] to which this [WritableByteChannel] will send data.
- * @constructor Creates a writable channel that writes each [ByteBuffer] as a [ByteString] to the
- *   provided [SendChannel].
+ * This class enables coroutine-friendly, asynchronous writes by delegating write operations to a
+ * coroutine channel.
  */
-class CoroutineWritableByteChannel(private val delegate: SendChannel<ByteString>) :
+class CoroutineWritableByteChannel
+private constructor(private val delegate: SendChannel<ByteString>, private val blocking: Boolean) :
   WritableByteChannel {
+  private var closed = false
 
-  /**
-   * Writes the contents of the provided [ByteBuffer] to the [SendChannel] as a [ByteString].
-   *
-   * If the channel is not ready to accept data, the method returns `0` without consuming any bytes
-   * from the buffer, allowing the caller to retry. If the channel is closed, a
-   * [ClosedChannelException] is thrown.
-   *
-   * @param source The [ByteBuffer] containing the data to write.
-   * @return The number of bytes written, or `0` if the channel is temporarily unable to accept
-   *   data.
-   * @throws ClosedChannelException if the channel is closed and cannot accept more data.
-   */
-  override fun write(source: ByteBuffer): Int {
-    val originalPosition = source.position()
-    val bytesToWrite = source.remaining()
-    val byteString = ByteString.copyFrom(source)
-    val result = delegate.trySend(byteString)
-    if (result.isClosed) {
+  override fun write(src: ByteBuffer): Int {
+    if (closed) {
       throw ClosedChannelException()
+    }
+
+    val slice: ByteBuffer = src.slice()
+    val chunk = ByteString.copyFrom(slice)
+    val result: ChannelResult<Unit> =
+      if (blocking) {
+        delegate.trySendBlocking(chunk)
+      } else {
+        delegate.trySend(chunk)
+      }
+    if (result.isClosed) {
+      throw IOException("delegate channel is closed")
     } else if (result.isFailure) {
-      source.position(originalPosition)
       return 0
     }
-    return bytesToWrite
+
+    src.position(src.position() + chunk.size)
+    return chunk.size
   }
 
-  @OptIn(DelicateCoroutinesApi::class) // Safe usage since write is guarded by trySend.
-  override fun isOpen(): Boolean = !delegate.isClosedForSend
+  override fun isOpen(): Boolean = !closed
 
   override fun close() {
+    if (closed) {
+      return
+    }
+
     delegate.close()
+    closed = true
+  }
+
+  companion object {
+    /**
+     * Creates a [CoroutineWritableByteChannel] in blocking mode.
+     *
+     * This means that the [write][CoroutineWritableByteChannel.write] method will block until all
+     * bytes can be written.
+     */
+    fun createBlocking(delegate: SendChannel<ByteString>) =
+      CoroutineWritableByteChannel(delegate, true)
+
+    /**
+     * Creates a [CoroutineWritableByteChannel] in non-blocking mode.
+     *
+     * This means that the [write][CoroutineWritableByteChannel.write] method will never block, but
+     * may not write all bytes if [delegate] isn't able to receive.
+     */
+    fun createNonBlocking(delegate: SendChannel<ByteString>) =
+      CoroutineWritableByteChannel(delegate, false)
   }
 }

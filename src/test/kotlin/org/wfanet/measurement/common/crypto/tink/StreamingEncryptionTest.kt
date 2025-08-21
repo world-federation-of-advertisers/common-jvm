@@ -45,7 +45,7 @@ class StreamingEncryptionTest {
     val chunkSizeBytes = 32 * 1024 // 32 KiB
 
     val ciphertextChunks =
-      StreamingEncryption.encryptChunked(keyHandle, plaintext, chunkSizeBytes, associatedData)
+      StreamingEncryption.encryptChunked(keyHandle, plaintext, associatedData, chunkSizeBytes)
         .toList()
 
     ciphertextChunks.forEachIndexed { index, chunk ->
