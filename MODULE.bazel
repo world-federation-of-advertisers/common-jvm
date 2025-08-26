@@ -32,6 +32,12 @@ bazel_dep(
     version = "0.6.0",
     repo_name = "wfa_rules_kotlin_jvm",
 )
+# DO_NOT_SUBMIT: use new rules_kotlin_jvm release
+git_override(
+    module_name = "rules_kotlin_jvm",
+    commit = "1217c0dc0b1aeee2d56df38be69a0c39ab0225fe",
+    remote = "https://github.com/world-federation-of-advertisers/rules_kotlin_jvm.git",
+)
 bazel_dep(
     name = "googleapis",
     version = "0.0.0-20250120-318818b.bzlmod.2",
@@ -67,7 +73,7 @@ bazel_dep(
 )
 bazel_dep(
     name = "rules_kotlin",
-    version = "2.1.0",
+    version = "2.1.9",
 )
 bazel_dep(
     name = "rules_multirun",
@@ -80,7 +86,7 @@ bazel_dep(
 )
 bazel_dep(
     name = "rules_jvm_external",
-    version = "6.6",
+    version = "6.8",
 )
 bazel_dep(
     name = "rules_oci",
