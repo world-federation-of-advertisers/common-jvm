@@ -4,7 +4,7 @@ module(
     repo_name = "wfa_common_jvm",
 )
 
-KOTLINX_COROUTINES_VERSION = "1.10.1"  # Compatible with rules_kotlin_jvm version.
+KOTLINX_COROUTINES_VERSION = "1.10.2"  # Compatible with rules_kotlin_jvm version.
 
 PROTOBUF_JAVA_VERSION = "4.29.3"  # Compatible with rules_kotlin_jvm version.
 
@@ -35,7 +35,7 @@ bazel_dep(
 # DO_NOT_SUBMIT: use new rules_kotlin_jvm release
 git_override(
     module_name = "rules_kotlin_jvm",
-    commit = "1217c0dc0b1aeee2d56df38be69a0c39ab0225fe",
+    commit = "00c9434df9e45d697a3324cfed697ba52d87019a",
     remote = "https://github.com/world-federation-of-advertisers/rules_kotlin_jvm.git",
 )
 bazel_dep(
