@@ -29,14 +29,8 @@ CLOUD_SQL_CONNECTOR_VERSION = "1.12.0"
 # See https://github.com/bazelbuild/bazel/discussions/23075.
 bazel_dep(
     name = "rules_kotlin_jvm",
-    version = "0.6.0",
+    version = "0.8.0",
     repo_name = "wfa_rules_kotlin_jvm",
-)
-# DO_NOT_SUBMIT: use new rules_kotlin_jvm release
-git_override(
-    module_name = "rules_kotlin_jvm",
-    commit = "00c9434df9e45d697a3324cfed697ba52d87019a",
-    remote = "https://github.com/world-federation-of-advertisers/rules_kotlin_jvm.git",
 )
 bazel_dep(
     name = "googleapis",
