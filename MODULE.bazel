@@ -186,7 +186,7 @@ maven.install(
         "org.jetbrains:annotations:23.0.0",
         "info.picocli:picocli:4.7.6",
         "com.google.code.gson:gson:2.10.1",
-        "io.netty:netty-handler:4.1.108.Final",
+        "io.netty:netty-handler:4.1.124.Final",
         "com.google.crypto.tink:tink:" + TINK_VERSION,
         "com.github.ben-manes.caffeine:caffeine:3.1.8",
 
