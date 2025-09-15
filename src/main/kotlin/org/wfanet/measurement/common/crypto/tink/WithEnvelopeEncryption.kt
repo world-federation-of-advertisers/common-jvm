@@ -17,7 +17,9 @@ package org.wfanet.measurement.common.crypto.tink
 import com.google.crypto.tink.Key
 import com.google.crypto.tink.KeysetHandle
 import com.google.crypto.tink.KmsClient
+import com.google.crypto.tink.SecretKeyAccess
 import com.google.crypto.tink.StreamingAead
+import com.google.crypto.tink.TinkJsonProtoKeysetFormat
 import com.google.crypto.tink.TinkProtoKeysetFormat
 import com.google.crypto.tink.aead.AeadConfig
 import com.google.crypto.tink.streamingaead.StreamingAeadConfig
@@ -50,6 +52,12 @@ fun StorageClient.withEnvelopeEncryption(
   val kekAead = kmsClient.getAead(kekUri)
   val handle: KeysetHandle =
     TinkProtoKeysetFormat.parseEncryptedKeyset(encryptedDek.toByteArray(), kekAead, byteArrayOf())
+
+  val jsonEncryptedKeyset: String =
+    TinkJsonProtoKeysetFormat.serializeEncryptedKeyset(handle, kekAead, encryptedDek.toByteArray())
+
+  println("🔐 Encrypted JSON keyset:\n$jsonEncryptedKeyset")
+
   return when (val primaryKey: Key = handle.primary.key) {
     is StreamingAeadKey -> {
 
