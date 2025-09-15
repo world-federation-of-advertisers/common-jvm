@@ -14,6 +14,8 @@
 
 package org.wfanet.measurement.common.crypto.tink
 
+import com.google.crypto.tink.CleartextKeysetHandle
+import com.google.crypto.tink.JsonKeysetWriter
 import com.google.crypto.tink.Key
 import com.google.crypto.tink.KeysetHandle
 import com.google.crypto.tink.KmsClient
@@ -29,6 +31,7 @@ import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.Dispatchers
 import org.jetbrains.annotations.BlockingExecutor
 import org.wfanet.measurement.storage.StorageClient
+import java.io.ByteArrayOutputStream
 
 /*
  * Wraps this [StorageClient] in one that provides envelope encryption.
@@ -57,6 +60,10 @@ fun StorageClient.withEnvelopeEncryption(
     TinkJsonProtoKeysetFormat.serializeEncryptedKeyset(handle, kekAead, encryptedDek.toByteArray())
 
   println("🔐 Encrypted JSON keyset:\n$jsonEncryptedKeyset")
+
+  val out = ByteArrayOutputStream()
+  CleartextKeysetHandle.write(handle, JsonKeysetWriter.withOutputStream(out))
+  println("🔓 Decrypted JSON keyset:\n${out.toString(Charsets.UTF_8)}")
 
   return when (val primaryKey: Key = handle.primary.key) {
     is StreamingAeadKey -> {
