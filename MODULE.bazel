@@ -8,9 +8,9 @@ KOTLINX_COROUTINES_VERSION = "1.10.2"  # Compatible with rules_kotlin_jvm versio
 
 PROTOBUF_JAVA_VERSION = "4.29.3"  # Compatible with rules_kotlin_jvm version.
 
-GRPC_JAVA_VERSION = "1.69.0"  # Compatible with rules_kotlin_jvm version.
+GRPC_JAVA_VERSION = "1.75.0"  # Compatible with rules_kotlin_jvm version.
 
-GRPC_KOTLIN_VERSION = "1.4.1"  # Compatible with rules_kotlin_jvm version.
+GRPC_KOTLIN_VERSION = "1.5.0"  # Compatible with rules_kotlin_jvm version.
 
 # Note: The AWS SDK version needs to match with the EMR image version to avoid class conflicts at runtime.
 # Current version matches with the SDK version in EMR image 7.1.0
@@ -29,7 +29,6 @@ CLOUD_SQL_CONNECTOR_VERSION = "1.12.0"
 # See https://github.com/bazelbuild/bazel/discussions/23075.
 bazel_dep(
     name = "rules_kotlin_jvm",
-    version = "0.8.0",
     repo_name = "wfa_rules_kotlin_jvm",
 )
 bazel_dep(
@@ -63,7 +62,7 @@ bazel_dep(
 )
 bazel_dep(
     name = "rules_java",
-    version = "8.7.1",
+    version = "8.15.2",
 )
 bazel_dep(
     name = "rules_kotlin",
@@ -284,6 +283,11 @@ maven.install(
     ],
     fail_if_repin_required = True,
     fetch_sources = True,
+    known_contributing_modules = [
+        "bazel_worker_java",
+        "common-jvm",
+        "rules_kotlin_jvm",
+    ],
     lock_file = "//:maven_install.json",
     repositories = [
         "https://maven.google.com",
@@ -332,4 +336,13 @@ http_archive(
     sha256 = "1e4e32f6198facbac7a35b04fa4c1acb5e6d9bb13f983c60903da9cbbbd9f5b5",
     strip_prefix = "highwayhash-a7f68e2f95fac08b24327d74747521cf634d5aff",
     url = "https://github.com/google/highwayhash/archive/a7f68e2f95fac08b24327d74747521cf634d5aff.tar.gz",
+)
+
+# DO_NOT_SUBMIT(world-federation-of-advertisers/rules_kotlin_jvm#16): Use version.
+archive_override(
+    module_name = "rules_kotlin_jvm",
+    strip_prefix = "rules_kotlin_jvm-e14d3141ab7950955319798ca953127d51f1c3e3",
+    urls = [
+        "https://github.com/world-federation-of-advertisers/rules_kotlin_jvm/archive/e14d3141ab7950955319798ca953127d51f1c3e3.tar.gz",
+    ],
 )
