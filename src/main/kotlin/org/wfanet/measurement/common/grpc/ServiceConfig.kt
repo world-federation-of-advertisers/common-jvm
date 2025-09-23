@@ -20,6 +20,7 @@ import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.google.protobuf.util.Durations
 import com.google.rpc.Code
+import io.grpc.serviceconfig.MethodConfig
 import io.grpc.serviceconfig.MethodConfigKt
 import io.grpc.serviceconfig.ServiceConfigKt
 import io.grpc.serviceconfig.copy
@@ -59,6 +60,7 @@ data class ProtobufServiceConfig(val message: io.grpc.serviceconfig.ServiceConfi
       ProtobufServiceConfig(
         serviceConfig {
           methodConfig += methodConfig {
+            name += MethodConfig.Name.getDefaultInstance()
             timeout = Durations.fromSeconds(30)
             retryPolicy =
               MethodConfigKt.retryPolicy {
