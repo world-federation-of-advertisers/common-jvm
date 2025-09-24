@@ -59,9 +59,8 @@ fun StorageClient.withEnvelopeEncryption(
   StreamingAeadConfig.register()
 
   val storageClient = this
-  val kekAead = kmsClient.getAead(kekUri)
-  val handle: KeysetHandle =
-    TinkProtoKeysetFormat.parseEncryptedKeyset(encryptedDek.toByteArray(), kekAead, byteArrayOf())
+  val handle: KeysetHandle = keysetParser(kmsClient, kekUri, encryptedDek)
+  
   return when (val primaryKey: Key = handle.primary.key) {
     is StreamingAeadKey -> {
 
