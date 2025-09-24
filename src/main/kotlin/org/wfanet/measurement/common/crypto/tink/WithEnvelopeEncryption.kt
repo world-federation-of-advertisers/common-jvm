@@ -27,6 +27,21 @@ import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.Dispatchers
 import org.jetbrains.annotations.BlockingExecutor
 import org.wfanet.measurement.storage.StorageClient
+import com.google.crypto.tink.BinaryKeysetReader
+import com.google.crypto.tink.CleartextKeysetHandle
+import com.google.crypto.tink.Key
+import com.google.crypto.tink.KeysetHandle
+import com.google.crypto.tink.KmsClient
+import com.google.protobuf.ByteString
+import com.google.protobuf.util.JsonFormat
+import com.google.crypto.tink.proto.AesGcmHkdfStreamingParams
+import com.google.crypto.tink.proto.AesGcmHkdfStreamingKey
+import com.google.crypto.tink.proto.KeyData
+import com.google.crypto.tink.proto.KeyStatusType
+import com.google.crypto.tink.proto.Keyset
+import com.google.crypto.tink.proto.OutputPrefixType
+import java.security.SecureRandom
+import kotlin.math.absoluteValue
 
 /*
  * Wraps this [StorageClient] in one that provides envelope encryption.
@@ -41,6 +56,18 @@ fun StorageClient.withEnvelopeEncryption(
   kekUri: String,
   encryptedDek: ByteString,
   aeadContext: @BlockingExecutor CoroutineContext = Dispatchers.IO,
+  keysetParser: (
+    kmsClient: KmsClient,
+    kekUri: String,
+    encryptedDek: ByteString
+  ) -> KeysetHandle = { kms, uri, dek ->
+    val kekAead = kms.getAead(uri)
+    TinkProtoKeysetFormat.parseEncryptedKeyset(
+      dek.toByteArray(),
+      kekAead,
+      byteArrayOf()
+    )
+  },
 ): StorageClient {
 
   AeadConfig.register()
