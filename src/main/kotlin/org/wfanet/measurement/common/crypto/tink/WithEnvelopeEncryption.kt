@@ -14,6 +14,7 @@
 
 package org.wfanet.measurement.common.crypto.tink
 
+import com.google.crypto.tink.Aead
 import com.google.crypto.tink.Key
 import com.google.crypto.tink.KeysetHandle
 import com.google.crypto.tink.KmsClient
@@ -33,33 +34,35 @@ import org.wfanet.measurement.storage.StorageClient
  * Currently only supported Streaming AEAD storage client.
  * @param kmsClient the Tink [KmsClient] that is used
  * @param kekUri the uri of the key encryption key (kek)
- * @param encrypted data encryption key (DEK) in Tink binary format
+ * @param encryptedDek the encrypted data encryption key (DEK). By default this is
+ *        expected to be in Tink binary format, an alternative format (e.g. JSON)
+ *        can be supported by providing a custom [keysetParser].
  * @aeadContext the context the encrypted storage client will use
+ * @param parseEncryptedKeyset function used to parse and decrypt the [encryptedDek] into a [KeysetHandle].
+ *        The default is [TinkProtoKeysetFormat.parseEncryptedKeyset], which assumes a Tink-encrypted binary keyset.
  */
 fun StorageClient.withEnvelopeEncryption(
   kmsClient: KmsClient,
   kekUri: String,
   encryptedDek: ByteString,
   aeadContext: @BlockingExecutor CoroutineContext = Dispatchers.IO,
-  keysetParser: (
-    kmsClient: KmsClient,
-    kekUri: String,
-    encryptedDek: ByteString
-  ) -> KeysetHandle = { kms, uri, dek ->
-    val kekAead = kms.getAead(uri)
-    TinkProtoKeysetFormat.parseEncryptedKeyset(
-      dek.toByteArray(),
-      kekAead,
-      byteArrayOf()
-    )
-  },
+  parseEncryptedKeyset: (
+    encryptedDek: ByteArray,
+    kekAead: Aead,
+    associatedData: ByteArray?,
+  ) -> KeysetHandle = TinkProtoKeysetFormat::parseEncryptedKeyset
 ): StorageClient {
 
   AeadConfig.register()
   StreamingAeadConfig.register()
 
   val storageClient = this
-  val handle: KeysetHandle = keysetParser(kmsClient, kekUri, encryptedDek)
+  val kekAead = kmsClient.getAead(kekUri)
+  val handle: KeysetHandle = parseEncryptedKeyset(
+    encryptedDek.toByteArray(),
+    kekAead,
+    byteArrayOf()
+  )
   
   return when (val primaryKey: Key = handle.primary.key) {
     is StreamingAeadKey -> {
