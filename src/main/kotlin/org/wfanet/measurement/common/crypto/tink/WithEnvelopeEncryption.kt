@@ -36,7 +36,7 @@ import org.wfanet.measurement.storage.StorageClient
  * @param kekUri the uri of the key encryption key (kek)
  * @param encryptedDek the encrypted data encryption key (DEK). By default this is
  *        expected to be in Tink binary format, an alternative format (e.g. JSON)
- *        can be supported by providing a custom [keysetParser].
+ *        can be supported by providing a custom [parseEncryptedKeyset].
  * @aeadContext the context the encrypted storage client will use
  * @param parseEncryptedKeyset function used to parse and decrypt the [encryptedDek] into a [KeysetHandle].
  *        The default is [TinkProtoKeysetFormat.parseEncryptedKeyset], which assumes a Tink-encrypted binary keyset.
@@ -61,7 +61,7 @@ fun StorageClient.withEnvelopeEncryption(
   val handle: KeysetHandle = parseEncryptedKeyset(
     encryptedDek.toByteArray(),
     kekAead,
-    byteArrayOf()
+    null
   )
   
   return when (val primaryKey: Key = handle.primary.key) {
