@@ -46,11 +46,9 @@ fun StorageClient.withEnvelopeEncryption(
   kekUri: String,
   encryptedDek: ByteString,
   aeadContext: @BlockingExecutor CoroutineContext = Dispatchers.IO,
-  parseEncryptedKeyset: (
-    encryptedDek: ByteArray,
-    kekAead: Aead,
-    associatedData: ByteArray?,
-  ) -> KeysetHandle = TinkProtoKeysetFormat::parseEncryptedKeyset
+  parseEncryptedKeyset:
+    (encryptedDek: ByteArray, kekAead: Aead, associatedData: ByteArray?) -> KeysetHandle =
+    TinkProtoKeysetFormat::parseEncryptedKeyset,
 ): StorageClient {
 
   AeadConfig.register()
@@ -58,12 +56,8 @@ fun StorageClient.withEnvelopeEncryption(
 
   val storageClient = this
   val kekAead = kmsClient.getAead(kekUri)
-  val handle: KeysetHandle = parseEncryptedKeyset(
-    encryptedDek.toByteArray(),
-    kekAead,
-    null
-  )
-  
+  val handle: KeysetHandle = parseEncryptedKeyset(encryptedDek.toByteArray(), kekAead, null)
+
   return when (val primaryKey: Key = handle.primary.key) {
     is StreamingAeadKey -> {
 
