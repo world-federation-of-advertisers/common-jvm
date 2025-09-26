@@ -6,11 +6,11 @@ module(
 
 KOTLINX_COROUTINES_VERSION = "1.10.2"  # Compatible with rules_kotlin_jvm version.
 
-PROTOBUF_JAVA_VERSION = "4.29.3"  # Compatible with rules_kotlin_jvm version.
+PROTOBUF_JAVA_VERSION = "4.29.5"  # Compatible with rules_kotlin_jvm version.
 
-GRPC_JAVA_VERSION = "1.69.0"  # Compatible with rules_kotlin_jvm version.
+GRPC_JAVA_VERSION = "1.75.0"  # Compatible with rules_kotlin_jvm version.
 
-GRPC_KOTLIN_VERSION = "1.4.1"  # Compatible with rules_kotlin_jvm version.
+GRPC_KOTLIN_VERSION = "1.5.0"  # Compatible with rules_kotlin_jvm version.
 
 # Note: The AWS SDK version needs to match with the EMR image version to avoid class conflicts at runtime.
 # Current version matches with the SDK version in EMR image 7.1.0
@@ -29,7 +29,7 @@ CLOUD_SQL_CONNECTOR_VERSION = "1.12.0"
 # See https://github.com/bazelbuild/bazel/discussions/23075.
 bazel_dep(
     name = "rules_kotlin_jvm",
-    version = "0.8.0",
+    version = "0.9.0",
     repo_name = "wfa_rules_kotlin_jvm",
 )
 bazel_dep(
@@ -63,7 +63,7 @@ bazel_dep(
 )
 bazel_dep(
     name = "rules_java",
-    version = "8.7.1",
+    version = "8.15.2",
 )
 bazel_dep(
     name = "rules_kotlin",
@@ -75,7 +75,7 @@ bazel_dep(
 )
 bazel_dep(
     name = "protobuf",
-    version = "29.3",
+    version = "29.5",
     repo_name = "com_google_protobuf",
 )
 bazel_dep(
@@ -284,6 +284,11 @@ maven.install(
     ],
     fail_if_repin_required = True,
     fetch_sources = True,
+    known_contributing_modules = [
+        "bazel_worker_java",
+        "common-jvm",
+        "rules_kotlin_jvm",
+    ],
     lock_file = "//:maven_install.json",
     repositories = [
         "https://maven.google.com",
