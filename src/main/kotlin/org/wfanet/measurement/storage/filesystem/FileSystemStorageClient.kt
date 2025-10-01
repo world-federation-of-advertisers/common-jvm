@@ -50,6 +50,7 @@ class FileSystemStorageClient(
 
   override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
     val file: File = resolvePath(blobKey)
+    println("======================== writing file system storage: ${file.path}")
     withContext(coroutineContext + CoroutineName("writeBlob")) {
       file.parentFile.mkdirs()
       file
@@ -70,6 +71,7 @@ class FileSystemStorageClient(
 
   override suspend fun getBlob(blobKey: String): StorageClient.Blob? {
     val file: File = resolvePath(blobKey)
+    println("======================== reading file system storage: ${file.path}")
     return withContext(coroutineContext + CoroutineName(::getBlob.name)) {
       if (file.exists()) Blob(file, blobKey) else null
     }
