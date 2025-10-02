@@ -23,9 +23,8 @@ import picocli.CommandLine
 class GcsFromFlags(private val flags: Flags) {
 
   private val storageOptions: StorageOptions by lazy {
-    StorageOptions.grpc()
+    StorageOptions.newBuilder()
       .setOpenTelemetry(Instrumentation.openTelemetry)
-      .setEnableGrpcClientMetrics(true)
       .setProjectId(flags.projectName)
       .build()
   }
