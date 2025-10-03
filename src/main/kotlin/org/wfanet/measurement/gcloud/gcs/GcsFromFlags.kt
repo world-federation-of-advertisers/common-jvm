@@ -23,10 +23,14 @@ import picocli.CommandLine
 class GcsFromFlags(private val flags: Flags) {
 
   private val storageOptions: StorageOptions by lazy {
-    StorageOptions.newBuilder()
-      .setOpenTelemetry(Instrumentation.openTelemetry)
-      .setProjectId(flags.projectName)
-      .build()
+    val builder =
+      if (flags.useGrpc) {
+        StorageOptions.grpc().setEnableGrpcClientMetrics(true)
+      } else {
+        StorageOptions.newBuilder()
+      }
+
+    builder.setOpenTelemetry(Instrumentation.openTelemetry).setProjectId(flags.projectName).build()
   }
 
   val storage: Storage
@@ -50,6 +54,14 @@ class GcsFromFlags(private val flags: Flags) {
       required = true,
     )
     lateinit var bucket: String
+      private set
+
+    @CommandLine.Option(
+      names = ["--google-cloud-storage-use-grpc"],
+      description = ["Whether to use gRPC instead of http."],
+      required = false,
+    )
+    var useGrpc: Boolean = false
       private set
   }
 }
