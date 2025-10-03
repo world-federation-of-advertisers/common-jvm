@@ -24,14 +24,18 @@ import com.google.protobuf.Descriptors
 import com.google.protobuf.Timestamp
 import com.google.protobuf.TimestampProto
 import com.google.protobuf.kotlin.unpack
+import com.google.protobuf.timestamp
 import java.time.Clock
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 import org.wfanet.measurement.common.ProtoReflection.allDependencies
 import org.wfanet.measurement.common.testing.DependsOnSimple
+import org.wfanet.measurement.common.testing.DependsOnSimpleKt
 import org.wfanet.measurement.common.testing.Sibling
 import org.wfanet.measurement.common.testing.Simple
+import org.wfanet.measurement.common.testing.dependsOnSimple
+import org.wfanet.measurement.common.testing.simple
 
 /* Test for [ProtoReflection]. */
 @RunWith(JUnit4::class)
@@ -126,5 +130,107 @@ class ProtoReflectionTest {
     assertThat(typeUrl.split("/"))
       .containsExactly(typeUrlPrefix, "google.protobuf.Timestamp")
       .inOrder()
+  }
+
+  @Test
+  fun `getFieldsRecursive returns fields`() {
+    val message = dependsOnSimple {
+      simple = simple { intValue = 1 }
+      timestamp = timestamp {
+        seconds = 1754011048
+        nanos = 402358122
+      }
+      nested = DependsOnSimpleKt.nested { nestedIntValue = 2 }
+      repeatedSimple += simple { intValue = 2 }
+      repeatedSimple += simple { intValue = 3 }
+    }
+    val fields: Sequence<ProtoReflection.Field> = ProtoReflection.getFieldsRecursive(message)
+
+    val dependsOnSimpleDescriptor = DependsOnSimple.getDescriptor()
+    val simplePath =
+      listOf(
+        ProtoReflection.FieldPathSegment(
+          dependsOnSimpleDescriptor.findFieldByNumber(DependsOnSimple.SIMPLE_FIELD_NUMBER)
+        )
+      )
+    val intValueFieldDescriptor =
+      Simple.getDescriptor().findFieldByNumber(Simple.INT_VALUE_FIELD_NUMBER)
+    val intValuePath = simplePath + ProtoReflection.FieldPathSegment(intValueFieldDescriptor)
+    val timestampPath =
+      listOf(
+        ProtoReflection.FieldPathSegment(
+          dependsOnSimpleDescriptor.findFieldByNumber(DependsOnSimple.TIMESTAMP_FIELD_NUMBER)
+        )
+      )
+    val secondsPath =
+      timestampPath +
+        ProtoReflection.FieldPathSegment(
+          Timestamp.getDescriptor().findFieldByNumber(Timestamp.SECONDS_FIELD_NUMBER)
+        )
+    val nanosPath =
+      timestampPath +
+        ProtoReflection.FieldPathSegment(
+          Timestamp.getDescriptor().findFieldByNumber(Timestamp.NANOS_FIELD_NUMBER)
+        )
+    val nestedPath =
+      listOf(
+        ProtoReflection.FieldPathSegment(
+          dependsOnSimpleDescriptor.findFieldByNumber(DependsOnSimple.NESTED_FIELD_NUMBER)
+        )
+      )
+    val nestedIntPath =
+      nestedPath +
+        ProtoReflection.FieldPathSegment(
+          DependsOnSimple.Nested.getDescriptor()
+            .findFieldByNumber(DependsOnSimple.Nested.NESTED_INT_VALUE_FIELD_NUMBER)
+        )
+    val siblingPath =
+      listOf(
+        ProtoReflection.FieldPathSegment(
+          dependsOnSimpleDescriptor.findFieldByNumber(DependsOnSimple.SIBLING_FIELD_NUMBER)
+        )
+      )
+    val repeatedSimpleFieldDescriptor =
+      dependsOnSimpleDescriptor.findFieldByNumber(DependsOnSimple.REPEATED_SIMPLE_FIELD_NUMBER)
+    val repeatedSimplePathSegment = ProtoReflection.FieldPathSegment(repeatedSimpleFieldDescriptor)
+    val recursivePath =
+      listOf(
+        ProtoReflection.FieldPathSegment(
+          dependsOnSimpleDescriptor.findFieldByNumber(DependsOnSimple.RECURSIVE_FIELD_NUMBER)
+        )
+      )
+    assertThat(fields.toList())
+      .containsExactly(
+        ProtoReflection.Field(message, simplePath, message.simple),
+        ProtoReflection.Field(message.simple, intValuePath, message.simple.intValue),
+        ProtoReflection.Field(message, timestampPath, message.timestamp),
+        ProtoReflection.Field(message.timestamp, secondsPath, message.timestamp.seconds),
+        ProtoReflection.Field(message.timestamp, nanosPath, message.timestamp.nanos),
+        ProtoReflection.Field(message, nestedPath, message.nested),
+        ProtoReflection.Field(message.nested, nestedIntPath, message.nested.nestedIntValue),
+        ProtoReflection.Field(message, siblingPath, message.sibling),
+        ProtoReflection.Field(
+          message,
+          listOf(repeatedSimplePathSegment),
+          message.repeatedSimpleList,
+        ),
+        ProtoReflection.Field(
+          message.getRepeatedSimple(0),
+          listOf(
+            repeatedSimplePathSegment.withIndex(0),
+            ProtoReflection.FieldPathSegment(intValueFieldDescriptor),
+          ),
+          message.getRepeatedSimple(0).intValue,
+        ),
+        ProtoReflection.Field(
+          message.getRepeatedSimple(1),
+          listOf(
+            repeatedSimplePathSegment.withIndex(1),
+            ProtoReflection.FieldPathSegment(intValueFieldDescriptor),
+          ),
+          message.getRepeatedSimple(1).intValue,
+        ),
+        ProtoReflection.Field(message, recursivePath, message.recursive),
+      )
   }
 }

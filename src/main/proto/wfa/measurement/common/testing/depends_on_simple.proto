@@ -32,6 +32,10 @@ message DependsOnSimple {
   Nested nested = 3;
 
   Sibling sibling = 4;
+
+  repeated Simple repeated_simple = 5;
+
+  DependsOnSimple recursive = 6;
 }
 
 message Sibling {
