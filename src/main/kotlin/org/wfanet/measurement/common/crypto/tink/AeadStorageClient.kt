@@ -21,8 +21,7 @@ import com.google.protobuf.kotlin.toByteString
 import com.google.protobuf.kotlin.toByteStringUtf8
 import java.util.logging.Logger
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.flow.flow
 import org.wfanet.measurement.common.flatten
 import org.wfanet.measurement.storage.StorageClient
 
@@ -89,10 +88,10 @@ class AeadStorageClient(private val storageClient: StorageClient, private val ae
      * @throws java.io.IOException If there is an issue reading from the stream or during
      *   decryption.
      */
-    override fun read(): Flow<ByteString> {
+    override fun read(): Flow<ByteString> = flow {
       val associatedData: ByteString = blobKey.toByteStringUtf8()
-      val data = runBlocking { blob.read().flatten().toByteArray() }
-      return flowOf(aead.decrypt(data, associatedData.toByteArray()).toByteString())
+      val data = blob.read().flatten().toByteArray()
+      emit(aead.decrypt(data, associatedData.toByteArray()).toByteString())
     }
 
     override suspend fun delete() = blob.delete()
