@@ -20,24 +20,18 @@ import com.google.common.truth.Truth.assertThat
 import com.google.crypto.tink.Aead
 import com.google.crypto.tink.KeyTemplates
 import com.google.crypto.tink.KeysetHandle
+import com.google.crypto.tink.aead.AeadConfig
 import com.google.protobuf.ByteString
-import java.io.ByteArrayInputStream
-import java.nio.channels.Channels
 import kotlin.test.assertNotNull
 import kotlinx.coroutines.runBlocking
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
-import org.wfanet.measurement.common.BYTES_PER_MIB
-import org.wfanet.measurement.common.asFlow
-import org.wfanet.measurement.common.flatten
 import org.wfanet.measurement.common.size
 import org.wfanet.measurement.common.toByteArray
 import org.wfanet.measurement.storage.testing.AbstractStorageClientTest
 import org.wfanet.measurement.storage.testing.InMemoryStorageClient
-import com.google.crypto.tink.aead.AeadConfig
-import kotlin.random.Random
 
 @RunWith(JUnit4::class)
 class AeadStorageClientTest : AbstractStorageClientTest<AeadStorageClient>() {
@@ -69,6 +63,7 @@ class AeadStorageClientTest : AbstractStorageClientTest<AeadStorageClient>() {
     init {
       AeadConfig.register()
     }
+
     private const val TINK_PREFIX_SIZE = 5
     private const val IV_SIZE = 12
     private const val TAG_SIZE = 16
