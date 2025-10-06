@@ -21,6 +21,7 @@ import com.google.crypto.tink.KmsClient
 import com.google.crypto.tink.StreamingAead
 import com.google.crypto.tink.TinkProtoKeysetFormat
 import com.google.crypto.tink.aead.AeadConfig
+import com.google.crypto.tink.aead.AeadKey
 import com.google.crypto.tink.streamingaead.StreamingAeadConfig
 import com.google.crypto.tink.streamingaead.StreamingAeadKey
 import com.google.protobuf.ByteString
@@ -37,7 +38,7 @@ import org.wfanet.measurement.storage.StorageClient
  * @param encryptedDek the encrypted data encryption key (DEK). By default this is
  *        expected to be in Tink binary format, an alternative format (e.g. JSON)
  *        can be supported by providing a custom [parseEncryptedKeyset].
- * @aeadContext the context the encrypted storage client will use
+ * @aeadContext the context the encrypted storage client will use. Only needed for streamining use cases.
  * @param parseEncryptedKeyset function used to parse and decrypt the [encryptedDek] into a [KeysetHandle].
  *        The default is [TinkProtoKeysetFormat.parseEncryptedKeyset], which assumes a Tink-encrypted binary keyset.
  */
@@ -60,12 +61,14 @@ fun StorageClient.withEnvelopeEncryption(
 
   return when (val primaryKey: Key = handle.primary.key) {
     is StreamingAeadKey -> {
-
       StreamingAeadStorageClient(
         storageClient = storageClient,
         streamingAead = handle.getPrimitive(StreamingAead::class.java),
         streamingAeadContext = aeadContext,
       )
+    }
+    is AeadKey -> {
+      AeadStorageClient(storageClient = storageClient, aead = handle.getPrimitive(Aead::class.java))
     }
     else -> throw IllegalArgumentException("Unsupported Key Type: ${primaryKey::class.simpleName}")
   }

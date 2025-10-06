@@ -22,6 +22,7 @@ import com.google.crypto.tink.KeyTemplates
 import com.google.crypto.tink.KeysetHandle
 import com.google.crypto.tink.TinkProtoKeysetFormat
 import com.google.crypto.tink.aead.AeadConfig
+import com.google.crypto.tink.hybrid.HybridConfig
 import com.google.crypto.tink.streamingaead.StreamingAeadConfig
 import com.google.protobuf.ByteString
 import kotlin.test.assertFailsWith
@@ -63,6 +64,31 @@ class WithEnvelopeEncryptionTest() {
   }
 
   @Test
+  fun `returns encrypted AEAD storage client`() {
+    // Set up KMS
+    val kmsClient = FakeKmsClient()
+    val kekUri = FakeKmsClient.KEY_URI_PREFIX + "key1"
+    val kmsKeyHandle = KeysetHandle.generateNew(KeyTemplates.get("AES128_GCM"))
+    kmsClient.setAead(kekUri, kmsKeyHandle.getPrimitive(Aead::class.java))
+    // Set up AEAD encryption
+    val tinkKeyTemplateType = "AES256_GCM"
+    val aeadKeyTemplate = KeyTemplates.get(tinkKeyTemplateType)
+    val keyEncryptionHandle = KeysetHandle.generateNew(aeadKeyTemplate)
+    val wrappedStorageClient = InMemoryStorageClient()
+    val serializedEncryptionKey =
+      ByteString.copyFrom(
+        TinkProtoKeysetFormat.serializeEncryptedKeyset(
+          keyEncryptionHandle,
+          kmsClient.getAead(kekUri),
+          byteArrayOf(),
+        )
+      )
+    val storageClient =
+      wrappedStorageClient.withEnvelopeEncryption(kmsClient, kekUri, serializedEncryptionKey)
+    assertThat(storageClient).isInstanceOf(AeadStorageClient::class.java)
+  }
+
+  @Test
   fun `unsupported key type throws IllegalArgumentException`() {
     runBlocking {
       val kmsClient = FakeKmsClient()
@@ -70,7 +96,7 @@ class WithEnvelopeEncryptionTest() {
       val kmsKeyHandle = KeysetHandle.generateNew(KeyTemplates.get("AES128_GCM"))
       kmsClient.setAead(kekUri, kmsKeyHandle.getPrimitive(Aead::class.java))
       // Only streaming is supported for the key template type
-      val tinkKeyTemplateType = "AES128_GCM"
+      val tinkKeyTemplateType = "ECIES_P256_HKDF_HMAC_SHA256_AES128_GCM"
       val aeadKeyTemplate = KeyTemplates.get(tinkKeyTemplateType)
       val keyEncryptionHandle = KeysetHandle.generateNew(aeadKeyTemplate)
       val wrappedStorageClient = InMemoryStorageClient()
@@ -92,22 +118,6 @@ class WithEnvelopeEncryptionTest() {
   init {
     AeadConfig.register()
     StreamingAeadConfig.register()
-  }
-
-  companion object {
-    private const val TINK_PREFIX_SIZE_BYTES = 5
-    private const val HEADER_SIZE_BYTES = 1
-    private const val SEGMENT_INFO_SIZE_BYTES = 21
-    private const val FIRST_SEGMENT_HEADER_SIZE = 21
-    private const val SEGMENT_TAG_SIZE_BYTES = 16
-    private const val LAST_SEGMENT_HEADER_SIZE = 24
-
-    private const val TOTAL_OVERHEAD_BYTES =
-      TINK_PREFIX_SIZE_BYTES +
-        HEADER_SIZE_BYTES +
-        SEGMENT_INFO_SIZE_BYTES +
-        FIRST_SEGMENT_HEADER_SIZE +
-        SEGMENT_TAG_SIZE_BYTES +
-        LAST_SEGMENT_HEADER_SIZE
+    HybridConfig.register()
   }
 }
