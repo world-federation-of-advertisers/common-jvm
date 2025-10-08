@@ -20,29 +20,21 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
 
-/**
- * Represents a range of [Instant]s where the upper bound is not included in the range.
- *
- * TODO(world-federation-of-advertisers/common-jvm#170): Implement OpenEndRange.
- */
-data class OpenEndTimeRange(val start: Instant, val endExclusive: Instant) {
-  operator fun contains(value: Instant): Boolean {
-    return value >= start && value < endExclusive
-  }
+/** Represents a range of [Instant]s where the upper bound is not included in the range. */
+class OpenEndTimeRange private constructor(private val delegate: OpenEndRange<Instant>) :
+  OpenEndRange<Instant> by delegate {
 
-  fun overlaps(other: OpenEndTimeRange): Boolean {
-    return max(start, other.start) < min(endExclusive, other.endExclusive)
-  }
+  constructor(start: Instant, endExclusive: Instant) : this(start..<endExclusive)
+
+  fun overlaps(other: OpenEndTimeRange): Boolean = overlaps(other as OpenEndRange<Instant>)
+
+  override fun equals(other: Any?): Boolean = delegate == other
+
+  override fun hashCode(): Int = delegate.hashCode()
+
+  override fun toString() = delegate.toString()
 
   companion object {
-    private fun min(lhs: Instant, rhs: Instant): Instant {
-      return if (lhs < rhs) lhs else rhs
-    }
-
-    private fun max(lhs: Instant, rhs: Instant): Instant {
-      return if (lhs > rhs) lhs else rhs
-    }
-
     fun fromClosedDateRange(
       dateRange: ClosedRange<LocalDate>,
       zoneOffset: ZoneOffset = ZoneOffset.UTC,
@@ -52,4 +44,12 @@ data class OpenEndTimeRange(val start: Instant, val endExclusive: Instant) {
         dateRange.endInclusive.plusDays(1).atStartOfDay().toInstant(zoneOffset),
       )
   }
+}
+
+fun OpenEndRange<Instant>.overlaps(other: OpenEndRange<Instant>): Boolean {
+  return start.coerceAtLeast(other.start) < endExclusive.coerceAtMost(other.endExclusive)
+}
+
+operator fun OpenEndRange<Instant>.contains(other: OpenEndRange<Instant>): Boolean {
+  return start <= other.start && endExclusive >= other.endExclusive
 }
