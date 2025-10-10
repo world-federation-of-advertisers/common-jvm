@@ -21,7 +21,8 @@ import com.google.cloud.spanner.Spanner
 import com.google.cloud.spanner.connection.SpannerPool
 import java.nio.file.Path
 import java.sql.DriverManager
-import kotlinx.coroutines.runBlocking
+import java.util.logging.Level
+import java.util.logging.Logger
 import org.junit.rules.TestRule
 import org.junit.runner.Description
 import org.junit.runners.model.Statement
@@ -53,7 +54,10 @@ class SpannerEmulatorRule : TestRule, SpannerDatabaseAdmin {
       override fun evaluate() {
         SpannerEmulator().use { emulator ->
           try {
-            emulatorHost = runBlocking { emulator.start() }
+            emulatorHost = emulator.start()
+            emulator.onExit().exceptionally { e: Throwable ->
+              logger.log(Level.SEVERE, e) { "Spanner emulator exited exceptionally" }
+            }
             base.evaluate()
           } finally {
             if (::spanner.isInitialized) {
@@ -95,5 +99,7 @@ class SpannerEmulatorRule : TestRule, SpannerDatabaseAdmin {
   companion object {
     private const val PROJECT = "test-project"
     private const val INSTANCE = "test-instance"
+
+    private val logger = Logger.getLogger(this::class.java.enclosingClass.name)
   }
 }
