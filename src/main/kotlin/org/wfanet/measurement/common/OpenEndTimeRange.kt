@@ -21,28 +21,32 @@ import java.time.LocalDate
 import java.time.ZoneOffset
 
 /** Represents a range of [Instant]s where the upper bound is not included in the range. */
-class OpenEndTimeRange private constructor(private val delegate: OpenEndRange<Instant>) :
+@ConsistentCopyVisibility
+@Deprecated("Prefer OpenEndRange<Instant>")
+data class OpenEndTimeRange private constructor(private val delegate: OpenEndRange<Instant>) :
   OpenEndRange<Instant> by delegate {
 
+  @Deprecated("Prefer OpenEndRange<Instant>", ReplaceWith("start..<endExclusive"))
   constructor(start: Instant, endExclusive: Instant) : this(start..<endExclusive)
 
-  fun overlaps(other: OpenEndTimeRange): Boolean = overlaps(other as OpenEndRange<Instant>)
+  fun overlaps(@Suppress("DEPRECATION") other: OpenEndTimeRange): Boolean =
+    overlaps(other as OpenEndRange<Instant>)
 
-  override fun equals(other: Any?): Boolean = delegate == other
-
-  override fun hashCode(): Int = delegate.hashCode()
-
-  override fun toString() = delegate.toString()
+  override fun toString(): String = delegate.toString()
 
   companion object {
+    @Suppress("DEPRECATION")
+    @Deprecated(
+      "Use dateRange.toOpenEndInstantRange",
+      ReplaceWith(
+        "dateRange.toOpenEndInstantRange(zoneOffset)",
+        imports = ["org.wfanet.measurement.common.toOpenEndInstantRange"],
+      ),
+    )
     fun fromClosedDateRange(
       dateRange: ClosedRange<LocalDate>,
       zoneOffset: ZoneOffset = ZoneOffset.UTC,
-    ) =
-      OpenEndTimeRange(
-        dateRange.start.atStartOfDay().toInstant(zoneOffset),
-        dateRange.endInclusive.plusDays(1).atStartOfDay().toInstant(zoneOffset),
-      )
+    ) = OpenEndTimeRange(dateRange.toOpenEndInstantRange(zoneOffset))
   }
 }
 
@@ -52,4 +56,13 @@ fun OpenEndRange<Instant>.overlaps(other: OpenEndRange<Instant>): Boolean {
 
 operator fun OpenEndRange<Instant>.contains(other: OpenEndRange<Instant>): Boolean {
   return start <= other.start && endExclusive >= other.endExclusive
+}
+
+fun ClosedRange<LocalDate>.toOpenEndInstantRange(
+  zoneOffset: ZoneOffset = ZoneOffset.UTC
+): OpenEndRange<Instant> {
+  return start.atStartOfDay().toInstant(zoneOffset)..<endInclusive
+      .plusDays(1)
+      .atStartOfDay()
+      .toInstant(zoneOffset)
 }
