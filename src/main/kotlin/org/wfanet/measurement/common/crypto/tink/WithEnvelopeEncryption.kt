@@ -67,6 +67,7 @@ fun StorageClient.withEnvelopeEncryption(
     println("✅ [Envelope] Successfully unwrapped DEK. Primary key type: ${handle.primary.key.javaClass.simpleName}")
   return when (val primaryKey: Key = handle.primary.key) {
     is StreamingAeadKey -> {
+      println("STREAMING")
       StreamingAeadStorageClient(
         storageClient = storageClient,
         streamingAead = handle.getPrimitive(StreamingAead::class.java),
@@ -74,6 +75,7 @@ fun StorageClient.withEnvelopeEncryption(
       )
     }
     is AeadKey -> {
+      println("AEAD")
       AeadStorageClient(storageClient = storageClient, aead = handle.getPrimitive(Aead::class.java))
     }
     else -> throw IllegalArgumentException("Unsupported Key Type: ${primaryKey::class.simpleName}")
