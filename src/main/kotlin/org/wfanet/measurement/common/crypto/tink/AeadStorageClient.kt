@@ -91,7 +91,7 @@ class AeadStorageClient(private val storageClient: StorageClient, private val ae
     override fun read(): Flow<ByteString> = flow {
       val associatedData: ByteString = blobKey.toByteStringUtf8()
       val data = blob.read().flatten().toByteArray()
-      println("-----> associated data: $associatedData")
+      println("-----> associated data: $associatedData / $blobKey")
       println("-----> data: $data")
       emit(aead.decrypt(data, associatedData.toByteArray()).toByteString())
     }
