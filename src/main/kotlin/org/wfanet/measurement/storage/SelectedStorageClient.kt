@@ -80,6 +80,7 @@ class SelectedStorageClient(
   companion object {
 
     fun parseBlobUri(url: String): BlobUri {
+      println("URI to parse: '$url'")
       val uri = URI.create(url)
       println("----------- uri: $uri, ${uri.scheme}, ${uri.host}, ${uri.path}")
       return when (uri.scheme) {
