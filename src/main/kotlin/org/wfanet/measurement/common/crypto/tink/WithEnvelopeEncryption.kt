@@ -57,8 +57,14 @@ fun StorageClient.withEnvelopeEncryption(
 
   val storageClient = this
   val kekAead = kmsClient.getAead(kekUri)
-  val handle: KeysetHandle = parseEncryptedKeyset(encryptedDek.toByteArray(), kekAead, null)
-
+//  val handle: KeysetHandle = parseEncryptedKeyset(encryptedDek.toByteArray(), kekAead, null)
+    val handle = try {
+        parseEncryptedKeyset(encryptedDek.toByteArray(), kekAead, null)
+    } catch (e: Exception) {
+        println("❌ [Envelope] Failed to unwrap DEK: ${e.message}")
+        throw e
+    }
+    println("✅ [Envelope] Successfully unwrapped DEK. Primary key type: ${handle.primary.key.javaClass.simpleName}")
   return when (val primaryKey: Key = handle.primary.key) {
     is StreamingAeadKey -> {
       StreamingAeadStorageClient(
