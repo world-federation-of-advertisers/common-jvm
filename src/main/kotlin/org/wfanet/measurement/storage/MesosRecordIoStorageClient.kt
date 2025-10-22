@@ -119,6 +119,7 @@ class MesosRecordIoStorageClient(private val storageClient: StorageClient) : Sto
       val recordSizeBuffer = StringBuilder()
       var currentRecordSize = -1
       var recordBuffer = ByteString.newOutput()
+      var emittedCount = 0
 
       blob.read().collect { chunk: ByteString ->
         var position = 0
@@ -154,6 +155,10 @@ class MesosRecordIoStorageClient(private val storageClient: StorageClient) : Sto
             }
             if (recordBuffer.size() == currentRecordSize) {
               emit(recordBuffer.toByteString())
+              emittedCount++
+              if (emittedCount % 100 == 0) {
+                println("✅ Emitted $emittedCount records so far")
+              }
               currentRecordSize = -1
               recordBuffer.reset()
             }
