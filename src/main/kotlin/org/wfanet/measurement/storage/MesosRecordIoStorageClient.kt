@@ -156,7 +156,7 @@ class MesosRecordIoStorageClient(private val storageClient: StorageClient) : Sto
             if (recordBuffer.size() == currentRecordSize) {
               emit(recordBuffer.toByteString())
               emittedCount++
-              if (emittedCount % 100 == 0) {
+              if (emittedCount % 1000 == 0) {
                 println("✅ Emitted $emittedCount records so far")
               }
               currentRecordSize = -1
