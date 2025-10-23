@@ -94,8 +94,8 @@ class AeadStorageClient(private val storageClient: StorageClient, private val ae
       println("-----> associated data: $associatedData / $blobKey")
       println("-----> data: $data")
       println("----------> passing empty byte")
-//      emit(aead.decrypt(data, associatedData.toByteArray()).toByteString())
-      emit(aead.decrypt(data, ByteArray(0)).toByteString())
+      emit(aead.decrypt(data, associatedData.toByteArray()).toByteString())
+//      emit(aead.decrypt(data, ByteArray(0)).toByteString())
     }
 
     override suspend fun delete() = blob.delete()
