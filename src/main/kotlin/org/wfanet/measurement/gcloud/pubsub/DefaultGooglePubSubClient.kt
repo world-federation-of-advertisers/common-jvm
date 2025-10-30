@@ -24,6 +24,7 @@ import com.google.pubsub.v1.ProjectSubscriptionName
 import com.google.pubsub.v1.PubsubMessage
 import com.google.pubsub.v1.TopicName
 import org.threeten.bp.Duration
+import com.google.api.gax.batching.FlowControlSettings
 
 class DefaultGooglePubSubClient : GooglePubSubClient() {
   override fun buildTopicAdminClient(): TopicAdminClient {
@@ -37,10 +38,15 @@ class DefaultGooglePubSubClient : GooglePubSubClient() {
     messageHandler: (PubsubMessage, AckReplyConsumer) -> Unit,
   ): GoogleSubscriber {
 
+    val flow = FlowControlSettings.newBuilder()
+      .setMaxOutstandingElementCount(1L) // At most one leased message per VM
+      .build()
+
     val subscriptionName = ProjectSubscriptionName.format(projectId, subscriptionId)
     val messageReceiver = MessageReceiver { message, consumer -> messageHandler(message, consumer) }
     val subscriberBuilder =
       GoogleSubscriber.newBuilder(subscriptionName, messageReceiver)
+        .setFlowControlSettings(flow)
         .setMaxAckExtensionPeriod(ackExtensionPeriod)
 
     return subscriberBuilder.build()
