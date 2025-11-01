@@ -18,13 +18,7 @@ import com.google.protobuf.ByteString
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 
-/**
- * Interface for blob/object storage operations.
- *
- * It is assumed that the content of blobs accessed through this interface is immutable once the
- * blob has been created. Hence, this interface has no operations for modifying the content of an
- * existing blob.
- */
+/** Interface for blob/object storage operations. */
 interface StorageClient {
   /** Writes [content] to a blob with [blobKey]. */
   suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): Blob
@@ -35,6 +29,15 @@ interface StorageClient {
    * Prefer the [Flow] overload if your content is not already a [ByteString] and not all in memory.
    */
   suspend fun writeBlob(blobKey: String, content: ByteString) = writeBlob(blobKey, flowOf(content))
+
+  /**
+   * Replaces [blob] with [content] if the content hasn't changed since [blob] was retrieved.
+   *
+   * Optional operation.
+   */
+  suspend fun replaceBlob(blob: Blob, content: Flow<ByteString>): Blob {
+    throw UnsupportedOperationException("Not supported by this implementation")
+  }
 
   /** Returns a [Blob] for the specified key, or `null` if it cannot be found. */
   suspend fun getBlob(blobKey: String): Blob?
