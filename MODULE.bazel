@@ -217,7 +217,6 @@ maven.install(
         "com.google.cloud:google-cloud-core-grpc",
         "com.google.cloud:google-cloud-storage",
         "com.google.cloud:google-cloud-pubsub",
-        "com.google.cloud:google-cloud-nio",
         "com.google.cloud:google-cloud-spanner",
         "com.google.cloud:google-cloud-bigquery",
         "com.google.cloud.functions:functions-framework-api:1.1.0",

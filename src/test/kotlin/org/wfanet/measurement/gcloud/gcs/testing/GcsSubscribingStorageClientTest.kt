@@ -17,7 +17,7 @@
 package org.wfanet.measurement.gcloud.gcs.testing
 
 import com.google.cloud.functions.CloudEventsFunction
-import com.google.cloud.storage.contrib.nio.testing.LocalStorageHelper
+import com.google.cloud.storage.BucketInfo
 import com.google.common.truth.Truth.assertThat
 import com.google.events.cloud.storage.v1.StorageObjectData
 import com.google.protobuf.kotlin.toByteStringUtf8
@@ -26,6 +26,7 @@ import io.cloudevents.CloudEvent
 import io.cloudevents.CloudEventData
 import kotlinx.coroutines.runBlocking
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
@@ -38,9 +39,12 @@ import org.wfanet.measurement.storage.testing.AbstractStorageClientTest
 
 @RunWith(JUnit4::class)
 class GcsSubscribingStorageClientTest : AbstractStorageClientTest<GcsStorageClient>() {
+  @get:Rule val storageEmulator = StorageEmulatorRule()
+
   @Before
   fun initStorageClient() {
-    val storage = LocalStorageHelper.getOptions().service
+    val storage = storageEmulator.storage
+    storage.create(BucketInfo.of(BUCKET))
     storageClient = GcsStorageClient(storage, BUCKET)
   }
 
