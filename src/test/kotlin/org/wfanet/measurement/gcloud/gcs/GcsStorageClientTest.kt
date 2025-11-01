@@ -14,17 +14,22 @@
 
 package org.wfanet.measurement.gcloud.gcs
 
-import com.google.cloud.storage.contrib.nio.testing.LocalStorageHelper
+import com.google.cloud.storage.BucketInfo
 import org.junit.Before
+import org.junit.Rule
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
+import org.wfanet.measurement.gcloud.gcs.testing.StorageEmulatorRule
 import org.wfanet.measurement.storage.testing.AbstractStorageClientTest
 
 @RunWith(JUnit4::class)
 class GcsStorageClientTest : AbstractStorageClientTest<GcsStorageClient>() {
+  @get:Rule val storageEmulator = StorageEmulatorRule()
+
   @Before
   fun initClient() {
-    val storage = LocalStorageHelper.getOptions().service
+    val storage = storageEmulator.storage
+    storage.create(BucketInfo.of(BUCKET))
     storageClient = GcsStorageClient(storage, BUCKET)
   }
 
