@@ -31,9 +31,12 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.yield
+import org.jetbrains.annotations.Blocking
 import org.jetbrains.annotations.BlockingExecutor
 import org.wfanet.measurement.common.BYTES_PER_MIB
 import org.wfanet.measurement.common.asFlow
+import org.wfanet.measurement.storage.BlobChangedException
+import org.wfanet.measurement.storage.ConditionalOperationStorageClient
 import org.wfanet.measurement.storage.StorageClient
 import org.wfanet.measurement.storage.StorageException
 
@@ -55,46 +58,53 @@ class GcsStorageClient(
   private val storage: Storage,
   val bucketName: String,
   private val blockingContext: @BlockingExecutor CoroutineContext = Dispatchers.IO,
-) : StorageClient {
+) : StorageClient, ConditionalOperationStorageClient {
 
-  /** Write [content] into a blob in storage. */
   override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
     try {
-      return withContext<ClientBlob>(blockingContext + CoroutineName("writeBlob")) {
-        val blob = storage.create(BlobInfo.newBuilder(bucketName, blobKey).build())
-
-        blob.writer().use { byteChannel: WriteChannel ->
-          content.collect { bytes ->
-            for (buffer in bytes.asReadOnlyByteBufferList()) {
-              while (buffer.hasRemaining() && currentCoroutineContext().isActive) {
-                // Writer has its own internal buffering, so we can just use whatever buffers we
-                // already have.
-                if (byteChannel.write(buffer) == 0) {
-                  // Nothing was written, so we may have a non-blocking channel that nothing can be
-                  // written to right now. Suspend this coroutine to avoid monopolizing the thread.
-                  yield()
-                }
-              }
-            }
-          }
-        }
-        ClientBlob(blob.reload(), blobKey)
+      return withContext(blockingContext + CoroutineName("writeBlob")) {
+        val gcsBlob: Blob = storage.create(BlobInfo.newBuilder(bucketName, blobKey).build())
+        gcsBlob.write(content)
+        ClientBlob(gcsBlob.reload(), blobKey)
       }
     } catch (e: GcsStorageException) {
       throw StorageException("Error writing blob with key $blobKey", e)
     }
   }
 
+  override suspend fun writeBlobIfUnchanged(
+    blob: StorageClient.Blob,
+    content: Flow<ByteString>,
+  ): StorageClient.Blob {
+    require(blob is ClientBlob) { "Incompatible blob type" }
+    val gcsBlob: Blob = blob.blob
+    return withContext(blockingContext + CoroutineName("replaceBlob")) {
+      try {
+        gcsBlob.write(content)
+      } catch (e: GcsStorageException) {
+        if (e.code == HTTP_PRECONDITION_FAILED) {
+          throw BlobChangedException(
+            "Precondition failed when attempting to write ${blob.blobKey}",
+            e,
+          )
+        } else {
+          throw StorageException("Error writing blob with key ${blob.blobKey}", e)
+        }
+      }
+      ClientBlob(gcsBlob.reload(), blob.blobKey)
+    }
+  }
+
   override suspend fun getBlob(blobKey: String): StorageClient.Blob? {
-    val blob: Blob? =
+    val blob: Blob =
       withContext(blockingContext + CoroutineName("getBlob")) {
         try {
           storage.get(bucketName, blobKey)
         } catch (e: GcsStorageException) {
           throw StorageException("Error getting blob with key $blobKey", e)
         }
-      }
-    return blob?.let { ClientBlob(blob, blobKey) }
+      } ?: return null
+    return ClientBlob(blob, blobKey)
   }
 
   override suspend fun listBlobs(prefix: String?): Flow<StorageClient.Blob> {
@@ -128,7 +138,7 @@ class GcsStorageClient(
   }
 
   /** [StorageClient.Blob] implementation for [GcsStorageClient]. */
-  private inner class ClientBlob(private val blob: Blob, override val blobKey: String) :
+  private inner class ClientBlob(val blob: Blob, override val blobKey: String) :
     StorageClient.Blob {
     override val storageClient: StorageClient
       get() = this@GcsStorageClient
@@ -148,7 +158,28 @@ class GcsStorageClient(
   }
 
   companion object {
+    private const val HTTP_PRECONDITION_FAILED = 412
+
     /** Constructs a [GcsStorageClient] from command-line flags. */
     fun fromFlags(gcs: GcsFromFlags) = GcsStorageClient(gcs.storage, gcs.bucket)
+  }
+}
+
+@Blocking
+private suspend fun Blob.write(content: Flow<ByteString>) {
+  writer(Storage.BlobWriteOption.generationMatch(generation)).use { byteChannel: WriteChannel ->
+    content.collect { bytes ->
+      for (buffer in bytes.asReadOnlyByteBufferList()) {
+        while (buffer.hasRemaining() && currentCoroutineContext().isActive) {
+          // Writer has its own internal buffering, so we can just use whatever buffers we
+          // already have.
+          if (byteChannel.write(buffer) == 0) {
+            // Nothing was written, so we may have a non-blocking channel that nothing can be
+            // written to right now. Suspend this coroutine to avoid monopolizing the thread.
+            yield()
+          }
+        }
+      }
+    }
   }
 }

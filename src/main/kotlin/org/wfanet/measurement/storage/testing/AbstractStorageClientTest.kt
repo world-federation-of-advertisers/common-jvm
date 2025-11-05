@@ -21,7 +21,6 @@ import com.google.protobuf.kotlin.toByteStringUtf8
 import kotlin.random.Random
 import kotlin.test.assertNotNull
 import kotlinx.coroutines.flow.emptyFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import org.junit.Test
