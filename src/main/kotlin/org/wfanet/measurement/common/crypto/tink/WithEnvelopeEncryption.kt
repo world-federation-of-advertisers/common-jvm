@@ -67,6 +67,7 @@ fun StorageClient.withEnvelopeEncryption(
     }
 //  println("✅ [Envelope] Successfully unwrapped DEK. Primary key type: ${handle.primary.key.javaClass.simpleName}")
   println("✅ [Envelope] Successfully unwrapped DEK. Primary key type: ${handle}")
+  println("---===---")
   return when (val primaryKey: Key = handle.primary.key) {
     is StreamingAeadKey -> {
       println("STREAMING")
