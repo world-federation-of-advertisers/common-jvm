@@ -20,10 +20,10 @@ import org.junit.ClassRule
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 import org.wfanet.measurement.gcloud.gcs.testing.StorageEmulatorRule
-import org.wfanet.measurement.storage.testing.AbstractStorageClientTest
+import org.wfanet.measurement.storage.testing.AbstractConditionalOperationStorageClientTest
 
 @RunWith(JUnit4::class)
-class GcsStorageClientTest : AbstractStorageClientTest<GcsStorageClient>() {
+class GcsStorageClientTest : AbstractConditionalOperationStorageClientTest<GcsStorageClient>() {
   @Before
   fun initClient() {
     storageEmulator.createBucket(BUCKET)

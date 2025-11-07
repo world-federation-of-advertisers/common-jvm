@@ -17,14 +17,9 @@ package org.wfanet.measurement.storage
 import com.google.protobuf.ByteString
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
+import org.wfanet.measurement.storage.StorageClient.Blob
 
-/**
- * Interface for blob/object storage operations.
- *
- * It is assumed that the content of blobs accessed through this interface is immutable once the
- * blob has been created. Hence, this interface has no operations for modifying the content of an
- * existing blob.
- */
+/** Interface for blob/object storage operations. */
 interface StorageClient {
   /** Writes [content] to a blob with [blobKey]. */
   suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): Blob
@@ -65,4 +60,23 @@ interface StorageClient {
   }
 }
 
+/**
+ * [StorageClient] which supports additional operations with conditional behavior for freshness
+ * validation.
+ */
+interface ConditionalOperationStorageClient : StorageClient {
+  /**
+   * Writes [content] to the blob specified by the [blobKey][Blob.blobKey] of [blob] if it has not
+   * changed on the backend.
+   *
+   * @return the updated [Blob]
+   * @throws BlobChangedException if the blob was changed on the backend
+   * @throws StorageException if write failed
+   */
+  suspend fun writeBlobIfUnchanged(blob: Blob, content: Flow<ByteString>): Blob
+}
+
 open class StorageException(message: String?, cause: Throwable? = null) : Exception(message, cause)
+
+class BlobChangedException(message: String?, cause: Throwable? = null) :
+  StorageException(message, cause)
