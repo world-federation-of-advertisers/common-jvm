@@ -14,6 +14,7 @@
 
 package org.wfanet.measurement.gcloud.pubsub
 
+import com.google.api.gax.batching.FlowControlSettings
 import com.google.cloud.pubsub.v1.AckReplyConsumer
 import com.google.cloud.pubsub.v1.MessageReceiver
 import com.google.cloud.pubsub.v1.Publisher as GooglePublisher
@@ -38,10 +39,16 @@ class DefaultGooglePubSubClient : GooglePubSubClient() {
     messageHandler: (PubsubMessage, AckReplyConsumer) -> Unit,
   ): GoogleSubscriber {
 
+    val flow =
+      FlowControlSettings.newBuilder()
+        .setMaxOutstandingElementCount(1L) // At most one leased message per VM
+        .build()
+
     val subscriptionName = ProjectSubscriptionName.format(projectId, subscriptionId)
     val messageReceiver = MessageReceiver { message, consumer -> messageHandler(message, consumer) }
     val subscriberBuilder =
       GoogleSubscriber.newBuilder(subscriptionName, messageReceiver)
+        .setFlowControlSettings(flow)
         .setMaxAckExtensionPeriodDuration(JavaDuration.ofSeconds(ackExtensionPeriod.getSeconds()))
         .setMaxDurationPerAckExtensionDuration(JavaDuration.ofMinutes(10))
 

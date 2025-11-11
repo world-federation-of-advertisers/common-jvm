@@ -20,6 +20,7 @@ import com.google.common.truth.Truth.assertThat
 import java.time.Instant
 import java.time.LocalDate
 import java.time.Period
+import java.time.temporal.ChronoUnit
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
@@ -28,35 +29,61 @@ import org.junit.runners.JUnit4
 @RunWith(JUnit4::class)
 class OpenEndTimeRangeTest {
   @Test
-  fun `contains returns true for start`() {
-    val now = Instant.now()
-    val lastWeek = now.minus(Period.ofWeeks(1))
+  fun `equals returns true for equivalent instances`() {
+    val endExclusive = Instant.now()
+    val start = endExclusive.minus(5, ChronoUnit.MINUTES)
 
-    assertThat(lastWeek in OpenEndTimeRange(lastWeek, now)).isTrue()
+    @Suppress("DEPRECATION")
+    assertThat(OpenEndTimeRange(start, endExclusive))
+      .isEqualTo(OpenEndTimeRange(start, endExclusive))
   }
 
   @Test
-  fun `contains returns false for endExclusive`() {
-    val now = Instant.now()
-    val lastWeek = now.minus(Period.ofWeeks(1))
+  fun `equals returns false for inequivalent instances`() {
+    val endExclusive = Instant.now()
+    val start = endExclusive.minus(5, ChronoUnit.MINUTES)
 
-    assertThat(now in OpenEndTimeRange(lastWeek, now)).isFalse()
+    @Suppress("DEPRECATION")
+    assertThat(OpenEndTimeRange(start, endExclusive))
+      .isNotEqualTo(OpenEndTimeRange(start.minus(10, ChronoUnit.SECONDS), endExclusive))
   }
 
   @Test
-  fun `contains returns true for time between start and end`() {
+  fun `contains returns true for fully contained range`() {
     val now = Instant.now()
     val lastWeek = now.minus(Period.ofWeeks(1))
+    val range: OpenEndRange<Instant> = lastWeek..<now
+    val other = lastWeek.plus(1, ChronoUnit.SECONDS)..<now.minus(1, ChronoUnit.SECONDS)
 
-    assertThat(now.minusSeconds(1) in OpenEndTimeRange(lastWeek, now)).isTrue()
+    assertThat(other in range).isTrue()
+  }
+
+  @Test
+  fun `contains returns true for equivalent range`() {
+    val now = Instant.now()
+    val lastWeek = now.minus(Period.ofWeeks(1))
+    val range: OpenEndRange<Instant> = lastWeek..<now
+    val other: OpenEndRange<Instant> = lastWeek..<now
+
+    assertThat(other in range).isTrue()
+  }
+
+  @Test
+  fun `contains returns false non-contained range`() {
+    val now = Instant.now()
+    val lastWeek = now.minus(Period.ofWeeks(1))
+    val range: OpenEndRange<Instant> = lastWeek..<now
+    val other: OpenEndRange<Instant> = lastWeek.minus(1, ChronoUnit.SECONDS)..<now
+
+    assertThat(other in range).isFalse()
   }
 
   @Test
   fun `overlaps returns true for fully contained range`() {
     val now = Instant.now()
     val lastWeek = now.minus(Period.ofWeeks(1))
-    val subject = OpenEndTimeRange(lastWeek, now)
-    val other = OpenEndTimeRange(lastWeek.plus(Period.ofDays(1)), now.minus(Period.ofDays(1)))
+    val subject: OpenEndRange<Instant> = lastWeek..<now
+    val other: OpenEndRange<Instant> = lastWeek.plus(Period.ofDays(1))..<now.minus(Period.ofDays(1))
 
     assertThat(subject.overlaps(other)).isTrue()
   }
@@ -65,8 +92,9 @@ class OpenEndTimeRangeTest {
   fun `overlaps returns true for partially overlapping range`() {
     val now = Instant.now()
     val lastWeek = now.minus(Period.ofWeeks(1))
-    val subject = OpenEndTimeRange(lastWeek, now)
-    val other = OpenEndTimeRange(lastWeek.minus(Period.ofDays(1)), lastWeek.plus(Period.ofDays(1)))
+    val subject: OpenEndRange<Instant> = lastWeek..<now
+    val other: OpenEndRange<Instant> =
+      lastWeek.minus(Period.ofDays(1))..<lastWeek.plus(Period.ofDays(1))
 
     assertThat(subject.overlaps(other)).isTrue()
   }
@@ -75,18 +103,18 @@ class OpenEndTimeRangeTest {
   fun `overlaps returns false for range that only overlaps end`() {
     val now = Instant.now()
     val lastWeek = now.minus(Period.ofWeeks(1))
-    val subject = OpenEndTimeRange(lastWeek, now)
-    val other = OpenEndTimeRange(now, now.plus(Period.ofDays(1)))
+    val subject: OpenEndRange<Instant> = lastWeek..<now
+    val other: OpenEndRange<Instant> = now..<now.plus(Period.ofDays(1))
 
     assertThat(subject.overlaps(other)).isFalse()
   }
 
   @Test
-  fun `fromClosedDateRange returns range from start of first day to start of day after last day`() {
+  fun `toOpenEndInstantRange returns range from start of first day to start of day after last day`() {
     val firstDay = LocalDate.of(2023, 2, 1)
     val lastDay = LocalDate.of(2023, 2, 8)
 
-    val range = OpenEndTimeRange.fromClosedDateRange(firstDay..lastDay)
+    val range = (firstDay..lastDay).toOpenEndInstantRange()
 
     assertThat(range.start).isEqualTo(Instant.parse("2023-02-01T00:00:00Z"))
     assertThat(range.endExclusive).isEqualTo(Instant.parse("2023-02-09T00:00:00Z"))

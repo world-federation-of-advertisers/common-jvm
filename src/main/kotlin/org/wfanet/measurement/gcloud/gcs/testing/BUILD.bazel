@@ -1,3 +1,4 @@
+load("@rules_java//java:defs.bzl", "java_library")
 load("@wfa_rules_kotlin_jvm//kotlin:defs.bzl", "kt_jvm_library")
 
 package(
@@ -5,9 +6,37 @@ package(
     default_visibility = ["//visibility:public"],
 )
 
-kt_jvm_library(
+java_library(
     name = "testing",
-    srcs = glob(["*.kt"]),
+    exports = [
+        ":gcs_subscribing_storage_client",
+        ":storage_emulator",
+        ":storage_emulator_rule",
+    ],
+)
+
+kt_jvm_library(
+    name = "storage_emulator",
+    srcs = ["StorageEmulator.kt"],
+    deps = [
+        "//imports/java/com/google/cloud/storage",
+        "//imports/java/org/jetbrains/annotations",
+        "//src/main/kotlin/org/wfanet/measurement/common",
+    ],
+)
+
+kt_jvm_library(
+    name = "storage_emulator_rule",
+    srcs = ["StorageEmulatorRule.kt"],
+    deps = [
+        ":storage_emulator",
+        "//imports/java/org/junit",
+    ],
+)
+
+kt_jvm_library(
+    name = "gcs_subscribing_storage_client",
+    srcs = ["GcsSubscribingStorageClient.kt"],
     deps = [
         "//imports/java/com/google/cloud/functions:functions_framework_api",
         "//imports/java/com/google/cloud/storage",
