@@ -23,6 +23,7 @@ import com.google.cloud.pubsub.v1.TopicAdminSettings
 import com.google.pubsub.v1.ProjectSubscriptionName
 import com.google.pubsub.v1.PubsubMessage
 import com.google.pubsub.v1.TopicName
+import java.time.Duration as JavaDuration
 import org.threeten.bp.Duration
 
 class DefaultGooglePubSubClient : GooglePubSubClient() {
@@ -41,7 +42,8 @@ class DefaultGooglePubSubClient : GooglePubSubClient() {
     val messageReceiver = MessageReceiver { message, consumer -> messageHandler(message, consumer) }
     val subscriberBuilder =
       GoogleSubscriber.newBuilder(subscriptionName, messageReceiver)
-        .setMaxAckExtensionPeriod(ackExtensionPeriod)
+        .setMaxAckExtensionPeriodDuration(JavaDuration.ofSeconds(ackExtensionPeriod.getSeconds()))
+        .setMaxDurationPerAckExtensionDuration(JavaDuration.ofMinutes(10))
 
     return subscriberBuilder.build()
   }

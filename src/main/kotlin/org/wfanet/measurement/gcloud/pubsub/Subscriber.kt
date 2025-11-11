@@ -60,7 +60,7 @@ class Subscriber(
         googlePubSubClient.buildSubscriber(
           projectId = projectId,
           subscriptionId = subscriptionId,
-          ackExtensionPeriod = Duration.ofHours(6),
+          ackExtensionPeriod = Duration.ofHours(1),
         ) { message, consumer ->
           val parsedMessage = parser.parseFrom(message.data.toByteArray())
           val queueMessage =
