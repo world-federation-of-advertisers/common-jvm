@@ -36,7 +36,13 @@ class GooglePubSubTest : AbstractQueueTest() {
   }
 
   override fun createSubscriber(): QueueSubscriber {
-    return Subscriber(projectId = PROJECT_ID, googlePubSubClient = emulatorClient)
+    return Subscriber(
+      projectId = PROJECT_ID,
+      googlePubSubClient = emulatorClient,
+      maxMessages = 10,
+      pullIntervalMillis = 100,
+      blockingContext = kotlinx.coroutines.Dispatchers.IO,
+    )
   }
 
   override suspend fun createTopicAndSubscription() {
