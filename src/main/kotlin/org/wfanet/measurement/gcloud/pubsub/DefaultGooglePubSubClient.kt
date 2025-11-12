@@ -49,8 +49,10 @@ class DefaultGooglePubSubClient : GooglePubSubClient() {
     val subscriberBuilder =
       GoogleSubscriber.newBuilder(subscriptionName, messageReceiver)
         .setFlowControlSettings(flow)
+        .setMinDurationPerAckExtensionDuration(JavaDuration.ofSeconds(30))
+        .setMaxDurationPerAckExtensionDuration(JavaDuration.ofMinutes(5))
         .setMaxAckExtensionPeriodDuration(JavaDuration.ofSeconds(ackExtensionPeriod.getSeconds()))
-        .setMaxDurationPerAckExtensionDuration(JavaDuration.ofMinutes(10))
+
 
     return subscriberBuilder.build()
   }
