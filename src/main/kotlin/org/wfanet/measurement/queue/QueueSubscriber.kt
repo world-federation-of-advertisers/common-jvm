@@ -42,7 +42,11 @@ interface QueueSubscriber : AutoCloseable {
     parser: Parser<T>,
   ): ReceiveChannel<QueueMessage<T>>
 
-  data class QueueMessage<T>(val body: T, private val consumer: MessageConsumer) {
+  data class QueueMessage<T>(
+    val body: T,
+    val ackId: String,
+    private val consumer: MessageConsumer,
+  ) {
     fun ack() {
       consumer.ack()
     }

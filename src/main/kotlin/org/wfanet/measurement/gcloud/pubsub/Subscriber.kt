@@ -66,6 +66,7 @@ class Subscriber(
           val queueMessage =
             QueueSubscriber.QueueMessage(
               body = parsedMessage,
+              ackId = message.messageId,
               consumer = PubSubMessageConsumer(consumer),
             )
 
