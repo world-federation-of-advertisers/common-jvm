@@ -37,12 +37,11 @@ class PublishFailedException(topicId: String, cause: Throwable? = null) :
  * A class for publishing messages to Google Cloud Pub/Sub topics.
  *
  * @property projectId The Google Cloud project ID.
- * @property googlePubSubClient The client used for managing Pub/Sub resources. Defaults to
- *   [DefaultGooglePubSubClient].
+ * @property googlePubSubClient The client used for managing Pub/Sub resources.
  */
 class Publisher<T : Message>(
   private val projectId: String,
-  private val googlePubSubClient: GooglePubSubClient = DefaultGooglePubSubClient(),
+  private val googlePubSubClient: GooglePubSubClient,
 ) : QueuePublisher<T> {
 
   /** A concurrent map to store and reuse [Publisher] instances by topic ID. */

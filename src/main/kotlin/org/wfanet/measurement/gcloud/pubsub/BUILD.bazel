@@ -29,6 +29,7 @@ kt_jvm_library(
         "//imports/java/com/google/cloud/pubsub",
         "//imports/java/com/google/protobuf",
         "//imports/kotlin/kotlinx/coroutines:core",
+        "//src/main/kotlin/org/wfanet/measurement/gcloud/common",
         "//src/main/kotlin/org/wfanet/measurement/queue:queue_subscriber",
     ],
 )

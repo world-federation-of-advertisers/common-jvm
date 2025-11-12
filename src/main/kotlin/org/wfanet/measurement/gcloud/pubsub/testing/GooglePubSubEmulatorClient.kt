@@ -46,18 +46,19 @@ class GooglePubSubEmulatorClient(host: String, port: Int) : GooglePubSubClient()
   private val channelProvider =
     FixedTransportChannelProvider.create(GrpcTransportChannel.create(channel))
   private val credentialsProvider = NoCredentialsProvider.create()
-  private val subscriptionAdminClient: Lazy<SubscriptionAdminClient> = lazy {
-    SubscriptionAdminClient.create(
-      SubscriptionAdminSettings.newBuilder()
+
+  override fun buildTopicAdminClient(): TopicAdminClient {
+    return TopicAdminClient.create(
+      TopicAdminSettings.newBuilder()
         .setTransportChannelProvider(channelProvider)
         .setCredentialsProvider(credentialsProvider)
         .build()
     )
   }
 
-  override fun buildTopicAdminClient(): TopicAdminClient {
-    return TopicAdminClient.create(
-      TopicAdminSettings.newBuilder()
+  override fun buildSubscriptionAdminClient(): SubscriptionAdminClient {
+    return SubscriptionAdminClient.create(
+      SubscriptionAdminSettings.newBuilder()
         .setTransportChannelProvider(channelProvider)
         .setCredentialsProvider(credentialsProvider)
         .build()
@@ -100,20 +101,17 @@ class GooglePubSubEmulatorClient(host: String, port: Int) : GooglePubSubClient()
         .setPushConfig(PushConfig.getDefaultInstance())
         .build()
 
-    subscriptionAdminClient.value.createSubscriptionCallable().futureCall(subscription).await()
+    getSubscriptionAdminClient().createSubscriptionCallable().futureCall(subscription).await()
   }
 
   suspend fun deleteSubscription(projectId: String, subscriptionId: String) {
     val subscriptionName = ProjectSubscriptionName.format(projectId, subscriptionId)
     val request = DeleteSubscriptionRequest.newBuilder().setSubscription(subscriptionName).build()
-    subscriptionAdminClient.value.deleteSubscriptionCallable().futureCall(request).await()
+    getSubscriptionAdminClient().deleteSubscriptionCallable().futureCall(request).await()
   }
 
   override fun close() {
     super.close()
     channel.shutdown()
-    if (subscriptionAdminClient.isInitialized()) {
-      subscriptionAdminClient.value.close()
-    }
   }
 }

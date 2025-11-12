@@ -16,12 +16,20 @@ package org.wfanet.measurement.queue
 
 import com.google.protobuf.Message
 import com.google.protobuf.Parser
+import java.time.Duration
 import kotlinx.coroutines.channels.ReceiveChannel
 
 interface MessageConsumer {
   fun ack()
 
   fun nack()
+
+  /**
+   * Extends the acknowledgment deadline for this message.
+   *
+   * @param duration The duration by which to extend the deadline from now.
+   */
+  fun extendAckDeadline(duration: Duration)
 }
 
 /**
@@ -42,13 +50,21 @@ interface QueueSubscriber : AutoCloseable {
     parser: Parser<T>,
   ): ReceiveChannel<QueueMessage<T>>
 
-  data class QueueMessage<T>(val body: T, private val consumer: MessageConsumer) {
+  data class QueueMessage<T>(
+    val body: T,
+    val ackId: String,
+    private val consumer: MessageConsumer,
+  ) {
     fun ack() {
       consumer.ack()
     }
 
     fun nack() {
       consumer.nack()
+    }
+
+    fun extendAckDeadline(duration: Duration) {
+      consumer.extendAckDeadline(duration)
     }
   }
 }
