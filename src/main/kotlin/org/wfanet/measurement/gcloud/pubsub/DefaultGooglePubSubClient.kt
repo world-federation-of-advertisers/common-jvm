@@ -49,7 +49,9 @@ class DefaultGooglePubSubClient : GooglePubSubClient() {
     ackExtensionPeriod: Duration,
     messageHandler: (PubsubMessage, AckReplyConsumer) -> Unit,
   ): GoogleSubscriber {
-    logger.info("Building Subscriber for subscription: $subscriptionId in project: $projectId with ackExtensionPeriod: $ackExtensionPeriod")
+    logger.info(
+      "Building Subscriber for subscription: $subscriptionId in project: $projectId with ackExtensionPeriod: $ackExtensionPeriod"
+    )
 
     val flow =
       FlowControlSettings.newBuilder()

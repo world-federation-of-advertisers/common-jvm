@@ -15,7 +15,6 @@
 package org.wfanet.measurement.gcloud.pubsub
 
 import com.google.common.truth.Truth.assertThat
-import com.google.protobuf.ByteString
 import com.google.protobuf.StringValue
 import java.time.Duration
 import kotlinx.coroutines.channels.consumeEach
