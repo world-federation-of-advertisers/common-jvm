@@ -23,12 +23,16 @@ import java.time.Duration
 import java.util.logging.Logger
 import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import java.util.logging.Level
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.channels.produce
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.annotations.BlockingExecutor
@@ -56,10 +60,21 @@ class Subscriber(
   private val googlePubSubClient: GooglePubSubClient,
   private val maxMessages: Int,
   private val pullIntervalMillis: Long,
+  private val ackDeadlineExtensionIntervalSeconds: Int,
+  private val ackDeadlineExtensionSeconds: Int,
   blockingContext: @BlockingExecutor CoroutineContext,
 ) : QueueSubscriber {
 
   private val scope = CoroutineScope(blockingContext)
+
+  init {
+    require(ackDeadlineExtensionIntervalSeconds in 0..600){
+      "ackDeadlineExtensionIntervalSeconds must in in 0..600"
+    }
+    require(ackDeadlineExtensionSeconds in 0..600){
+      "ackDeadlineExtensionIntervalSeconds must in in 0..600"
+    }
+  }
 
   @OptIn(ExperimentalCoroutinesApi::class) // For `produce`.
   override fun <T : Message> subscribe(
@@ -109,6 +124,8 @@ class Subscriber(
                   subscriptionId = subscriptionId,
                   ackId = ackId,
                   googlePubSubClient = googlePubSubClient,
+                  ackDeadlineExtensionIntervalSeconds = ackDeadlineExtensionIntervalSeconds,
+                  ackDeadlineExtensionSeconds = ackDeadlineExtensionSeconds,
                 )
 
               // Create queue message with ack ID
@@ -158,10 +175,48 @@ class Subscriber(
     private val subscriptionId: String,
     private val ackId: String,
     private val googlePubSubClient: GooglePubSubClient,
+    private val ackDeadlineExtensionIntervalSeconds: Int,
+    private val ackDeadlineExtensionSeconds: Int,
   ) : MessageConsumer {
+
+    private var ackDeadlineExtensionJob: Job? = null
+
+    init {
+      if (ackDeadlineExtensionSeconds > 0) {
+        // Start background coroutine to extend ack deadline if configured
+        logger.info(
+          "Starting ack deadline extension job for message ${ackId} (interval: ${ackDeadlineExtensionIntervalSeconds}s, deadline: ${ackDeadlineExtensionSeconds}s)"
+        )
+        ackDeadlineExtensionJob =
+          CoroutineScope(Dispatchers.IO).launch {
+            while (isActive) {
+              ackDeadlineExtensionIntervalSeconds
+              delay(ackDeadlineExtensionIntervalSeconds * 1000L)
+              try {
+                runBlocking {
+                  googlePubSubClient.modifyAckDeadline(
+                    projectId = projectId,
+                    subscriptionId = subscriptionId,
+                    ackIds = listOf(ackId),
+                    ackDeadlineSeconds = ackDeadlineExtensionSeconds,
+                  )
+                }
+                logger.info(
+                  "Extended ack deadline to $ackDeadlineExtensionSeconds seconds for message $ackId"
+                )
+              } catch (e: Exception) {
+                logger.log(Level.WARNING, e) {
+                  "Failed to extend ack deadline for message $ackId"
+                }
+              }
+            }
+          }
+      }
+    }
 
     override fun ack() {
       try {
+        ackDeadlineExtensionJob?.cancel()
         val subscriptionName = ProjectSubscriptionName.format(projectId, subscriptionId)
         logger.info("Acknowledging message with ackId=$ackId for subscription: $subscriptionName")
         val request =
@@ -183,6 +238,7 @@ class Subscriber(
     }
 
     override fun nack() {
+      ackDeadlineExtensionJob?.cancel()
       // Nack by setting deadline to 0, making message immediately available for redelivery
       runBlocking {
         googlePubSubClient.modifyAckDeadline(
@@ -194,17 +250,6 @@ class Subscriber(
       }
     }
 
-    override fun extendAckDeadline(duration: Duration) {
-      val deadlineSeconds = duration.toSeconds().toInt()
-      runBlocking {
-        googlePubSubClient.modifyAckDeadline(
-          projectId = projectId,
-          subscriptionId = subscriptionId,
-          ackIds = listOf(ackId),
-          ackDeadlineSeconds = deadlineSeconds,
-        )
-      }
-    }
   }
 
   companion object {

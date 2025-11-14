@@ -16,7 +16,7 @@ package org.wfanet.measurement.gcloud.pubsub
 
 import com.google.common.truth.Truth.assertThat
 import com.google.protobuf.StringValue
-import java.time.Duration
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.consumeEach
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -51,7 +51,9 @@ class PullSubscriberTest {
         googlePubSubClient = emulatorClient,
         maxMessages = 1,
         pullIntervalMillis = 100,
-        blockingContext = kotlinx.coroutines.Dispatchers.IO,
+        blockingContext = Dispatchers.IO,
+        ackDeadlineExtensionIntervalSeconds = 0,
+        ackDeadlineExtensionSeconds = 0,
       )
 
     runBlocking {
@@ -139,43 +141,6 @@ class PullSubscriberTest {
       // AckId should be a non-empty string
       assertThat(capturedAckId).isNotEmpty()
       assertThat(capturedAckId).isNotNull()
-    }
-  }
-
-  @Test
-  fun `extendAckDeadline extends message deadline`() = runBlocking {
-    // Publish a message
-    val publisher = Publisher<StringValue>(PROJECT_ID, emulatorClient)
-    val testMessage = StringValue.newBuilder().setValue("test-extend-deadline").build()
-    publisher.publishMessage(TOPIC_ID, testMessage)
-
-    // Subscribe and extend deadline
-    val channel = subscriber.subscribe(SUBSCRIPTION_ID, StringValue.parser())
-
-    withTimeout(10000) {
-      var extendSucceeded = false
-
-      launch {
-        channel.consumeEach { queueMessage ->
-          try {
-            // Extend deadline by 5 minutes
-            queueMessage.extendAckDeadline(Duration.ofMinutes(5))
-            extendSucceeded = true
-          } catch (e: Exception) {
-            // Should not throw
-            throw AssertionError("extendAckDeadline should not throw", e)
-          } finally {
-            queueMessage.ack()
-            subscriber.close()
-          }
-        }
-      }
-
-      while (!extendSucceeded) {
-        delay(100)
-      }
-
-      assertThat(extendSucceeded).isTrue()
     }
   }
 

@@ -14,6 +14,7 @@
 
 package org.wfanet.measurement.gcloud.pubsub
 
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import org.junit.ClassRule
 import org.wfa.measurement.queue.testing.TestWork
@@ -41,7 +42,9 @@ class GooglePubSubTest : AbstractQueueTest() {
       googlePubSubClient = emulatorClient,
       maxMessages = 10,
       pullIntervalMillis = 100,
-      blockingContext = kotlinx.coroutines.Dispatchers.IO,
+      blockingContext = Dispatchers.IO,
+      ackDeadlineExtensionIntervalSeconds = 10,
+      ackDeadlineExtensionSeconds = 10,
     )
   }
 

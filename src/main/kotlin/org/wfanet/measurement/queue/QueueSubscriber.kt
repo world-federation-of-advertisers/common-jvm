@@ -24,12 +24,6 @@ interface MessageConsumer {
 
   fun nack()
 
-  /**
-   * Extends the acknowledgment deadline for this message.
-   *
-   * @param duration The duration by which to extend the deadline from now.
-   */
-  fun extendAckDeadline(duration: Duration)
 }
 
 /**
@@ -63,8 +57,5 @@ interface QueueSubscriber : AutoCloseable {
       consumer.nack()
     }
 
-    fun extendAckDeadline(duration: Duration) {
-      consumer.extendAckDeadline(duration)
-    }
   }
 }
