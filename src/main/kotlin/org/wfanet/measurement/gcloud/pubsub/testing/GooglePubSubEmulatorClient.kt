@@ -101,13 +101,13 @@ class GooglePubSubEmulatorClient(host: String, port: Int) : GooglePubSubClient()
         .setPushConfig(PushConfig.getDefaultInstance())
         .build()
 
-    getSubscriptionAdminClient().createSubscriptionCallable().futureCall(subscription).await()
+    subscriptionAdminClient.value.createSubscriptionCallable().futureCall(subscription).await()
   }
 
   suspend fun deleteSubscription(projectId: String, subscriptionId: String) {
     val subscriptionName = ProjectSubscriptionName.format(projectId, subscriptionId)
     val request = DeleteSubscriptionRequest.newBuilder().setSubscription(subscriptionName).build()
-    getSubscriptionAdminClient().deleteSubscriptionCallable().futureCall(request).await()
+    subscriptionAdminClient.value.deleteSubscriptionCallable().futureCall(request).await()
   }
 
   override fun close() {

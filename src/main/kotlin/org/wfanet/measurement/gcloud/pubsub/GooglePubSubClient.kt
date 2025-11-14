@@ -35,7 +35,7 @@ abstract class GooglePubSubClient : AutoCloseable {
   protected val logger: Logger = Logger.getLogger(this::class.java.name)
 
   private val topicAdminClient: Lazy<TopicAdminClient> = lazy { buildTopicAdminClient() }
-  private val subscriptionAdminClient: Lazy<SubscriptionAdminClient> = lazy {
+  val subscriptionAdminClient: Lazy<SubscriptionAdminClient> = lazy {
     buildSubscriptionAdminClient()
   }
 
@@ -52,18 +52,6 @@ abstract class GooglePubSubClient : AutoCloseable {
    * @return A new instance of [SubscriptionAdminClient].
    */
   protected abstract fun buildSubscriptionAdminClient(): SubscriptionAdminClient
-
-  /**
-   * Gets the SubscriptionAdminClient for performing subscription operations.
-   *
-   * This client can be used for pull-based subscriptions, acknowledgments, and modifying ack
-   * deadlines.
-   *
-   * @return The [SubscriptionAdminClient] instance.
-   */
-  fun getSubscriptionAdminClient(): SubscriptionAdminClient {
-    return subscriptionAdminClient.value
-  }
 
   /**
    * Builds a Google Pub/Sub [GoogleSubscriber].

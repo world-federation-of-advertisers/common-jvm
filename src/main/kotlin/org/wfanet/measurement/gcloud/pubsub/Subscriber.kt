@@ -19,21 +19,20 @@ import com.google.protobuf.Parser
 import com.google.pubsub.v1.AcknowledgeRequest
 import com.google.pubsub.v1.ProjectSubscriptionName
 import com.google.pubsub.v1.PullRequest
-import java.time.Duration
+import java.util.logging.Level
 import java.util.logging.Logger
 import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import java.util.logging.Level
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.channels.produce
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.annotations.BlockingExecutor
 import org.wfanet.measurement.gcloud.common.await
@@ -52,10 +51,14 @@ import org.wfanet.measurement.queue.QueueSubscriber
  * @param projectId The Google Cloud project ID.
  * @param googlePubSubClient The client interface for interacting with the Google Pub/Sub service.
  * @param maxMessages The maximum number of messages to pull in each request. Default is 1.
- * @param pullIntervalMillis The interval between pull requests in milliseconds when no messages are received. Default is 100ms.
- * @param ackDeadlineExtensionIntervalSeconds The interval in seconds between automatic ack deadline extensions. Default is 60 seconds.
- * @param ackDeadlineExtensionSeconds The number of seconds to extend the ack deadline by. Default is 600 seconds (10 minutes).
- * @param blockingContext The coroutine context used for producing the channel. Default is Dispatchers.IO.
+ * @param pullIntervalMillis The interval between pull requests in milliseconds when no messages are
+ *   received. Default is 100ms.
+ * @param ackDeadlineExtensionIntervalSeconds The interval in seconds between automatic ack deadline
+ *   extensions. Default is 60 seconds.
+ * @param ackDeadlineExtensionSeconds The number of seconds to extend the ack deadline by. Default
+ *   is 600 seconds (10 minutes).
+ * @param blockingContext The coroutine context used for producing the channel. Default is
+ *   Dispatchers.IO.
  */
 class Subscriber(
   private val projectId: String,
@@ -70,10 +73,10 @@ class Subscriber(
   private val scope = CoroutineScope(blockingContext)
 
   init {
-    require(ackDeadlineExtensionIntervalSeconds in 0..600){
+    require(ackDeadlineExtensionIntervalSeconds in 0..600) {
       "ackDeadlineExtensionIntervalSeconds must in in 0..600"
     }
-    require(ackDeadlineExtensionSeconds in 0..600){
+    require(ackDeadlineExtensionSeconds in 0..600) {
       "ackDeadlineExtensionIntervalSeconds must in in 0..600"
     }
   }
@@ -100,8 +103,7 @@ class Subscriber(
 
             // Pull messages from Pub/Sub
             val pullResponse =
-              googlePubSubClient
-                .getSubscriptionAdminClient()
+              googlePubSubClient.subscriptionAdminClient.value
                 .pullCallable()
                 .futureCall(pullRequest)
                 .await()
@@ -206,9 +208,7 @@ class Subscriber(
                   "Extended ack deadline to $ackDeadlineExtensionSeconds seconds for message $ackId"
                 )
               } catch (e: Exception) {
-                logger.log(Level.WARNING, e) {
-                  "Failed to extend ack deadline for message $ackId"
-                }
+                logger.log(Level.WARNING, e) { "Failed to extend ack deadline for message $ackId" }
               }
             }
           }
@@ -223,8 +223,7 @@ class Subscriber(
         val request =
           AcknowledgeRequest.newBuilder().setSubscription(subscriptionName).addAckIds(ackId).build()
 
-        googlePubSubClient
-          .getSubscriptionAdminClient()
+        googlePubSubClient.subscriptionAdminClient.value
           .acknowledgeCallable()
           .futureCall(request)
           .get() // Blocking call
@@ -250,7 +249,6 @@ class Subscriber(
         )
       }
     }
-
   }
 
   companion object {
