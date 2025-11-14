@@ -51,18 +51,20 @@ import org.wfanet.measurement.queue.QueueSubscriber
  *
  * @param projectId The Google Cloud project ID.
  * @param googlePubSubClient The client interface for interacting with the Google Pub/Sub service.
- * @param maxMessages The maximum number of messages to pull in each request.
- * @param pullIntervalMillis The interval between pull requests in milliseconds.
- * @param blockingContext The coroutine context used for producing the channel.
+ * @param maxMessages The maximum number of messages to pull in each request. Default is 1.
+ * @param pullIntervalMillis The interval between pull requests in milliseconds when no messages are received. Default is 100ms.
+ * @param ackDeadlineExtensionIntervalSeconds The interval in seconds between automatic ack deadline extensions. Default is 60 seconds.
+ * @param ackDeadlineExtensionSeconds The number of seconds to extend the ack deadline by. Default is 600 seconds (10 minutes).
+ * @param blockingContext The coroutine context used for producing the channel. Default is Dispatchers.IO.
  */
 class Subscriber(
   private val projectId: String,
   private val googlePubSubClient: GooglePubSubClient,
-  private val maxMessages: Int,
-  private val pullIntervalMillis: Long,
-  private val ackDeadlineExtensionIntervalSeconds: Int,
-  private val ackDeadlineExtensionSeconds: Int,
-  blockingContext: @BlockingExecutor CoroutineContext,
+  private val maxMessages: Int = 1,
+  private val pullIntervalMillis: Long = 100,
+  private val ackDeadlineExtensionIntervalSeconds: Int = 60,
+  private val ackDeadlineExtensionSeconds: Int = 600,
+  blockingContext: @BlockingExecutor CoroutineContext = Dispatchers.IO,
 ) : QueueSubscriber {
 
   private val scope = CoroutineScope(blockingContext)
