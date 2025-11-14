@@ -16,14 +16,12 @@ package org.wfanet.measurement.queue
 
 import com.google.protobuf.Message
 import com.google.protobuf.Parser
-import java.time.Duration
 import kotlinx.coroutines.channels.ReceiveChannel
 
 interface MessageConsumer {
   fun ack()
 
   fun nack()
-
 }
 
 /**
@@ -56,6 +54,5 @@ interface QueueSubscriber : AutoCloseable {
     fun nack() {
       consumer.nack()
     }
-
   }
 }
