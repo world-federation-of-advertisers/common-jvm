@@ -190,7 +190,6 @@ class Subscriber(
         ackDeadlineExtensionJob =
           CoroutineScope(Dispatchers.IO).launch {
             while (isActive) {
-              ackDeadlineExtensionIntervalSeconds
               delay(ackDeadlineExtensionIntervalSeconds * 1000L)
               try {
                 runBlocking {
