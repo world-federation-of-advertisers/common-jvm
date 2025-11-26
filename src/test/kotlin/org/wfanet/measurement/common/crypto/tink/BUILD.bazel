@@ -1,6 +1,19 @@
 load("@wfa_rules_kotlin_jvm//kotlin:defs.bzl", "kt_jvm_test")
 
 kt_jvm_test(
+    name = "AeadStorageClientTest",
+    srcs = ["AeadStorageClientTest.kt"],
+    deps = [
+        "//imports/java/com/google/common/truth",
+        "//imports/java/com/google/crypto/tink",
+        "//imports/java/org/junit",
+        "//src/main/kotlin/org/wfanet/measurement/common/crypto/tink",
+        "//src/main/kotlin/org/wfanet/measurement/common/crypto/tink/testing",
+        "//src/main/kotlin/org/wfanet/measurement/storage/testing",
+    ],
+)
+
+kt_jvm_test(
     name = "KeyHandleTest",
     srcs = ["KeyHandleTest.kt"],
     deps = [
@@ -41,6 +54,17 @@ kt_jvm_test(
 )
 
 kt_jvm_test(
+    name = "StreamingEncryptionTest",
+    srcs = ["StreamingEncryptionTest.kt"],
+    deps = [
+        "//imports/java/com/google/common/truth",
+        "//imports/java/com/google/crypto/tink",
+        "//imports/java/org/junit",
+        "//src/main/kotlin/org/wfanet/measurement/common/crypto/tink",
+    ],
+)
+
+kt_jvm_test(
     name = "SelfIssuedIdTokensTest",
     srcs = ["SelfIssuedIdTokensTest.kt"],
     deps = [
@@ -61,5 +85,18 @@ kt_jvm_test(
         "//imports/java/org/junit",
         "//imports/kotlin/kotlin/test",
         "//src/main/kotlin/org/wfanet/measurement/common/crypto/tink",
+    ],
+)
+
+kt_jvm_test(
+    name = "WithEnvelopeEncryptionTest",
+    srcs = ["WithEnvelopeEncryptionTest.kt"],
+    deps = [
+        "//imports/java/com/google/common/truth",
+        "//imports/java/com/google/crypto/tink",
+        "//imports/java/org/junit",
+        "//src/main/kotlin/org/wfanet/measurement/common/crypto/tink",
+        "//src/main/kotlin/org/wfanet/measurement/common/crypto/tink/testing",
+        "//src/main/kotlin/org/wfanet/measurement/storage/testing",
     ],
 )

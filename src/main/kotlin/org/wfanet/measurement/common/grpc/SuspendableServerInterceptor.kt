@@ -66,7 +66,7 @@ abstract class SuspendableServerInterceptor(
   abstract suspend fun <ReqT : Any, RespT : Any> interceptCallSuspending(
     call: ServerCall<ReqT, RespT>,
     headers: Metadata,
-    next: ServerCallHandler<ReqT, RespT>
+    next: ServerCallHandler<ReqT, RespT>,
   ): ServerCall.Listener<ReqT>
 }
 

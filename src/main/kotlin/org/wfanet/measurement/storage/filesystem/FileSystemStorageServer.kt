@@ -32,8 +32,8 @@ private class Flags {
     description =
       [
         "Directory to store blobs on the file system.",
-        "If not specified, a new temporary directory will be created and used."
-      ]
+        "If not specified, a new temporary directory will be created and used.",
+      ],
   )
   var directory: File? = null
     private set
@@ -42,7 +42,7 @@ private class Flags {
 @CommandLine.Command(name = SERVER_NAME, mixinStandardHelpOptions = true, showDefaultValues = true)
 private fun run(
   @CommandLine.Mixin serverFlags: CommonServer.Flags,
-  @CommandLine.Mixin flags: Flags
+  @CommandLine.Mixin flags: Flags,
 ) {
   val directory = flags.directory ?: Files.createTempDirectory(null).toFile()
   logger.info("Storing blobs in $directory")
@@ -50,7 +50,7 @@ private fun run(
   CommonServer.fromFlags(
       serverFlags,
       SERVER_NAME,
-      FileSystemStorageService(directory, Dispatchers.IO)
+      FileSystemStorageService(directory, Dispatchers.IO),
     )
     .start()
     .blockUntilShutdown()

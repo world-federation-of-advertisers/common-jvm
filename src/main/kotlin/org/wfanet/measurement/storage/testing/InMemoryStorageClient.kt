@@ -17,6 +17,7 @@ package org.wfanet.measurement.storage.testing
 import com.google.protobuf.ByteString
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import org.wfanet.measurement.common.flatten
 import org.wfanet.measurement.storage.StorageClient
@@ -43,7 +44,19 @@ class InMemoryStorageClient : StorageClient {
     return storageMap[blobKey]
   }
 
-  private inner class Blob(private val blobKey: String, private val content: ByteString) :
+  override suspend fun listBlobs(prefix: String?): Flow<StorageClient.Blob> {
+    return flow {
+      for (key in storageMap.keys().toList()) {
+        if (prefix.isNullOrEmpty()) {
+          emit(storageMap.getValue(key))
+        } else {
+          if (key.startsWith(prefix = prefix, ignoreCase = false)) emit(storageMap.getValue(key))
+        }
+      }
+    }
+  }
+
+  private inner class Blob(override val blobKey: String, private val content: ByteString) :
     StorageClient.Blob {
 
     override val size: Long

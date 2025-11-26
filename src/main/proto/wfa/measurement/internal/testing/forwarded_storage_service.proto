@@ -25,10 +25,16 @@ service ForwardedStorage {
   rpc GetBlobMetadata(GetBlobMetadataRequest) returns (BlobMetadata) {}
   rpc ReadBlob(ReadBlobRequest) returns (stream ReadBlobResponse) {}
   rpc DeleteBlob(DeleteBlobRequest) returns (DeleteBlobResponse) {}
+  // When prefix is not specified, metadata for all blobs is returned. When
+  // prefix is specified, it filters out blobs with blob keys that do not match
+  // the prefix.
+  rpc ListBlobMetadata(ListBlobMetadataRequest)
+      returns (ListBlobMetadataResponse) {}
 }
 
 message BlobMetadata {
   int64 size = 1;
+  string blob_key = 2;
 }
 
 message WriteBlobRequest {
@@ -63,4 +69,12 @@ message DeleteBlobRequest {
 
 message DeleteBlobResponse {
   // Deliberately empty
+}
+
+message ListBlobMetadataRequest {
+  string prefix = 1;
+}
+
+message ListBlobMetadataResponse {
+  repeated BlobMetadata blob_metadata = 1;
 }

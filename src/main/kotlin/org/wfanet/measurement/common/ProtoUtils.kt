@@ -133,7 +133,7 @@ fun Message.Builder.mergeFromTextProto(textProto: Readable, typeRegistry: TypeRe
 fun <T : Message> parseTextProto(
   textProto: Readable,
   messageInstance: T,
-  typeRegistry: TypeRegistry = TypeRegistry.getEmptyTypeRegistry()
+  typeRegistry: TypeRegistry = TypeRegistry.getEmptyTypeRegistry(),
 ): T {
   return messageInstance
     .newBuilderForType()
@@ -144,7 +144,7 @@ fun <T : Message> parseTextProto(
 fun <T : Message> parseTextProto(
   textProto: File,
   messageInstance: T,
-  typeRegistry: TypeRegistry = TypeRegistry.getEmptyTypeRegistry()
+  typeRegistry: TypeRegistry = TypeRegistry.getEmptyTypeRegistry(),
 ): T {
   return textProto.bufferedReader().use { reader ->
     parseTextProto(reader, messageInstance, typeRegistry)

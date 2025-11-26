@@ -29,7 +29,7 @@ object PostgresConnectionFactories {
       ConnectionFactoryOptions.builder()
         .option(
           ConnectionFactoryOptions.DRIVER,
-          PostgresqlConnectionFactoryProvider.POSTGRESQL_DRIVER
+          PostgresqlConnectionFactoryProvider.POSTGRESQL_DRIVER,
         )
         .option(ConnectionFactoryOptions.PROTOCOL, "postgresql")
         .option(ConnectionFactoryOptions.USER, postgresCredentials.username)

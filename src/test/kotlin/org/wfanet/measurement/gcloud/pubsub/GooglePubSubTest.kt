@@ -14,6 +14,7 @@
 
 package org.wfanet.measurement.gcloud.pubsub
 
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import org.junit.ClassRule
 import org.wfa.measurement.queue.testing.TestWork
@@ -36,7 +37,15 @@ class GooglePubSubTest : AbstractQueueTest() {
   }
 
   override fun createSubscriber(): QueueSubscriber {
-    return Subscriber(projectId = PROJECT_ID, googlePubSubClient = emulatorClient)
+    return Subscriber(
+      projectId = PROJECT_ID,
+      googlePubSubClient = emulatorClient,
+      maxMessages = 10,
+      pullIntervalMillis = 100,
+      blockingContext = Dispatchers.IO,
+      ackDeadlineExtensionIntervalSeconds = 10,
+      ackDeadlineExtensionSeconds = 10,
+    )
   }
 
   override suspend fun createTopicAndSubscription() {

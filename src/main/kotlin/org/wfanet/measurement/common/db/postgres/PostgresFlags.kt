@@ -14,6 +14,7 @@
 
 package org.wfanet.measurement.common.db.postgres
 
+import java.time.Duration
 import picocli.CommandLine
 
 /** Common command-line flags for connecting to a single Postgres database. */
@@ -21,7 +22,7 @@ class PostgresFlags {
   @CommandLine.Option(
     names = ["--postgres-database"],
     description = ["Name of the Postgres database."],
-    required = false
+    required = false,
   )
   var database: String = ""
     private set
@@ -29,7 +30,7 @@ class PostgresFlags {
   @CommandLine.Option(
     names = ["--postgres-host"],
     description = ["Host name of the Postgres database."],
-    required = true
+    required = true,
   )
   lateinit var host: String
     private set
@@ -37,7 +38,7 @@ class PostgresFlags {
   @CommandLine.Option(
     names = ["--postgres-port"],
     description = ["Port of the Postgres database."],
-    required = true
+    required = true,
   )
   var port: Int = 0
     private set
@@ -45,7 +46,7 @@ class PostgresFlags {
   @CommandLine.Option(
     names = ["--postgres-user"],
     description = ["User of the Postgres database."],
-    required = true
+    required = true,
   )
   lateinit var user: String
     private set
@@ -53,9 +54,18 @@ class PostgresFlags {
   @CommandLine.Option(
     names = ["--postgres-password"],
     description = ["Password of the Postgres database."],
-    required = true
+    required = true,
   )
   lateinit var password: String
+    private set
+
+  @CommandLine.Option(
+    names = ["--statement-timeout"],
+    description = ["statement_timeout for connections. 0 represents no timeout."],
+    required = false,
+    defaultValue = "0s",
+  )
+  lateinit var statementTimeout: Duration
     private set
 
   val jdbcConnectionString: String

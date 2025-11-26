@@ -14,21 +14,30 @@
 
 package org.wfanet.measurement.gcloud.gcs
 
-import com.google.cloud.storage.contrib.nio.testing.LocalStorageHelper
+import org.junit.After
 import org.junit.Before
+import org.junit.ClassRule
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
-import org.wfanet.measurement.storage.testing.AbstractStorageClientTest
+import org.wfanet.measurement.gcloud.gcs.testing.StorageEmulatorRule
+import org.wfanet.measurement.storage.testing.AbstractConditionalOperationStorageClientTest
 
 @RunWith(JUnit4::class)
-class GcsStorageClientTest : AbstractStorageClientTest<GcsStorageClient>() {
+class GcsStorageClientTest : AbstractConditionalOperationStorageClientTest<GcsStorageClient>() {
   @Before
   fun initClient() {
-    val storage = LocalStorageHelper.getOptions().service
-    storageClient = GcsStorageClient(storage, BUCKET)
+    storageEmulator.createBucket(BUCKET)
+    storageClient = GcsStorageClient(storageEmulator.storage, BUCKET)
+  }
+
+  @After
+  fun deleteBucket() {
+    storageEmulator.deleteBucketRecursive(BUCKET)
   }
 
   companion object {
     private const val BUCKET = "test-bucket"
+
+    @get:JvmStatic @get:ClassRule val storageEmulator = StorageEmulatorRule()
   }
 }

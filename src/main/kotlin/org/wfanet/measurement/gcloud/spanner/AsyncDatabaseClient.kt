@@ -258,7 +258,7 @@ private class ReadContextImpl(private val delegate: ReadContext) :
     val resultSet: AsyncResultSet = executeQuery()
 
     resultSet.setCallback(underlyingExecutor, ::readyCallback)
-    awaitClose { resultSet.close() }
+    awaitClose { resultSet.cancel() }
   }
 }
 
@@ -376,7 +376,7 @@ private class TransactionManagerImpl(private val delegate: AsyncTransactionManag
           future
         }
         awaitClose {
-          resultSet?.close()
+          resultSet?.cancel()
           future.set(Unit)
         }
       }

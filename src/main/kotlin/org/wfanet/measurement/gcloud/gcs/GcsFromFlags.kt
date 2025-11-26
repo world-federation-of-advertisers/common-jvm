@@ -16,13 +16,21 @@ package org.wfanet.measurement.gcloud.gcs
 
 import com.google.cloud.storage.Storage
 import com.google.cloud.storage.StorageOptions
+import org.wfanet.measurement.common.Instrumentation
 import picocli.CommandLine
 
 /** Client access provider for Google Cloud Storage (GCS) via command-line flags. */
 class GcsFromFlags(private val flags: Flags) {
 
   private val storageOptions: StorageOptions by lazy {
-    StorageOptions.newBuilder().setProjectId(flags.projectName).build()
+    val builder =
+      if (flags.useGrpc) {
+        StorageOptions.grpc().setEnableGrpcClientMetrics(true)
+      } else {
+        StorageOptions.newBuilder()
+      }
+
+    builder.setOpenTelemetry(Instrumentation.openTelemetry).setProjectId(flags.projectName).build()
   }
 
   val storage: Storage
@@ -35,7 +43,7 @@ class GcsFromFlags(private val flags: Flags) {
     @CommandLine.Option(
       names = ["--google-cloud-storage-project"],
       description = ["Name of the Google Cloud Storage project to use."],
-      required = true
+      required = true,
     )
     lateinit var projectName: String
       private set
@@ -43,9 +51,17 @@ class GcsFromFlags(private val flags: Flags) {
     @CommandLine.Option(
       names = ["--google-cloud-storage-bucket"],
       description = ["Name of the Google Cloud Storage project to use."],
-      required = true
+      required = true,
     )
     lateinit var bucket: String
+      private set
+
+    @CommandLine.Option(
+      names = ["--google-cloud-storage-use-grpc"],
+      description = ["Whether to use gRPC instead of http."],
+      required = false,
+    )
+    var useGrpc: Boolean = false
       private set
   }
 }

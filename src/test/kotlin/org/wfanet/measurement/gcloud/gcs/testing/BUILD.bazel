@@ -1,0 +1,17 @@
+load("@wfa_rules_kotlin_jvm//kotlin:defs.bzl", "kt_jvm_test")
+
+kt_jvm_test(
+    name = "GcsSubscribingStorageClientTest",
+    srcs = ["GcsSubscribingStorageClientTest.kt"],
+    tags = [
+        # Uses Docker.
+        "no-remote-exec",
+    ],
+    test_class = "org.wfanet.measurement.gcloud.gcs.testing.GcsSubscribingStorageClientTest",
+    deps = [
+        "//imports/java/org/junit",
+        "//src/main/kotlin/org/wfanet/measurement/gcloud/gcs/testing:gcs_subscribing_storage_client",
+        "//src/main/kotlin/org/wfanet/measurement/gcloud/gcs/testing:storage_emulator_rule",
+        "@wfa_common_jvm//imports/kotlin/org/mockito/kotlin",
+    ],
+)

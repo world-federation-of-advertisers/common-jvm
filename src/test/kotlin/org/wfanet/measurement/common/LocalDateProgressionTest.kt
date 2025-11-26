@@ -42,7 +42,7 @@ class LocalDateProgressionTest {
         lastWeek.plusDays(4),
         lastWeek.plusDays(5),
         lastWeek.plusDays(6),
-        today
+        today,
       )
       .inOrder()
   }
@@ -73,12 +73,7 @@ class LocalDateProgressionTest {
     val dates = (lastWeek..today step Period.ofDays(2)).toList()
 
     assertThat(dates)
-      .containsExactly(
-        lastWeek,
-        lastWeek.plusDays(2),
-        lastWeek.plusDays(4),
-        lastWeek.plusDays(6),
-      )
+      .containsExactly(lastWeek, lastWeek.plusDays(2), lastWeek.plusDays(4), lastWeek.plusDays(6))
       .inOrder()
   }
 }

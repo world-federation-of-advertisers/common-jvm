@@ -15,24 +15,17 @@
 package org.wfanet.measurement.common.crypto.tink
 
 import com.google.crypto.tink.StreamingAead
+import com.google.crypto.tink.streamingaead.StreamingAeadConfig
 import com.google.protobuf.ByteString
+import com.google.protobuf.kotlin.toByteStringUtf8
 import java.nio.channels.ClosedChannelException
 import java.util.logging.Logger
 import kotlin.coroutines.CoroutineContext
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.channelFlow
-import kotlinx.coroutines.flow.emitAll
-import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.produceIn
-import kotlinx.coroutines.yield
 import org.jetbrains.annotations.BlockingExecutor
 import org.wfanet.measurement.common.BYTES_PER_MIB
-import org.wfanet.measurement.common.CoroutineReadableByteChannel
 import org.wfanet.measurement.common.CoroutineWritableByteChannel
-import org.wfanet.measurement.common.asFlow
 import org.wfanet.measurement.storage.StorageClient
 
 /**
@@ -65,26 +58,10 @@ class StreamingAeadStorageClient(
    * @throws ClosedChannelException if the channel is closed before all data is written.
    */
   override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
-    val encryptedContent = channelFlow {
-      val writableChannel = CoroutineWritableByteChannel(channel)
-
-      streamingAead.newEncryptingChannel(writableChannel, blobKey.encodeToByteArray()).use {
-        ciphertextChannel ->
-        content.collect { byteString ->
-          byteString.asReadOnlyByteBufferList().forEach { buffer ->
-            while (buffer.hasRemaining()) {
-              val bytesWritten = ciphertextChannel.write(buffer)
-              if (bytesWritten == 0) {
-                yield()
-                continue
-              }
-            }
-          }
-        }
-      }
-    }
-
-    val wrappedBlob: StorageClient.Blob = storageClient.writeBlob(blobKey, encryptedContent)
+    val associatedData: ByteString = blobKey.toByteStringUtf8()
+    val ciphertext: Flow<ByteString> =
+      streamingAead.encrypt(content, associatedData, streamingAeadContext)
+    val wrappedBlob: StorageClient.Blob = storageClient.writeBlob(blobKey, ciphertext)
     logger.fine { "Wrote encrypted content to storage with blobKey: $blobKey" }
     return EncryptedBlob(wrappedBlob, blobKey)
   }
@@ -99,10 +76,14 @@ class StreamingAeadStorageClient(
     return blob?.let { EncryptedBlob(it, blobKey) }
   }
 
+  override suspend fun listBlobs(prefix: String?): Flow<StorageClient.Blob> {
+    return storageClient.listBlobs(prefix)
+  }
+
   /** A blob that will decrypt the content when read */
   private inner class EncryptedBlob(
     private val blob: StorageClient.Blob,
-    private val blobKey: String,
+    override val blobKey: String,
   ) : StorageClient.Blob {
     override val storageClient = this@StreamingAeadStorageClient.storageClient
 
@@ -119,24 +100,20 @@ class StreamingAeadStorageClient(
      * @throws java.io.IOException If there is an issue reading from the stream or during
      *   decryption.
      */
-    override fun read(): Flow<ByteString> = flow {
-      val scope = CoroutineScope(streamingAeadContext)
-      try {
-        val chunkChannel = blob.read().produceIn(scope)
-        val readableChannel = CoroutineReadableByteChannel(chunkChannel)
-
-        val plaintextChannel =
-          streamingAead.newDecryptingChannel(readableChannel, blobKey.encodeToByteArray())
-        emitAll(plaintextChannel.asFlow(BYTES_PER_MIB, streamingAeadContext))
-      } finally {
-        scope.cancel()
-      }
+    override fun read(): Flow<ByteString> {
+      val associatedData: ByteString = blobKey.toByteStringUtf8()
+      return streamingAead.decrypt(blob.read(), associatedData, READ_CHUNK_SIZE_BYTES)
     }
 
     override suspend fun delete() = blob.delete()
   }
 
   companion object {
+    private const val READ_CHUNK_SIZE_BYTES = BYTES_PER_MIB
     private val logger = Logger.getLogger(this::class.java.name)
+
+    init {
+      StreamingAeadConfig.register()
+    }
   }
 }

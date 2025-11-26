@@ -42,7 +42,7 @@ fun commandLineMain(command: KFunction<*>, args: Array<String>) {
 fun commandLineMain(
   command: Runnable,
   args: Array<String>,
-  format: DurationFormat = DurationFormat.HUMAN_READABLE
+  format: DurationFormat = DurationFormat.HUMAN_READABLE,
 ) {
   val status: Int = command.toCommandLine(format).execute(*args)
   if (status != 0) {

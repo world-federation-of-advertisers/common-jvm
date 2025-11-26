@@ -39,5 +39,5 @@ enum class LogSeverity(val number: Int) {
   /** A person must take an action immediately. */
   ALERT(700),
   /** One or more systems are unusable. */
-  EMERGENCY(800)
+  EMERGENCY(800),
 }

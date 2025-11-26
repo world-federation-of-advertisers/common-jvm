@@ -52,7 +52,7 @@ private enum class Asn1Tag(val byte: Byte) {
 
 /** ASN.1 context-specific tags for the X.509 v3 AuthorityKeyIdentifier extension. */
 private enum class AuthorityKeyIdentifierTag(val byte: Byte) {
-  KEY_IDENTIFIER(0x00.toByte()),
+  KEY_IDENTIFIER(0x00.toByte())
 }
 
 /**
@@ -101,7 +101,7 @@ private data class DefiniteLengthDescriptor(
           tagClass,
           tagNumber,
           octets[lengthIndex].toInt(),
-          lengthIndex + 1
+          lengthIndex + 1,
         )
       }
 
@@ -122,7 +122,7 @@ private data class DefiniteLengthDescriptor(
         tagClass,
         tagNumber,
         buffer.order(ByteOrder.BIG_ENDIAN).int,
-        lengthIndex + numAdditionalLengthOctets + 1
+        lengthIndex + numAdditionalLengthOctets + 1,
       )
     }
   }
@@ -144,7 +144,7 @@ val X509Certificate.subjectKeyIdentifier: ByteString?
     return ByteString.copyFrom(
       octets,
       keyIdentifierInfo.contentOffset,
-      keyIdentifierInfo.contentLength
+      keyIdentifierInfo.contentLength,
     )
   }
 
@@ -173,6 +173,6 @@ val X509Certificate.authorityKeyIdentifier: ByteString?
     return ByteString.copyFrom(
       octets,
       sequenceElementInfo.contentOffset,
-      sequenceElementInfo.contentLength
+      sequenceElementInfo.contentLength,
     )
   }

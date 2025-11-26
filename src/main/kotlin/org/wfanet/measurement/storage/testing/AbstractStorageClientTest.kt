@@ -21,6 +21,7 @@ import com.google.protobuf.kotlin.toByteStringUtf8
 import kotlin.random.Random
 import kotlin.test.assertNotNull
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import org.junit.Test
 import org.wfanet.measurement.common.BYTES_PER_MIB
@@ -102,9 +103,50 @@ abstract class AbstractStorageClientTest<T : StorageClient> {
     assertThat(blob).contentEqualTo(ByteString.EMPTY)
   }
 
+  @Test
+  fun `listBlobs with prefix gets blobs with blob keys that match the prefix`() = runBlocking {
+    prepareStorage()
+    val blobs = storageClient.listBlobs(prefix = "dir1").toList()
+    assertThat(blobs).hasSize(1)
+    assertThat(blobs.first().blobKey).isEqualTo(BLOB_KEY_1)
+  }
+
+  @Test
+  fun `listBlobs with prefix does not match middle of blob key`() = runBlocking {
+    prepareStorage()
+    val blobs = storageClient.listBlobs(prefix = "file2").toList()
+    assertThat(blobs).hasSize(0)
+  }
+
+  @Test
+  fun `listBlobs with empty prefix gets all blobs`() = runBlocking {
+    prepareStorage()
+    val blobs = storageClient.listBlobs(prefix = "").toList()
+    assertThat(blobs).hasSize(3)
+  }
+
+  @Test
+  fun `listBlobs with no arguments gets all blobs`() = runBlocking {
+    prepareStorage()
+    val blobs = storageClient.listBlobs().toList()
+    assertThat(blobs).hasSize(3)
+  }
+
+  private fun prepareStorage() {
+    runBlocking {
+      storageClient.writeBlob(BLOB_KEY_1, "content1".toByteStringUtf8())
+      storageClient.writeBlob(BLOB_KEY_2, "content2".toByteStringUtf8())
+      storageClient.writeBlob(BLOB_KEY_3, "content3".toByteStringUtf8())
+    }
+  }
+
   companion object {
     private val random = Random.Default
     private val testBlobContent: ByteString =
       random.nextBytes(random.nextInt(BYTES_PER_MIB * 3, BYTES_PER_MIB * 4)).toByteString()
+
+    private const val BLOB_KEY_1 = "dir1/file1.textproto"
+    private const val BLOB_KEY_2 = "dir2/file2.textproto"
+    private const val BLOB_KEY_3 = "file3.textproto"
   }
 }

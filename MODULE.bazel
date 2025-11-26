@@ -4,13 +4,13 @@ module(
     repo_name = "wfa_common_jvm",
 )
 
-KOTLINX_COROUTINES_VERSION = "1.8.1"  # Compatible with rules_kotlin_jvm version.
+KOTLINX_COROUTINES_VERSION = "1.10.2"  # Compatible with rules_kotlin_jvm version.
 
-PROTOBUF_JAVA_VERSION = "4.27.4"  # Compatible with rules_kotlin_jvm version.
+PROTOBUF_JAVA_VERSION = "4.29.5"  # Compatible with rules_kotlin_jvm version.
 
-GRPC_JAVA_VERSION = "1.66.0"  # Compatible with rules_kotlin_jvm version.
+GRPC_JAVA_VERSION = "1.75.0"  # Compatible with rules_kotlin_jvm version.
 
-GRPC_KOTLIN_VERSION = "1.4.1"  # Compatible with rules_kotlin_jvm version.
+GRPC_KOTLIN_VERSION = "1.5.0"  # Compatible with rules_kotlin_jvm version.
 
 # Note: The AWS SDK version needs to match with the EMR image version to avoid class conflicts at runtime.
 # Current version matches with the SDK version in EMR image 7.1.0
@@ -29,17 +29,17 @@ CLOUD_SQL_CONNECTOR_VERSION = "1.12.0"
 # See https://github.com/bazelbuild/bazel/discussions/23075.
 bazel_dep(
     name = "rules_kotlin_jvm",
-    version = "0.4.0",
+    version = "0.9.0",
     repo_name = "wfa_rules_kotlin_jvm",
 )
 bazel_dep(
     name = "googleapis",
-    version = "0.0.0-bzlmod.1",
+    version = "0.0.0-20250120-318818b.bzlmod.2",
     repo_name = "com_google_googleapis",
 )
 bazel_dep(
     name = "cloud-spanner-emulator-bin",
-    version = "1.5.23",
+    version = "1.5.37.libcxx.1",
     repo_name = "cloud_spanner_emulator",
 )
 
@@ -47,7 +47,7 @@ bazel_dep(
 
 bazel_dep(
     name = "platforms",
-    version = "0.0.10",
+    version = "1.0.0",
 )
 bazel_dep(
     name = "bazel_skylib",
@@ -55,19 +55,19 @@ bazel_dep(
 )
 bazel_dep(
     name = "rules_proto",
-    version = "6.0.2",
+    version = "7.1.0",
 )
 bazel_dep(
     name = "rules_pkg",
-    version = "0.9.1",
+    version = "1.0.1",
 )
 bazel_dep(
     name = "rules_java",
-    version = "7.11.1",
+    version = "8.15.2",
 )
 bazel_dep(
     name = "rules_kotlin",
-    version = "1.9.6",
+    version = "2.1.9",
 )
 bazel_dep(
     name = "rules_multirun",
@@ -75,12 +75,12 @@ bazel_dep(
 )
 bazel_dep(
     name = "protobuf",
-    version = "27.3",
+    version = "29.5",
     repo_name = "com_google_protobuf",
 )
 bazel_dep(
     name = "rules_jvm_external",
-    version = "6.4",
+    version = "6.8",
 )
 bazel_dep(
     name = "rules_oci",
@@ -169,15 +169,24 @@ maven.artifact(
     artifact = "opentelemetry-sdk-testing",
     group = "io.opentelemetry",
 )
+maven.artifact(
+    artifact = "liquibase-postgresql",
+    exclusions = [
+        # TODO(liquibase/liquibase-postgresql#201): Remove when fixed.
+        "postgresql:postgresql",
+    ],
+    group = "org.liquibase.ext",
+    version = "4.33.0",
+)
 maven.install(
     name = "maven",
     artifacts = [
         "junit:junit:4.13.2",
         "org.conscrypt:conscrypt-openjdk-uber:2.5.2",
         "org.jetbrains:annotations:23.0.0",
-        "info.picocli:picocli:4.4.0",
+        "info.picocli:picocli:4.7.6",
         "com.google.code.gson:gson:2.10.1",
-        "io.netty:netty-handler:4.1.108.Final",
+        "io.netty:netty-handler:4.1.124.Final",
         "com.google.crypto.tink:tink:" + TINK_VERSION,
         "com.github.ben-manes.caffeine:caffeine:3.1.8",
 
@@ -208,11 +217,13 @@ maven.install(
         "com.google.cloud:google-cloud-core-grpc",
         "com.google.cloud:google-cloud-storage",
         "com.google.cloud:google-cloud-pubsub",
-        "com.google.cloud:google-cloud-nio",
         "com.google.cloud:google-cloud-spanner",
         "com.google.cloud:google-cloud-bigquery",
         "com.google.cloud.functions:functions-framework-api:1.1.0",
         "com.google.cloud:google-cloudevent-types:0.16.0",
+        "com.google.auth:google-auth-library-oauth2-http",
+        "com.google.auth:google-auth-library-credentials",
+        "com.google.crypto.tink:tink-gcpkms:1.9.0",
 
         # Cloud Functions
         "io.cloudevents:cloudevents-core",
@@ -236,16 +247,14 @@ maven.install(
         "com.google.cloud.sql:postgres-socket-factory:" + CLOUD_SQL_CONNECTOR_VERSION,
         "com.google.cloud.sql:cloud-sql-connector-r2dbc-core:" + CLOUD_SQL_CONNECTOR_VERSION,
         "com.google.cloud.sql:cloud-sql-connector-r2dbc-postgres:" + CLOUD_SQL_CONNECTOR_VERSION,
-        "org.postgresql:postgresql:42.7.0",
-        "org.postgresql:r2dbc-postgresql:1.0.4.RELEASE",
+        "org.postgresql:postgresql:42.7.7",
+        "org.postgresql:r2dbc-postgresql:1.0.7.RELEASE",
         "io.r2dbc:r2dbc-spi:1.0.0.RELEASE",
-        "io.r2dbc:r2dbc-pool:1.0.0.RELEASE",
 
         # Liquibase.
         "org.yaml:snakeyaml:2.2",
-        "org.liquibase:liquibase-core:4.26.0",
-        "com.google.cloudspannerecosystem:liquibase-spanner:4.25.1",
-        "org.liquibase.ext:liquibase-postgresql:4.11.0",
+        "org.liquibase:liquibase-core:4.33.0",
+        "com.google.cloudspannerecosystem:liquibase-spanner:4.32.0",
 
         # Math library.
         "org.apache.commons:commons-math3:3.6.1",
@@ -265,15 +274,20 @@ maven.install(
         "org.jetbrains.kotlinx:kotlinx-coroutines-bom:" + KOTLINX_COROUTINES_VERSION,
         "com.google.protobuf:protobuf-bom:" + PROTOBUF_JAVA_VERSION,
         "io.grpc:grpc-bom:" + GRPC_JAVA_VERSION,
-        "com.google.cloud:libraries-bom:26.45.0",
+        "com.google.cloud:libraries-bom:26.62.0",
         "software.amazon.awssdk:bom:" + AWS_JAVA_SDK_VERSION,
         "io.opentelemetry:opentelemetry-bom:1.42.1",
-        "org.testcontainers:testcontainers-bom:1.19.3",
+        "org.testcontainers:testcontainers-bom:1.21.3",
         "io.projectreactor:reactor-bom:2023.0.9",
         "io.cloudevents:cloudevents-bom:4.0.1",
     ],
     fail_if_repin_required = True,
     fetch_sources = True,
+    known_contributing_modules = [
+        "bazel_worker_java",
+        "common-jvm",
+        "rules_kotlin_jvm",
+    ],
     lock_file = "//:maven_install.json",
     repositories = [
         "https://maven.google.com",
@@ -288,14 +302,14 @@ oci = use_extension("@rules_oci//oci:extensions.bzl", "oci")
 oci.pull(
     name = "java_image_base",
     # Digest of nonroot tag.
-    digest = "sha256:2db4acff2603088acaf67dac414462c9fcc3e2cc3ff9a642d5af9c7cff2b5fe9",
+    digest = "sha256:045d4d33b19383ea3955495093083de7ef96096a58b5fbb782952f9d456e6df8",
     image = "gcr.io/distroless/java17-debian12",
     platforms = ["linux/amd64"],
 )
 oci.pull(
     name = "java_debug_image_base",
     # Digest of debug-nonroot tag.
-    digest = "sha256:ba4e9fa14e71499ec20b70599d0528a1636941b04c54ab08b3bc69468c1837c8",
+    digest = "sha256:be8ef44736f1b68e878655c1536ed646467d0517c00057a1aff5022a5aecd1cd",
     image = "gcr.io/distroless/java17-debian12",
     platforms = ["linux/amd64"],
 )

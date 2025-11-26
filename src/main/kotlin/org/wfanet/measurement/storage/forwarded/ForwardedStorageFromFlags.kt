@@ -30,7 +30,7 @@ class ForwardedStorageFromFlags(flags: Flags, tlsFlags: TlsFlags) {
         buildTlsChannel(
           flags.forwardedStorageServiceTarget,
           trustedCerts,
-          flags.forwardedStorageCertHost
+          flags.forwardedStorageCertHost,
         )
       )
     )
@@ -40,7 +40,7 @@ class ForwardedStorageFromFlags(flags: Flags, tlsFlags: TlsFlags) {
     @CommandLine.Option(
       names = ["--forwarded-storage-service-target"],
       description = ["gRPC target (authority string or URI) for ForwardedStorage service."],
-      required = true
+      required = true,
     )
     lateinit var forwardedStorageServiceTarget: String
       private set
@@ -48,7 +48,7 @@ class ForwardedStorageFromFlags(flags: Flags, tlsFlags: TlsFlags) {
     @CommandLine.Option(
       names = ["--forwarded-storage-cert-host"],
       description = ["Expected hostname of ForwardedStorage service's TLS certificate."],
-      required = false
+      required = false,
     )
     var forwardedStorageCertHost: String? = null
       private set

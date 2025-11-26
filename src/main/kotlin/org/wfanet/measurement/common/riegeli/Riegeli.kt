@@ -55,7 +55,7 @@ object Riegeli {
       0x2f696c6567656952,
       0x0a7364726f636572,
       0x2f696c6567656952,
-      0x0a7364726f636572
+      0x0a7364726f636572,
     )
   }
 
@@ -152,7 +152,7 @@ object Riegeli {
     val chunkType: Byte,
     val numRecords: ByteString,
     val decodedDataSize: ByteString,
-    val data: ByteBuffer
+    val data: ByteBuffer,
   ) {
 
     init {
@@ -243,7 +243,7 @@ object Riegeli {
         dataHash: ByteString,
         chunkType: Byte,
         numRecords: ByteString,
-        decodedDataSize: ByteString
+        decodedDataSize: ByteString,
       ): Boolean {
 
         val highwayHash = buildHighwayHash()
@@ -272,7 +272,7 @@ object Riegeli {
       private fun isValidData(
         dataSize: ByteString,
         dataHash: ByteString,
-        data: ByteBuffer
+        data: ByteBuffer,
       ): Boolean {
         val highwayHash = buildHighwayHash()
 
@@ -316,7 +316,7 @@ object Riegeli {
     private fun readCompressedBuffer(
       dataBuffer: ByteBuffer,
       compressedSize: Int,
-      compressionType: Byte
+      compressionType: Byte,
     ): ByteBuffer {
       val startingPoint = dataBuffer.position()
 
@@ -441,7 +441,7 @@ object Riegeli {
   private constructor(
     val headerHash: ByteString,
     val previousChunk: ByteString,
-    val nextChunk: ByteString
+    val nextChunk: ByteString,
   ) {
 
     init {
@@ -492,7 +492,7 @@ object Riegeli {
       private fun isValid(
         headerHash: ByteString,
         previousChunk: ByteString,
-        nextChunk: ByteString
+        nextChunk: ByteString,
       ): Boolean {
         val highwayHash = buildHighwayHash()
 

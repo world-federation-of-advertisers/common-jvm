@@ -14,34 +14,24 @@
 
 package org.wfanet.measurement.gcloud.spanner.testing
 
+import java.io.IOException
 import java.net.ServerSocket
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
-import kotlin.coroutines.CoroutineContext
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.yield
-import org.jetbrains.annotations.BlockingExecutor
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.concurrent.thread
 import org.wfanet.measurement.common.getRuntimePath
 
 private const val EMULATOR_HOSTNAME = "localhost"
-private const val INVALID_HOST_MESSAGE =
-  "emulator host must be of the form $EMULATOR_HOSTNAME:<port>"
 
 /**
  * Wrapper for Cloud Spanner Emulator binary.
  *
  * @param port TCP port that the emulator should listen on, or 0 to allocate a port automatically
- * @param coroutineContext Context for operations that may block
  */
-class SpannerEmulator(
-  private val port: Int = 0,
-  private val coroutineContext: @BlockingExecutor CoroutineContext = Dispatchers.IO,
-) : AutoCloseable {
-  private val startMutex = Mutex()
+class SpannerEmulator(private val port: Int = 0) : AutoCloseable {
   @Volatile private lateinit var emulator: Process
 
   val started: Boolean
@@ -54,6 +44,10 @@ class SpannerEmulator(
       return _emulatorHost!!
     }
 
+  private val closed = AtomicBoolean(false)
+  private lateinit var readThread: Thread
+  private val errOutput = StringBuilder()
+
   /**
    * Starts the emulator process if it has not already been started.
    *
@@ -61,52 +55,71 @@ class SpannerEmulator(
    *
    * @returns the emulator host
    */
-  suspend fun start(): String {
+  @Synchronized
+  fun start(): String {
     if (started) {
       return emulatorHost
     }
+    // Open a socket on `port`. This should reduce the likelihood that the port
+    // is in use. Additionally, this will allocate a port if `port` is 0.
+    val localPort = ServerSocket(port).use { it.localPort }
 
-    return startMutex.withLock {
-      // Double-checked locking.
-      if (started) {
-        return@withLock emulatorHost
-      }
+    val emulatorHost = "$EMULATOR_HOSTNAME:$localPort"
+    _emulatorHost = emulatorHost
+    emulator = ProcessBuilder(emulatorPath.toString(), "--host_port=$emulatorHost").start()
 
-      return withContext(coroutineContext) {
-        // Open a socket on `port`. This should reduce the likelihood that the port
-        // is in use. Additionally, this will allocate a port if `port` is 0.
-        val localPort = ServerSocket(port).use { it.localPort }
+    // Message output by simulator which indicates that it is ready.
+    val readyMessage = "Server address: $emulatorHost"
 
-        val emulatorHost = "$EMULATOR_HOSTNAME:$localPort"
-        _emulatorHost = emulatorHost
-        emulator = ProcessBuilder(emulatorPath.toString(), "--host_port=$emulatorHost").start()
+    val readyFuture = CompletableFuture<Unit>()
 
-        // Message output by simulator which indicates that it is ready.
-        val readyMessage = "Server address: $emulatorHost"
-
+    readThread =
+      thread(start = true, isDaemon = true) {
         emulator.errorStream.use { input ->
           input.bufferedReader().use { reader ->
-            do {
-              yield()
-              check(emulator.isAlive) { "Emulator stopped unexpectedly" }
-              val line = reader.readLine()
-            } while (!line.contains(readyMessage))
+            while (true) {
+              val line = reader.readLine() ?: break
+              errOutput.appendLine(line)
+              if (line.contains(readyMessage)) {
+                readyFuture.complete(Unit)
+              }
+            }
           }
         }
+        if (!readyFuture.isDone) {
+          readyFuture.completeExceptionally(
+            IOException(
+              "Emulator exited unexpectedly with code ${emulator.exitValue()}: $errOutput"
+            )
+          )
+        }
+      }
 
-        emulatorHost
+    readyFuture.join()
+    return emulatorHost
+  }
+
+  @Synchronized
+  override fun close() {
+    if (started && !closed.get()) {
+      closed.set(true)
+      readThread.interrupt()
+      emulator.destroy()
+      onExit().join()
+    }
+  }
+
+  /** Returns a future for the termination of the emulator process. */
+  fun onExit(): CompletableFuture<Unit> {
+    synchronized(this) { check(started) { "Not started" } }
+    return emulator.onExit().thenApply { process ->
+      if (!closed.get()) {
+        throw IOException(
+          "Emulator exited unexpectedly with code ${process.exitValue()}: $errOutput"
+        )
       }
     }
   }
-
-  override fun close() {
-    if (started) {
-      emulator.destroy()
-    }
-  }
-
-  fun buildJdbcConnectionString(project: String, instance: String, database: String): String =
-    buildJdbcConnectionString(emulatorHost, project, instance, database)
 
   companion object {
     private val emulatorPath: Path
@@ -120,16 +133,6 @@ class SpannerEmulator(
       check(Files.isExecutable(runtimePath)) { "$runtimePath is not executable" }
 
       emulatorPath = runtimePath
-    }
-
-    fun withHost(emulatorHost: String): SpannerEmulator {
-      val lazyMessage: () -> String = { INVALID_HOST_MESSAGE }
-
-      val parts = emulatorHost.split(':', limit = 2)
-      require(parts.size == 2 && parts[0] == EMULATOR_HOSTNAME, lazyMessage)
-      val port = requireNotNull(parts[1].toIntOrNull(), lazyMessage)
-
-      return SpannerEmulator(port)
     }
 
     fun buildJdbcConnectionString(

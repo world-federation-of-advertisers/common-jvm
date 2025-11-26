@@ -18,8 +18,8 @@ package org.wfanet.measurement.storage
 
 import com.google.common.truth.Truth.assertThat
 import com.google.protobuf.ByteString
-import java.lang.NumberFormatException
 import kotlin.test.assertFailsWith
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
@@ -30,7 +30,10 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
+import org.wfanet.measurement.storage.testing.ComplexMessage
+import org.wfanet.measurement.storage.testing.ComplexMessageKt
 import org.wfanet.measurement.storage.testing.InMemoryStorageClient
+import org.wfanet.measurement.storage.testing.complexMessage
 
 @RunWith(JUnit4::class)
 class MesosRecordIoStorageClientTest {
@@ -162,24 +165,91 @@ class MesosRecordIoStorageClientTest {
       requireNotNull(blob) { "Blob should exist" }
 
       when {
-        invalidContent.startsWith("-5") -> {
-          assertFailsWith<IllegalArgumentException>(
-            "Expected IllegalArgumentException for content: $invalidContent"
-          ) {
-            blob.read().collect {}
-          }
-        }
         !invalidContent.startsWith("100") -> {
-          assertFailsWith<NumberFormatException>(
-            "Expected NumberFormatException for content: $invalidContent"
-          ) {
-            blob.read().collect {}
-          }
+          assertFailsWith<IllegalArgumentException> { blob.read().collect {} }
         }
         else -> {
           blob.read().collect {}
         }
       }
     }
+  }
+
+  @Test
+  fun `test writing and reading multiple complex records`() = runBlocking {
+    val testSubMessage =
+      ComplexMessageKt.subMessage {
+        field1 += listOf(1, 2, 3)
+        field2 = ComplexMessage.Enum.STATE_2
+        field3 = (1..1000).map { ('a'..'z').random() }.joinToString("")
+        field4 = 100L
+      }
+    val testData = complexMessage {
+      field1 += listOf(1, 2, 3)
+      field2 += listOf(testSubMessage, testSubMessage)
+      field3 = 100.0
+    }
+    val numRecords = 2
+    val blobKey = "test-single-record"
+    val data: Flow<ByteString> = flow { repeat(numRecords) { emit(testData.toByteString()) } }
+    mesosRecordIoStorageClient.writeBlob(blobKey, data)
+    val blob = mesosRecordIoStorageClient.getBlob(blobKey)
+    requireNotNull(blob) { "Blob should exist" }
+    val records = blob.read().toList()
+    assertThat(records.size).isEqualTo(numRecords)
+    for (record in records) {
+      assertThat(testData).isEqualTo(ComplexMessage.parseFrom(record))
+    }
+  }
+
+  @Test
+  fun `test reading blob when record size and record delimiter are splitted across two chunks`() =
+    runBlocking {
+      val payload = "my-payload"
+      val sizeStr = payload.length.toString()
+      val chunk1 = ByteString.copyFromUtf8(sizeStr)
+      val chunk2 = ByteString.copyFromUtf8("\n" + payload)
+      val client = makeClientWithChunks(chunk1, chunk2)
+      val blob = client.getBlob("fake-blob-key")!!
+      val records = blob.read().toList()
+      assertThat(records).hasSize(1)
+      assertThat(records[0].toStringUtf8()).isEqualTo(payload)
+    }
+
+  @Test
+  fun `test reading blob when record size is splitted across two chunks`() = runBlocking {
+    val payload = "my-payload"
+    val sizeStr = payload.length.toString()
+    val chunk1 = ByteString.copyFromUtf8(sizeStr.take(2))
+    val chunk2 = ByteString.copyFromUtf8(sizeStr.drop(2) + "\n" + payload)
+    val client = makeClientWithChunks(chunk1, chunk2)
+    val blob = client.getBlob("fake-blob-key")!!
+    val records = blob.read().toList()
+    assertThat(records).hasSize(1)
+    assertThat(records[0].toStringUtf8()).isEqualTo(payload)
+  }
+
+  private fun makeClientWithChunks(vararg chunks: ByteString) =
+    MesosRecordIoStorageClient(
+      object : StorageClient {
+        override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>) =
+          throw UnsupportedOperationException("not used")
+
+        override suspend fun getBlob(blobKey: String) = FakeBlob(chunks.toList())
+
+        override suspend fun listBlobs(prefix: String?) =
+          throw UnsupportedOperationException("not used")
+      }
+    )
+
+  private class FakeBlob(private val chunks: List<ByteString>) : StorageClient.Blob {
+    override val blobKey: String = "fake"
+    override val size: Long = chunks.sumOf { it.size().toLong() }
+    override val storageClient: StorageClient
+      get() = throw UnsupportedOperationException("n/a")
+
+    override fun read(): Flow<ByteString> = flow { for (c in chunks) emit(c) }
+
+    override suspend fun delete() = Unit
   }
 }

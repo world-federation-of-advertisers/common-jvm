@@ -14,10 +14,13 @@
 
 package org.wfanet.measurement.gcloud.pubsub
 
+import com.google.api.gax.batching.FlowControlSettings
 import com.google.cloud.pubsub.v1.AckReplyConsumer
 import com.google.cloud.pubsub.v1.MessageReceiver
 import com.google.cloud.pubsub.v1.Publisher as GooglePublisher
 import com.google.cloud.pubsub.v1.Subscriber as GoogleSubscriber
+import com.google.cloud.pubsub.v1.SubscriptionAdminClient
+import com.google.cloud.pubsub.v1.SubscriptionAdminSettings
 import com.google.cloud.pubsub.v1.TopicAdminClient
 import com.google.cloud.pubsub.v1.TopicAdminSettings
 import com.google.pubsub.v1.ProjectSubscriptionName
@@ -27,7 +30,17 @@ import org.threeten.bp.Duration
 
 class DefaultGooglePubSubClient : GooglePubSubClient() {
   override fun buildTopicAdminClient(): TopicAdminClient {
-    return TopicAdminClient.create(TopicAdminSettings.newBuilder().build())
+    logger.info("Building TopicAdminClient")
+    val client = TopicAdminClient.create(TopicAdminSettings.newBuilder().build())
+    logger.info("TopicAdminClient built successfully")
+    return client
+  }
+
+  override fun buildSubscriptionAdminClient(): SubscriptionAdminClient {
+    logger.info("Building SubscriptionAdminClient")
+    val client = SubscriptionAdminClient.create(SubscriptionAdminSettings.newBuilder().build())
+    logger.info("SubscriptionAdminClient built successfully")
+    return client
   }
 
   override fun buildSubscriber(
@@ -36,18 +49,32 @@ class DefaultGooglePubSubClient : GooglePubSubClient() {
     ackExtensionPeriod: Duration,
     messageHandler: (PubsubMessage, AckReplyConsumer) -> Unit,
   ): GoogleSubscriber {
+    logger.info(
+      "Building Subscriber for subscription: $subscriptionId in project: $projectId with ackExtensionPeriod: $ackExtensionPeriod"
+    )
+
+    val flow =
+      FlowControlSettings.newBuilder()
+        .setMaxOutstandingElementCount(1L) // At most one leased message per VM
+        .build()
 
     val subscriptionName = ProjectSubscriptionName.format(projectId, subscriptionId)
     val messageReceiver = MessageReceiver { message, consumer -> messageHandler(message, consumer) }
     val subscriberBuilder =
       GoogleSubscriber.newBuilder(subscriptionName, messageReceiver)
+        .setFlowControlSettings(flow)
         .setMaxAckExtensionPeriod(ackExtensionPeriod)
 
-    return subscriberBuilder.build()
+    val subscriber = subscriberBuilder.build()
+    logger.info("Subscriber built successfully for subscription: $subscriptionId")
+    return subscriber
   }
 
   override fun buildPublisher(projectId: String, topicId: String): GooglePublisher {
+    logger.info("Building Publisher for topic: $topicId in project: $projectId")
     val topicName = TopicName.of(projectId, topicId)
-    return GooglePublisher.newBuilder(topicName).build()
+    val publisher = GooglePublisher.newBuilder(topicName).build()
+    logger.info("Publisher built successfully for topic: $topicId")
+    return publisher
   }
 }

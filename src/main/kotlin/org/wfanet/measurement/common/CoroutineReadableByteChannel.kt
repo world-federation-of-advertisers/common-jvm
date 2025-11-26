@@ -16,7 +16,9 @@ package org.wfanet.measurement.common
 
 import com.google.protobuf.ByteString
 import java.nio.ByteBuffer
+import java.nio.channels.ClosedChannelException
 import java.nio.channels.ReadableByteChannel
+import kotlinx.coroutines.channels.ChannelResult
 import kotlinx.coroutines.channels.ReceiveChannel
 
 /**
@@ -24,64 +26,56 @@ import kotlinx.coroutines.channels.ReceiveChannel
  * This class enables coroutine-friendly, asynchronous reads by delegating read operations to a
  * coroutine channel.
  *
- * @constructor Creates a readable channel that reads each [ByteString] from the provided
- *   [ReceiveChannel] and writes it to the specified [ByteBuffer].
  * @property delegate The [ReceiveChannel] from which this [ReadableByteChannel] will read data.
  */
 class CoroutineReadableByteChannel(private val delegate: ReceiveChannel<ByteString>) :
   ReadableByteChannel {
 
-  private var remainingBuffer: ByteBuffer = ByteString.EMPTY.asReadOnlyByteBuffer()
+  private var closed = false
 
-  /**
-   * Reads bytes from the [ReceiveChannel] and transfers them into the provided buffer. If there are
-   * leftover bytes from a previous read that didn’t fit in the buffer, they are written first.
-   *
-   * When the [ReceiveChannel] has no data available:
-   * - Returns `0` if the channel is open but temporarily empty, allowing the caller to retry later.
-   * - Returns `-1` if the channel is closed and no more data will arrive.
-   *
-   * If only part of a [ByteString] fits into `destination`, the unread portion is saved for future
-   * reads, ensuring data is preserved between calls.
-   *
-   * @param destination The [ByteBuffer] where data will be written.
-   * @return The number of bytes written to `destination`, `0` if no data is available, or `-1` if
-   *   the channel is closed and all data has been read.
-   */
+  /** Buffer of bytes read from [delegate] but not yet read by the caller. */
+  private var sourceBuffer: ByteBuffer = ByteString.EMPTY.asReadOnlyByteBuffer()
+
   override fun read(destination: ByteBuffer): Int {
-
-    if (remainingBuffer.hasRemaining()) {
-      val bytesWritten = writeToDestination(destination, remainingBuffer)
-      return bytesWritten
+    if (closed) {
+      throw ClosedChannelException()
     }
 
-    val result = delegate.tryReceive()
-    val byteString = result.getOrNull() ?: return if (result.isClosed) -1 else 0
-    remainingBuffer = byteString.asReadOnlyByteBuffer()
-    val bytesWritten = writeToDestination(destination, remainingBuffer)
-    return bytesWritten
+    var writtenCountBytes = 0
+    while (destination.hasRemaining()) {
+      // Read from delegate channel if source buffer is empty.
+      if (!sourceBuffer.hasRemaining()) {
+        val result: ChannelResult<ByteString> = delegate.tryReceive()
+        if (result.isFailure) {
+          if (result.isClosed) {
+            if (writtenCountBytes == 0) {
+              return -1
+            }
+          }
+          return writtenCountBytes
+        }
+
+        val source: ByteString = result.getOrThrow()
+        sourceBuffer = source.asReadOnlyByteBuffer()
+      }
+
+      // Put into destination buffer.
+      if (sourceBuffer.hasRemaining()) {
+        writtenCountBytes += destination.tryPut(sourceBuffer)
+      }
+    }
+
+    return writtenCountBytes
   }
 
-  /**
-   * Transfers bytes from source to destination ByteBuffer, limited by the remaining capacity of
-   * both buffers. Preserves the source buffer's original limit after the transfer.
-   *
-   * @param destination The target ByteBuffer to write data into
-   * @param source The source ByteBuffer to read data from
-   * @return The number of bytes transferred
-   */
-  private fun writeToDestination(destination: ByteBuffer, source: ByteBuffer): Int {
-    val bytesToWrite = minOf(destination.remaining(), source.remaining())
-    val originalLimit = source.limit()
-    source.limit(source.position() + bytesToWrite)
-    destination.put(source)
-    source.limit(originalLimit)
-    return bytesToWrite
-  }
-
-  override fun isOpen(): Boolean = !delegate.isClosedForReceive
+  override fun isOpen(): Boolean = !closed
 
   override fun close() {
+    if (closed) {
+      return
+    }
+
     delegate.cancel()
+    closed = true
   }
 }

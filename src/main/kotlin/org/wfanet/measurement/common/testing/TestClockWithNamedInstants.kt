@@ -25,8 +25,11 @@ import java.time.ZoneId
  */
 class TestClockWithNamedInstants(start: Instant) : Clock() {
   private val ticks = linkedMapOf("start" to start)
+
   override fun instant(): Instant = last()
+
   operator fun get(name: String): Instant = ticks[name] ?: error("No named test instant for $name")
+
   fun last() = ticks.toList().last().second
 
   /** Adds a tick event to the clock and ticks the clock forward by some fixed amount of seconds. */
@@ -37,5 +40,6 @@ class TestClockWithNamedInstants(start: Instant) : Clock() {
   }
 
   override fun withZone(zone: ZoneId?): Clock = error("Not implemented")
+
   override fun getZone() = error("Not implemented")
 }

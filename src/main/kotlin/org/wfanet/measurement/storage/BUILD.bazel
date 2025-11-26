@@ -27,10 +27,23 @@ kt_jvm_library(
 
 kt_jvm_library(
     name = "mesos_recordio_storage_client",
-    srcs = glob(["*.kt"]),
+    srcs = ["MesosRecordIoStorageClient.kt"],
     deps = [
         "//imports/kotlin/kotlinx/coroutines:core",
         "//src/main/kotlin/org/wfanet/measurement/common",
         "//src/main/kotlin/org/wfanet/measurement/storage:store",
+    ],
+)
+
+kt_jvm_library(
+    name = "selected_storage_client",
+    srcs = ["SelectedStorageClient.kt"],
+    deps = [
+        ":client",
+        "//imports/java/com/google/protobuf",
+        "//imports/kotlin/kotlinx/coroutines:core",
+        "//src/main/kotlin/org/wfanet/measurement/common",
+        "//src/main/kotlin/org/wfanet/measurement/gcloud/gcs",
+        "//src/main/kotlin/org/wfanet/measurement/storage/filesystem:client",
     ],
 )
