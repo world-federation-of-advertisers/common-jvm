@@ -1,5 +1,5 @@
 {
-  "lockFileVersion": 11,
+  "lockFileVersion": 13,
   "registryFileHashes": {
     "https://bcr.bazel.build/bazel_registry.json": "8a28e4aff06ee60aed2a8c281907fb8bcbf3b753c91fb5a5c57da3215d5b3497",
     "https://bcr.bazel.build/modules/abseil-cpp/20210324.2/MODULE.bazel": "7cd0312e064fde87c8d1cd79ba06c876bd23630c83466e9500321be55c96ace2",
@@ -12,8 +12,8 @@
     "https://bcr.bazel.build/modules/abseil-cpp/20240116.1/source.json": "9be551b8d4e3ef76875c0d744b5d6a504a27e3ae67bc6b28f46415fd2d2957da",
     "https://bcr.bazel.build/modules/abseil-py/2.1.0/MODULE.bazel": "5ebe5bf853769c65707e5c28f216798f7a4b1042015e6a36e6d03094d94bec8a",
     "https://bcr.bazel.build/modules/abseil-py/2.1.0/source.json": "0e8fc4f088ce07099c1cd6594c20c7ddbb48b4b3c0849b7d94ba94be88ff042b",
-    "https://bcr.bazel.build/modules/apple_support/1.5.0/MODULE.bazel": "50341a62efbc483e8a2a6aec30994a58749bd7b885e18dd96aa8c33031e558ef",
-    "https://bcr.bazel.build/modules/apple_support/1.5.0/source.json": "eb98a7627c0bc486b57f598ad8da50f6625d974c8f723e9ea71bd39f709c9862",
+    "https://bcr.bazel.build/modules/apple_support/1.23.1/MODULE.bazel": "53763fed456a968cf919b3240427cf3a9d5481ec5466abc9d5dc51bc70087442",
+    "https://bcr.bazel.build/modules/apple_support/1.23.1/source.json": "d888b44312eb0ad2c21a91d026753f330caa48a25c9b2102fae75eb2b0dcfdd2",
     "https://bcr.bazel.build/modules/aspect_bazel_lib/2.7.2/MODULE.bazel": "780d1a6522b28f5edb7ea09630748720721dfe27690d65a2d33aa7509de77e07",
     "https://bcr.bazel.build/modules/aspect_bazel_lib/2.7.2/source.json": "a9ee2898e86eb8106e67b2adcd63de788cd922dd82f90f6775f13b0bf2248d75",
     "https://bcr.bazel.build/modules/bazel_features/1.1.0/MODULE.bazel": "cfd42ff3b815a5f39554d97182657f8c4b9719568eb7fded2b9135f084bf760b",
@@ -26,6 +26,7 @@
     "https://bcr.bazel.build/modules/bazel_features/1.18.0/MODULE.bazel": "1be0ae2557ab3a72a57aeb31b29be347bcdc5d2b1eb1e70f39e3851a7e97041a",
     "https://bcr.bazel.build/modules/bazel_features/1.19.0/MODULE.bazel": "59adcdf28230d220f0067b1f435b8537dd033bfff8db21335ef9217919c7fb58",
     "https://bcr.bazel.build/modules/bazel_features/1.25.0/MODULE.bazel": "e2e60a10a6da64bbf533f15ca652bf61a033e41c2ed734d79a9a08ba87f68c1a",
+    "https://bcr.bazel.build/modules/bazel_features/1.27.0/MODULE.bazel": "621eeee06c4458a9121d1f104efb80f39d34deff4984e778359c60eaf1a8cb65",
     "https://bcr.bazel.build/modules/bazel_features/1.30.0/MODULE.bazel": "a14b62d05969a293b80257e72e597c2da7f717e1e69fa8b339703ed6731bec87",
     "https://bcr.bazel.build/modules/bazel_features/1.30.0/source.json": "b07e17f067fe4f69f90b03b36ef1e08fe0d1f3cac254c1241a1818773e3423bc",
     "https://bcr.bazel.build/modules/bazel_features/1.4.1/MODULE.bazel": "e45b6bb2350aff3e442ae1111c555e27eac1d915e77775f6fdc4b351b758b5d7",
@@ -56,6 +57,10 @@
     "https://bcr.bazel.build/modules/gazelle/0.40.0/MODULE.bazel": "42ba5378ebe845fca43989a53186ab436d956db498acde790685fe0e8f9c6146",
     "https://bcr.bazel.build/modules/gazelle/0.40.0/source.json": "1e5ef6e4d8b9b6836d93273c781e78ff829ea2e077afef7a57298040fa4f010a",
     "https://bcr.bazel.build/modules/google_benchmark/1.8.2/MODULE.bazel": "a70cf1bba851000ba93b58ae2f6d76490a9feb74192e57ab8e8ff13c34ec50cb",
+    "https://bcr.bazel.build/modules/googleapis-rules-registry/1.0.0/MODULE.bazel": "97c6a4d413b373d4cc97065da3de1b2166e22cbbb5f4cc9f05760bfa83619e24",
+    "https://bcr.bazel.build/modules/googleapis-rules-registry/1.0.0/source.json": "cf611c836a60e98e2e2ab2de8004f119e9f06878dcf4ea2d95a437b1b7a89fe9",
+    "https://bcr.bazel.build/modules/googleapis/0.0.0-20251127-8cd3749f/MODULE.bazel": "0a7d8e0130d168498b6d84873349ca2ccd5ceeb929ba7857ca5d3fbe84fd24d4",
+    "https://bcr.bazel.build/modules/googleapis/0.0.0-20251127-8cd3749f/source.json": "9fe9804a6a425f22428eddf184c397237e41f81dd28897213bc1217b9e17095b",
     "https://bcr.bazel.build/modules/googletest/1.11.0/MODULE.bazel": "3a83f095183f66345ca86aa13c58b59f9f94a2f81999c093d4eeaa2d262d12f4",
     "https://bcr.bazel.build/modules/googletest/1.14.0.bcr.1/MODULE.bazel": "22c31a561553727960057361aa33bf20fb2e98584bc4fec007906e27053f80c6",
     "https://bcr.bazel.build/modules/googletest/1.14.0.bcr.1/source.json": "41e9e129f80d8c8bf103a7acc337b76e54fad1214ac0a7084bf24f4cd924b8b4",
@@ -95,6 +100,7 @@
     "https://bcr.bazel.build/modules/rules_android/0.6.4/source.json": "95d3c233c81005ad95eadc9382fde7dc6bd2c61752361e463264ee8349c071fb",
     "https://bcr.bazel.build/modules/rules_cc/0.0.1/MODULE.bazel": "cb2aa0747f84c6c3a78dad4e2049c154f08ab9d166b1273835a8174940365647",
     "https://bcr.bazel.build/modules/rules_cc/0.0.10/MODULE.bazel": "ec1705118f7eaedd6e118508d3d26deba2a4e76476ada7e0e3965211be012002",
+    "https://bcr.bazel.build/modules/rules_cc/0.0.11/MODULE.bazel": "9f249c5624a4788067b96b8b896be10c7e8b4375dc46f6d8e1e51100113e0992",
     "https://bcr.bazel.build/modules/rules_cc/0.0.15/MODULE.bazel": "6704c35f7b4a72502ee81f61bf88706b54f06b3cbe5558ac17e2e14666cd5dcc",
     "https://bcr.bazel.build/modules/rules_cc/0.0.16/MODULE.bazel": "7661303b8fc1b4d7f532e54e9d6565771fea666fbdf839e0a86affcd02defe87",
     "https://bcr.bazel.build/modules/rules_cc/0.0.16/source.json": "227e83737046aa4f50015da48e98e0d8ab42fd0ec74d8d653b6cc9f9a357f200",
@@ -137,8 +143,8 @@
     "https://bcr.bazel.build/modules/rules_jvm_external/6.8/source.json": "c85e553d5ac17f7825cd85b9cceb500c64f9e44f0e93c7887469e430c4ae9eff",
     "https://bcr.bazel.build/modules/rules_kotlin/1.9.5/MODULE.bazel": "043a16a572f610558ec2030db3ff0c9938574e7dd9f58bded1bb07c0192ef025",
     "https://bcr.bazel.build/modules/rules_kotlin/1.9.6/MODULE.bazel": "d269a01a18ee74d0335450b10f62c9ed81f2321d7958a2934e44272fe82dcef3",
-    "https://bcr.bazel.build/modules/rules_kotlin/2.1.9/MODULE.bazel": "28576b494c054a52a75aadeb47533a8f8ce7853858e3b62426e24f57436fcaab",
-    "https://bcr.bazel.build/modules/rules_kotlin/2.1.9/source.json": "a9cea7b968eee397162a42e0e8ab6d5dfb8680320ba4e39a2f58d80ab2af0964",
+    "https://bcr.bazel.build/modules/rules_kotlin/2.1.10/MODULE.bazel": "cf3e4e04cebd799ffdd76f07a5fcc05f7b8c47bae73b780a694fe76746a69440",
+    "https://bcr.bazel.build/modules/rules_kotlin/2.1.10/source.json": "04a273e397fbb31ff3d328f44482c783feac979f33f3c2737fba880c84f8f340",
     "https://bcr.bazel.build/modules/rules_license/0.0.3/MODULE.bazel": "627e9ab0247f7d1e05736b59dbb1b6871373de5ad31c3011880b4133cafd4bd0",
     "https://bcr.bazel.build/modules/rules_license/0.0.7/MODULE.bazel": "088fbeb0b6a419005b89cf93fe62d9517c0a2b8bb56af3244af65ecfe37e7d5d",
     "https://bcr.bazel.build/modules/rules_license/1.0.0/MODULE.bazel": "a7fda60eefdf3d8c827262ba499957e4df06f659330bbe6cdbdb975b768bb65c",
@@ -196,7 +202,7 @@
     "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main/modules/abseil-cpp/20230802.1/MODULE.bazel": "not found",
     "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main/modules/abseil-cpp/20240116.1/MODULE.bazel": "not found",
     "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main/modules/abseil-py/2.1.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main/modules/apple_support/1.5.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main/modules/apple_support/1.23.1/MODULE.bazel": "not found",
     "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main/modules/aspect_bazel_lib/2.7.2/MODULE.bazel": "not found",
     "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main/modules/bazel_features/1.1.0/MODULE.bazel": "not found",
     "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main/modules/bazel_features/1.1.1/MODULE.bazel": "not found",
@@ -208,6 +214,7 @@
     "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main/modules/bazel_features/1.18.0/MODULE.bazel": "not found",
     "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main/modules/bazel_features/1.19.0/MODULE.bazel": "not found",
     "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main/modules/bazel_features/1.25.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main/modules/bazel_features/1.27.0/MODULE.bazel": "not found",
     "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main/modules/bazel_features/1.30.0/MODULE.bazel": "not found",
     "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main/modules/bazel_features/1.4.1/MODULE.bazel": "not found",
     "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main/modules/bazel_features/1.9.1/MODULE.bazel": "not found",
@@ -234,8 +241,8 @@
     "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main/modules/gazelle/0.36.0/MODULE.bazel": "not found",
     "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main/modules/gazelle/0.40.0/MODULE.bazel": "not found",
     "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main/modules/google_benchmark/1.8.2/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main/modules/googleapis/0.0.0-20250120-318818b.bzlmod.2/MODULE.bazel": "bc7b33b0bb086af82b8df26d22f377022bb8335a397a8f5ffdfa5447c4b21423",
-    "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main/modules/googleapis/0.0.0-20250120-318818b.bzlmod.2/source.json": "f6a10713fb40dd200f6d000dfcd367ef3eb1057d3c944b9b302c049beeaa2c83",
+    "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main/modules/googleapis-rules-registry/1.0.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main/modules/googleapis/0.0.0-20251127-8cd3749f/MODULE.bazel": "not found",
     "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main/modules/googletest/1.11.0/MODULE.bazel": "not found",
     "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main/modules/googletest/1.14.0.bcr.1/MODULE.bazel": "not found",
     "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main/modules/googletest/1.14.0/MODULE.bazel": "not found",
@@ -268,6 +275,7 @@
     "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main/modules/rules_android/0.6.4/MODULE.bazel": "not found",
     "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main/modules/rules_cc/0.0.1/MODULE.bazel": "not found",
     "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main/modules/rules_cc/0.0.10/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main/modules/rules_cc/0.0.11/MODULE.bazel": "not found",
     "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main/modules/rules_cc/0.0.15/MODULE.bazel": "not found",
     "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main/modules/rules_cc/0.0.16/MODULE.bazel": "not found",
     "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main/modules/rules_cc/0.0.2/MODULE.bazel": "not found",
@@ -305,9 +313,9 @@
     "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main/modules/rules_jvm_external/6.8/MODULE.bazel": "not found",
     "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main/modules/rules_kotlin/1.9.5/MODULE.bazel": "not found",
     "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main/modules/rules_kotlin/1.9.6/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main/modules/rules_kotlin/2.1.9/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main/modules/rules_kotlin_jvm/0.9.0/MODULE.bazel": "33cbd1ea82f2e676ac26a5801e0b2060d5d73d1b1e52b0af8192bedff22e6672",
-    "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main/modules/rules_kotlin_jvm/0.9.0/source.json": "098f291e8d9e116f4b52a891ab69b1fe9a5145867f3ae43189ad5fbb56260d64",
+    "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main/modules/rules_kotlin/2.1.10/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main/modules/rules_kotlin_jvm/0.10.0/MODULE.bazel": "5c0f8fb102fa23a25d64c6961c96ae42693f0b23226ebdaff33dc82112a63de2",
+    "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main/modules/rules_kotlin_jvm/0.10.0/source.json": "985890daab507dd3aa1399ddb0027413cb879a2b61cc82ca6b812cb75fd1218c",
     "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main/modules/rules_license/0.0.3/MODULE.bazel": "not found",
     "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main/modules/rules_license/0.0.7/MODULE.bazel": "not found",
     "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main/modules/rules_license/1.0.0/MODULE.bazel": "not found",
@@ -349,37 +357,9 @@
   },
   "selectedYankedVersions": {},
   "moduleExtensions": {
-    "@@apple_support~//crosstool:setup.bzl%apple_cc_configure_extension": {
-      "general": {
-        "bzlTransitiveDigest": "PjIds3feoYE8SGbbIq2SFTZy3zmxeO2tQevJZNDo7iY=",
-        "usagesDigest": "+hz7IHWN6A1oVJJWNDB6yZRG+RYhF76wAYItpAeIUIg=",
-        "recordedFileInputs": {},
-        "recordedDirentsInputs": {},
-        "envVariables": {},
-        "generatedRepoSpecs": {
-          "local_config_apple_cc_toolchains": {
-            "bzlFile": "@@apple_support~//crosstool:setup.bzl",
-            "ruleClassName": "_apple_cc_autoconf_toolchains",
-            "attributes": {}
-          },
-          "local_config_apple_cc": {
-            "bzlFile": "@@apple_support~//crosstool:setup.bzl",
-            "ruleClassName": "_apple_cc_autoconf",
-            "attributes": {}
-          }
-        },
-        "recordedRepoMappingEntries": [
-          [
-            "apple_support~",
-            "bazel_tools",
-            "bazel_tools"
-          ]
-        ]
-      }
-    },
     "@@aspect_bazel_lib~//lib:extensions.bzl%toolchains": {
       "general": {
-        "bzlTransitiveDigest": "qjpcu+jbmeT2L5+ioH/HKy64NswEV29s9cVZee/Nh3Y=",
+        "bzlTransitiveDigest": "JHtMcaMMpU/ILF1QDSyoS8AKwvd7mIaRWMqSlGJnXRY=",
         "usagesDigest": "yD4DXuvTljgtca6Sf2RbSMr+wv2ltleoabaAOGbQnh0=",
         "recordedFileInputs": {},
         "recordedDirentsInputs": {},
@@ -844,183 +824,9 @@
         ]
       }
     },
-    "@@googleapis~//:extensions.bzl%imports": {
-      "general": {
-        "bzlTransitiveDigest": "VXACEoJpwbI+uwMJbQ+ZVVcu/QlJNn8aDQpkQwrY60s=",
-        "usagesDigest": "tpxcAlGd6yIbdWOvVwVEqvXBI3SFgs5R6XpiYS6lSFI=",
-        "recordedFileInputs": {},
-        "recordedDirentsInputs": {},
-        "envVariables": {},
-        "generatedRepoSpecs": {
-          "com_google_googleapis_imports": {
-            "bzlFile": "@@googleapis~//:repository_rules.bzl",
-            "ruleClassName": "switched_rules",
-            "attributes": {
-              "rules": {
-                "proto_library_with_info": [
-                  "",
-                  ""
-                ],
-                "moved_proto_library": [
-                  "",
-                  ""
-                ],
-                "java_proto_library": [
-                  "",
-                  ""
-                ],
-                "java_grpc_library": [
-                  "",
-                  ""
-                ],
-                "java_gapic_library": [
-                  "",
-                  ""
-                ],
-                "java_gapic_test": [
-                  "",
-                  ""
-                ],
-                "java_gapic_assembly_gradle_pkg": [
-                  "",
-                  ""
-                ],
-                "py_proto_library": [
-                  "",
-                  ""
-                ],
-                "py_grpc_library": [
-                  "",
-                  ""
-                ],
-                "py_gapic_library": [
-                  "",
-                  ""
-                ],
-                "py_test": [
-                  "",
-                  ""
-                ],
-                "py_gapic_assembly_pkg": [
-                  "",
-                  ""
-                ],
-                "py_import": [
-                  "",
-                  ""
-                ],
-                "go_proto_library": [
-                  "",
-                  ""
-                ],
-                "go_grpc_library": [
-                  "",
-                  ""
-                ],
-                "go_library": [
-                  "",
-                  ""
-                ],
-                "go_test": [
-                  "",
-                  ""
-                ],
-                "go_gapic_library": [
-                  "",
-                  ""
-                ],
-                "go_gapic_assembly_pkg": [
-                  "",
-                  ""
-                ],
-                "cc_proto_library": [
-                  "",
-                  ""
-                ],
-                "cc_grpc_library": [
-                  "",
-                  ""
-                ],
-                "cc_gapic_library": [
-                  "",
-                  ""
-                ],
-                "php_proto_library": [
-                  "",
-                  "php_proto_library"
-                ],
-                "php_grpc_library": [
-                  "",
-                  "php_grpc_library"
-                ],
-                "php_gapic_library": [
-                  "",
-                  "php_gapic_library"
-                ],
-                "php_gapic_assembly_pkg": [
-                  "",
-                  "php_gapic_assembly_pkg"
-                ],
-                "nodejs_gapic_library": [
-                  "",
-                  "typescript_gapic_library"
-                ],
-                "nodejs_gapic_assembly_pkg": [
-                  "",
-                  "typescript_gapic_assembly_pkg"
-                ],
-                "ruby_proto_library": [
-                  "",
-                  ""
-                ],
-                "ruby_grpc_library": [
-                  "",
-                  ""
-                ],
-                "ruby_ads_gapic_library": [
-                  "",
-                  ""
-                ],
-                "ruby_cloud_gapic_library": [
-                  "",
-                  ""
-                ],
-                "ruby_gapic_assembly_pkg": [
-                  "",
-                  ""
-                ],
-                "csharp_proto_library": [
-                  "",
-                  ""
-                ],
-                "csharp_grpc_library": [
-                  "",
-                  ""
-                ],
-                "csharp_gapic_library": [
-                  "",
-                  ""
-                ],
-                "csharp_gapic_assembly_pkg": [
-                  "",
-                  ""
-                ]
-              }
-            }
-          }
-        },
-        "recordedRepoMappingEntries": [
-          [
-            "googleapis~",
-            "com_google_googleapis",
-            "googleapis~"
-          ]
-        ]
-      }
-    },
     "@@pybind11_bazel~//:python_configure.bzl%extension": {
       "general": {
-        "bzlTransitiveDigest": "whINYge95GgPtysKDbNHQ0ZlWYdtKybHs5y2tLF+x7Q=",
+        "bzlTransitiveDigest": "dFd3A3f+jPCss+EDKMp/jxjcUhfMku130eT1KGxSCwA=",
         "usagesDigest": "gNvOHVcAlwgDsNXD0amkv2CC96mnaCThPQoE44y8K+w=",
         "recordedFileInputs": {
           "@@pybind11_bazel~//MODULE.bazel": "88af1c246226d87e65be78ed49ecd1e6f5e98648558c14ce99176da041dc378e"
@@ -1056,7 +862,7 @@
     },
     "@@rules_android~//bzlmod_extensions:apksig.bzl%apksig_extension": {
       "general": {
-        "bzlTransitiveDigest": "+fNvC5PNWx1aA64JjkW33+1zGbG9xgfi70xQhxbglhY=",
+        "bzlTransitiveDigest": "aKgEcaKs136KEaPsvdlrHNWOCprOjeArHrv+jcplfNU=",
         "usagesDigest": "uDrl2Xk9+cPfQvHLt2WzWo0jqThMB7lbSCP/qNjnWbY=",
         "recordedFileInputs": {},
         "recordedDirentsInputs": {},
@@ -1099,7 +905,7 @@
     },
     "@@rules_fuzzing~//fuzzing/private:extensions.bzl%non_module_dependencies": {
       "general": {
-        "bzlTransitiveDigest": "hVgJRQ3Er45/UUAgNn1Yp2Khcp/Y8WyafA2kXIYmQ5M=",
+        "bzlTransitiveDigest": "VMhyxXtdJvrNlLts7afAymA+pOatXuh5kLdxzVAZ/04=",
         "usagesDigest": "YnIrdgwnf3iCLfChsltBdZ7yOJh706lpa2vww/i2pDI=",
         "recordedFileInputs": {},
         "recordedDirentsInputs": {},
@@ -1188,107 +994,9 @@
         ]
       }
     },
-    "@@rules_kotlin~//src/main/starlark/core/repositories:bzlmod_setup.bzl%rules_kotlin_extensions": {
-      "general": {
-        "bzlTransitiveDigest": "c6iPfz6Wb6gXFKT2shogk+bhm75TOuTrqklRqXYf+1A=",
-        "usagesDigest": "C1h2D3Hb1msnMNjJUuncwMdFAq6QTKftQg881rXKcr8=",
-        "recordedFileInputs": {},
-        "recordedDirentsInputs": {},
-        "envVariables": {},
-        "generatedRepoSpecs": {
-          "com_github_jetbrains_kotlin_git": {
-            "bzlFile": "@@rules_kotlin~//src/main/starlark/core/repositories:compiler.bzl",
-            "ruleClassName": "kotlin_compiler_git_repository",
-            "attributes": {
-              "urls": [
-                "https://github.com/JetBrains/kotlin/releases/download/v2.1.21/kotlin-compiler-2.1.21.zip"
-              ],
-              "sha256": "1ba08a8b45da99339a0601134cc037b54cf85e9bc0edbe76dcbd27c2d684a977"
-            }
-          },
-          "com_github_jetbrains_kotlin": {
-            "bzlFile": "@@rules_kotlin~//src/main/starlark/core/repositories:compiler.bzl",
-            "ruleClassName": "kotlin_capabilities_repository",
-            "attributes": {
-              "git_repository_name": "com_github_jetbrains_kotlin_git",
-              "compiler_version": "2.1.21"
-            }
-          },
-          "com_github_google_ksp": {
-            "bzlFile": "@@rules_kotlin~//src/main/starlark/core/repositories:ksp.bzl",
-            "ruleClassName": "ksp_compiler_plugin_repository",
-            "attributes": {
-              "urls": [
-                "https://github.com/google/ksp/releases/download/2.1.21-2.0.1/artifacts.zip"
-              ],
-              "sha256": "44e965bb067b2bb5cd9184dab2c3dea6e3eab747d341c07645bb4c88f09e49c8",
-              "strip_version": "2.1.21-2.0.1"
-            }
-          },
-          "com_github_pinterest_ktlint": {
-            "bzlFile": "@@bazel_tools//tools/build_defs/repo:http.bzl",
-            "ruleClassName": "http_file",
-            "attributes": {
-              "sha256": "5ba1ac917a06b0f02daaa60d10abbedd2220d60216af670c67a45b91c74cf8bb",
-              "urls": [
-                "https://github.com/pinterest/ktlint/releases/download/1.6.0/ktlint"
-              ],
-              "executable": true
-            }
-          },
-          "kotlinx_serialization_core_jvm": {
-            "bzlFile": "@@bazel_tools//tools/build_defs/repo:http.bzl",
-            "ruleClassName": "http_jar",
-            "attributes": {
-              "sha256": "3565b6d4d789bf70683c45566944287fc1d8dc75c23d98bd87d01059cc76f2b3",
-              "urls": [
-                "https://repo1.maven.org/maven2/org/jetbrains/kotlinx/kotlinx-serialization-core-jvm/1.8.1/kotlinx-serialization-core-jvm-1.8.1.jar"
-              ]
-            }
-          },
-          "kotlinx_serialization_json": {
-            "bzlFile": "@@bazel_tools//tools/build_defs/repo:http.bzl",
-            "ruleClassName": "http_jar",
-            "attributes": {
-              "sha256": "58adf3358a0f99dd8d66a550fbe19064d395e0d5f7f1e46515cd3470a56fbbb0",
-              "urls": [
-                "https://repo1.maven.org/maven2/org/jetbrains/kotlinx/kotlinx-serialization-json/1.8.1/kotlinx-serialization-json-1.8.1.jar"
-              ]
-            }
-          },
-          "kotlinx_serialization_json_jvm": {
-            "bzlFile": "@@bazel_tools//tools/build_defs/repo:http.bzl",
-            "ruleClassName": "http_jar",
-            "attributes": {
-              "sha256": "8769e5647557e3700919c32d508f5c5dad53c5d8234cd10846354fbcff14aa24",
-              "urls": [
-                "https://repo1.maven.org/maven2/org/jetbrains/kotlinx/kotlinx-serialization-json-jvm/1.8.1/kotlinx-serialization-json-jvm-1.8.1.jar"
-              ]
-            }
-          },
-          "kotlin_build_tools_impl": {
-            "bzlFile": "@@bazel_tools//tools/build_defs/repo:http.bzl",
-            "ruleClassName": "http_jar",
-            "attributes": {
-              "sha256": "6e94896e321603e3bfe89fef02478e44d1d64a3d25d49d0694892ffc01c60acf",
-              "urls": [
-                "https://repo1.maven.org/maven2/org/jetbrains/kotlin/kotlin-build-tools-impl/2.1.20/kotlin-build-tools-impl-2.1.20.jar"
-              ]
-            }
-          }
-        },
-        "recordedRepoMappingEntries": [
-          [
-            "rules_kotlin~",
-            "bazel_tools",
-            "bazel_tools"
-          ]
-        ]
-      }
-    },
     "@@rules_oci~//oci:extensions.bzl%oci": {
       "general": {
-        "bzlTransitiveDigest": "OVEJd+9OsTlLRRtoGhpS3F/POZeqAtCCl7TCPbI7Cjo=",
+        "bzlTransitiveDigest": "ctbUAaQYfE1kK7joe+VD+ViuaL27ygVh0Hc94Y7DXEY=",
         "usagesDigest": "UEN84T9eMtl4dSZ9zKKkdGokOEZtcAqO9iU05p29hAo=",
         "recordedFileInputs": {},
         "recordedDirentsInputs": {},
@@ -1812,7 +1520,7 @@
     },
     "@@rules_python~//python/private/pypi:pip.bzl%pip_internal": {
       "general": {
-        "bzlTransitiveDigest": "zILwI7T/k6h/pYfkRtV/lt28aBD2t8ctGSN/xk851fw=",
+        "bzlTransitiveDigest": "MmF9m46UdSuFKwrizNYQvDxFqq8Xtaclm79IR+fFC9Y=",
         "usagesDigest": "439oxGbekj6KqwCe9qVSTRFGrlIFvFmpkiA3bPw7e2k=",
         "recordedFileInputs": {
           "@@rules_python~//tools/publish/requirements.txt": "031e35d03dde03ae6305fe4b3d1f58ad7bdad857379752deede0f93649991b8a",
