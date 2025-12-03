@@ -33,11 +33,6 @@ bazel_dep(
     repo_name = "wfa_rules_kotlin_jvm",
 )
 bazel_dep(
-    name = "googleapis",
-    version = "0.0.0-20250120-318818b.bzlmod.2",
-    repo_name = "com_google_googleapis",
-)
-bazel_dep(
     name = "cloud-spanner-emulator-bin",
     version = "1.5.37.libcxx.1",
     repo_name = "cloud_spanner_emulator",
@@ -67,7 +62,7 @@ bazel_dep(
 )
 bazel_dep(
     name = "rules_kotlin",
-    version = "2.1.9",
+    version = "2.1.10",
 )
 bazel_dep(
     name = "rules_multirun",
@@ -77,6 +72,11 @@ bazel_dep(
     name = "protobuf",
     version = "29.5",
     repo_name = "com_google_protobuf",
+)
+bazel_dep(
+    name = "googleapis",
+    version = "0.0.0-20251127-8cd3749f",
+    repo_name = "com_google_googleapis",
 )
 bazel_dep(
     name = "rules_jvm_external",
@@ -185,10 +185,12 @@ maven.install(
         "org.conscrypt:conscrypt-openjdk-uber:2.5.2",
         "org.jetbrains:annotations:23.0.0",
         "info.picocli:picocli:4.7.6",
-        "com.google.code.gson:gson:2.10.1",
         "io.netty:netty-handler:4.1.124.Final",
         "com.google.crypto.tink:tink:" + TINK_VERSION,
         "com.github.ben-manes.caffeine:caffeine:3.1.8",
+        # TODO(bazelbuild/bazel-worker-api/issues#14): Remove versions when fixed.
+        "com.google.guava:guava:33.4.0-jre",
+        "com.google.code.gson:gson:2.12.1",
 
         # kotlinx-coroutines
         "org.jetbrains.kotlinx:kotlinx-coroutines-test",
@@ -197,8 +199,9 @@ maven.install(
         "org.jetbrains.kotlinx:kotlinx-coroutines-guava",
 
         # Protobuf.
-        "com.google.protobuf:protobuf-java",
-        "com.google.protobuf:protobuf-java-util",
+        # TODO(bazelbuild/bazel-worker-api/issues#14): Remove versions when fixed.
+        "com.google.protobuf:protobuf-java:" + PROTOBUF_JAVA_VERSION,
+        "com.google.protobuf:protobuf-java-util:" + PROTOBUF_JAVA_VERSION,
 
         # gRPC.
         "io.grpc:grpc-census",
@@ -209,7 +212,6 @@ maven.install(
         "io.grpc:grpc-inprocess",
 
         # Google Cloud.
-        "com.google.guava:guava",
         "com.google.api:api-common",
         "com.google.api:gax",
         "com.google.apis:google-api-services-bigquery:v2-rev20240815-2.0.0",
