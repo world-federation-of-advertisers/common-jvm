@@ -6,9 +6,9 @@ module(
 
 KOTLINX_COROUTINES_VERSION = "1.10.2"  # Compatible with rules_kotlin_jvm version.
 
-PROTOBUF_JAVA_VERSION = "4.29.5"  # Compatible with rules_kotlin_jvm version.
+PROTOBUF_JAVA_VERSION = "4.32.1"  # Compatible with rules_kotlin_jvm version.
 
-GRPC_JAVA_VERSION = "1.75.0"  # Compatible with rules_kotlin_jvm version.
+GRPC_JAVA_VERSION = "1.77.0"  # Compatible with rules_kotlin_jvm version.
 
 GRPC_KOTLIN_VERSION = "1.5.0"  # Compatible with rules_kotlin_jvm version.
 
@@ -29,7 +29,6 @@ CLOUD_SQL_CONNECTOR_VERSION = "1.12.0"
 # See https://github.com/bazelbuild/bazel/discussions/23075.
 bazel_dep(
     name = "rules_kotlin_jvm",
-    version = "0.10.0",
     repo_name = "wfa_rules_kotlin_jvm",
 )
 bazel_dep(
@@ -70,7 +69,7 @@ bazel_dep(
 )
 bazel_dep(
     name = "protobuf",
-    version = "29.5",
+    version = "32.1",
     repo_name = "com_google_protobuf",
 )
 bazel_dep(
@@ -333,4 +332,13 @@ http_archive(
     sha256 = "1e4e32f6198facbac7a35b04fa4c1acb5e6d9bb13f983c60903da9cbbbd9f5b5",
     strip_prefix = "highwayhash-a7f68e2f95fac08b24327d74747521cf634d5aff",
     url = "https://github.com/google/highwayhash/archive/a7f68e2f95fac08b24327d74747521cf634d5aff.tar.gz",
+)
+
+# TODO(world-federation-of-advertisers/rules_kotlin_jvm#18): Use version.
+archive_override(
+    module_name = "rules_kotlin_jvm",
+    urls = [
+        "https://github.com/world-federation-of-advertisers/rules_kotlin_jvm/archive/31da3060728bb0d73f576074c5e96bf074e96d65.tar.gz",
+    ],
+    strip_prefix = "rules_kotlin_jvm-31da3060728bb0d73f576074c5e96bf074e96d65",
 )
