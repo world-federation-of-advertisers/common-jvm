@@ -1065,7 +1065,7 @@
     "@@rules_oci~//oci:extensions.bzl%oci": {
       "general": {
         "bzlTransitiveDigest": "ctbUAaQYfE1kK7joe+VD+ViuaL27ygVh0Hc94Y7DXEY=",
-        "usagesDigest": "UEN84T9eMtl4dSZ9zKKkdGokOEZtcAqO9iU05p29hAo=",
+        "usagesDigest": "HpEjwvOhrv3nB81eaHbMJb7J7jxLjeddfp19Tj8x3vU=",
         "recordedFileInputs": {},
         "recordedDirentsInputs": {},
         "envVariables": {},
@@ -1077,7 +1077,7 @@
               "scheme": "https",
               "registry": "gcr.io",
               "repository": "distroless/java17-debian12",
-              "identifier": "sha256:daa1318b01203dba7f9fa56b3e0707d38ee3fdef8f71842a9261ff19f3b66540",
+              "identifier": "sha256:032c7e120a1f5e1667a9647f4b129b313fe0f095aeae46e39d7425f23bc48912",
               "platform": "linux/amd64",
               "target_name": "java_image_base_linux_amd64",
               "bazel_tags": []
@@ -1091,7 +1091,7 @@
               "scheme": "https",
               "registry": "gcr.io",
               "repository": "distroless/java17-debian12",
-              "identifier": "sha256:daa1318b01203dba7f9fa56b3e0707d38ee3fdef8f71842a9261ff19f3b66540",
+              "identifier": "sha256:032c7e120a1f5e1667a9647f4b129b313fe0f095aeae46e39d7425f23bc48912",
               "platforms": {
                 "@@platforms//cpu:x86_64": "@java_image_base_linux_amd64"
               },
@@ -1106,7 +1106,7 @@
               "scheme": "https",
               "registry": "gcr.io",
               "repository": "distroless/java17-debian12",
-              "identifier": "sha256:6343c6a034b5276869f59129d8a9da54bbaedb624a6424dbdd8ff2b8880912fc",
+              "identifier": "sha256:993202d1b1ab1e4faf07bf3084cd66ae6c43c87c4edc1d537550b65369784bf1",
               "platform": "linux/amd64",
               "target_name": "java_debug_image_base_linux_amd64",
               "bazel_tags": []
@@ -1120,7 +1120,7 @@
               "scheme": "https",
               "registry": "gcr.io",
               "repository": "distroless/java17-debian12",
-              "identifier": "sha256:6343c6a034b5276869f59129d8a9da54bbaedb624a6424dbdd8ff2b8880912fc",
+              "identifier": "sha256:993202d1b1ab1e4faf07bf3084cd66ae6c43c87c4edc1d537550b65369784bf1",
               "platforms": {
                 "@@platforms//cpu:x86_64": "@java_debug_image_base_linux_amd64"
               },
