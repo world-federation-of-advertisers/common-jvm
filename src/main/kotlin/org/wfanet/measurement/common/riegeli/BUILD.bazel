@@ -16,7 +16,7 @@ kt_jvm_library(
     ],
     deps = [
         "//imports/java/com/google/protobuf",
-        "//imports/java/org/apache/commons:compress",
+        "//imports/java/org/apache/commons/compress",
         "//imports/kotlin/com/google/protobuf/kotlin",
         "//src/main/kotlin/org/wfanet/measurement/common",
         "@com_google_highwayhash//:highway_hash",
