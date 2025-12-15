@@ -1,11 +1,6 @@
 package(default_visibility = ["//visibility:public"])
 
 alias(
-    name = "math3",
-    actual = "@maven//:org_apache_commons_commons_math3",
-)
-
-alias(
     name = "compress",
     actual = "@maven//:org_apache_commons_commons_compress",
 )
