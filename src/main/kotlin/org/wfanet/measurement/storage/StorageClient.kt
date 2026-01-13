@@ -76,6 +76,28 @@ interface ConditionalOperationStorageClient : StorageClient {
   suspend fun writeBlobIfUnchanged(blob: Blob, content: Flow<ByteString>): Blob
 }
 
+/**
+ * [StorageClient] which supports object metadata operations.
+ *
+ * This is useful for storage systems that support custom metadata and lifecycle management based on
+ * custom timestamps (e.g., GCS Custom-Time).
+ */
+interface ObjectMetadataStorageClient : StorageClient {
+  /**
+   * Updates metadata on an existing object.
+   *
+   * @param blobKey The key of the blob to update
+   * @param customTime Optional timestamp to set as Custom-Time (for lifecycle management)
+   * @param metadata Custom key-value metadata pairs
+   * @throws StorageException if update fails
+   */
+  suspend fun updateObjectMetadata(
+    blobKey: String,
+    customTime: java.time.Instant? = null,
+    metadata: Map<String, String> = emptyMap(),
+  )
+}
+
 open class StorageException(message: String?, cause: Throwable? = null) : Exception(message, cause)
 
 class BlobChangedException(message: String?, cause: Throwable? = null) :

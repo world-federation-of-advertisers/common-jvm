@@ -17,10 +17,14 @@ package org.wfanet.measurement.gcloud.gcs
 import com.google.api.gax.paging.Page
 import com.google.cloud.WriteChannel
 import com.google.cloud.storage.Blob
+import com.google.cloud.storage.BlobId
 import com.google.cloud.storage.BlobInfo
 import com.google.cloud.storage.Storage
 import com.google.cloud.storage.StorageException as GcsStorageException
 import com.google.protobuf.ByteString
+import java.time.Instant
+import java.time.OffsetDateTime
+import java.time.ZoneOffset
 import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.Dispatchers
@@ -37,6 +41,7 @@ import org.wfanet.measurement.common.BYTES_PER_MIB
 import org.wfanet.measurement.common.asFlow
 import org.wfanet.measurement.storage.BlobChangedException
 import org.wfanet.measurement.storage.ConditionalOperationStorageClient
+import org.wfanet.measurement.storage.ObjectMetadataStorageClient
 import org.wfanet.measurement.storage.StorageClient
 import org.wfanet.measurement.storage.StorageException
 
@@ -58,7 +63,7 @@ class GcsStorageClient(
   private val storage: Storage,
   val bucketName: String,
   private val blockingContext: @BlockingExecutor CoroutineContext = Dispatchers.IO,
-) : StorageClient, ConditionalOperationStorageClient {
+) : StorageClient, ConditionalOperationStorageClient, ObjectMetadataStorageClient {
 
   override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
     try {
@@ -135,6 +140,33 @@ class GcsStorageClient(
         }
       }
       .flowOn(blockingContext + CoroutineName("listBlobs"))
+  }
+
+  override suspend fun updateObjectMetadata(
+    blobKey: String,
+    customTime: Instant?,
+    metadata: Map<String, String>,
+  ) {
+    withContext(blockingContext + CoroutineName("updateObjectMetadata")) {
+      try {
+        val blobId = BlobId.of(bucketName, blobKey)
+        val blobInfoBuilder = BlobInfo.newBuilder(blobId)
+
+        if (customTime != null) {
+          blobInfoBuilder.setCustomTimeOffsetDateTime(
+            OffsetDateTime.ofInstant(customTime, ZoneOffset.UTC)
+          )
+        }
+
+        if (metadata.isNotEmpty()) {
+          blobInfoBuilder.setMetadata(metadata)
+        }
+
+        storage.update(blobInfoBuilder.build())
+      } catch (e: GcsStorageException) {
+        throw StorageException("Error updating metadata for blob with key $blobKey", e)
+      }
+    }
   }
 
   /** [StorageClient.Blob] implementation for [GcsStorageClient]. */
