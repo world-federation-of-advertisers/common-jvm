@@ -14,16 +14,18 @@
 
 package org.wfanet.measurement.gcloud.gcs
 
+import com.google.common.truth.Truth.assertThat
+import java.time.Instant
 import org.junit.After
 import org.junit.Before
 import org.junit.ClassRule
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 import org.wfanet.measurement.gcloud.gcs.testing.StorageEmulatorRule
-import org.wfanet.measurement.storage.testing.AbstractConditionalOperationStorageClientTest
+import org.wfanet.measurement.storage.testing.AbstractBlobMetadataStorageClientTest
 
 @RunWith(JUnit4::class)
-class GcsStorageClientTest : AbstractConditionalOperationStorageClientTest<GcsStorageClient>() {
+class GcsStorageClientTest : AbstractBlobMetadataStorageClientTest<GcsStorageClient>() {
   @Before
   fun initClient() {
     storageEmulator.createBucket(BUCKET)
@@ -33,6 +35,26 @@ class GcsStorageClientTest : AbstractConditionalOperationStorageClientTest<GcsSt
   @After
   fun deleteBucket() {
     storageEmulator.deleteBucketRecursive(BUCKET)
+  }
+
+  override suspend fun verifyBlobMetadata(
+    blobKey: String,
+    expectedCustomCreateTime: Instant?,
+    expectedMetadata: Map<String, String>,
+  ) {
+    val blob = storageEmulator.storage.get(BUCKET, blobKey)
+    checkNotNull(blob) { "Blob not found: $blobKey" }
+
+    if (expectedCustomCreateTime != null) {
+      val actualCustomTime = blob.customTimeOffsetDateTime
+      checkNotNull(actualCustomTime) { "Custom time not set on blob: $blobKey" }
+      assertThat(actualCustomTime.toInstant()).isEqualTo(expectedCustomCreateTime)
+    }
+
+    if (expectedMetadata.isNotEmpty()) {
+      val actualMetadata = blob.metadata ?: emptyMap()
+      assertThat(actualMetadata).containsAtLeastEntriesIn(expectedMetadata)
+    }
   }
 
   companion object {

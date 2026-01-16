@@ -15,6 +15,7 @@
 package org.wfanet.measurement.storage
 
 import com.google.protobuf.ByteString
+import java.time.Instant
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import org.wfanet.measurement.storage.StorageClient.Blob
@@ -74,6 +75,28 @@ interface ConditionalOperationStorageClient : StorageClient {
    * @throws StorageException if write failed
    */
   suspend fun writeBlobIfUnchanged(blob: Blob, content: Flow<ByteString>): Blob
+}
+
+/**
+ * [StorageClient] which supports blob metadata operations.
+ *
+ * This is useful for storage systems that support custom metadata and lifecycle management based on
+ * custom timestamps (e.g., GCS Custom-Time).
+ */
+interface BlobMetadataStorageClient : StorageClient {
+  /**
+   * Updates metadata on an existing blob.
+   *
+   * @param blobKey The key of the blob to update
+   * @param customCreateTime Optional custom create timestamp (for lifecycle management)
+   * @param metadata Custom key-value metadata pairs
+   * @throws StorageException if update fails
+   */
+  suspend fun updateBlobMetadata(
+    blobKey: String,
+    customCreateTime: Instant? = null,
+    metadata: Map<String, String> = emptyMap(),
+  )
 }
 
 open class StorageException(message: String?, cause: Throwable? = null) : Exception(message, cause)
