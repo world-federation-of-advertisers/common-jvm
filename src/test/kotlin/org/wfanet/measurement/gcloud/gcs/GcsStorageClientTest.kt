@@ -16,7 +16,6 @@ package org.wfanet.measurement.gcloud.gcs
 
 import com.google.common.truth.Truth.assertThat
 import java.time.Instant
-import java.time.ZoneOffset
 import org.junit.After
 import org.junit.Before
 import org.junit.ClassRule

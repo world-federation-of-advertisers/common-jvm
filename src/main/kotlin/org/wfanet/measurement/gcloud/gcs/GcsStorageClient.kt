@@ -147,6 +147,10 @@ class GcsStorageClient(
     customTime: Instant?,
     metadata: Map<String, String>,
   ) {
+    if (customTime == null && metadata.isEmpty()) {
+      return
+    }
+
     withContext(blockingContext + CoroutineName("updateObjectMetadata")) {
       try {
         val blobId = BlobId.of(bucketName, blobKey)
@@ -162,7 +166,10 @@ class GcsStorageClient(
           blobInfoBuilder.setMetadata(metadata)
         }
 
-        storage.update(blobInfoBuilder.build())
+        val updatedBlob = storage.update(blobInfoBuilder.build())
+        if (updatedBlob == null) {
+          throw StorageException("Blob not found: $blobKey")
+        }
       } catch (e: GcsStorageException) {
         throw StorageException("Error updating metadata for blob with key $blobKey", e)
       }
@@ -206,8 +213,10 @@ private suspend fun Blob.write(content: Flow<ByteString>) {
           // Writer has its own internal buffering, so we can just use whatever buffers we
           // already have.
           if (byteChannel.write(buffer) == 0) {
-            // Nothing was written, so we may have a non-blocking channel that nothing can be
-            // written to right now. Suspend this coroutine to avoid monopolizing the thread.
+            // Nothing was written, so we may have a non-blocking channel that nothing
+            // can be
+            // written to right now. Suspend this coroutine to avoid monopolizing the
+            // thread.
             yield()
           }
         }

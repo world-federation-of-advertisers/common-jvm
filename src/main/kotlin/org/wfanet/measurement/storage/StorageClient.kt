@@ -15,6 +15,7 @@
 package org.wfanet.measurement.storage
 
 import com.google.protobuf.ByteString
+import java.time.Instant
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import org.wfanet.measurement.storage.StorageClient.Blob
@@ -93,7 +94,7 @@ interface ObjectMetadataStorageClient : StorageClient {
    */
   suspend fun updateObjectMetadata(
     blobKey: String,
-    customTime: java.time.Instant? = null,
+    customTime: Instant? = null,
     metadata: Map<String, String> = emptyMap(),
   )
 }
