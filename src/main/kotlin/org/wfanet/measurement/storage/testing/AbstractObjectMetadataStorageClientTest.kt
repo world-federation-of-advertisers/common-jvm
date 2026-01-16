@@ -32,8 +32,9 @@ import org.wfanet.measurement.storage.StorageException
  * storage backend.
  */
 abstract class AbstractObjectMetadataStorageClientTest<T> :
-  AbstractConditionalOperationStorageClientTest<T>()
-  where T : ObjectMetadataStorageClient, T : ConditionalOperationStorageClient {
+  AbstractConditionalOperationStorageClientTest<T>() where
+T : ObjectMetadataStorageClient,
+T : ConditionalOperationStorageClient {
 
   /**
    * Verifies that the object metadata was set correctly.
@@ -92,4 +93,3 @@ abstract class AbstractObjectMetadataStorageClientTest<T> :
     }
   }
 }
-
