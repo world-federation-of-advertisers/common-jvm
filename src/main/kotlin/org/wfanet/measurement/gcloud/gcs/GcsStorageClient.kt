@@ -41,7 +41,7 @@ import org.wfanet.measurement.common.BYTES_PER_MIB
 import org.wfanet.measurement.common.asFlow
 import org.wfanet.measurement.storage.BlobChangedException
 import org.wfanet.measurement.storage.ConditionalOperationStorageClient
-import org.wfanet.measurement.storage.ObjectMetadataStorageClient
+import org.wfanet.measurement.storage.BlobMetadataStorageClient
 import org.wfanet.measurement.storage.StorageClient
 import org.wfanet.measurement.storage.StorageException
 
@@ -63,7 +63,7 @@ class GcsStorageClient(
   private val storage: Storage,
   val bucketName: String,
   private val blockingContext: @BlockingExecutor CoroutineContext = Dispatchers.IO,
-) : StorageClient, ConditionalOperationStorageClient, ObjectMetadataStorageClient {
+) : StorageClient, ConditionalOperationStorageClient, BlobMetadataStorageClient {
 
   override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
     try {
@@ -142,31 +142,31 @@ class GcsStorageClient(
       .flowOn(blockingContext + CoroutineName("listBlobs"))
   }
 
-  override suspend fun updateObjectMetadata(
+  override suspend fun updateBlobMetadata(
     blobKey: String,
-    customTime: Instant?,
+    customCreateTime: Instant?,
     metadata: Map<String, String>,
   ) {
-    if (customTime == null && metadata.isEmpty()) {
-      return
+    require(customCreateTime != null || metadata.isNotEmpty()) {
+      "At least one of customCreateTime or metadata must be specified"
     }
 
-    withContext(blockingContext + CoroutineName("updateObjectMetadata")) {
+    withContext(blockingContext + CoroutineName("updateBlobMetadata")) {
       try {
         val blobId = BlobId.of(bucketName, blobKey)
-        val blobInfoBuilder = BlobInfo.newBuilder(blobId)
+        val blobInfo = BlobInfo.newBuilder(blobId).apply {
+          if (customCreateTime != null) {
+            setCustomTimeOffsetDateTime(
+              OffsetDateTime.ofInstant(customCreateTime, ZoneOffset.UTC)
+            )
+          }
 
-        if (customTime != null) {
-          blobInfoBuilder.setCustomTimeOffsetDateTime(
-            OffsetDateTime.ofInstant(customTime, ZoneOffset.UTC)
-          )
-        }
+          if (metadata.isNotEmpty()) {
+            setMetadata(metadata)
+          }
+        }.build()
 
-        if (metadata.isNotEmpty()) {
-          blobInfoBuilder.setMetadata(metadata)
-        }
-
-        val updatedBlob = storage.update(blobInfoBuilder.build())
+        val updatedBlob = storage.update(blobInfo)
         if (updatedBlob == null) {
           throw StorageException("Blob not found: $blobKey")
         }
@@ -213,9 +213,8 @@ private suspend fun Blob.write(content: Flow<ByteString>) {
           // Writer has its own internal buffering, so we can just use whatever buffers we
           // already have.
           if (byteChannel.write(buffer) == 0) {
-            // Nothing was written, so we may have a non-blocking channel that nothing
-            // can be
-            // written to right now. Suspend this coroutine to avoid monopolizing the
+            // Nothing was written, so we may have a non-blocking channel that nothing can
+            // be written to right now. Suspend this coroutine to avoid monopolizing the
             // thread.
             yield()
           }

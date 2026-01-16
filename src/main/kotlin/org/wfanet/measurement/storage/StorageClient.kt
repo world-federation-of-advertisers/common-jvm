@@ -78,23 +78,23 @@ interface ConditionalOperationStorageClient : StorageClient {
 }
 
 /**
- * [StorageClient] which supports object metadata operations.
+ * [StorageClient] which supports blob metadata operations.
  *
  * This is useful for storage systems that support custom metadata and lifecycle management based on
  * custom timestamps (e.g., GCS Custom-Time).
  */
-interface ObjectMetadataStorageClient : StorageClient {
+interface BlobMetadataStorageClient : StorageClient {
   /**
-   * Updates metadata on an existing object.
+   * Updates metadata on an existing blob.
    *
    * @param blobKey The key of the blob to update
-   * @param customTime Optional timestamp to set as Custom-Time (for lifecycle management)
+   * @param customCreateTime Optional custom create timestamp (for lifecycle management)
    * @param metadata Custom key-value metadata pairs
    * @throws StorageException if update fails
    */
-  suspend fun updateObjectMetadata(
+  suspend fun updateBlobMetadata(
     blobKey: String,
-    customTime: Instant? = null,
+    customCreateTime: Instant? = null,
     metadata: Map<String, String> = emptyMap(),
   )
 }
