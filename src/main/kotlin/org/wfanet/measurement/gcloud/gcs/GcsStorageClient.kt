@@ -17,10 +17,14 @@ package org.wfanet.measurement.gcloud.gcs
 import com.google.api.gax.paging.Page
 import com.google.cloud.WriteChannel
 import com.google.cloud.storage.Blob
+import com.google.cloud.storage.BlobId
 import com.google.cloud.storage.BlobInfo
 import com.google.cloud.storage.Storage
 import com.google.cloud.storage.StorageException as GcsStorageException
 import com.google.protobuf.ByteString
+import java.time.Instant
+import java.time.OffsetDateTime
+import java.time.ZoneOffset
 import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.Dispatchers
@@ -36,6 +40,7 @@ import org.jetbrains.annotations.BlockingExecutor
 import org.wfanet.measurement.common.BYTES_PER_MIB
 import org.wfanet.measurement.common.asFlow
 import org.wfanet.measurement.storage.BlobChangedException
+import org.wfanet.measurement.storage.BlobMetadataStorageClient
 import org.wfanet.measurement.storage.ConditionalOperationStorageClient
 import org.wfanet.measurement.storage.StorageClient
 import org.wfanet.measurement.storage.StorageException
@@ -58,7 +63,7 @@ class GcsStorageClient(
   private val storage: Storage,
   val bucketName: String,
   private val blockingContext: @BlockingExecutor CoroutineContext = Dispatchers.IO,
-) : StorageClient, ConditionalOperationStorageClient {
+) : StorageClient, ConditionalOperationStorageClient, BlobMetadataStorageClient {
 
   override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
     try {
@@ -137,6 +142,43 @@ class GcsStorageClient(
       .flowOn(blockingContext + CoroutineName("listBlobs"))
   }
 
+  override suspend fun updateBlobMetadata(
+    blobKey: String,
+    customCreateTime: Instant?,
+    metadata: Map<String, String>,
+  ) {
+    require(customCreateTime != null || metadata.isNotEmpty()) {
+      "At least one of customCreateTime or metadata must be specified"
+    }
+
+    withContext(blockingContext + CoroutineName("updateBlobMetadata")) {
+      try {
+        val blobId = BlobId.of(bucketName, blobKey)
+        val blobInfo =
+          BlobInfo.newBuilder(blobId)
+            .apply {
+              if (customCreateTime != null) {
+                setCustomTimeOffsetDateTime(
+                  OffsetDateTime.ofInstant(customCreateTime, ZoneOffset.UTC)
+                )
+              }
+
+              if (metadata.isNotEmpty()) {
+                setMetadata(metadata)
+              }
+            }
+            .build()
+
+        val updatedBlob = storage.update(blobInfo)
+        if (updatedBlob == null) {
+          throw StorageException("Blob not found: $blobKey")
+        }
+      } catch (e: GcsStorageException) {
+        throw StorageException("Error updating metadata for blob with key $blobKey", e)
+      }
+    }
+  }
+
   /** [StorageClient.Blob] implementation for [GcsStorageClient]. */
   private inner class ClientBlob(val blob: Blob, override val blobKey: String) :
     StorageClient.Blob {
@@ -174,8 +216,9 @@ private suspend fun Blob.write(content: Flow<ByteString>) {
           // Writer has its own internal buffering, so we can just use whatever buffers we
           // already have.
           if (byteChannel.write(buffer) == 0) {
-            // Nothing was written, so we may have a non-blocking channel that nothing can be
-            // written to right now. Suspend this coroutine to avoid monopolizing the thread.
+            // Nothing was written, so we may have a non-blocking channel that nothing can
+            // be written to right now. Suspend this coroutine to avoid monopolizing the
+            // thread.
             yield()
           }
         }
