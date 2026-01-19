@@ -40,8 +40,8 @@ import org.jetbrains.annotations.BlockingExecutor
 import org.wfanet.measurement.common.BYTES_PER_MIB
 import org.wfanet.measurement.common.asFlow
 import org.wfanet.measurement.storage.BlobChangedException
-import org.wfanet.measurement.storage.ConditionalOperationStorageClient
 import org.wfanet.measurement.storage.BlobMetadataStorageClient
+import org.wfanet.measurement.storage.ConditionalOperationStorageClient
 import org.wfanet.measurement.storage.StorageClient
 import org.wfanet.measurement.storage.StorageException
 
@@ -154,17 +154,20 @@ class GcsStorageClient(
     withContext(blockingContext + CoroutineName("updateBlobMetadata")) {
       try {
         val blobId = BlobId.of(bucketName, blobKey)
-        val blobInfo = BlobInfo.newBuilder(blobId).apply {
-          if (customCreateTime != null) {
-            setCustomTimeOffsetDateTime(
-              OffsetDateTime.ofInstant(customCreateTime, ZoneOffset.UTC)
-            )
-          }
+        val blobInfo =
+          BlobInfo.newBuilder(blobId)
+            .apply {
+              if (customCreateTime != null) {
+                setCustomTimeOffsetDateTime(
+                  OffsetDateTime.ofInstant(customCreateTime, ZoneOffset.UTC)
+                )
+              }
 
-          if (metadata.isNotEmpty()) {
-            setMetadata(metadata)
-          }
-        }.build()
+              if (metadata.isNotEmpty()) {
+                setMetadata(metadata)
+              }
+            }
+            .build()
 
         val updatedBlob = storage.update(blobInfo)
         if (updatedBlob == null) {

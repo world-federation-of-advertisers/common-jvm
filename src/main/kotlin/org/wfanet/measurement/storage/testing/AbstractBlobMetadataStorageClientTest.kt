@@ -57,7 +57,11 @@ T : ConditionalOperationStorageClient {
 
     storageClient.updateBlobMetadata(blobKey, customCreateTime = customCreateTime)
 
-    verifyBlobMetadata(blobKey, expectedCustomCreateTime = customCreateTime, expectedMetadata = emptyMap())
+    verifyBlobMetadata(
+      blobKey,
+      expectedCustomCreateTime = customCreateTime,
+      expectedMetadata = emptyMap(),
+    )
   }
 
   @Test
@@ -78,9 +82,17 @@ T : ConditionalOperationStorageClient {
     val customCreateTime = Instant.parse("2025-01-15T10:30:00Z")
     val metadata = mapOf("resource-id" to "dataProviders/abc/impressionMetadata/xyz")
 
-    storageClient.updateBlobMetadata(blobKey, customCreateTime = customCreateTime, metadata = metadata)
+    storageClient.updateBlobMetadata(
+      blobKey,
+      customCreateTime = customCreateTime,
+      metadata = metadata,
+    )
 
-    verifyBlobMetadata(blobKey, expectedCustomCreateTime = customCreateTime, expectedMetadata = metadata)
+    verifyBlobMetadata(
+      blobKey,
+      expectedCustomCreateTime = customCreateTime,
+      expectedMetadata = metadata,
+    )
   }
 
   @Test
@@ -93,4 +105,3 @@ T : ConditionalOperationStorageClient {
     }
   }
 }
-
