@@ -203,6 +203,19 @@ class MesosRecordIoStorageClientTest {
   }
 
   @Test
+  fun `test writing and reading empty proto record`() = runBlocking {
+    val emptyMessage = ComplexMessage.getDefaultInstance()
+    val blobKey = "test-empty-proto-record"
+    mesosRecordIoStorageClient.writeBlob(blobKey, flowOf(emptyMessage.toByteString()))
+    val blob = mesosRecordIoStorageClient.getBlob(blobKey)
+    requireNotNull(blob) { "Blob should exist" }
+    val records = blob.read().toList()
+    assertThat(records).hasSize(1)
+    assertThat(records[0]).isEqualTo(ByteString.EMPTY)
+    assertThat(ComplexMessage.parseFrom(records[0])).isEqualTo(emptyMessage)
+  }
+
+  @Test
   fun `test reading blob when record size and record delimiter are splitted across two chunks`() =
     runBlocking {
       val payload = "my-payload"
