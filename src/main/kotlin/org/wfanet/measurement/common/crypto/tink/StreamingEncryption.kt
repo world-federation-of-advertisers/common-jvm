@@ -147,7 +147,10 @@ fun StreamingAead.decrypt(
           yield() // Let channel producer run.
           val readCount: Int = decryptingChannel.read(outputBuffer)
           if (!outputBuffer.hasRemaining() || readCount == -1) {
-            emit(outputBuffer.flip().toByteString())
+            outputBuffer.flip()
+            if (outputBuffer.hasRemaining()) {
+              emit(outputBuffer.toByteString())
+            }
             outputBuffer.clear()
           }
         } while (readCount != -1)
