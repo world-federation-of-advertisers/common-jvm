@@ -22,9 +22,13 @@ import com.google.crypto.tink.KeysetHandle
 import com.google.crypto.tink.StreamingAead
 import com.google.crypto.tink.streamingaead.StreamingAeadConfig
 import com.google.protobuf.ByteString
+import com.google.protobuf.kotlin.toByteString
 import java.io.ByteArrayInputStream
 import java.nio.channels.Channels
 import kotlin.test.assertNotNull
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import org.junit.Before
 import org.junit.Test
@@ -35,8 +39,11 @@ import org.wfanet.measurement.common.asFlow
 import org.wfanet.measurement.common.flatten
 import org.wfanet.measurement.common.size
 import org.wfanet.measurement.common.toByteArray
+import org.wfanet.measurement.storage.testing.ComplexMessage
+import org.wfanet.measurement.storage.testing.ComplexMessageKt
 import org.wfanet.measurement.storage.testing.AbstractStorageClientTest
 import org.wfanet.measurement.storage.testing.InMemoryStorageClient
+import org.wfanet.measurement.storage.testing.complexMessage
 
 @RunWith(JUnit4::class)
 class StreamingAeadStorageClientTest : AbstractStorageClientTest<StreamingAeadStorageClient>() {
@@ -68,6 +75,32 @@ class StreamingAeadStorageClientTest : AbstractStorageClientTest<StreamingAeadSt
     assertThat(plainTextContent).isEqualTo(testBlobContent)
   }
 
+  @Test
+  fun `read does not emit empty chunk at EOF`() = runBlocking {
+    val blobKey = "eof-empty-chunk"
+    val baseMessage =
+      findTinyMessageDivisor(maxPayloadLength = 200)
+        ?: error("Unable to build tiny message with size dividing 1 MiB")
+    val baseSize = baseMessage.toByteString().size
+    val baseCount = BYTES_PER_MIB / baseSize
+
+    storageClient.writeBlob(
+      blobKey,
+      flow {
+        repeat(baseCount) { emit(baseMessage.toByteString()) }
+      },
+    )
+
+    val blob = assertNotNull(storageClient.getBlob(blobKey))
+    val messages = blob.read().toList().map { bytes -> ComplexMessage.parseFrom(bytes) }
+
+    val totalSize = baseCount * baseSize
+
+    assertThat(totalSize).isEqualTo(BYTES_PER_MIB)
+    val hasDefaultInstance = messages.any { it == ComplexMessage.getDefaultInstance() }
+    assertThat(hasDefaultInstance).isFalse()
+  }
+
   companion object {
     private const val TINK_PREFIX_SIZE_BYTES = 5
     private const val HEADER_SIZE_BYTES = 1
@@ -91,5 +124,45 @@ class StreamingAeadStorageClientTest : AbstractStorageClientTest<StreamingAeadSt
     private val AEAD_KEY_TEMPLATE = KeyTemplates.get("AES128_GCM_HKDF_1MB")
     private val KEY_ENCRYPTION_KEY = KeysetHandle.generateNew(AEAD_KEY_TEMPLATE)
     private val streamingAead = KEY_ENCRYPTION_KEY.getPrimitive(StreamingAead::class.java)
+  }
+
+  private fun buildTinyMessage(payloadLength: Int): ComplexMessage {
+    val subMessage =
+      ComplexMessageKt.subMessage {
+        field3 = "a".repeat(payloadLength.coerceAtLeast(0))
+      }
+    return complexMessage { field2 += subMessage }
+  }
+
+  private fun findTinyMessageOfSize(
+    targetSize: Int,
+    maxPayloadLength: Int,
+  ): ComplexMessage? {
+    for (payloadLength in 0..maxPayloadLength) {
+      val message = buildTinyMessage(payloadLength)
+      if (message.toByteString().size == targetSize) {
+        return message
+      }
+    }
+    return null
+  }
+
+  private fun findTinyMessageDivisor(maxPayloadLength: Int): ComplexMessage? {
+    val preferredRange = 40..60
+    for (payloadLength in preferredRange) {
+      val message = buildTinyMessage(payloadLength)
+      val size = message.toByteString().size
+      if (size > 0 && BYTES_PER_MIB % size == 0) {
+        return message
+      }
+    }
+    for (payloadLength in 0..maxPayloadLength) {
+      val message = buildTinyMessage(payloadLength)
+      val size = message.toByteString().size
+      if (size > 0 && BYTES_PER_MIB % size == 0) {
+        return message
+      }
+    }
+    return null
   }
 }

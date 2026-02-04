@@ -7,8 +7,10 @@ kt_jvm_test(
         "//imports/java/com/google/common/truth",
         "//imports/java/com/google/crypto/tink",
         "//imports/java/org/junit",
+        "//imports/kotlin/com/google/protobuf/kotlin",
         "//src/main/kotlin/org/wfanet/measurement/common/crypto/tink",
         "//src/main/kotlin/org/wfanet/measurement/common/crypto/tink/testing",
+        "//src/main/proto/wfa/measurement/storage/testing:complex_message_kt_jvm_proto",
         "//src/main/kotlin/org/wfanet/measurement/storage/testing",
     ],
 )
@@ -34,9 +36,11 @@ kt_jvm_test(
         "//imports/java/com/google/common/truth",
         "//imports/java/com/google/crypto/tink",
         "//imports/java/org/junit",
+        "//imports/kotlin/com/google/protobuf/kotlin",
         "//src/main/kotlin/org/wfanet/measurement/common/crypto/tink",
         "//src/main/kotlin/org/wfanet/measurement/common/crypto/tink/testing",
         "//src/main/kotlin/org/wfanet/measurement/storage/testing",
+        "//src/main/proto/wfa/measurement/storage/testing:complex_message_kt_jvm_proto",
     ],
 )
 
@@ -47,9 +51,11 @@ kt_jvm_test(
         "//imports/java/com/google/common/truth",
         "//imports/java/com/google/crypto/tink",
         "//imports/java/org/junit",
+        "//imports/kotlin/com/google/protobuf/kotlin",
         "//src/main/kotlin/org/wfanet/measurement/common/crypto/tink",
         "//src/main/kotlin/org/wfanet/measurement/common/crypto/tink/testing",
         "//src/main/kotlin/org/wfanet/measurement/storage/testing",
+        "//src/main/proto/wfa/measurement/storage/testing:complex_message_kt_jvm_proto",
     ],
 )
 
