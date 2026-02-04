@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
+import kotlin.random.Random
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -203,6 +204,73 @@ class MesosRecordIoStorageClientTest {
   }
 
   @Test
+  fun `test parsing identical blob is invariant to chunking`() = runBlocking {
+    val messages =
+      (1..25).map { index ->
+        complexMessage {
+          field1 += listOf(index, index + 1, index + 2)
+          field2 +=
+            ComplexMessageKt.subMessage {
+              field1 += listOf(index, index + 1)
+              field2 = ComplexMessage.Enum.STATE_1
+              field3 = "payload-$index"
+              field4 = index.toLong()
+            }
+          field3 = index.toDouble()
+        }
+      }
+    val blobKey = "test-chunking-invariant"
+    val recordFlow = flow { messages.forEach { emit(it.toByteString()) } }
+    mesosRecordIoStorageClient.writeBlob(blobKey, recordFlow)
+    val rawBlob = wrappedStorageClient.getBlob(blobKey)!!.read().toList().single()
+    val expected = messages.map { it.toByteString() }
+
+    listOf(1, 7, 19, 23).forEach { seed ->
+      val chunks = chunkByteString(rawBlob, seed = seed, minChunkSize = 1, maxChunkSize = 9)
+      val client = makeClientWithChunks(*chunks.toTypedArray())
+      val blob = client.getBlob("fake-blob-key")!!
+      val records = blob.read().toList()
+      assertThat(records).containsExactlyElementsIn(expected).inOrder()
+    }
+  }
+
+  @Test
+  fun `test writing and reading empty proto record succeeds`() = runBlocking {
+    val nonEmptyMessage = complexMessage { field1 += 1 }
+    val emptyMessage = ComplexMessage.getDefaultInstance()
+    val blobKey = "test-empty-proto-record"
+    mesosRecordIoStorageClient.writeBlob(
+      blobKey,
+      flowOf(
+        nonEmptyMessage.toByteString(),
+        emptyMessage.toByteString(),
+        nonEmptyMessage.toByteString(),
+      ),
+    )
+    val blob = mesosRecordIoStorageClient.getBlob(blobKey)
+    requireNotNull(blob) { "Blob should exist" }
+    val records = blob.read().toList()
+    assertThat(records).hasSize(3)
+    assertThat(ComplexMessage.parseFrom(records[0])).isEqualTo(nonEmptyMessage)
+    assertThat(records[1]).isEqualTo(ByteString.EMPTY)
+    assertThat(ComplexMessage.parseFrom(records[1])).isEqualTo(emptyMessage)
+  }
+
+  @Test
+  fun `test reading zero-sized record as empty proto`() = runBlocking {
+    val blobKey = "test-zero-sized-record"
+    wrappedStorageClient.writeBlob(blobKey, flowOf(ByteString.copyFromUtf8("0\n")))
+    val blob = mesosRecordIoStorageClient.getBlob(blobKey)
+    requireNotNull(blob) { "Blob should exist" }
+
+    val records = blob.read().toList()
+    assertThat(records).hasSize(1)
+    assertThat(records[0]).isEqualTo(ByteString.EMPTY)
+    assertThat(ComplexMessage.parseFrom(records[0]))
+      .isEqualTo(ComplexMessage.getDefaultInstance())
+  }
+
+  @Test
   fun `test reading blob when record size and record delimiter are splitted across two chunks`() =
     runBlocking {
       val payload = "my-payload"
@@ -251,5 +319,25 @@ class MesosRecordIoStorageClientTest {
     override fun read(): Flow<ByteString> = flow { for (c in chunks) emit(c) }
 
     override suspend fun delete() = Unit
+  }
+
+  private fun chunkByteString(
+    data: ByteString,
+    seed: Int,
+    minChunkSize: Int,
+    maxChunkSize: Int,
+  ): List<ByteString> {
+    require(minChunkSize > 0)
+    require(maxChunkSize >= minChunkSize)
+    val random = Random(seed)
+    val chunks = mutableListOf<ByteString>()
+    var position = 0
+    while (position < data.size()) {
+      val remaining = data.size() - position
+      val chunkSize = minOf(remaining, random.nextInt(maxChunkSize - minChunkSize + 1) + minChunkSize)
+      chunks.add(data.substring(position, position + chunkSize))
+      position += chunkSize
+    }
+    return chunks
   }
 }
