@@ -18,6 +18,7 @@ package org.wfanet.measurement.storage
 
 import com.google.common.truth.Truth.assertThat
 import com.google.protobuf.ByteString
+import kotlin.random.Random
 import kotlin.test.assertFailsWith
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
@@ -26,7 +27,6 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
-import kotlin.random.Random
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -266,8 +266,7 @@ class MesosRecordIoStorageClientTest {
     val records = blob.read().toList()
     assertThat(records).hasSize(1)
     assertThat(records[0]).isEqualTo(ByteString.EMPTY)
-    assertThat(ComplexMessage.parseFrom(records[0]))
-      .isEqualTo(ComplexMessage.getDefaultInstance())
+    assertThat(ComplexMessage.parseFrom(records[0])).isEqualTo(ComplexMessage.getDefaultInstance())
   }
 
   @Test
@@ -334,7 +333,8 @@ class MesosRecordIoStorageClientTest {
     var position = 0
     while (position < data.size()) {
       val remaining = data.size() - position
-      val chunkSize = minOf(remaining, random.nextInt(maxChunkSize - minChunkSize + 1) + minChunkSize)
+      val chunkSize =
+        minOf(remaining, random.nextInt(maxChunkSize - minChunkSize + 1) + minChunkSize)
       chunks.add(data.substring(position, position + chunkSize))
       position += chunkSize
     }
