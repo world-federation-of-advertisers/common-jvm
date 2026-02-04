@@ -27,7 +27,6 @@ import java.io.ByteArrayInputStream
 import java.nio.channels.Channels
 import kotlin.test.assertNotNull
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import org.junit.Before
@@ -39,9 +38,9 @@ import org.wfanet.measurement.common.asFlow
 import org.wfanet.measurement.common.flatten
 import org.wfanet.measurement.common.size
 import org.wfanet.measurement.common.toByteArray
+import org.wfanet.measurement.storage.testing.AbstractStorageClientTest
 import org.wfanet.measurement.storage.testing.ComplexMessage
 import org.wfanet.measurement.storage.testing.ComplexMessageKt
-import org.wfanet.measurement.storage.testing.AbstractStorageClientTest
 import org.wfanet.measurement.storage.testing.InMemoryStorageClient
 import org.wfanet.measurement.storage.testing.complexMessage
 
@@ -86,9 +85,7 @@ class StreamingAeadStorageClientTest : AbstractStorageClientTest<StreamingAeadSt
 
     storageClient.writeBlob(
       blobKey,
-      flow {
-        repeat(baseCount) { emit(baseMessage.toByteString()) }
-      },
+      flow { repeat(baseCount) { emit(baseMessage.toByteString()) } },
     )
 
     val blob = assertNotNull(storageClient.getBlob(blobKey))
@@ -128,16 +125,11 @@ class StreamingAeadStorageClientTest : AbstractStorageClientTest<StreamingAeadSt
 
   private fun buildTinyMessage(payloadLength: Int): ComplexMessage {
     val subMessage =
-      ComplexMessageKt.subMessage {
-        field3 = "a".repeat(payloadLength.coerceAtLeast(0))
-      }
+      ComplexMessageKt.subMessage { field3 = "a".repeat(payloadLength.coerceAtLeast(0)) }
     return complexMessage { field2 += subMessage }
   }
 
-  private fun findTinyMessageOfSize(
-    targetSize: Int,
-    maxPayloadLength: Int,
-  ): ComplexMessage? {
+  private fun findTinyMessageOfSize(targetSize: Int, maxPayloadLength: Int): ComplexMessage? {
     for (payloadLength in 0..maxPayloadLength) {
       val message = buildTinyMessage(payloadLength)
       if (message.toByteString().size == targetSize) {
