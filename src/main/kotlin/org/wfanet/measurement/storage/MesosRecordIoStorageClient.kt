@@ -136,6 +136,7 @@ class MesosRecordIoStorageClient(private val storageClient: StorageClient) : Sto
               )
               currentRecordSize = recordSizeBuffer.toString().toInt()
               recordSizeBuffer.clear()
+              require(currentRecordSize >= 0) { "Record size must be non-negative." }
               recordBuffer = ByteString.newOutput(currentRecordSize)
               position = newlineIndex + 1
             } else {
@@ -143,7 +144,7 @@ class MesosRecordIoStorageClient(private val storageClient: StorageClient) : Sto
               break
             }
           }
-          if (currentRecordSize > 0) {
+          if (currentRecordSize >= 0) {
             val remainingBytes = chunk.size() - position
             val bytesToRead = minOf(remainingBytes, currentRecordSize - recordBuffer.size())
 
