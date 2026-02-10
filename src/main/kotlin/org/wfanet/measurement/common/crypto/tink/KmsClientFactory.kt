@@ -38,6 +38,21 @@ data class GCloudWifCredentials(
 ) : WifCredentials
 
 /**
+ * Configuration for creating credentials using AWS's Workload Identity Federation via STS
+ * AssumeRoleWithWebIdentity.
+ */
+data class AwsWifCredentials(
+  /** The ARN of the IAM role to assume. */
+  val roleArn: String,
+  /** The file path to the web identity token (e.g., an OIDC token). */
+  val webIdentityTokenFilePath: String,
+  /** An identifier for the assumed role session. */
+  val roleSessionName: String,
+  /** The AWS region for the STS endpoint. */
+  val region: String,
+) : WifCredentials
+
+/**
  * Factory for creating [KmsClient] instances.
  *
  * @param T The specific type of [WifCredentials] this factory supports.
