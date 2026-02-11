@@ -18,84 +18,63 @@ import com.google.common.truth.Truth.assertThat
 import java.security.GeneralSecurityException
 import kotlin.test.assertFailsWith
 import org.junit.Before
-import org.junit.Rule
 import org.junit.Test
-import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
-import org.wfanet.measurement.common.crypto.tink.AwsWifCredentials
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider
 
-private const val ROLE_ARN = "arn:aws:iam::123456789012:role/test-role"
-private const val ROLE_SESSION_NAME = "test-session"
-private const val REGION = "us-east-1"
 private const val AWS_KMS_KEY_URI =
   "aws-kms://arn:aws:kms:us-east-1:123456789012:key/test-key-id"
 private const val GCP_KMS_KEY_URI =
   "gcp-kms://projects/test/locations/us/keyRings/kr/cryptoKeys/ck"
 private const val FAKE_KMS_KEY_URI = "fake-kms://key1"
+private const val INVALID_ARN_KEY_URI = "aws-kms://invalid-arn"
 
-/** Tests for [AwsKmsClientFactory]. */
+/** Tests for [AwsKmsClient]. */
 @RunWith(JUnit4::class)
 class AwsKmsClientFactoryTest {
-  @Rule @JvmField val tempFolder = TemporaryFolder()
-
-  private lateinit var factory: AwsKmsClientFactory
+  private lateinit var kmsClient: AwsKmsClient
 
   @Before
   fun setUp() {
-    factory = AwsKmsClientFactory()
-  }
-
-  private fun createConfig(tokenFilePath: String): AwsWifCredentials {
-    return AwsWifCredentials(
-      roleArn = ROLE_ARN,
-      webIdentityTokenFilePath = tokenFilePath,
-      roleSessionName = ROLE_SESSION_NAME,
-      region = REGION,
-    )
+    val credentialsProvider =
+      StaticCredentialsProvider.create(AwsBasicCredentials.create("fake-key", "fake-secret"))
+    kmsClient = AwsKmsClient(credentialsProvider)
   }
 
   @Test
-  fun `getKmsClient returns KmsClient that supports aws-kms URIs`() {
-    val tokenFile = tempFolder.newFile("token.jwt")
-    tokenFile.writeText("dummy-oidc-token")
-    val config = createConfig(tokenFile.absolutePath)
-
-    val kmsClient = factory.getKmsClient(config)
-
+  fun `doesSupport returns true for aws-kms URIs`() {
     assertThat(kmsClient.doesSupport(AWS_KMS_KEY_URI)).isTrue()
   }
 
   @Test
-  fun `getKmsClient returns KmsClient that does not support gcp-kms URIs`() {
-    val tokenFile = tempFolder.newFile("token.jwt")
-    tokenFile.writeText("dummy-oidc-token")
-    val config = createConfig(tokenFile.absolutePath)
-
-    val kmsClient = factory.getKmsClient(config)
-
+  fun `doesSupport returns false for gcp-kms URIs`() {
     assertThat(kmsClient.doesSupport(GCP_KMS_KEY_URI)).isFalse()
   }
 
   @Test
-  fun `getKmsClient returns KmsClient that does not support fake-kms URIs`() {
-    val tokenFile = tempFolder.newFile("token.jwt")
-    tokenFile.writeText("dummy-oidc-token")
-    val config = createConfig(tokenFile.absolutePath)
-
-    val kmsClient = factory.getKmsClient(config)
-
+  fun `doesSupport returns false for fake-kms URIs`() {
     assertThat(kmsClient.doesSupport(FAKE_KMS_KEY_URI)).isFalse()
   }
 
   @Test
-  fun `getKmsClient returns KmsClient whose getAead throws for unsupported URI`() {
-    val tokenFile = tempFolder.newFile("token.jwt")
-    tokenFile.writeText("dummy-oidc-token")
-    val config = createConfig(tokenFile.absolutePath)
+  fun `doesSupport returns false for null URI`() {
+    assertThat(kmsClient.doesSupport(null)).isFalse()
+  }
 
-    val kmsClient = factory.getKmsClient(config)
-
+  @Test
+  fun `getAead throws GeneralSecurityException for unsupported URI`() {
     assertFailsWith<GeneralSecurityException> { kmsClient.getAead(GCP_KMS_KEY_URI) }
+  }
+
+  @Test
+  fun `getAead throws GeneralSecurityException for null URI`() {
+    assertFailsWith<GeneralSecurityException> { kmsClient.getAead(null) }
+  }
+
+  @Test
+  fun `getAead throws GeneralSecurityException for invalid ARN`() {
+    assertFailsWith<GeneralSecurityException> { kmsClient.getAead(INVALID_ARN_KEY_URI) }
   }
 }
