@@ -27,6 +27,7 @@ kt_jvm_library(
     exports = [":spanner_emulator"],
     runtime_deps = [
         "//imports/java/liquibase/ext/spanner",
+        "//imports/java/org/liquibase/analytics:disable_analytics",
     ],
     deps = [
         ":spanner_emulator",

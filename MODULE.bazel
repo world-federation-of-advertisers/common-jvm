@@ -131,22 +131,22 @@ maven.artifact(
 )
 maven.artifact(
     testonly = True,
-    artifact = "database-commons",
+    artifact = "testcontainers-database-commons",
     group = "org.testcontainers",
 )
 maven.artifact(
     testonly = True,
-    artifact = "jdbc",
+    artifact = "testcontainers-jdbc",
     group = "org.testcontainers",
 )
 maven.artifact(
     testonly = True,
-    artifact = "postgresql",
+    artifact = "testcontainers-postgresql",
     group = "org.testcontainers",
 )
 maven.artifact(
     testonly = True,
-    artifact = "gcloud",
+    artifact = "testcontainers-gcloud",
     group = "org.testcontainers",
 )
 maven.artifact(
@@ -252,6 +252,7 @@ maven.install(
         "org.yaml:snakeyaml:2.2",
         "org.liquibase:liquibase-core:4.33.0",
         "com.google.cloudspannerecosystem:liquibase-spanner:4.32.0",
+        "org.liquibase.ext:liquibase-disable-analytics:1.0.0",
 
         # Riegeli Decompressor
         "org.apache.commons:commons-compress:1.28.0",
@@ -267,7 +268,7 @@ maven.install(
         "com.google.cloud:libraries-bom:26.62.0",
         "software.amazon.awssdk:bom:" + AWS_JAVA_SDK_VERSION,
         "io.opentelemetry:opentelemetry-bom:1.42.1",
-        "org.testcontainers:testcontainers-bom:1.21.3",
+        "org.testcontainers:testcontainers-bom:2.0.3",
         "io.projectreactor:reactor-bom:2023.0.9",
         "io.cloudevents:cloudevents-bom:4.0.1",
     ],

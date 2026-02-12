@@ -1,0 +1,6 @@
+package(default_visibility = ["//visibility:public"])
+
+alias(
+    name = "disable_analytics",
+    actual = "@maven//:org_liquibase_ext_liquibase_disable_analytics",
+)
