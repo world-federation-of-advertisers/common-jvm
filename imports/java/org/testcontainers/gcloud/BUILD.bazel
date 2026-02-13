@@ -1,0 +1,6 @@
+package(default_visibility = ["//visibility:public"])
+
+alias(
+    name = "gcloud",
+    actual = "@maven//:org_testcontainers_testcontainers_gcloud",
+)

@@ -17,7 +17,7 @@ package org.wfanet.measurement.gcloud.pubsub.testing
 import org.junit.rules.TestRule
 import org.junit.runner.Description
 import org.junit.runners.model.Statement
-import org.testcontainers.containers.PubSubEmulatorContainer
+import org.testcontainers.gcloud.PubSubEmulatorContainer
 import org.testcontainers.utility.DockerImageName
 
 /** [GooglePubSubEmulatorProvider] implementation as a JUnit [TestRule]. */

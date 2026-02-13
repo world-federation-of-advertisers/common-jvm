@@ -24,7 +24,7 @@ import kotlinx.coroutines.reactive.awaitFirst
 import org.junit.rules.TestRule
 import org.junit.runner.Description
 import org.junit.runners.model.Statement
-import org.testcontainers.containers.PostgreSQLContainer
+import org.testcontainers.postgresql.PostgreSQLContainer
 import org.wfanet.measurement.common.db.liquibase.Liquibase
 import org.wfanet.measurement.common.db.r2dbc.postgres.PostgresDatabaseClient
 
@@ -42,19 +42,22 @@ interface PostgresDatabaseProvider {
  */
 class PostgresDatabaseProviderRule(private val changelogPath: Path) :
   PostgresDatabaseProvider, TestRule {
-  private val postgresContainer = KPostgresContainer(POSTGRES_IMAGE_NAME)
+  private val postgresContainer = PostgreSQLContainer(POSTGRES_IMAGE_NAME)
 
   override fun createDatabase() = postgresContainer.createDatabase()
 
   override fun apply(base: Statement, description: Description): Statement {
-    val dbProviderStatement =
-      object : Statement() {
-        override fun evaluate() {
+    return object : Statement() {
+      override fun evaluate() {
+        postgresContainer.start()
+        try {
           postgresContainer.updateTemplateDatabase(changelogPath)
           base.evaluate()
+        } finally {
+          postgresContainer.stop()
         }
       }
-    return (postgresContainer as TestRule).apply(dbProviderStatement, description)
+    }
   }
 
   companion object {
@@ -64,13 +67,13 @@ class PostgresDatabaseProviderRule(private val changelogPath: Path) :
 
     private val dbNumber = AtomicInteger()
 
-    private fun KPostgresContainer.updateTemplateDatabase(changelogPath: Path) {
+    private fun PostgreSQLContainer.updateTemplateDatabase(changelogPath: Path) {
       withDatabaseName(TEMPLATE_DATABASE_NAME).createConnection("").use { connection ->
         Liquibase.update(connection, changelogPath)
       }
     }
 
-    private fun KPostgresContainer.createDatabase(): PostgresDatabaseClient {
+    private fun PostgreSQLContainer.createDatabase(): PostgresDatabaseClient {
       val dbNumber = dbNumber.incrementAndGet()
       val databaseName = "database_$dbNumber"
       createConnection("").use { connection ->
@@ -96,7 +99,3 @@ class PostgresDatabaseProviderRule(private val changelogPath: Path) :
     }
   }
 }
-
-/** Kotlin generic type for [PostgreSQLContainer]. */
-private class KPostgresContainer(imageName: String) :
-  PostgreSQLContainer<KPostgresContainer>(imageName)
