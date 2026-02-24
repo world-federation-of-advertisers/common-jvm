@@ -24,8 +24,10 @@ import org.junit.runners.JUnit4
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider
 
-private const val AWS_KMS_KEY_URI = "aws-kms://arn:aws:kms:us-east-1:123456789012:key/test-key-id"
-private const val GCP_KMS_KEY_URI = "gcp-kms://projects/test/locations/us/keyRings/kr/cryptoKeys/ck"
+private const val AWS_KMS_KEY_URI =
+  "aws-kms://arn:aws:kms:us-east-1:123456789012:key/test-key-id"
+private const val GCP_KMS_KEY_URI =
+  "gcp-kms://projects/test/locations/us/keyRings/kr/cryptoKeys/ck"
 private const val FAKE_KMS_KEY_URI = "fake-kms://key1"
 private const val INVALID_ARN_KEY_URI = "aws-kms://invalid-arn"
 

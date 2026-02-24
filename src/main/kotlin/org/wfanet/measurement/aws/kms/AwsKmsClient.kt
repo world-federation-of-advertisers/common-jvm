@@ -101,12 +101,17 @@ class AwsKmsClient(private val credentialsProvider: AwsCredentialsProvider) : Km
  * Encryption context with `associatedData` (Base64-encoded) is included when [associatedData] is
  * non-null and non-empty, matching the behavior of Tink's `AwsKmsAead`.
  */
-private class AwsKmsAead(private val kmsClient: SdkKmsClient, private val keyArn: String) : Aead {
+private class AwsKmsAead(
+  private val kmsClient: SdkKmsClient,
+  private val keyArn: String,
+) : Aead {
 
   override fun encrypt(plaintext: ByteArray, associatedData: ByteArray?): ByteArray {
     try {
       val requestBuilder =
-        EncryptRequest.builder().keyId(keyArn).plaintext(SdkBytes.fromByteArray(plaintext))
+        EncryptRequest.builder()
+          .keyId(keyArn)
+          .plaintext(SdkBytes.fromByteArray(plaintext))
       if (associatedData != null && associatedData.isNotEmpty()) {
         requestBuilder.encryptionContext(
           mapOf(ASSOCIATED_DATA_KEY to Base64.getEncoder().encodeToString(associatedData))
