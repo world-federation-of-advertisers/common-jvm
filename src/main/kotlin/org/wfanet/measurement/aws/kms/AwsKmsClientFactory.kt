@@ -33,9 +33,9 @@ class AwsKmsClientFactory : KmsClientFactory<AwsWifCredentials> {
    * This method creates an [StsWebIdentityTokenFileCredentialsProvider] that exchanges a web
    * identity token (e.g., an OIDC token from a Kubernetes service account) for temporary AWS
    * credentials by assuming an IAM role. The STS client uses [AnonymousCredentialsProvider] because
-   * `AssumeRoleWithWebIdentity` authenticates via the web identity token itself and does not require
-   * pre-existing AWS credentials. This allows the factory to be used from non-AWS environments
-   * (e.g., Google Cloud).
+   * `AssumeRoleWithWebIdentity` authenticates via the web identity token itself and does not
+   * require pre-existing AWS credentials. This allows the factory to be used from non-AWS
+   * environments (e.g., Google Cloud).
    *
    * @param config The AWS specific WIF configuration.
    * @return An initialized [AwsKmsClient].

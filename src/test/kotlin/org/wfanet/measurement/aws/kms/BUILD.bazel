@@ -7,8 +7,8 @@ kt_jvm_test(
     deps = [
         "//imports/java/com/google/common/truth",
         "//imports/java/org/junit",
+        "//imports/java/software/amazon/awssdk/auth",
         "//imports/kotlin/kotlin/test",
         "//src/main/kotlin/org/wfanet/measurement/aws/kms:aws_kms_client_factory",
-        "@maven//:software_amazon_awssdk_auth",
     ],
 )

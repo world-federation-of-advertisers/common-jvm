@@ -10,10 +10,10 @@ kt_jvm_library(
     ],
     deps = [
         "//imports/java/com/google/crypto/tink",
+        "//imports/java/software/amazon/awssdk/auth",
+        "//imports/java/software/amazon/awssdk/services/kms",
+        "//imports/java/software/amazon/awssdk/services/regions",
+        "//imports/java/software/amazon/awssdk/services/sts",
         "//src/main/kotlin/org/wfanet/measurement/common/crypto/tink",
-        "@maven//:software_amazon_awssdk_auth",
-        "@maven//:software_amazon_awssdk_kms",
-        "@maven//:software_amazon_awssdk_regions",
-        "@maven//:software_amazon_awssdk_sts",
     ],
 )
