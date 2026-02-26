@@ -24,7 +24,8 @@ import org.wfanet.measurement.common.crypto.tink.GcpToAwsWifCredentials
  * Tests for [GcpToAwsKmsClientFactory].
  *
  * Full integration testing requires a Confidential Space environment with a configured GCP/AWS
- * trust relationship. This unit test verifies that the factory fails gracefully with a bogus config.
+ * trust relationship. This unit test verifies that the factory fails gracefully with a bogus
+ * config.
  */
 @RunWith(JUnit4::class)
 class GcpToAwsKmsClientFactoryTest {
@@ -34,11 +35,13 @@ class GcpToAwsKmsClientFactoryTest {
     val factory = GcpToAwsKmsClientFactory()
     val config =
       GcpToAwsWifCredentials(
-        gcpAudience = "//iam.googleapis.com/projects/123/locations/global/workloadIdentityPools/pool/providers/provider",
+        gcpAudience =
+          "//iam.googleapis.com/projects/123/locations/global/workloadIdentityPools/pool/providers/provider",
         subjectTokenType = "urn:ietf:params:oauth:token-type:jwt",
         tokenUrl = "https://sts.googleapis.com/v1/token",
         credentialSourceFilePath = "/run/container_launcher/attestation_verifier_claims_token",
-        serviceAccountImpersonationUrl = "https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/sa@project.iam.gserviceaccount.com:generateAccessToken",
+        serviceAccountImpersonationUrl =
+          "https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/sa@project.iam.gserviceaccount.com:generateAccessToken",
         roleArn = "arn:aws:iam::123456789012:role/test-role",
         roleSessionName = "test-session",
         region = "us-east-1",

@@ -113,30 +113,21 @@ class GcpToAwsKmsClientFactory : KmsClientFactory<GcpToAwsWifCredentials> {
   }
 
   companion object {
-    private fun buildExternalAccountCredentials(
-      config: GcpToAwsWifCredentials
-    ): GoogleCredentials {
+    private fun buildExternalAccountCredentials(config: GcpToAwsWifCredentials): GoogleCredentials {
       val wifConfigJson =
-        JsonObject()
-          .run {
-            addProperty("type", "external_account")
-            addProperty("audience", config.gcpAudience)
-            addProperty("subject_token_type", config.subjectTokenType)
-            addProperty("token_url", config.tokenUrl)
-            add(
-              "credential_source",
-              JsonObject().apply { addProperty("file", config.credentialSourceFilePath) },
-            )
-            addProperty(
-              "service_account_impersonation_url",
-              config.serviceAccountImpersonationUrl,
-            )
-            add(
-              "scopes",
-              JsonArray().apply { add("https://www.googleapis.com/auth/cloud-platform") },
-            )
-            toString()
-          }
+        JsonObject().run {
+          addProperty("type", "external_account")
+          addProperty("audience", config.gcpAudience)
+          addProperty("subject_token_type", config.subjectTokenType)
+          addProperty("token_url", config.tokenUrl)
+          add(
+            "credential_source",
+            JsonObject().apply { addProperty("file", config.credentialSourceFilePath) },
+          )
+          addProperty("service_account_impersonation_url", config.serviceAccountImpersonationUrl)
+          add("scopes", JsonArray().apply { add("https://www.googleapis.com/auth/cloud-platform") })
+          toString()
+        }
 
       try {
         return GoogleCredentials.fromStream(wifConfigJson.byteInputStream(Charsets.UTF_8))
