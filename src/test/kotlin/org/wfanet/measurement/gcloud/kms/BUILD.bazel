@@ -1,0 +1,13 @@
+load("@wfa_rules_kotlin_jvm//kotlin:defs.bzl", "kt_jvm_test")
+
+kt_jvm_test(
+    name = "GcpToAwsKmsClientFactoryTest",
+    srcs = ["GcpToAwsKmsClientFactoryTest.kt"],
+    test_class = "org.wfanet.measurement.gcloud.kms.GcpToAwsKmsClientFactoryTest",
+    deps = [
+        "//imports/java/org/junit",
+        "//imports/kotlin/kotlin/test",
+        "//src/main/kotlin/org/wfanet/measurement/common/crypto/tink",
+        "//src/main/kotlin/org/wfanet/measurement/gcloud/kms:gcp_to_aws_kms_client_factory",
+    ],
+)
