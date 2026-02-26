@@ -17,7 +17,7 @@ package org.wfanet.measurement.aws.kms
 import com.google.crypto.tink.KmsClient
 import java.nio.file.Paths
 import java.security.GeneralSecurityException
-import org.wfanet.measurement.common.crypto.tink.AwsWifCredentials
+import org.wfanet.measurement.common.crypto.tink.AwsWebIdentityCredentials
 import org.wfanet.measurement.common.crypto.tink.KmsClientFactory
 import software.amazon.awssdk.auth.credentials.AnonymousCredentialsProvider
 import software.amazon.awssdk.regions.Region
@@ -25,10 +25,9 @@ import software.amazon.awssdk.services.sts.StsClient
 import software.amazon.awssdk.services.sts.auth.StsWebIdentityTokenFileCredentialsProvider
 
 /** A [KmsClientFactory] for creating Tink [KmsClient] instances for AWS KMS. */
-class AwsKmsClientFactory : KmsClientFactory<AwsWifCredentials> {
+class AwsKmsClientFactory : KmsClientFactory<AwsWebIdentityCredentials> {
   /**
-   * Returns an [AwsKmsClient] configured for Workload Identity Federation via STS
-   * AssumeRoleWithWebIdentity.
+   * Returns an [AwsKmsClient] configured via STS AssumeRoleWithWebIdentity.
    *
    * This method creates an [StsWebIdentityTokenFileCredentialsProvider] that exchanges a web
    * identity token (e.g., an OIDC token from a Kubernetes service account) for temporary AWS
@@ -37,11 +36,11 @@ class AwsKmsClientFactory : KmsClientFactory<AwsWifCredentials> {
    * require pre-existing AWS credentials. This allows the factory to be used from non-AWS
    * environments (e.g., Google Cloud).
    *
-   * @param config The AWS specific WIF configuration.
+   * @param config The AWS web identity configuration.
    * @return An initialized [AwsKmsClient].
    * @throws GeneralSecurityException if the client cannot be initialized.
    */
-  override fun getKmsClient(config: AwsWifCredentials): KmsClient {
+  override fun getKmsClient(config: AwsWebIdentityCredentials): KmsClient {
     val stsClient =
       try {
         StsClient.builder()

@@ -38,10 +38,12 @@ data class GCloudWifCredentials(
 ) : WifCredentials
 
 /**
- * Configuration for creating credentials using AWS's Workload Identity Federation via STS
- * AssumeRoleWithWebIdentity.
+ * Configuration for creating credentials using AWS STS AssumeRoleWithWebIdentity.
+ *
+ * Uses a web identity token file (e.g., an OIDC token from a Kubernetes service account) to assume
+ * an IAM role for temporary AWS credentials.
  */
-data class AwsWifCredentials(
+data class AwsWebIdentityCredentials(
   /** The ARN of the IAM role to assume. */
   val roleArn: String,
   /** The file path to the web identity token (e.g., an OIDC token). */
