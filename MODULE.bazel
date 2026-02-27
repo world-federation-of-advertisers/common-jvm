@@ -230,6 +230,7 @@ maven.install(
         "software.amazon.awssdk:regions",
         "software.amazon.awssdk:s3",
         "software.amazon.awssdk:secretsmanager",
+        "software.amazon.awssdk:kms",
         "software.amazon.awssdk:sts",
 
         # OpenTelemetry.
