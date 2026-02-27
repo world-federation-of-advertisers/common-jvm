@@ -22,7 +22,7 @@ import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import java.security.GeneralSecurityException
 import org.wfanet.measurement.aws.kms.AwsKmsClient
-import org.wfanet.measurement.common.crypto.tink.GcpToAwsWifCredentials
+import org.wfanet.measurement.common.crypto.tink.GCloudToAwsWifCredentials
 import org.wfanet.measurement.common.crypto.tink.KmsClientFactory
 import software.amazon.awssdk.auth.credentials.AnonymousCredentialsProvider
 import software.amazon.awssdk.auth.credentials.AwsSessionCredentials
@@ -30,53 +30,60 @@ import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider
 import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.sts.StsClient
 import software.amazon.awssdk.services.sts.model.AssumeRoleWithWebIdentityRequest
+import software.amazon.awssdk.services.sts.model.AssumeRoleWithWebIdentityResponse
+import software.amazon.awssdk.services.sts.model.Credentials
 
 /**
- * A [KmsClientFactory] for accessing AWS KMS from a GCP Confidential Space workload.
+ * A [KmsClientFactory] for accessing AWS KMS from a Google Cloud Confidential Space workload.
  *
  * Uses the same external-account credential flow as [GCloudKmsClientFactory] to exchange a
- * Confidential Space attestation token for GCP credentials, then impersonates a service account to
- * obtain an OIDC ID token. That ID token is exchanged with AWS STS `AssumeRoleWithWebIdentity` for
- * temporary AWS credentials.
+ * Confidential Space attestation token for Google Cloud credentials, then impersonates a service
+ * account to obtain an OIDC ID token. That ID token is exchanged with AWS STS
+ * `AssumeRoleWithWebIdentity` for temporary AWS credentials.
  */
-class GcpToAwsKmsClientFactory : KmsClientFactory<GcpToAwsWifCredentials> {
+class GCloudToAwsKmsClientFactory : KmsClientFactory<GCloudToAwsWifCredentials> {
   /**
-   * Returns an [AwsKmsClient] using GCP Confidential Space identity to authenticate with AWS.
+   * Returns an [AwsKmsClient] using Google Cloud Confidential Space identity to authenticate with
+   * AWS.
    *
    * The flow:
    * 1. Build an `external_account` credential from the attestation token file
-   * 2. Impersonate a GCP service account from those credentials
+   * 2. Impersonate a Google Cloud service account from those credentials
    * 3. Generate an OIDC ID token with the AWS audience
    * 4. Exchange the ID token with AWS STS `AssumeRoleWithWebIdentity`
    *
-   * @param config The GCP-to-AWS WIF configuration.
+   * @param config The Google Cloud-to-AWS WIF configuration.
    * @return An initialized [AwsKmsClient].
    * @throws GeneralSecurityException if credentials cannot be obtained or exchanged.
    */
-  override fun getKmsClient(config: GcpToAwsWifCredentials): KmsClient {
-    val externalAccountCredentials = buildExternalAccountCredentials(config)
+  override fun getKmsClient(config: GCloudToAwsWifCredentials): KmsClient {
+    val externalAccountCredentials: GoogleCredentials = buildExternalAccountCredentials(config)
 
-    val impersonatedCredentials =
+    val impersonatedCredentials: ImpersonatedCredentials =
       ImpersonatedCredentials.newBuilder()
-        .setSourceCredentials(externalAccountCredentials)
-        .setTargetPrincipal(extractServiceAccount(config.serviceAccountImpersonationUrl))
-        .setScopes(listOf("https://www.googleapis.com/auth/cloud-platform"))
+        .apply {
+          setSourceCredentials(externalAccountCredentials)
+          setTargetPrincipal(extractServiceAccount(config.serviceAccountImpersonationUrl))
+          setScopes(listOf("https://www.googleapis.com/auth/cloud-platform"))
+        }
         .build()
 
-    val idToken =
+    val idToken: String =
       try {
-        val idTokenCredentials =
+        val idTokenCredentials: IdTokenCredentials =
           IdTokenCredentials.newBuilder()
-            .setIdTokenProvider(impersonatedCredentials)
-            .setTargetAudience(config.awsAudience)
+            .apply {
+              setIdTokenProvider(impersonatedCredentials)
+              setTargetAudience(config.awsAudience)
+            }
             .build()
         idTokenCredentials.refresh()
         idTokenCredentials.idToken.tokenValue
       } catch (e: Exception) {
-        throw GeneralSecurityException("Failed to obtain GCP ID token", e)
+        throw GeneralSecurityException("Failed to obtain Google Cloud ID token", e)
       }
 
-    val stsClient =
+    val stsClient: StsClient =
       try {
         StsClient.builder()
           .region(Region.of(config.region))
@@ -86,7 +93,7 @@ class GcpToAwsKmsClientFactory : KmsClientFactory<GcpToAwsWifCredentials> {
         throw GeneralSecurityException("Failed to create AWS STS client", e)
       }
 
-    val stsResponse =
+    val stsResponse: AssumeRoleWithWebIdentityResponse =
       try {
         stsClient.assumeRoleWithWebIdentity(
           AssumeRoleWithWebIdentityRequest.builder()
@@ -99,8 +106,8 @@ class GcpToAwsKmsClientFactory : KmsClientFactory<GcpToAwsWifCredentials> {
         throw GeneralSecurityException("AWS STS AssumeRoleWithWebIdentity failed", e)
       }
 
-    val awsCredentials = stsResponse.credentials()
-    val credentialsProvider =
+    val awsCredentials: Credentials = stsResponse.credentials()
+    val credentialsProvider: StaticCredentialsProvider =
       StaticCredentialsProvider.create(
         AwsSessionCredentials.create(
           awsCredentials.accessKeyId(),
@@ -113,11 +120,13 @@ class GcpToAwsKmsClientFactory : KmsClientFactory<GcpToAwsWifCredentials> {
   }
 
   companion object {
-    private fun buildExternalAccountCredentials(config: GcpToAwsWifCredentials): GoogleCredentials {
-      val wifConfigJson =
+    private fun buildExternalAccountCredentials(
+      config: GCloudToAwsWifCredentials
+    ): GoogleCredentials {
+      val wifConfigJson: String =
         JsonObject().run {
           addProperty("type", "external_account")
-          addProperty("audience", config.gcpAudience)
+          addProperty("audience", config.gcloudAudience)
           addProperty("subject_token_type", config.subjectTokenType)
           addProperty("token_url", config.tokenUrl)
           add(

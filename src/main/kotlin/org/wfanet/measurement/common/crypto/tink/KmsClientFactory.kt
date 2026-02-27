@@ -55,23 +55,26 @@ data class AwsWebIdentityCredentials(
 ) : WifCredentials
 
 /**
- * Configuration for accessing AWS KMS from a GCP Confidential Space workload.
+ * Configuration for accessing AWS KMS from a Google Cloud Confidential Space workload.
  *
  * Uses the same external-account credential flow as [GCloudWifCredentials] to exchange a
- * Confidential Space attestation token for GCP credentials, then impersonates a service account to
- * obtain an OIDC ID token. That ID token is exchanged with AWS STS `AssumeRoleWithWebIdentity` for
- * temporary AWS credentials.
+ * Confidential Space attestation token for Google Cloud credentials, then impersonates a service
+ * account to obtain an OIDC ID token. That ID token is exchanged with AWS STS
+ * `AssumeRoleWithWebIdentity` for temporary AWS credentials.
  */
-data class GcpToAwsWifCredentials(
-  /** The GCP audience for the WIF token exchange (Confidential Space workload pool). */
-  val gcpAudience: String,
+data class GCloudToAwsWifCredentials(
+  /** The Google Cloud audience for the WIF token exchange (Confidential Space workload pool). */
+  val gcloudAudience: String,
   /** The type of the token being presented (e.g., an OIDC token type). */
   val subjectTokenType: String,
-  /** The GCP Security Token Service (STS) token endpoint URL. */
+  /** The Google Cloud Security Token Service (STS) token endpoint URL. */
   val tokenUrl: String,
   /** The file path to the subject token (e.g., a Confidential Space attestation token). */
   val credentialSourceFilePath: String,
-  /** The URL to impersonate a GCP service account to get credentials for ID token generation. */
+  /**
+   * The URL to impersonate a Google Cloud service account to get credentials for ID token
+   * generation.
+   */
   val serviceAccountImpersonationUrl: String,
   /** The ARN of the AWS IAM role to assume. */
   val roleArn: String,

@@ -18,24 +18,24 @@ import kotlin.test.assertFails
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
-import org.wfanet.measurement.common.crypto.tink.GcpToAwsWifCredentials
+import org.wfanet.measurement.common.crypto.tink.GCloudToAwsWifCredentials
 
 /**
- * Tests for [GcpToAwsKmsClientFactory].
+ * Tests for [GCloudToAwsKmsClientFactory].
  *
- * Full integration testing requires a Confidential Space environment with a configured GCP/AWS
- * trust relationship. This unit test verifies that the factory fails gracefully with a bogus
- * config.
+ * Full integration testing requires a Confidential Space environment with a configured Google
+ * Cloud/AWS trust relationship. This unit test verifies that the factory fails gracefully with a
+ * bogus config.
  */
 @RunWith(JUnit4::class)
-class GcpToAwsKmsClientFactoryTest {
+class GCloudToAwsKmsClientFactoryTest {
 
   @Test
   fun `getKmsClient fails with invalid config`() {
-    val factory = GcpToAwsKmsClientFactory()
+    val factory = GCloudToAwsKmsClientFactory()
     val config =
-      GcpToAwsWifCredentials(
-        gcpAudience =
+      GCloudToAwsWifCredentials(
+        gcloudAudience =
           "//iam.googleapis.com/projects/123/locations/global/workloadIdentityPools/pool/providers/provider",
         subjectTokenType = "urn:ietf:params:oauth:token-type:jwt",
         tokenUrl = "https://sts.googleapis.com/v1/token",
