@@ -44,8 +44,10 @@ class AwsKmsClientFactory : KmsClientFactory<AwsWebIdentityCredentials> {
     val stsClient =
       try {
         StsClient.builder()
-          .region(Region.of(config.region))
-          .credentialsProvider(AnonymousCredentialsProvider.create())
+          .apply {
+            region(Region.of(config.region))
+            credentialsProvider(AnonymousCredentialsProvider.create())
+          }
           .build()
       } catch (e: Exception) {
         throw GeneralSecurityException("Failed to create STS client", e)
@@ -53,10 +55,12 @@ class AwsKmsClientFactory : KmsClientFactory<AwsWebIdentityCredentials> {
 
     val credentialsProvider =
       StsWebIdentityTokenFileCredentialsProvider.builder()
-        .stsClient(stsClient)
-        .roleArn(config.roleArn)
-        .roleSessionName(config.roleSessionName)
-        .webIdentityTokenFile(Paths.get(config.webIdentityTokenFilePath))
+        .apply {
+          stsClient(stsClient)
+          roleArn(config.roleArn)
+          roleSessionName(config.roleSessionName)
+          webIdentityTokenFile(Paths.get(config.webIdentityTokenFilePath))
+        }
         .build()
 
     return AwsKmsClient(credentialsProvider)

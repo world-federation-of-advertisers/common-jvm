@@ -71,8 +71,10 @@ class AwsKmsClient(private val credentialsProvider: AwsCredentialsProvider) : Km
     val kmsClient =
       try {
         SdkKmsClient.builder()
-          .credentialsProvider(credentialsProvider)
-          .region(Region.of(region))
+          .apply {
+            credentialsProvider(credentialsProvider)
+            region(Region.of(region))
+          }
           .build()
       } catch (e: Exception) {
         throw GeneralSecurityException("Cannot initialize AWS KMS client", e)
@@ -105,14 +107,19 @@ private class AwsKmsAead(private val kmsClient: SdkKmsClient, private val keyArn
 
   override fun encrypt(plaintext: ByteArray, associatedData: ByteArray?): ByteArray {
     try {
-      val requestBuilder =
-        EncryptRequest.builder().keyId(keyArn).plaintext(SdkBytes.fromByteArray(plaintext))
-      if (associatedData != null && associatedData.isNotEmpty()) {
-        requestBuilder.encryptionContext(
-          mapOf(ASSOCIATED_DATA_KEY to Base64.getEncoder().encodeToString(associatedData))
-        )
-      }
-      val response = kmsClient.encrypt(requestBuilder.build())
+      val request =
+        EncryptRequest.builder()
+          .apply {
+            keyId(keyArn)
+            plaintext(SdkBytes.fromByteArray(plaintext))
+            if (associatedData != null && associatedData.isNotEmpty()) {
+              encryptionContext(
+                mapOf(ASSOCIATED_DATA_KEY to Base64.getEncoder().encodeToString(associatedData))
+              )
+            }
+          }
+          .build()
+      val response = kmsClient.encrypt(request)
       return response.ciphertextBlob().asByteArray()
     } catch (e: KmsException) {
       throw GeneralSecurityException("Encryption failed", e)
@@ -121,14 +128,18 @@ private class AwsKmsAead(private val kmsClient: SdkKmsClient, private val keyArn
 
   override fun decrypt(ciphertext: ByteArray, associatedData: ByteArray?): ByteArray {
     try {
-      val requestBuilder =
-        DecryptRequest.builder().ciphertextBlob(SdkBytes.fromByteArray(ciphertext))
-      if (associatedData != null && associatedData.isNotEmpty()) {
-        requestBuilder.encryptionContext(
-          mapOf(ASSOCIATED_DATA_KEY to Base64.getEncoder().encodeToString(associatedData))
-        )
-      }
-      val response = kmsClient.decrypt(requestBuilder.build())
+      val request =
+        DecryptRequest.builder()
+          .apply {
+            ciphertextBlob(SdkBytes.fromByteArray(ciphertext))
+            if (associatedData != null && associatedData.isNotEmpty()) {
+              encryptionContext(
+                mapOf(ASSOCIATED_DATA_KEY to Base64.getEncoder().encodeToString(associatedData))
+              )
+            }
+          }
+          .build()
+      val response = kmsClient.decrypt(request)
       if (response.keyId() != keyArn) {
         throw GeneralSecurityException("Decryption failed: wrong key id")
       }

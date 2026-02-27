@@ -86,8 +86,10 @@ class GCloudToAwsKmsClientFactory : KmsClientFactory<GCloudToAwsWifCredentials> 
     val stsClient: StsClient =
       try {
         StsClient.builder()
-          .region(Region.of(config.region))
-          .credentialsProvider(AnonymousCredentialsProvider.create())
+          .apply {
+            region(Region.of(config.region))
+            credentialsProvider(AnonymousCredentialsProvider.create())
+          }
           .build()
       } catch (e: Exception) {
         throw GeneralSecurityException("Failed to create AWS STS client", e)
@@ -97,9 +99,11 @@ class GCloudToAwsKmsClientFactory : KmsClientFactory<GCloudToAwsWifCredentials> 
       try {
         stsClient.assumeRoleWithWebIdentity(
           AssumeRoleWithWebIdentityRequest.builder()
-            .roleArn(config.roleArn)
-            .roleSessionName(config.roleSessionName)
-            .webIdentityToken(idToken)
+            .apply {
+              roleArn(config.roleArn)
+              roleSessionName(config.roleSessionName)
+              webIdentityToken(idToken)
+            }
             .build()
         )
       } catch (e: Exception) {
