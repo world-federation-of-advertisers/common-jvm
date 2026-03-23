@@ -15,3 +15,21 @@ kt_jvm_test(
         "//src/main/kotlin/org/wfanet/measurement/storage/testing",
     ],
 )
+
+kt_jvm_test(
+    name = "GcsListBlobsDuplicateTest",
+    srcs = ["GcsListBlobsDuplicateTest.kt"],
+    tags = [
+        "no-remote-exec",
+    ],
+    test_class = "org.wfanet.measurement.gcloud.gcs.GcsListBlobsDuplicateTest",
+    deps = [
+        "//imports/java/com/google/cloud/storage",
+        "//imports/java/com/google/common/truth",
+        "//imports/java/com/google/protobuf",
+        "//imports/java/org/junit",
+        "//imports/kotlin/kotlinx/coroutines:core",
+        "//src/main/kotlin/org/wfanet/measurement/gcloud/gcs",
+        "//src/main/kotlin/org/wfanet/measurement/gcloud/gcs/testing:storage_emulator_rule",
+    ],
+)
