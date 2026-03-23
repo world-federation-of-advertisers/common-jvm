@@ -130,14 +130,6 @@ class GcsStorageClient(
         for (blob: Blob in blobPage.iterateAll()) {
           emit(ClientBlob(blob, blob.name))
         }
-
-        var nextPage: Page<Blob>? = blobPage.nextPage
-        while (nextPage != null) {
-          for (blob: Blob in nextPage.iterateAll()) {
-            emit(ClientBlob(blob, blob.name))
-          }
-          nextPage = nextPage.nextPage
-        }
       }
       .flowOn(blockingContext + CoroutineName("listBlobs"))
   }

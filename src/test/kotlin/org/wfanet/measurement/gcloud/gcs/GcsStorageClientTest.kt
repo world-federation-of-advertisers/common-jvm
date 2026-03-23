@@ -15,10 +15,15 @@
 package org.wfanet.measurement.gcloud.gcs
 
 import com.google.common.truth.Truth.assertThat
+import com.google.protobuf.ByteString
 import java.time.Instant
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Before
 import org.junit.ClassRule
+import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 import org.wfanet.measurement.gcloud.gcs.testing.StorageEmulatorRule
@@ -55,6 +60,23 @@ class GcsStorageClientTest : AbstractBlobMetadataStorageClientTest<GcsStorageCli
       val actualMetadata = blob.metadata ?: emptyMap()
       assertThat(actualMetadata).containsAtLeastEntriesIn(expectedMetadata)
     }
+  }
+
+  @Test
+  fun `listBlobs returns all blobs without duplicates`() = runBlocking {
+    val totalBlobs = 25
+    val prefix = "test/"
+
+    for (i in 1..totalBlobs) {
+      val key = "${prefix}file_${"%04d".format(i)}.json"
+      storageClient.writeBlob(key, flowOf(ByteString.copyFromUtf8("x")))
+    }
+
+    val results = storageClient.listBlobs(prefix).toList()
+    val keys = results.map { it.blobKey }
+
+    assertThat(keys).hasSize(totalBlobs)
+    assertThat(keys.toSet()).hasSize(totalBlobs)
   }
 
   companion object {
