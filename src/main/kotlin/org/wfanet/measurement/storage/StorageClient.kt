@@ -46,34 +46,43 @@ interface StorageClient {
   suspend fun listBlobs(prefix: String? = null): Flow<Blob>
 
   /**
-   * Lists unique key prefixes (virtual directories) under the given [prefix] using the specified
-   * [delimiter].
+   * Lists blob keys and unique key prefixes (virtual directories) directly under the given
+   * [prefix] using the specified [delimiter].
+   *
+   * This mirrors the behavior of GCS delimiter-based listing:
+   * - Blobs whose keys do not contain the [delimiter] after [prefix] are returned as-is.
+   * - Blobs whose keys contain the [delimiter] after [prefix] are grouped, and only the common
+   *   prefix up to and including the first [delimiter] is returned (deduplicated).
    *
    * For example, given blobs:
    * ```
+   *   path/file.txt
    *   path/2026-03-13/done
    *   path/2026-03-13/data
    *   path/2026-03-14/done
    * ```
-   * Calling `listBlobKeys("path/", "/")` returns `["path/2026-03-13/", "path/2026-03-14/"]`.
+   * Calling `listBlobKeys("path/", "/")` returns
+   * `["path/2026-03-13/", "path/2026-03-14/", "path/file.txt"]`.
    *
    * Implementations should use the storage backend's native prefix/delimiter support where
    * available (e.g., GCS delimiter listing) to avoid enumerating all objects.
    *
    * @param prefix The prefix to list under.
    * @param delimiter The delimiter used to define virtual directory boundaries.
-   * @return A [Flow] of prefix strings representing virtual directories.
+   * @return A [Flow] of blob keys and prefix strings.
    */
   suspend fun listBlobKeys(prefix: String, delimiter: String = "/"): Flow<String> {
-    val prefixes = mutableSetOf<String>()
+    val keys = mutableSetOf<String>()
     listBlobs(prefix).toList().forEach { blob ->
       val relativePath = blob.blobKey.removePrefix(prefix)
       val delimiterIndex = relativePath.indexOf(delimiter)
       if (delimiterIndex >= 0) {
-        prefixes.add(prefix + relativePath.substring(0, delimiterIndex + delimiter.length))
+        keys.add(prefix + relativePath.substring(0, delimiterIndex + delimiter.length))
+      } else {
+        keys.add(blob.blobKey)
       }
     }
-    return flow { prefixes.sorted().forEach { emit(it) } }
+    return flow { keys.sorted().forEach { emit(it) } }
   }
 
   /** Reference to a blob in a storage system. */
