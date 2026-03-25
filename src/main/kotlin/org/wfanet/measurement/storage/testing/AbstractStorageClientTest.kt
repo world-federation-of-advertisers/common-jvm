@@ -132,6 +132,40 @@ abstract class AbstractStorageClientTest<T : StorageClient> {
     assertThat(blobs).hasSize(3)
   }
 
+  @Test
+  fun `listBlobKeys returns unique prefixes for given delimiter`(): Unit = runBlocking {
+    storageClient.writeBlob("path/2026-03-13/done", "done".toByteStringUtf8())
+    storageClient.writeBlob("path/2026-03-13/data1", "data".toByteStringUtf8())
+    storageClient.writeBlob("path/2026-03-13/data2", "data".toByteStringUtf8())
+    storageClient.writeBlob("path/2026-03-14/done", "done".toByteStringUtf8())
+    storageClient.writeBlob("path/2026-03-15/done", "done".toByteStringUtf8())
+
+    val prefixes = storageClient.listBlobKeys("path/", "/").toList()
+
+    assertThat(prefixes).containsExactly(
+      "path/2026-03-13/",
+      "path/2026-03-14/",
+      "path/2026-03-15/",
+    )
+  }
+
+  @Test
+  fun `listBlobKeys returns empty flow for non-existent prefix`(): Unit = runBlocking {
+    val prefixes = storageClient.listBlobKeys("non-existent/", "/").toList()
+    assertThat(prefixes).isEmpty()
+  }
+
+  @Test
+  fun `listBlobKeys does not return nested prefixes`(): Unit = runBlocking {
+    storageClient.writeBlob("a/b/c/file1", "data".toByteStringUtf8())
+    storageClient.writeBlob("a/b/d/file2", "data".toByteStringUtf8())
+
+    val prefixes = storageClient.listBlobKeys("a/", "/").toList()
+
+    // Should only return the immediate child prefix, not nested ones
+    assertThat(prefixes).containsExactly("a/b/")
+  }
+
   private fun prepareStorage() {
     runBlocking {
       storageClient.writeBlob(BLOB_KEY_1, "content1".toByteStringUtf8())

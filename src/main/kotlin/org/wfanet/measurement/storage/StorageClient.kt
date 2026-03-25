@@ -17,6 +17,8 @@ package org.wfanet.measurement.storage
 import com.google.protobuf.ByteString
 import java.time.Instant
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.flow.flowOf
 import org.wfanet.measurement.storage.StorageClient.Blob
 
@@ -42,6 +44,37 @@ interface StorageClient {
    *   filters out blobs with blob keys that do not match the prefix.
    */
   suspend fun listBlobs(prefix: String? = null): Flow<Blob>
+
+  /**
+   * Lists unique key prefixes (virtual directories) under the given [prefix] using the specified
+   * [delimiter].
+   *
+   * For example, given blobs:
+   * ```
+   *   path/2026-03-13/done
+   *   path/2026-03-13/data
+   *   path/2026-03-14/done
+   * ```
+   * Calling `listBlobKeys("path/", "/")` returns `["path/2026-03-13/", "path/2026-03-14/"]`.
+   *
+   * Implementations should use the storage backend's native prefix/delimiter support where
+   * available (e.g., GCS delimiter listing) to avoid enumerating all objects.
+   *
+   * @param prefix The prefix to list under.
+   * @param delimiter The delimiter used to define virtual directory boundaries.
+   * @return A [Flow] of prefix strings representing virtual directories.
+   */
+  suspend fun listBlobKeys(prefix: String, delimiter: String = "/"): Flow<String> {
+    val prefixes = mutableSetOf<String>()
+    listBlobs(prefix).toList().forEach { blob ->
+      val relativePath = blob.blobKey.removePrefix(prefix)
+      val delimiterIndex = relativePath.indexOf(delimiter)
+      if (delimiterIndex >= 0) {
+        prefixes.add(prefix + relativePath.substring(0, delimiterIndex + delimiter.length))
+      }
+    }
+    return flow { prefixes.sorted().forEach { emit(it) } }
+  }
 
   /** Reference to a blob in a storage system. */
   interface Blob {

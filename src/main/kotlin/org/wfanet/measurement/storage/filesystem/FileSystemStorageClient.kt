@@ -115,6 +115,31 @@ class FileSystemStorageClient(
       .flowOn(coroutineContext)
   }
 
+  override suspend fun listBlobKeys(prefix: String, delimiter: String): Flow<String> {
+    require(delimiter == "/") { "FileSystemStorageClient only supports '/' delimiter" }
+
+    val prefixDir =
+      if (prefix.isEmpty()) {
+        directory
+      } else {
+        File(directory, prefix.trimEnd('/'))
+      }
+
+    if (!prefixDir.isDirectory) {
+      return emptyFlow()
+    }
+
+    return channelFlow<String> {
+        withContext(coroutineContext) {
+          prefixDir.listFiles()?.filter { it.isDirectory }?.forEach { dir ->
+            val relativePath = dir.toPath().relativeTo(directory.toPath()).toBlobKey()
+            trySendBlocking("$relativePath/")
+          }
+        }
+      }
+      .flowOn(coroutineContext)
+  }
+
   private fun resolvePath(blobKey: String): File {
     val relativePath =
       if (File.separatorChar == '/') {
