@@ -149,10 +149,12 @@ class GcsStorageClient(
       }
 
     return flow {
-        // When using a delimiter, the GCS API returns "prefix" entries for virtual directories.
-        // The Java client exposes these through Page.getValues() with names ending in the delimiter.
+        // When using a delimiter, the GCS API returns both items and prefix entries.
+        // Only emit prefix entries (names ending with the delimiter), not direct items.
         for (blob: Blob in blobPage.iterateAll()) {
-          emit(blob.name)
+          if (blob.name.endsWith(delimiter)) {
+            emit(blob.name)
+          }
         }
       }
       .flowOn(blockingContext + CoroutineName("listBlobKeys"))
