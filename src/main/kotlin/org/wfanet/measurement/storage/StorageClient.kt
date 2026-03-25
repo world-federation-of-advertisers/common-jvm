@@ -18,8 +18,8 @@ import com.google.protobuf.ByteString
 import java.time.Instant
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.toList
 import org.wfanet.measurement.storage.StorageClient.Blob
 
 /** Interface for blob/object storage operations. */
@@ -46,8 +46,8 @@ interface StorageClient {
   suspend fun listBlobs(prefix: String? = null): Flow<Blob>
 
   /**
-   * Lists blob keys and unique key prefixes (virtual directories) directly under the given
-   * [prefix] using the specified [delimiter].
+   * Lists blob keys and unique key prefixes (virtual directories) directly under the given [prefix]
+   * using the specified [delimiter].
    *
    * This mirrors the behavior of GCS delimiter-based listing:
    * - Blobs whose keys do not contain the [delimiter] after [prefix] are returned as-is.
@@ -61,8 +61,9 @@ interface StorageClient {
    *   path/2026-03-13/data
    *   path/2026-03-14/done
    * ```
-   * Calling `listBlobKeys("path/", "/")` returns
-   * `["path/2026-03-13/", "path/2026-03-14/", "path/file.txt"]`.
+   *
+   * Calling `listBlobKeys("path/", "/")` returns `["path/2026-03-13/", "path/2026-03-14/",
+   * "path/file.txt"]`.
    *
    * Implementations should use the storage backend's native prefix/delimiter support where
    * available (e.g., GCS delimiter listing) to avoid enumerating all objects.

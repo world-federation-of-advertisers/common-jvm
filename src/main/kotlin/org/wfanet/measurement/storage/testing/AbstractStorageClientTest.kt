@@ -142,11 +142,7 @@ abstract class AbstractStorageClientTest<T : StorageClient> {
 
     val prefixes = storageClient.listBlobKeys("path/", "/").toList()
 
-    assertThat(prefixes).containsExactly(
-      "path/2026-03-13/",
-      "path/2026-03-14/",
-      "path/2026-03-15/",
-    )
+    assertThat(prefixes).containsExactly("path/2026-03-13/", "path/2026-03-14/", "path/2026-03-15/")
   }
 
   @Test
@@ -179,12 +175,7 @@ abstract class AbstractStorageClientTest<T : StorageClient> {
     val keys = storageClient.listBlobKeys("path/", "/").toList()
 
     // Should return direct files and directory prefixes, but NOT nested files
-    assertThat(keys).containsExactly(
-      "path/dir1/",
-      "path/dir2/",
-      "path/file1.txt",
-      "path/file2.txt",
-    )
+    assertThat(keys).containsExactly("path/dir1/", "path/dir2/", "path/file1.txt", "path/file2.txt")
   }
 
   private fun prepareStorage() {
