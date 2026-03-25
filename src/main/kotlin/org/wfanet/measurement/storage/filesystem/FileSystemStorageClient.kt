@@ -131,9 +131,13 @@ class FileSystemStorageClient(
 
     return channelFlow<String> {
         withContext(coroutineContext) {
-          prefixDir.listFiles()?.filter { it.isDirectory }?.forEach { dir ->
-            val relativePath = dir.toPath().relativeTo(directory.toPath()).toBlobKey()
-            trySendBlocking("$relativePath/")
+          prefixDir.listFiles()?.forEach { entry ->
+            val relativePath = entry.toPath().relativeTo(directory.toPath()).toBlobKey()
+            if (entry.isDirectory) {
+              trySendBlocking("$relativePath/")
+            } else {
+              trySendBlocking(relativePath)
+            }
           }
         }
       }

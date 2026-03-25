@@ -149,12 +149,10 @@ class GcsStorageClient(
       }
 
     return flow {
-        // When using a delimiter, the GCS API returns both items and prefix entries.
-        // Only emit prefix entries (names ending with the delimiter), not direct items.
+        // When using a delimiter, the GCS API returns both items (direct blobs) and prefix
+        // entries (virtual directories ending with the delimiter).
         for (blob: Blob in blobPage.iterateAll()) {
-          if (blob.name.endsWith(delimiter)) {
-            emit(blob.name)
-          }
+          emit(blob.name)
         }
       }
       .flowOn(blockingContext + CoroutineName("listBlobKeys"))

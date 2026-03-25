@@ -167,24 +167,25 @@ abstract class AbstractStorageClientTest<T : StorageClient> {
   }
 
   @Test
-  fun `listBlobKeys excludes direct files and only returns directory prefixes`(): Unit =
-    runBlocking {
-      // Files directly at the prefix level (should NOT be returned)
-      storageClient.writeBlob("path/file1.txt", "data".toByteStringUtf8())
-      storageClient.writeBlob("path/file2.txt", "data".toByteStringUtf8())
-      // Files inside subdirectories (should be grouped into directory prefixes)
-      storageClient.writeBlob("path/dir1/nested1.txt", "data".toByteStringUtf8())
-      storageClient.writeBlob("path/dir1/nested2.txt", "data".toByteStringUtf8())
-      storageClient.writeBlob("path/dir2/nested3.txt", "data".toByteStringUtf8())
+  fun `listBlobKeys returns both direct files and directory prefixes`(): Unit = runBlocking {
+    // Files directly at the prefix level
+    storageClient.writeBlob("path/file1.txt", "data".toByteStringUtf8())
+    storageClient.writeBlob("path/file2.txt", "data".toByteStringUtf8())
+    // Files inside subdirectories
+    storageClient.writeBlob("path/dir1/nested1.txt", "data".toByteStringUtf8())
+    storageClient.writeBlob("path/dir1/nested2.txt", "data".toByteStringUtf8())
+    storageClient.writeBlob("path/dir2/nested3.txt", "data".toByteStringUtf8())
 
-      val keys = storageClient.listBlobKeys("path/", "/").toList()
+    val keys = storageClient.listBlobKeys("path/", "/").toList()
 
-      // Should only return directory prefixes, not direct files or nested files
-      assertThat(keys).containsExactly(
-        "path/dir1/",
-        "path/dir2/",
-      )
-    }
+    // Should return direct files and directory prefixes, but NOT nested files
+    assertThat(keys).containsExactly(
+      "path/dir1/",
+      "path/dir2/",
+      "path/file1.txt",
+      "path/file2.txt",
+    )
+  }
 
   private fun prepareStorage() {
     runBlocking {
