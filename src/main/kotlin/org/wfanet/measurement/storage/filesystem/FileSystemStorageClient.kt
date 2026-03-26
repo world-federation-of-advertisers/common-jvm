@@ -115,8 +115,7 @@ class FileSystemStorageClient(
       .flowOn(coroutineContext)
   }
 
-  override suspend fun listBlobKeys(prefix: String, delimiter: String): Flow<String> {
-    require(delimiter == "/") { "FileSystemStorageClient only supports '/' delimiter" }
+  override suspend fun listDelimitedBlobKeys(prefix: String): Flow<String> {
 
     val prefixDir =
       if (prefix.isEmpty()) {

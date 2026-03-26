@@ -134,9 +134,9 @@ class GcsStorageClient(
       .flowOn(blockingContext + CoroutineName("listBlobs"))
   }
 
-  override suspend fun listBlobKeys(prefix: String, delimiter: String): Flow<String> {
+  override suspend fun listDelimitedBlobKeys(prefix: String): Flow<String> {
     val options =
-      arrayOf(Storage.BlobListOption.prefix(prefix), Storage.BlobListOption.delimiter(delimiter))
+      arrayOf(Storage.BlobListOption.prefix(prefix), Storage.BlobListOption.delimiter(DELIMITER))
 
     val blobPage: Page<Blob> =
       try {
@@ -152,7 +152,7 @@ class GcsStorageClient(
           emit(blob.name)
         }
       }
-      .flowOn(blockingContext + CoroutineName("listBlobKeys"))
+      .flowOn(blockingContext + CoroutineName("listDelimitedBlobKeys"))
   }
 
   override suspend fun updateBlobMetadata(

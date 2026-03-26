@@ -47,12 +47,12 @@ interface StorageClient {
 
   /**
    * Lists blob keys and unique key prefixes (virtual directories) directly under the given [prefix]
-   * using the specified [delimiter].
+   * using [DELIMITER].
    *
    * This mirrors the behavior of GCS delimiter-based listing:
-   * - Blobs whose keys do not contain the [delimiter] after [prefix] are returned as-is.
-   * - Blobs whose keys contain the [delimiter] after [prefix] are grouped, and only the common
-   *   prefix up to and including the first encountered [delimiter] is returned (deduplicated).
+   * - Blobs whose keys do not contain the [DELIMITER] after [prefix] are returned as-is.
+   * - Blobs whose keys contain the [DELIMITER] after [prefix] are grouped, and only the common
+   *   prefix up to and including the first encountered [DELIMITER] is returned (deduplicated).
    *
    * For example, given blobs:
    * ```
@@ -62,28 +62,32 @@ interface StorageClient {
    *   path/2026-03-14/done
    * ```
    *
-   * Calling `listBlobKeys("path/", "/")` returns `["path/2026-03-13/", "path/2026-03-14/",
+   * Calling `listDelimitedBlobKeys("path/")` returns `["path/2026-03-13/", "path/2026-03-14/",
    * "path/file.txt"]`.
    *
    * Implementations should use the storage backend's native prefix/delimiter support where
    * available (e.g., GCS delimiter listing) to avoid enumerating all objects.
    *
    * @param prefix The prefix to list under.
-   * @param delimiter The delimiter used to define virtual directory boundaries.
-   * @return A [Flow] of blob keys and prefix strings ending at the first encountered [delimiter].
+   * @return A [Flow] of blob keys and prefix strings ending at the first encountered [DELIMITER].
    */
-  suspend fun listBlobKeys(prefix: String, delimiter: String = "/"): Flow<String> {
+  suspend fun listDelimitedBlobKeys(prefix: String): Flow<String> {
     val keys = mutableSetOf<String>()
     listBlobs(prefix).toList().forEach { blob ->
       val relativePath = blob.blobKey.removePrefix(prefix)
-      val delimiterIndex = relativePath.indexOf(delimiter)
+      val delimiterIndex = relativePath.indexOf(DELIMITER)
       if (delimiterIndex >= 0) {
-        keys.add(prefix + relativePath.substring(0, delimiterIndex + delimiter.length))
+        keys.add(prefix + relativePath.substring(0, delimiterIndex + DELIMITER.length))
       } else {
         keys.add(blob.blobKey)
       }
     }
     return flow { keys.sorted().forEach { emit(it) } }
+  }
+
+  companion object {
+    /** Delimiter used by [listDelimitedBlobKeys] to define virtual directory boundaries. */
+    const val DELIMITER = "/"
   }
 
   /** Reference to a blob in a storage system. */
