@@ -136,7 +136,10 @@ class GcsStorageClient(
 
   override suspend fun listDelimitedBlobKeys(prefix: String): Flow<String> {
     val options =
-      arrayOf(Storage.BlobListOption.prefix(prefix), Storage.BlobListOption.delimiter(DELIMITER))
+      arrayOf(
+        Storage.BlobListOption.prefix(prefix),
+        Storage.BlobListOption.delimiter(StorageClient.DELIMITER),
+      )
 
     val blobPage: Page<Blob> =
       try {
