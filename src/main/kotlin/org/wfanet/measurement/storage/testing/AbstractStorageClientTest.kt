@@ -230,6 +230,73 @@ abstract class AbstractStorageClientTest<T : StorageClient> {
     assertThat(blobs).isEmpty()
   }
 
+  @Test
+  fun `Blob updateTime is not null after writing`() = runBlocking {
+    val blobKey = "blob-with-update-time"
+    val blob = storageClient.writeBlob(blobKey, testBlobContent)
+
+    assertThat(blob.updateTime).isNotNull()
+  }
+
+  @Test
+  fun `getBlob returns blob with updateTime`() = runBlocking {
+    val blobKey = "blob-get-update-time"
+    storageClient.writeBlob(blobKey, testBlobContent)
+
+    val blob = assertNotNull(storageClient.getBlob(blobKey))
+
+    assertThat(blob.updateTime).isNotNull()
+  }
+
+  @Test
+  fun `listBlobsUpdatedAfter returns blobs updated after the given instant`(): Unit = runBlocking {
+    val beforeWrite = Instant.now().minusSeconds(1)
+    storageClient.writeBlob("update-prefix/blob1", "content1".toByteStringUtf8())
+    storageClient.writeBlob("update-prefix/blob2", "content2".toByteStringUtf8())
+
+    val blobs = storageClient.listBlobsUpdatedAfter("update-prefix/", beforeWrite).toList()
+
+    assertThat(blobs).hasSize(2)
+    val blobKeys = blobs.map { it.blobKey }.toSet()
+    assertThat(blobKeys).containsExactly("update-prefix/blob1", "update-prefix/blob2")
+  }
+
+  @Test
+  fun `listBlobsUpdatedAfter returns empty flow when no blobs match`(): Unit = runBlocking {
+    storageClient.writeBlob("old-update-prefix/blob1", "content1".toByteStringUtf8())
+
+    val futureInstant = Instant.now().plusSeconds(3600)
+    val blobs = storageClient.listBlobsUpdatedAfter("old-update-prefix/", futureInstant).toList()
+
+    assertThat(blobs).isEmpty()
+  }
+
+  @Test
+  fun `listBlobsUpdatedAfter returns empty flow for non-existent prefix`(): Unit = runBlocking {
+    val blobs =
+      storageClient.listBlobsUpdatedAfter("non-existent/", Instant.now().minusSeconds(1)).toList()
+
+    assertThat(blobs).isEmpty()
+  }
+
+  @Test
+  fun `writeBlob overwrite updates updateTime`() = runBlocking {
+    val blobKey = "blob-overwrite-update-time"
+    val firstBlob = storageClient.writeBlob(blobKey, "initial content".toByteStringUtf8())
+    val firstUpdateTime = firstBlob.updateTime
+
+    // Small delay to ensure time difference is measurable.
+    Thread.sleep(1100)
+
+    val overwrittenBlob = storageClient.writeBlob(blobKey, "updated content".toByteStringUtf8())
+
+    // updateTime should reflect the most recent write.
+    // Note: We cannot verify that createTime is preserved across overwrites because some storage
+    // clients (e.g. S3 without versioning) do not track a true creation time separately
+    // from the last modified time.
+    assertThat(overwrittenBlob.updateTime).isGreaterThan(firstUpdateTime)
+  }
+
   private fun prepareStorage() {
     runBlocking {
       storageClient.writeBlob(BLOB_KEY_1, "content1".toByteStringUtf8())

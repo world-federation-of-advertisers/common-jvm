@@ -82,6 +82,9 @@ internal constructor(
     override val createTime: java.time.Instant
       get() = blob.createTime
 
+    override val updateTime: java.time.Instant
+      get() = blob.updateTime
+
     override val size: Long
       get() = blob.size
 

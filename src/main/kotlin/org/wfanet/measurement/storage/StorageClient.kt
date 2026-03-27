@@ -105,6 +105,25 @@ interface StorageClient {
     }
   }
 
+  /**
+   * Lists blobs under [prefix] that were updated strictly after [after].
+   *
+   * Implementations should use native server-side filtering where available.
+   *
+   * @param prefix A blob key prefix to scope the listing.
+   * @param after Only blobs updated after this instant are returned.
+   * @return A [Flow] of [Blob]s updated after [after].
+   */
+  suspend fun listBlobsUpdatedAfter(prefix: String, after: Instant): Flow<Blob> {
+    return flow {
+      listBlobs(prefix).collect { blob ->
+        if (blob.updateTime.isAfter(after)) {
+          emit(blob)
+        }
+      }
+    }
+  }
+
   companion object {
     /** Delimiter used by [listBlobKeysAndPrefixes] to define virtual directory boundaries. */
     const val DELIMITER = "/"
@@ -123,6 +142,9 @@ interface StorageClient {
 
     /** The time the blob was created. */
     val createTime: Instant
+
+    /** The time the blob was last updated. */
+    val updateTime: Instant
 
     /** Returns a [Flow] for the blob content. */
     fun read(): Flow<ByteString>

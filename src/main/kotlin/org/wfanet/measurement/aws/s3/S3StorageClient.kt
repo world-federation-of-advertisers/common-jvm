@@ -139,7 +139,7 @@ class S3StorageClient(private val s3: S3AsyncClient, private val bucketName: Str
 
   override suspend fun getBlob(blobKey: String): StorageClient.Blob? {
     val head = head(blobKey) ?: return null
-    return Blob(blobKey, head.contentLength(), head.lastModified())
+    return Blob(blobKey, head.contentLength(), head.lastModified(), head.lastModified())
   }
 
   private suspend fun head(blobKey: String): HeadObjectResponse? {
@@ -179,7 +179,7 @@ class S3StorageClient(private val s3: S3AsyncClient, private val bucketName: Str
 
           listObjectsV2Response
             .contents()
-            .map { Blob(it.key(), it.size(), it.lastModified()) }
+            .map { Blob(it.key(), it.size(), it.lastModified(), it.lastModified()) }
             .forEach { emit(it) }
         }
       } catch (e: CompletionException) {
@@ -188,11 +188,17 @@ class S3StorageClient(private val s3: S3AsyncClient, private val bucketName: Str
     }
   }
 
+  /**
+   * S3 does not have a separate creation time unless versioning is enabled. Each write replaces the
+   * object entirely, so [lastModified] is both the creation time and update time of the current
+   * version.
+   */
   inner class Blob
   internal constructor(
     override val blobKey: String,
     contentLength: Long,
     override val createTime: Instant,
+    override val updateTime: Instant,
   ) : StorageClient.Blob {
     override val storageClient: StorageClient
       get() = this@S3StorageClient

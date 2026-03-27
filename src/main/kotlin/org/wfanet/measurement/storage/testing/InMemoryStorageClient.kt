@@ -36,7 +36,9 @@ class InMemoryStorageClient : StorageClient {
   }
 
   override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
-    val blob = Blob(blobKey, content.flatten())
+    val now = Instant.now()
+    val existingCreateTime = storageMap[blobKey]?.createTime
+    val blob = Blob(blobKey, content.flatten(), existingCreateTime ?: now, now)
     storageMap[blobKey] = blob
     return blob
   }
@@ -57,10 +59,12 @@ class InMemoryStorageClient : StorageClient {
     }
   }
 
-  private inner class Blob(override val blobKey: String, private val content: ByteString) :
-    StorageClient.Blob {
-
-    override val createTime: Instant = Instant.now()
+  private inner class Blob(
+    override val blobKey: String,
+    private val content: ByteString,
+    override val createTime: Instant,
+    override val updateTime: Instant,
+  ) : StorageClient.Blob {
 
     override val size: Long
       get() = content.size().toLong()

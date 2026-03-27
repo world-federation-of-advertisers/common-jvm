@@ -176,6 +176,9 @@ class FileSystemStorageClient(
           .creationTime()
           .toInstant()
 
+    override val updateTime: Instant
+      get() = Instant.ofEpochMilli(file.lastModified())
+
     override fun read(): Flow<ByteString> {
       return file
         .inputStream()

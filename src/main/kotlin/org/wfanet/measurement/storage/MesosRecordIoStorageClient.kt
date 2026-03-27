@@ -88,6 +88,9 @@ class MesosRecordIoStorageClient(private val storageClient: StorageClient) : Sto
     override val createTime: Instant
       get() = blob.createTime
 
+    override val updateTime: Instant
+      get() = blob.updateTime
+
     override val size: Long
       get() = blob.size
 

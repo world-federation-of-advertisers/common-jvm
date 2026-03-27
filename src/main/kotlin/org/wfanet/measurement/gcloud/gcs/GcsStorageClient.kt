@@ -207,6 +207,9 @@ class GcsStorageClient(
     override val createTime: Instant
       get() = checkNotNull(blob.createTimeOffsetDateTime).toInstant()
 
+    override val updateTime: Instant
+      get() = checkNotNull(blob.updateTimeOffsetDateTime).toInstant()
+
     override fun read(): Flow<ByteString> {
       return blob.reader().asFlow(READ_BUFFER_SIZE, blockingContext + CoroutineName("readBlob"))
     }

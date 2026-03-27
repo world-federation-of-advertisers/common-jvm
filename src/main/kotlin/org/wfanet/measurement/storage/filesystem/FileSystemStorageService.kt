@@ -64,6 +64,7 @@ class FileSystemStorageService(
     return blobMetadata {
       size = blob.size
       createTime = blob.createTime.toProtoTime()
+      updateTime = blob.updateTime.toProtoTime()
     }
   }
 
@@ -73,6 +74,7 @@ class FileSystemStorageService(
       size = blob.size
       blobKey = request.blobKey
       createTime = blob.createTime.toProtoTime()
+      updateTime = blob.updateTime.toProtoTime()
     }
   }
 
@@ -94,6 +96,7 @@ class FileSystemStorageService(
           blobKey = it.blobKey
           size = it.size
           createTime = it.createTime.toProtoTime()
+          updateTime = it.updateTime.toProtoTime()
         }
       }
     }
