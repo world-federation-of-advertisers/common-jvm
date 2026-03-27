@@ -62,7 +62,7 @@ interface StorageClient {
    *   path/2026-03-14/done
    * ```
    *
-   * Calling `listDelimitedBlobKeys("path/")` returns `["path/2026-03-13/", "path/2026-03-14/",
+   * Calling `listBlobKeysAndPrefixes("path/")` returns `["path/2026-03-13/", "path/2026-03-14/",
    * "path/file.txt"]`.
    *
    * Implementations should use the storage backend's native prefix/delimiter support where
@@ -71,7 +71,7 @@ interface StorageClient {
    * @param prefix The prefix to list under.
    * @return A [Flow] of blob keys and prefix strings ending at the first encountered [DELIMITER].
    */
-  suspend fun listDelimitedBlobKeys(prefix: String): Flow<String> {
+  suspend fun listBlobKeysAndPrefixes(prefix: String): Flow<String> {
     val keys = mutableSetOf<String>()
     listBlobs(prefix).toList().forEach { blob ->
       val relativePath = blob.blobKey.removePrefix(prefix)
@@ -86,7 +86,7 @@ interface StorageClient {
   }
 
   companion object {
-    /** Delimiter used by [listDelimitedBlobKeys] to define virtual directory boundaries. */
+    /** Delimiter used by [listBlobKeysAndPrefixes] to define virtual directory boundaries. */
     const val DELIMITER = "/"
   }
 

@@ -134,7 +134,7 @@ class GcsStorageClient(
       .flowOn(blockingContext + CoroutineName("listBlobs"))
   }
 
-  override suspend fun listDelimitedBlobKeys(prefix: String): Flow<String> {
+  override suspend fun listBlobKeysAndPrefixes(prefix: String): Flow<String> {
     val options =
       arrayOf(
         Storage.BlobListOption.prefix(prefix),
@@ -155,7 +155,7 @@ class GcsStorageClient(
           emit(blob.name)
         }
       }
-      .flowOn(blockingContext + CoroutineName("listDelimitedBlobKeys"))
+      .flowOn(blockingContext + CoroutineName("listBlobKeysAndPrefixes"))
   }
 
   override suspend fun updateBlobMetadata(

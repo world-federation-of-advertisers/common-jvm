@@ -115,7 +115,7 @@ class FileSystemStorageClient(
       .flowOn(coroutineContext)
   }
 
-  override suspend fun listDelimitedBlobKeys(prefix: String): Flow<String> {
+  override suspend fun listBlobKeysAndPrefixes(prefix: String): Flow<String> {
 
     val prefixDir =
       if (prefix.isEmpty()) {
