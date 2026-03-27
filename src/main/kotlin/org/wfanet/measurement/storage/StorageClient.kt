@@ -17,7 +17,9 @@ package org.wfanet.measurement.storage
 import com.google.protobuf.ByteString
 import java.time.Instant
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.toList
 import org.wfanet.measurement.storage.StorageClient.Blob
 
 /** Interface for blob/object storage operations. */
@@ -42,6 +44,51 @@ interface StorageClient {
    *   filters out blobs with blob keys that do not match the prefix.
    */
   suspend fun listBlobs(prefix: String? = null): Flow<Blob>
+
+  /**
+   * Lists blob keys and unique key prefixes (virtual directories) directly under the given [prefix]
+   * using [DELIMITER].
+   *
+   * This mirrors the behavior of GCS delimiter-based listing:
+   * - Blobs whose keys do not contain the [DELIMITER] after [prefix] are returned as-is.
+   * - Blobs whose keys contain the [DELIMITER] after [prefix] are grouped, and only the common
+   *   prefix up to and including the first encountered [DELIMITER] is returned (deduplicated).
+   *
+   * For example, given blobs:
+   * ```
+   *   path/file.txt
+   *   path/2026-03-13/done
+   *   path/2026-03-13/data
+   *   path/2026-03-14/done
+   * ```
+   *
+   * Calling `listBlobKeysAndPrefixes("path/")` returns `["path/2026-03-13/", "path/2026-03-14/",
+   * "path/file.txt"]`.
+   *
+   * Implementations should use the storage backend's native prefix/delimiter support where
+   * available (e.g., GCS delimiter listing) to avoid enumerating all objects.
+   *
+   * @param prefix The prefix to list under.
+   * @return A [Flow] of blob keys and prefix strings ending at the first encountered [DELIMITER].
+   */
+  suspend fun listBlobKeysAndPrefixes(prefix: String): Flow<String> {
+    val keys = mutableSetOf<String>()
+    listBlobs(prefix).toList().forEach { blob ->
+      val relativePath = blob.blobKey.removePrefix(prefix)
+      val delimiterIndex = relativePath.indexOf(DELIMITER)
+      if (delimiterIndex >= 0) {
+        keys.add(prefix + relativePath.substring(0, delimiterIndex + DELIMITER.length))
+      } else {
+        keys.add(blob.blobKey)
+      }
+    }
+    return flow { keys.sorted().forEach { emit(it) } }
+  }
+
+  companion object {
+    /** Delimiter used by [listBlobKeysAndPrefixes] to define virtual directory boundaries. */
+    const val DELIMITER = "/"
+  }
 
   /** Reference to a blob in a storage system. */
   interface Blob {

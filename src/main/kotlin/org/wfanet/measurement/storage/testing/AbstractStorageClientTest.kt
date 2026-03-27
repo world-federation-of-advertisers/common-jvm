@@ -132,6 +132,54 @@ abstract class AbstractStorageClientTest<T : StorageClient> {
     assertThat(blobs).hasSize(3)
   }
 
+  @Test
+  fun `listBlobKeysAndPrefixes returns unique prefixes for given delimiter`(): Unit = runBlocking {
+    storageClient.writeBlob("path/2026-03-13/done", "done".toByteStringUtf8())
+    storageClient.writeBlob("path/2026-03-13/data1", "data".toByteStringUtf8())
+    storageClient.writeBlob("path/2026-03-13/data2", "data".toByteStringUtf8())
+    storageClient.writeBlob("path/2026-03-14/done", "done".toByteStringUtf8())
+    storageClient.writeBlob("path/2026-03-15/done", "done".toByteStringUtf8())
+
+    val prefixes = storageClient.listBlobKeysAndPrefixes("path/").toList()
+
+    assertThat(prefixes).containsExactly("path/2026-03-13/", "path/2026-03-14/", "path/2026-03-15/")
+  }
+
+  @Test
+  fun `listBlobKeysAndPrefixes returns empty flow for non-existent prefix`(): Unit = runBlocking {
+    val prefixes = storageClient.listBlobKeysAndPrefixes("non-existent/").toList()
+    assertThat(prefixes).isEmpty()
+  }
+
+  @Test
+  fun `listBlobKeysAndPrefixes does not return nested prefixes`(): Unit = runBlocking {
+    storageClient.writeBlob("a/b/c/file1", "data".toByteStringUtf8())
+    storageClient.writeBlob("a/b/d/file2", "data".toByteStringUtf8())
+
+    val prefixes = storageClient.listBlobKeysAndPrefixes("a/").toList()
+
+    // Should only return the immediate child prefix, not nested ones
+    assertThat(prefixes).containsExactly("a/b/")
+  }
+
+  @Test
+  fun `listBlobKeysAndPrefixes returns both direct files and directory prefixes`(): Unit =
+    runBlocking {
+      // Files directly at the prefix level
+      storageClient.writeBlob("path/file1.txt", "data".toByteStringUtf8())
+      storageClient.writeBlob("path/file2.txt", "data".toByteStringUtf8())
+      // Files inside subdirectories
+      storageClient.writeBlob("path/dir1/nested1.txt", "data".toByteStringUtf8())
+      storageClient.writeBlob("path/dir1/nested2.txt", "data".toByteStringUtf8())
+      storageClient.writeBlob("path/dir2/nested3.txt", "data".toByteStringUtf8())
+
+      val keys = storageClient.listBlobKeysAndPrefixes("path/").toList()
+
+      // Should return direct files and directory prefixes, but NOT nested files
+      assertThat(keys)
+        .containsExactly("path/dir1/", "path/dir2/", "path/file1.txt", "path/file2.txt")
+    }
+
   private fun prepareStorage() {
     runBlocking {
       storageClient.writeBlob(BLOB_KEY_1, "content1".toByteStringUtf8())

@@ -134,6 +134,30 @@ class GcsStorageClient(
       .flowOn(blockingContext + CoroutineName("listBlobs"))
   }
 
+  override suspend fun listBlobKeysAndPrefixes(prefix: String): Flow<String> {
+    val options =
+      arrayOf(
+        Storage.BlobListOption.prefix(prefix),
+        Storage.BlobListOption.delimiter(StorageClient.DELIMITER),
+      )
+
+    val blobPage: Page<Blob> =
+      try {
+        storage.list(bucketName, *options)
+      } catch (e: GcsStorageException) {
+        throw StorageException("Failed to list blob keys.", e)
+      }
+
+    return flow {
+        // When using a delimiter, the GCS API returns both items (direct blobs) and prefix
+        // entries (virtual directories ending with the delimiter).
+        for (blob: Blob in blobPage.iterateAll()) {
+          emit(blob.name)
+        }
+      }
+      .flowOn(blockingContext + CoroutineName("listBlobKeysAndPrefixes"))
+  }
+
   override suspend fun updateBlobMetadata(
     blobKey: String,
     customCreateTime: Instant?,

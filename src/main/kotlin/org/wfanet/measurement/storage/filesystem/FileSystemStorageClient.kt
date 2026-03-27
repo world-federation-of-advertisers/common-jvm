@@ -115,6 +115,34 @@ class FileSystemStorageClient(
       .flowOn(coroutineContext)
   }
 
+  override suspend fun listBlobKeysAndPrefixes(prefix: String): Flow<String> {
+
+    val prefixDir =
+      if (prefix.isEmpty()) {
+        directory
+      } else {
+        File(directory, prefix.trimEnd('/'))
+      }
+
+    if (!prefixDir.isDirectory) {
+      return emptyFlow()
+    }
+
+    return channelFlow<String> {
+        withContext(coroutineContext) {
+          prefixDir.listFiles()?.forEach { entry ->
+            val relativePath = entry.toPath().relativeTo(directory.toPath()).toBlobKey()
+            if (entry.isDirectory) {
+              trySendBlocking("$relativePath/")
+            } else {
+              trySendBlocking(relativePath)
+            }
+          }
+        }
+      }
+      .flowOn(coroutineContext)
+  }
+
   private fun resolvePath(blobKey: String): File {
     val relativePath =
       if (File.separatorChar == '/') {
