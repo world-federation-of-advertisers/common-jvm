@@ -17,6 +17,7 @@ package org.wfanet.measurement.aws.s3
 import com.google.protobuf.ByteString
 import com.google.protobuf.kotlin.toByteString
 import java.security.MessageDigest
+import java.time.Instant
 import java.util.Base64
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletionException
@@ -138,7 +139,7 @@ class S3StorageClient(private val s3: S3AsyncClient, private val bucketName: Str
 
   override suspend fun getBlob(blobKey: String): StorageClient.Blob? {
     val head = head(blobKey) ?: return null
-    return Blob(blobKey, head.contentLength())
+    return Blob(blobKey, head.contentLength(), head.lastModified())
   }
 
   private suspend fun head(blobKey: String): HeadObjectResponse? {
@@ -176,7 +177,10 @@ class S3StorageClient(private val s3: S3AsyncClient, private val bucketName: Str
           truncated = listObjectsV2Response.isTruncated
           continuationToken = listObjectsV2Response.nextContinuationToken()
 
-          listObjectsV2Response.contents().map { Blob(it.key(), it.size()) }.forEach { emit(it) }
+          listObjectsV2Response
+            .contents()
+            .map { Blob(it.key(), it.size(), it.lastModified()) }
+            .forEach { emit(it) }
         }
       } catch (e: CompletionException) {
         throw e.cause!!
@@ -184,8 +188,26 @@ class S3StorageClient(private val s3: S3AsyncClient, private val bucketName: Str
     }
   }
 
-  inner class Blob internal constructor(override val blobKey: String, contentLength: Long) :
-    StorageClient.Blob {
+  /** [StorageClient.Blob] implementation for [S3StorageClient]. */
+  inner class Blob
+  internal constructor(
+    override val blobKey: String,
+    contentLength: Long,
+    /**
+     * S3 does not have a separate creation time unless versioning is enabled. Each write replaces
+     * the object entirely, so this is both the creation time and update time of the current
+     * version.
+     */
+    private val lastModified: Instant,
+  ) : StorageClient.Blob {
+    /** Always the same as [lastModified]. See [lastModified]. */
+    override val createTime: Instant
+      get() = lastModified
+
+    /** Always the same as [lastModified]. See [lastModified]. */
+    override val updateTime: Instant
+      get() = lastModified
+
     override val storageClient: StorageClient
       get() = this@S3StorageClient
 

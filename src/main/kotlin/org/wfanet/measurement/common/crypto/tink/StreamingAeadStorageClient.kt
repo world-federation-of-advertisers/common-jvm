@@ -90,6 +90,12 @@ class StreamingAeadStorageClient(
     override val size: Long
       get() = blob.size
 
+    override val createTime: java.time.Instant
+      get() = blob.createTime
+
+    override val updateTime: java.time.Instant
+      get() = blob.updateTime
+
     /**
      * Reads and decrypts the blob's content.
      *

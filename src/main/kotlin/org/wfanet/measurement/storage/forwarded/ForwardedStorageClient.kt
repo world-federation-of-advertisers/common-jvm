@@ -17,11 +17,13 @@ package org.wfanet.measurement.storage.forwarded
 import com.google.protobuf.ByteString
 import io.grpc.Status
 import io.grpc.StatusException
+import java.time.Instant
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.asFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
 import org.wfanet.measurement.common.asBufferedFlow
+import org.wfanet.measurement.common.toInstant
 import org.wfanet.measurement.internal.testing.ForwardedStorageGrpcKt.ForwardedStorageCoroutineStub
 import org.wfanet.measurement.internal.testing.WriteBlobRequest
 import org.wfanet.measurement.internal.testing.deleteBlobRequest
@@ -53,14 +55,19 @@ class ForwardedStorageClient(private val storageStub: ForwardedStorageCoroutineS
         }
     val metadata = storageStub.writeBlob(requests)
 
-    return Blob(blobKey, metadata.size)
+    return Blob(
+      blobKey,
+      metadata.size,
+      metadata.createTime.toInstant(),
+      metadata.updateTime.toInstant(),
+    )
   }
 
   override suspend fun getBlob(blobKey: String): StorageClient.Blob? {
     // Check if the blob exists
-    val blobSize =
+    val metadata =
       try {
-        storageStub.getBlobMetadata(getBlobMetadataRequest { this.blobKey = blobKey }).size
+        storageStub.getBlobMetadata(getBlobMetadataRequest { this.blobKey = blobKey })
       } catch (e: StatusException) {
         if (e.status.code == Status.NOT_FOUND.code) {
           return null
@@ -69,7 +76,12 @@ class ForwardedStorageClient(private val storageStub: ForwardedStorageCoroutineS
         }
       }
 
-    return Blob(blobKey, blobSize)
+    return Blob(
+      blobKey,
+      metadata.size,
+      metadata.createTime.toInstant(),
+      metadata.updateTime.toInstant(),
+    )
   }
 
   override suspend fun listBlobs(prefix: String?): Flow<StorageClient.Blob> {
@@ -82,11 +94,17 @@ class ForwardedStorageClient(private val storageStub: ForwardedStorageCoroutineS
         }
       )
 
-    return listBlobMetadataResponse.blobMetadataList.map { Blob(it.blobKey, it.size) }.asFlow()
+    return listBlobMetadataResponse.blobMetadataList
+      .map { Blob(it.blobKey, it.size, it.createTime.toInstant(), it.updateTime.toInstant()) }
+      .asFlow()
   }
 
-  private inner class Blob(override val blobKey: String, override val size: Long) :
-    StorageClient.Blob {
+  private inner class Blob(
+    override val blobKey: String,
+    override val size: Long,
+    override val createTime: Instant,
+    override val updateTime: Instant,
+  ) : StorageClient.Blob {
     override val storageClient: StorageClient
       get() = this@ForwardedStorageClient
 

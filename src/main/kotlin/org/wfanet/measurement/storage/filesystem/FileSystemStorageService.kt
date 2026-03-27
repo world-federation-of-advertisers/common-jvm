@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import org.jetbrains.annotations.BlockingExecutor
 import org.wfanet.measurement.common.consumeFirstOr
+import org.wfanet.measurement.common.toProtoTime
 import org.wfanet.measurement.internal.testing.BlobMetadata
 import org.wfanet.measurement.internal.testing.DeleteBlobRequest
 import org.wfanet.measurement.internal.testing.DeleteBlobResponse
@@ -60,13 +61,20 @@ class FileSystemStorageService(
           storageClient.writeBlob(blobKey, content)
         }
 
-    return BlobMetadata.newBuilder().setSize(blob.size).build()
+    return blobMetadata {
+      size = blob.size
+      createTime = blob.createTime.toProtoTime()
+      updateTime = blob.updateTime.toProtoTime()
+    }
   }
 
   override suspend fun getBlobMetadata(request: GetBlobMetadataRequest): BlobMetadata {
+    val blob = getBlob(request.blobKey)
     return blobMetadata {
-      size = getBlob(request.blobKey).size
+      size = blob.size
       blobKey = request.blobKey
+      createTime = blob.createTime.toProtoTime()
+      updateTime = blob.updateTime.toProtoTime()
     }
   }
 
@@ -87,6 +95,8 @@ class FileSystemStorageService(
         blobMetadata += blobMetadata {
           blobKey = it.blobKey
           size = it.size
+          createTime = it.createTime.toProtoTime()
+          updateTime = it.updateTime.toProtoTime()
         }
       }
     }

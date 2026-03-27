@@ -312,6 +312,8 @@ class MesosRecordIoStorageClientTest {
   private class FakeBlob(private val chunks: List<ByteString>) : StorageClient.Blob {
     override val blobKey: String = "fake"
     override val size: Long = chunks.sumOf { it.size().toLong() }
+    override val createTime: java.time.Instant = java.time.Instant.now()
+    override val updateTime: java.time.Instant = createTime
     override val storageClient: StorageClient
       get() = throw UnsupportedOperationException("n/a")
 

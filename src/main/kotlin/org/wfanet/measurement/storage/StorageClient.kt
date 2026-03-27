@@ -85,6 +85,45 @@ interface StorageClient {
     return flow { keys.sorted().forEach { emit(it) } }
   }
 
+  /**
+   * Lists blobs under [prefix] that were created strictly after [after].
+   *
+   * Implementations should use native server-side filtering where available (e.g., GCS
+   * `timeCreatedAfter`).
+   *
+   * @param prefix A blob key prefix to scope the listing.
+   * @param after Only blobs created after this instant are returned.
+   * @return A [Flow] of [Blob]s created after [after].
+   */
+  suspend fun listBlobsCreatedAfter(prefix: String, after: Instant): Flow<Blob> {
+    return flow {
+      listBlobs(prefix).collect { blob ->
+        if (blob.createTime.isAfter(after)) {
+          emit(blob)
+        }
+      }
+    }
+  }
+
+  /**
+   * Lists blobs under [prefix] that were updated strictly after [after].
+   *
+   * Implementations should use native server-side filtering where available.
+   *
+   * @param prefix A blob key prefix to scope the listing.
+   * @param after Only blobs updated after this instant are returned.
+   * @return A [Flow] of [Blob]s updated after [after].
+   */
+  suspend fun listBlobsUpdatedAfter(prefix: String, after: Instant): Flow<Blob> {
+    return flow {
+      listBlobs(prefix).collect { blob ->
+        if (blob.updateTime.isAfter(after)) {
+          emit(blob)
+        }
+      }
+    }
+  }
+
   companion object {
     /** Delimiter used by [listBlobKeysAndPrefixes] to define virtual directory boundaries. */
     const val DELIMITER = "/"
@@ -95,10 +134,17 @@ interface StorageClient {
     /** The [StorageClient] from which this [Blob] was obtained. */
     val storageClient: StorageClient
 
+    /** The key identifying this blob. */
     val blobKey: String
 
     /** Size of the blob in bytes. */
     val size: Long
+
+    /** The time the blob was created. */
+    val createTime: Instant
+
+    /** The time the blob was last updated. */
+    val updateTime: Instant
 
     /** Returns a [Flow] for the blob content. */
     fun read(): Flow<ByteString>
