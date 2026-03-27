@@ -90,6 +90,8 @@ class ForwardedStorageClient(private val storageStub: ForwardedStorageCoroutineS
     override val storageClient: StorageClient
       get() = this@ForwardedStorageClient
 
+    override val createTime: java.time.Instant? = null
+
     override fun read(): Flow<ByteString> {
       return storageStub.readBlob(readBlobRequest { blobKey = this@Blob.blobKey }).map { it.chunk }
     }

@@ -16,6 +16,7 @@ package org.wfanet.measurement.storage
 
 import com.google.protobuf.ByteString
 import com.google.protobuf.kotlin.toByteStringUtf8
+import java.time.Instant
 import java.util.logging.Logger
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -83,6 +84,9 @@ class MesosRecordIoStorageClient(private val storageClient: StorageClient) : Sto
   private inner class Blob(private val blob: StorageClient.Blob, override val blobKey: String) :
     StorageClient.Blob {
     override val storageClient = this@MesosRecordIoStorageClient.storageClient
+
+    override val createTime: Instant?
+      get() = blob.createTime
 
     override val size: Long
       get() = blob.size

@@ -38,6 +38,7 @@ import org.wfanet.measurement.storage.testing.AbstractStorageClientTest
 
 @RunWith(JUnit4::class)
 class FileSystemStorageServiceTest : AbstractStorageClientTest<ForwardedStorageClient>() {
+  override val supportsCreateTime: Boolean = false
   private val tempDirectory = TemporaryFolder()
   private val grpcTestServerRule = GrpcTestServerRule {
     addService(FileSystemStorageService(tempDirectory.root, Dispatchers.IO))

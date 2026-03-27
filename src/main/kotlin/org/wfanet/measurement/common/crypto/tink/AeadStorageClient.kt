@@ -78,6 +78,9 @@ class AeadStorageClient(private val storageClient: StorageClient, private val ae
     override val size: Long
       get() = blob.size
 
+    override val createTime: java.time.Instant?
+      get() = blob.createTime
+
     /**
      * Reads and decrypts the blob's content.
      *
