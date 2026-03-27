@@ -24,7 +24,6 @@ import kotlin.test.assertNotNull
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
-import org.junit.Assume.assumeTrue
 import org.junit.Test
 import org.wfanet.measurement.common.BYTES_PER_MIB
 import org.wfanet.measurement.common.size
@@ -35,8 +34,6 @@ import org.wfanet.measurement.storage.testing.BlobSubject.Companion.assertThat
 abstract class AbstractStorageClientTest<T : StorageClient> {
   protected val testBlobContent: ByteString
     get() = Companion.testBlobContent
-
-  open val supportsCreateTime: Boolean = true
 
   open fun computeStoredBlobSize(content: ByteString, blobKey: String): Int {
     return content.size
@@ -186,7 +183,6 @@ abstract class AbstractStorageClientTest<T : StorageClient> {
 
   @Test
   fun `Blob createTime is not null after writing`() = runBlocking {
-    assumeTrue(supportsCreateTime)
     val blobKey = "blob-with-create-time"
     val blob = storageClient.writeBlob(blobKey, testBlobContent)
 
@@ -195,7 +191,6 @@ abstract class AbstractStorageClientTest<T : StorageClient> {
 
   @Test
   fun `getBlob returns blob with createTime`() = runBlocking {
-    assumeTrue(supportsCreateTime)
     val blobKey = "blob-get-create-time"
     storageClient.writeBlob(blobKey, testBlobContent)
 
@@ -206,7 +201,6 @@ abstract class AbstractStorageClientTest<T : StorageClient> {
 
   @Test
   fun `listBlobsCreatedAfter returns blobs created after the given instant`(): Unit = runBlocking {
-    assumeTrue(supportsCreateTime)
     val beforeWrite = Instant.now().minusSeconds(1)
     storageClient.writeBlob("time-prefix/blob1", "content1".toByteStringUtf8())
     storageClient.writeBlob("time-prefix/blob2", "content2".toByteStringUtf8())
@@ -220,7 +214,6 @@ abstract class AbstractStorageClientTest<T : StorageClient> {
 
   @Test
   fun `listBlobsCreatedAfter returns empty flow when no blobs match`(): Unit = runBlocking {
-    assumeTrue(supportsCreateTime)
     storageClient.writeBlob("old-prefix/blob1", "content1".toByteStringUtf8())
 
     val futureInstant = Instant.now().plusSeconds(3600)
@@ -231,7 +224,6 @@ abstract class AbstractStorageClientTest<T : StorageClient> {
 
   @Test
   fun `listBlobsCreatedAfter returns empty flow for non-existent prefix`(): Unit = runBlocking {
-    assumeTrue(supportsCreateTime)
     val blobs =
       storageClient.listBlobsCreatedAfter("non-existent/", Instant.now().minusSeconds(1)).toList()
 
