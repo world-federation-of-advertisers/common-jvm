@@ -89,8 +89,7 @@ interface StorageClient {
    * Lists blobs under [prefix] that were created strictly after [after].
    *
    * Implementations should use native server-side filtering where available (e.g., GCS
-   * `timeCreatedAfter`). If the implementation does not support [Blob.createTime], an empty flow is
-   * returned.
+   * `timeCreatedAfter`).
    *
    * @param prefix A blob key prefix to scope the listing.
    * @param after Only blobs created after this instant are returned.
@@ -99,8 +98,7 @@ interface StorageClient {
   suspend fun listBlobsCreatedAfter(prefix: String, after: Instant): Flow<Blob> {
     return flow {
       listBlobs(prefix).collect { blob ->
-        val blobTime = blob.createTime
-        if (blobTime != null && blobTime.isAfter(after)) {
+        if (blob.createTime.isAfter(after)) {
           emit(blob)
         }
       }
@@ -123,8 +121,8 @@ interface StorageClient {
     /** Size of the blob in bytes. */
     val size: Long
 
-    /** The time the blob was created. May be `null` if the storage backend does not support it. */
-    val createTime: Instant?
+    /** The time the blob was created. */
+    val createTime: Instant
 
     /** Returns a [Flow] for the blob content. */
     fun read(): Flow<ByteString>

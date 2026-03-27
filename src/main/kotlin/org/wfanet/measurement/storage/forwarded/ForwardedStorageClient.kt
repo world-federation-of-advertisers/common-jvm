@@ -55,11 +55,7 @@ class ForwardedStorageClient(private val storageStub: ForwardedStorageCoroutineS
         }
     val metadata = storageStub.writeBlob(requests)
 
-    return Blob(
-      blobKey,
-      metadata.size,
-      if (metadata.hasCreateTime()) metadata.createTime.toInstant() else null,
-    )
+    return Blob(blobKey, metadata.size, metadata.createTime.toInstant())
   }
 
   override suspend fun getBlob(blobKey: String): StorageClient.Blob? {
@@ -75,11 +71,7 @@ class ForwardedStorageClient(private val storageStub: ForwardedStorageCoroutineS
         }
       }
 
-    return Blob(
-      blobKey,
-      metadata.size,
-      if (metadata.hasCreateTime()) metadata.createTime.toInstant() else null,
-    )
+    return Blob(blobKey, metadata.size, metadata.createTime.toInstant())
   }
 
   override suspend fun listBlobs(prefix: String?): Flow<StorageClient.Blob> {
@@ -93,16 +85,14 @@ class ForwardedStorageClient(private val storageStub: ForwardedStorageCoroutineS
       )
 
     return listBlobMetadataResponse.blobMetadataList
-      .map {
-        Blob(it.blobKey, it.size, if (it.hasCreateTime()) it.createTime.toInstant() else null)
-      }
+      .map { Blob(it.blobKey, it.size, it.createTime.toInstant()) }
       .asFlow()
   }
 
   private inner class Blob(
     override val blobKey: String,
     override val size: Long,
-    override val createTime: Instant?,
+    override val createTime: Instant,
   ) : StorageClient.Blob {
     override val storageClient: StorageClient
       get() = this@ForwardedStorageClient

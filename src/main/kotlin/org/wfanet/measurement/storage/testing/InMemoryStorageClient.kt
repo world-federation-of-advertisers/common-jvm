@@ -60,7 +60,7 @@ class InMemoryStorageClient : StorageClient {
   private inner class Blob(override val blobKey: String, private val content: ByteString) :
     StorageClient.Blob {
 
-    override val createTime: Instant? = Instant.now()
+    override val createTime: Instant = Instant.now()
 
     override val size: Long
       get() = content.size().toLong()

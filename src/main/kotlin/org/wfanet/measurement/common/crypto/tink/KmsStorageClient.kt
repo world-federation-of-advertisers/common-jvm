@@ -79,7 +79,7 @@ internal constructor(
     StorageClient.Blob {
     override val storageClient = this@KmsStorageClient.storageClient
 
-    override val createTime: java.time.Instant?
+    override val createTime: java.time.Instant
       get() = blob.createTime
 
     override val size: Long

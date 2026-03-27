@@ -63,9 +63,7 @@ class FileSystemStorageService(
 
     return blobMetadata {
       size = blob.size
-      if (blob.createTime != null) {
-        createTime = blob.createTime!!.toProtoTime()
-      }
+      createTime = blob.createTime.toProtoTime()
     }
   }
 
@@ -74,9 +72,7 @@ class FileSystemStorageService(
     return blobMetadata {
       size = blob.size
       blobKey = request.blobKey
-      if (blob.createTime != null) {
-        createTime = blob.createTime!!.toProtoTime()
-      }
+      createTime = blob.createTime.toProtoTime()
     }
   }
 
@@ -97,9 +93,7 @@ class FileSystemStorageService(
         blobMetadata += blobMetadata {
           blobKey = it.blobKey
           size = it.size
-          if (it.createTime != null) {
-            createTime = it.createTime!!.toProtoTime()
-          }
+          createTime = it.createTime.toProtoTime()
         }
       }
     }

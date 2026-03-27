@@ -170,8 +170,14 @@ class FileSystemStorageClient(
     override val size: Long
       get() = file.length()
 
-    override val createTime: Instant?
-      get() = Instant.ofEpochMilli(file.lastModified())
+    override val createTime: Instant
+      get() =
+        java.nio.file.Files.readAttributes(
+            file.toPath(),
+            java.nio.file.attribute.BasicFileAttributes::class.java,
+          )
+          .creationTime()
+          .toInstant()
 
     override fun read(): Flow<ByteString> {
       return file
