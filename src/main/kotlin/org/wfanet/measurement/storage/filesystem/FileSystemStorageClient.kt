@@ -172,10 +172,7 @@ class FileSystemStorageClient(
 
     override val createTime: Instant
       get() =
-        java.nio.file.Files.readAttributes(
-            file.toPath(),
-            java.nio.file.attribute.BasicFileAttributes::class.java,
-          )
+        Files.readAttributes(file.toPath(), BasicFileAttributes::class.java)
           .creationTime()
           .toInstant()
 
