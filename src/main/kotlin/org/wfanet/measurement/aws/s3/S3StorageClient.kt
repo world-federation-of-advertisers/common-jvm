@@ -192,7 +192,7 @@ class S3StorageClient(private val s3: S3AsyncClient, private val bucketName: Str
   internal constructor(
     override val blobKey: String,
     contentLength: Long,
-    override val createTime: Instant? = null,
+    override val createTime: Instant?,
   ) : StorageClient.Blob {
     override val storageClient: StorageClient
       get() = this@S3StorageClient
