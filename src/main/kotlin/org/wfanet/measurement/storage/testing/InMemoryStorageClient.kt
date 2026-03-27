@@ -15,6 +15,7 @@
 package org.wfanet.measurement.storage.testing
 
 import com.google.protobuf.ByteString
+import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -58,6 +59,8 @@ class InMemoryStorageClient : StorageClient {
 
   private inner class Blob(override val blobKey: String, private val content: ByteString) :
     StorageClient.Blob {
+
+    override val createTime: Instant? = Instant.now()
 
     override val size: Long
       get() = content.size().toLong()

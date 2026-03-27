@@ -22,6 +22,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.SimpleFileVisitor
 import java.nio.file.attribute.BasicFileAttributes
+import java.time.Instant
 import kotlin.coroutines.CoroutineContext
 import kotlin.io.path.relativeTo
 import kotlinx.coroutines.CoroutineName
@@ -168,6 +169,9 @@ class FileSystemStorageClient(
 
     override val size: Long
       get() = file.length()
+
+    override val createTime: Instant?
+      get() = Instant.ofEpochMilli(file.lastModified())
 
     override fun read(): Flow<ByteString> {
       return file
