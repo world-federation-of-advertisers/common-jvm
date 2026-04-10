@@ -32,6 +32,12 @@ bazel_dep(
     version = "0.12.0",
     repo_name = "wfa_rules_kotlin_jvm",
 )
+# DO_NOT_SUBMIT: use new release version
+git_override(
+    module_name = "rules_kotlin_jvm",
+    commit = "e32531de30da6220a68dfd3397c3bbd05299546e",
+    remote = "https://github.com/world-federation-of-advertisers/rules_kotlin_jvm.git",
+)
 bazel_dep(
     name = "cloud-spanner-emulator-bin",
     version = "1.5.37.libcxx.1",
