@@ -34,7 +34,7 @@ bazel_dep(
 )
 bazel_dep(
     name = "cloud-spanner-emulator-bin",
-    version = "1.5.37.libcxx.1",
+    version = "1.5.52",
     repo_name = "cloud_spanner_emulator",
 )
 
@@ -295,15 +295,15 @@ oci = use_extension("@rules_oci//oci:extensions.bzl", "oci")
 oci.pull(
     name = "java_image_base",
     # Digest of nonroot tag.
-    digest = "sha256:06484c2a9dcc9070aeafbc0fe752cb9f73bc0cea5c311f6a516e9010061998ad",
-    image = "gcr.io/distroless/java17-debian12",
+    digest = "sha256:e07bf2a4b73e122bea42dd1eb868dae9739ac7b96e3cddacb4b067b8ba5c969e",
+    image = "gcr.io/distroless/java17-debian13",
     platforms = ["linux/amd64"],
 )
 oci.pull(
     name = "java_debug_image_base",
     # Digest of debug-nonroot tag.
-    digest = "sha256:62fe5d2c001d18675801c5841cd6959a5f031c6b4287f6d424646d4402b758da",
-    image = "gcr.io/distroless/java17-debian12",
+    digest = "sha256:73126b876b1d039189081600e881f893518524c6bc22553e3f20e9197657e1a9",
+    image = "gcr.io/distroless/java17-debian13",
     platforms = ["linux/amd64"],
 )
 use_repo(
