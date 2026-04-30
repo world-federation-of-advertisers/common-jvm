@@ -57,12 +57,6 @@ jobs:
     - name: Build
       run: bazel build //...
 
-    # TODO(world-federation-of-advertisers/cross-media-measurement#3734): Remove this workaround once the issue is fixed
-    - name: Install dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y libc++-dev libc++abi-dev
-
     - name: Run tests
       id: run-tests
       run: bazel test //...
