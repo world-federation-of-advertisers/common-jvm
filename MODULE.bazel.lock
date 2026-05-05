@@ -277,8 +277,8 @@
     "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main/modules/bazel_worker_api/0.0.4/MODULE.bazel": "not found",
     "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main/modules/bazel_worker_java/0.0.4/MODULE.bazel": "not found",
     "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main/modules/buildozer/7.1.2/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main/modules/cloud-spanner-emulator-bin/1.5.37.libcxx.1/MODULE.bazel": "e613534d63e9c0c100986a4c438c93ff0c6903223d215d63273c168407ff3395",
-    "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main/modules/cloud-spanner-emulator-bin/1.5.37.libcxx.1/source.json": "a68ef196aab6142417530c86166a79aa3ef7dd68328bc6fea194491d9f3aadfc",
+    "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main/modules/cloud-spanner-emulator-bin/1.5.52/MODULE.bazel": "4b74b3ae32df1c817ef4d8e761f57f93a4db6b5d5a1db25ecb389d56942e05a8",
+    "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main/modules/cloud-spanner-emulator-bin/1.5.52/source.json": "94cd36e363306482d9f70dfc91b62fc9ba85bf7c49e49eac619d81ea06691029",
     "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main/modules/gazelle/0.32.0/MODULE.bazel": "not found",
     "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main/modules/gazelle/0.33.0/MODULE.bazel": "not found",
     "https://raw.githubusercontent.com/world-federation-of-advertisers/bazel-registry/main/modules/gazelle/0.34.0/MODULE.bazel": "not found",
@@ -1065,7 +1065,7 @@
     "@@rules_oci~//oci:extensions.bzl%oci": {
       "general": {
         "bzlTransitiveDigest": "ctbUAaQYfE1kK7joe+VD+ViuaL27ygVh0Hc94Y7DXEY=",
-        "usagesDigest": "hMMnEmmqbFDau6cHLRxLeXPvDSxhzpr7moEoDc7qap4=",
+        "usagesDigest": "06lRJm1mQOdbuIQx36U236PBhfpjL+OMjXI2qiFLtT8=",
         "recordedFileInputs": {},
         "recordedDirentsInputs": {},
         "envVariables": {},
@@ -1076,8 +1076,8 @@
             "attributes": {
               "scheme": "https",
               "registry": "gcr.io",
-              "repository": "distroless/java17-debian12",
-              "identifier": "sha256:06484c2a9dcc9070aeafbc0fe752cb9f73bc0cea5c311f6a516e9010061998ad",
+              "repository": "distroless/java17-debian13",
+              "identifier": "sha256:e07bf2a4b73e122bea42dd1eb868dae9739ac7b96e3cddacb4b067b8ba5c969e",
               "platform": "linux/amd64",
               "target_name": "java_image_base_linux_amd64",
               "bazel_tags": []
@@ -1090,8 +1090,8 @@
               "target_name": "java_image_base",
               "scheme": "https",
               "registry": "gcr.io",
-              "repository": "distroless/java17-debian12",
-              "identifier": "sha256:06484c2a9dcc9070aeafbc0fe752cb9f73bc0cea5c311f6a516e9010061998ad",
+              "repository": "distroless/java17-debian13",
+              "identifier": "sha256:e07bf2a4b73e122bea42dd1eb868dae9739ac7b96e3cddacb4b067b8ba5c969e",
               "platforms": {
                 "@@platforms//cpu:x86_64": "@java_image_base_linux_amd64"
               },
@@ -1105,8 +1105,8 @@
             "attributes": {
               "scheme": "https",
               "registry": "gcr.io",
-              "repository": "distroless/java17-debian12",
-              "identifier": "sha256:62fe5d2c001d18675801c5841cd6959a5f031c6b4287f6d424646d4402b758da",
+              "repository": "distroless/java17-debian13",
+              "identifier": "sha256:73126b876b1d039189081600e881f893518524c6bc22553e3f20e9197657e1a9",
               "platform": "linux/amd64",
               "target_name": "java_debug_image_base_linux_amd64",
               "bazel_tags": []
@@ -1119,8 +1119,8 @@
               "target_name": "java_debug_image_base",
               "scheme": "https",
               "registry": "gcr.io",
-              "repository": "distroless/java17-debian12",
-              "identifier": "sha256:62fe5d2c001d18675801c5841cd6959a5f031c6b4287f6d424646d4402b758da",
+              "repository": "distroless/java17-debian13",
+              "identifier": "sha256:73126b876b1d039189081600e881f893518524c6bc22553e3f20e9197657e1a9",
               "platforms": {
                 "@@platforms//cpu:x86_64": "@java_debug_image_base_linux_amd64"
               },
