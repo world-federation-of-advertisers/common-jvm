@@ -294,14 +294,16 @@ use_repo(maven, "maven")
 oci = use_extension("@rules_oci//oci:extensions.bzl", "oci")
 oci.pull(
     name = "java_image_base",
-    # Digest of nonroot tag.
+    reproducible = True,
+    tag = "nonroot",    
     digest = "sha256:e07bf2a4b73e122bea42dd1eb868dae9739ac7b96e3cddacb4b067b8ba5c969e",
     image = "gcr.io/distroless/java17-debian13",
     platforms = ["linux/amd64"],
 )
 oci.pull(
     name = "java_debug_image_base",
-    # Digest of debug-nonroot tag.
+    reproducible = True,
+    tag = "debug-nonroot",    
     digest = "sha256:73126b876b1d039189081600e881f893518524c6bc22553e3f20e9197657e1a9",
     image = "gcr.io/distroless/java17-debian13",
     platforms = ["linux/amd64"],
