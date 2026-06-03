@@ -22,7 +22,6 @@ import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import java.security.GeneralSecurityException
 import java.time.Instant
-import java.util.logging.Level
 import java.util.logging.Logger
 import org.wfanet.measurement.aws.kms.AwsKmsClient
 import org.wfanet.measurement.common.crypto.tink.GCloudToAwsWifCredentials
@@ -57,7 +56,10 @@ class GCloudToAwsKmsClientFactory : KmsClientFactory<GCloudToAwsWifCredentials> 
    * @throws GeneralSecurityException if credentials cannot be obtained or exchanged.
    */
   override fun getKmsClient(config: GCloudToAwsWifCredentials): KmsClient {
-    val credentialsProvider = RefreshableGCloudToAwsCredentialsProvider(config)
+    val credentialsProvider =
+      RefreshableGCloudToAwsCredentialsProvider(REFRESH_MARGIN_SECONDS) {
+        obtainAwsCredentials(config)
+      }
     return AwsKmsClient(credentialsProvider)
   }
 
@@ -65,7 +67,7 @@ class GCloudToAwsKmsClientFactory : KmsClientFactory<GCloudToAwsWifCredentials> 
     private val logger: Logger = Logger.getLogger(GCloudToAwsKmsClientFactory::class.java.name)
 
     /** Margin before expiration at which credentials are proactively refreshed. */
-    private const val REFRESH_MARGIN_SECONDS: Long = 300
+    internal const val REFRESH_MARGIN_SECONDS: Long = 300
 
     private fun buildExternalAccountCredentials(
       config: GCloudToAwsWifCredentials
@@ -175,11 +177,15 @@ class GCloudToAwsKmsClientFactory : KmsClientFactory<GCloudToAwsWifCredentials> 
   }
 
   /**
-   * An [AwsCredentialsProvider] that re-executes the full GCP-to-AWS credential chain when the
-   * current session credentials are within [REFRESH_MARGIN_SECONDS] of expiration.
+   * An [AwsCredentialsProvider] that caches credentials and refreshes them when they are within
+   * [refreshMarginSeconds] of expiration.
+   *
+   * @param refreshMarginSeconds Seconds before expiration to trigger a refresh.
+   * @param credentialSupplier Function that obtains fresh credentials and their expiration.
    */
-  private class RefreshableGCloudToAwsCredentialsProvider(
-    private val config: GCloudToAwsWifCredentials
+  internal class RefreshableGCloudToAwsCredentialsProvider(
+    private val refreshMarginSeconds: Long,
+    private val credentialSupplier: () -> Pair<AwsSessionCredentials, Instant>,
   ) : AwsCredentialsProvider {
 
     @Volatile private var cachedCredentials: AwsSessionCredentials? = null
@@ -188,7 +194,7 @@ class GCloudToAwsKmsClientFactory : KmsClientFactory<GCloudToAwsWifCredentials> 
     override fun resolveCredentials(): AwsCredentials {
       val now = Instant.now()
       val current = cachedCredentials
-      if (current != null && now.plusSeconds(REFRESH_MARGIN_SECONDS).isBefore(expiration)) {
+      if (current != null && now.plusSeconds(refreshMarginSeconds).isBefore(expiration)) {
         return current
       }
 
@@ -197,13 +203,13 @@ class GCloudToAwsKmsClientFactory : KmsClientFactory<GCloudToAwsWifCredentials> 
         val currentAfterLock = cachedCredentials
         if (
           currentAfterLock != null &&
-            nowAfterLock.plusSeconds(REFRESH_MARGIN_SECONDS).isBefore(expiration)
+            nowAfterLock.plusSeconds(refreshMarginSeconds).isBefore(expiration)
         ) {
           return currentAfterLock
         }
 
         logger.info("Refreshing AWS credentials via GCP-to-AWS credential chain")
-        val (newCredentials, newExpiration) = obtainAwsCredentials(config)
+        val (newCredentials, newExpiration) = credentialSupplier()
         cachedCredentials = newCredentials
         expiration = newExpiration
         logger.info("AWS credentials refreshed, expiration: $newExpiration")
