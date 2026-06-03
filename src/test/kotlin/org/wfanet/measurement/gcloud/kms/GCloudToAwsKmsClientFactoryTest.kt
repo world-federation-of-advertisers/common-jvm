@@ -139,4 +139,54 @@ class GCloudToAwsKmsClientFactoryTest {
     provider.resolveCredentials()
     assertThat(callCount).isEqualTo(1)
   }
+
+  @Test
+  fun `short refresh margin triggers refresh after sleep`() {
+    var callCount = 0
+    val provider =
+      GCloudToAwsKmsClientFactory.RefreshableGCloudToAwsCredentialsProvider(
+        refreshMarginSeconds = 2
+      ) {
+        callCount++
+        val credentials =
+          AwsSessionCredentials.create("key-$callCount", "secret-$callCount", "token-$callCount")
+        val expiration = Instant.now().plusSeconds(3)
+        credentials to expiration
+      }
+
+    val first = provider.resolveCredentials() as AwsSessionCredentials
+    assertThat(first.accessKeyId()).isEqualTo("key-1")
+    assertThat(callCount).isEqualTo(1)
+
+    Thread.sleep(1500)
+
+    val second = provider.resolveCredentials() as AwsSessionCredentials
+    assertThat(second.accessKeyId()).isEqualTo("key-2")
+    assertThat(callCount).isEqualTo(2)
+  }
+
+  @Test
+  fun `long refresh margin does not trigger refresh after same sleep`() {
+    var callCount = 0
+    val provider =
+      GCloudToAwsKmsClientFactory.RefreshableGCloudToAwsCredentialsProvider(
+        refreshMarginSeconds = 2
+      ) {
+        callCount++
+        val credentials =
+          AwsSessionCredentials.create("key-$callCount", "secret-$callCount", "token-$callCount")
+        val expiration = Instant.now().plusSeconds(3600)
+        credentials to expiration
+      }
+
+    val first = provider.resolveCredentials() as AwsSessionCredentials
+    assertThat(first.accessKeyId()).isEqualTo("key-1")
+    assertThat(callCount).isEqualTo(1)
+
+    Thread.sleep(1500)
+
+    val second = provider.resolveCredentials() as AwsSessionCredentials
+    assertThat(second).isSameInstanceAs(first)
+    assertThat(callCount).isEqualTo(1)
+  }
 }
