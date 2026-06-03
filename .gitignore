@@ -9,4 +9,5 @@
 *.iml
 
 # Local Bazel configuration.
-/local.bazelrc
+/local.bazelrc.cursor/
+.gopath/
