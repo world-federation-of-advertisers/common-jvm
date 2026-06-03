@@ -1,0 +1,195 @@
+---
+description: List changed files in PR and run ktfmt linter
+globs:
+alwaysApply: false
+---
+
+
+
+
+# PR Files & Lint
+
+
+
+
+Lists all files changed in the current branch vs main and runs ktfmt and clang linter.
+
+
+
+
+---
+
+
+
+
+## Step 1: Get Changed Files
+
+
+
+
+Run this command to get all changed files:
+
+
+
+
+```bash
+git diff --name-only main...HEAD
+```
+
+
+
+
+## Step 2: Classify Each File
+
+
+
+
+For each file, determine if it's NEW or MODIFIED:
+
+
+
+
+```bash
+git show main:<filepath> 2>/dev/null && echo "MODIFIED" || echo "NEW"
+```
+
+
+
+
+## Step 3: Print File Table
+
+
+
+
+Output a table like this:
+
+
+
+
+```
+═══════════════════════════════════════════════════════════════
+📋 FILES CHANGED (branch vs main)
+═══════════════════════════════════════════════════════════════
+
+
+
+
+| # | File | Status |
+|---|------|--------|
+| 1 | src/main/kotlin/.../MyFile.kt | 🆕 NEW |
+| 2 | src/main/kotlin/.../OtherFile.kt | ✏️ MODIFIED |
+| 3 | src/test/kotlin/.../MyFileTest.kt | 🆕 NEW |
+
+
+
+
+Total: X files (Y new, Z modified)
+```
+
+
+
+
+## Step 4: Run ktfmt Linter
+
+
+
+
+For all `.kt` files in the list, run ktfmt with google-style:
+
+
+
+
+```bash
+# Download ktfmt if not present
+if [ ! -f /tmp/ktfmt.jar ]; then
+curl -L -o /tmp/ktfmt.jar https://repo1.maven.org/maven2/com/facebook/ktfmt/0.44/ktfmt-0.44-jar-with-dependencies.jar
+fi
+
+
+
+
+# Run ktfmt on changed Kotlin files
+git diff --name-only main...HEAD | grep '\.kt$' | xargs -r java -jar /tmp/ktfmt.jar --google-style
+```
+
+
+## Step 5: Run clang Linter
+
+
+
+
+For all `.proto` files in the list, run clang-format with google-style (-i --style=Google):
+
+
+Download clang-format if not present
+```bash
+# Run clang-format on changed Proto files
+git diff --name-only main...HEAD | grep '\.proto$' | xargs -r clang-format -i --style=Google "$@"
+```
+
+
+### Step 6: Run buildifier
+
+
+For all bazel build files in the list, run buildifier
+Download buildifier if not present
+```go install github.com/bazelbuild/buildtools/buildifier@latest
+# Run buildifier on all the changed build files
+```
+## Step 7: Print Linting Summary
+
+
+
+
+```
+═══════════════════════════════════════════════════════════════
+🎨 LINTING COMPLETE
+═══════════════════════════════════════════════════════════════
+
+
+
+
+Files formatted: X
+```
+
+
+
+
+If ktfmt made changes, list which files were modified.
+
+
+
+
+---
+
+
+
+
+## Output Format
+
+
+
+
+The complete output should be:
+
+
+
+
+1. File table (Step 3)
+2. Linting summary (Step 5)
+
+
+
+
+That's it. This rule does NOT analyze code quality - use other rules for that.
+
+
+
+
+
+
+
+
+
+
+

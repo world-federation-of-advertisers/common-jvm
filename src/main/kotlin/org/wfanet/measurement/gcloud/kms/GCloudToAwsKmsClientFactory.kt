@@ -42,7 +42,9 @@ import software.amazon.awssdk.services.sts.model.AssumeRoleWithWebIdentityReques
  * account to obtain an OIDC ID token. That ID token is exchanged with AWS STS
  * `AssumeRoleWithWebIdentity` for temporary AWS credentials.
  */
-class GCloudToAwsKmsClientFactory : KmsClientFactory<GCloudToAwsWifCredentials> {
+class GCloudToAwsKmsClientFactory(
+  private val refreshMarginSeconds: Long = DEFAULT_REFRESH_MARGIN_SECONDS
+) : KmsClientFactory<GCloudToAwsWifCredentials> {
   /**
    * Returns an [AwsKmsClient] using Google Cloud Confidential Space identity to authenticate with
    * AWS.
@@ -57,7 +59,7 @@ class GCloudToAwsKmsClientFactory : KmsClientFactory<GCloudToAwsWifCredentials> 
    */
   override fun getKmsClient(config: GCloudToAwsWifCredentials): KmsClient {
     val credentialsProvider =
-      RefreshableGCloudToAwsCredentialsProvider(REFRESH_MARGIN_SECONDS) {
+      RefreshableGCloudToAwsCredentialsProvider(refreshMarginSeconds) {
         obtainAwsCredentials(config)
       }
     return AwsKmsClient(credentialsProvider)
@@ -66,8 +68,8 @@ class GCloudToAwsKmsClientFactory : KmsClientFactory<GCloudToAwsWifCredentials> 
   companion object {
     private val logger: Logger = Logger.getLogger(GCloudToAwsKmsClientFactory::class.java.name)
 
-    /** Margin before expiration at which credentials are proactively refreshed. */
-    internal const val REFRESH_MARGIN_SECONDS: Long = 300
+    /** Default margin before expiration at which credentials are proactively refreshed. */
+    private const val DEFAULT_REFRESH_MARGIN_SECONDS: Long = 900
 
     private fun buildExternalAccountCredentials(
       config: GCloudToAwsWifCredentials
