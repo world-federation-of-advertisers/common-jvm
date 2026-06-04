@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package org.wfanet.measurement.aws.kms
+package org.wfanet.measurement.aws
 
 import com.google.common.truth.Truth.assertThat
 import java.time.Clock

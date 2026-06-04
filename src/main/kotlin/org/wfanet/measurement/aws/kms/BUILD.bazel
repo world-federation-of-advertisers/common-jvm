@@ -17,11 +17,3 @@ kt_jvm_library(
         "//src/main/kotlin/org/wfanet/measurement/common/crypto/tink",
     ],
 )
-
-kt_jvm_library(
-    name = "refreshable_aws_credentials_provider",
-    srcs = ["RefreshableAwsCredentialsProvider.kt"],
-    deps = [
-        "//imports/java/software/amazon/awssdk/auth",
-    ],
-)
