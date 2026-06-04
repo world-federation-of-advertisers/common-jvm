@@ -31,8 +31,21 @@ import software.amazon.awssdk.auth.credentials.AwsSessionCredentials
 data class TimeBoundCredentials(val credentials: AwsSessionCredentials, val expiration: Instant)
 
 /**
- * An [AwsCredentialsProvider] that caches credentials and refreshes them when they are within
- * [refreshMargin] of expiration.
+ * An [AwsCredentialsProvider] that caches temporary AWS session credentials and proactively
+ * refreshes them before they expire.
+ *
+ * Use this when AWS credentials are obtained through a multi-step exchange that the AWS SDK cannot
+ * manage natively — for example, federated identity flows where a GCP Confidential Space
+ * attestation token is exchanged for a Google Cloud access token, which is then exchanged via AWS
+ * STS `AssumeRoleWithWebIdentity` for temporary AWS credentials. In these cases, the AWS SDK's
+ * built-in credential providers (such as `StsAssumeRoleWithWebIdentityCredentialsProvider`) cannot
+ * be used because the web identity token itself must be re-obtained through a separate provider
+ * before each STS call.
+ *
+ * Credentials are obtained lazily on the first call to [resolveCredentials] and cached until they
+ * are within [refreshMargin] of expiration, at which point the [credentialSupplier] is called
+ * again. If the supplier throws, the exception propagates to the caller and no credentials are
+ * cached, allowing retry on the next call.
  *
  * Thread-safe: concurrent calls to [resolveCredentials] are serialized via double-checked locking
  * so that only one thread executes the credential supplier when a refresh is needed.
