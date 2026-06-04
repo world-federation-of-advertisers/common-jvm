@@ -11,16 +11,3 @@ kt_jvm_test(
         "//src/main/kotlin/org/wfanet/measurement/gcloud/kms:gcloud_to_aws_kms_client_factory",
     ],
 )
-
-kt_jvm_test(
-    name = "RefreshableAwsCredentialsProviderTest",
-    srcs = ["RefreshableAwsCredentialsProviderTest.kt"],
-    test_class = "org.wfanet.measurement.gcloud.kms.RefreshableAwsCredentialsProviderTest",
-    deps = [
-        "//imports/java/com/google/common/truth",
-        "//imports/java/org/junit",
-        "//imports/java/software/amazon/awssdk/auth",
-        "//imports/kotlin/kotlin/test",
-        "//src/main/kotlin/org/wfanet/measurement/gcloud/kms:refreshable_aws_credentials_provider",
-    ],
-)

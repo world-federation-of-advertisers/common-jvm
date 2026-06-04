@@ -12,14 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package org.wfanet.measurement.gcloud.kms
+package org.wfanet.measurement.aws.kms
 
 import com.google.common.truth.Truth.assertThat
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
 import java.time.ZoneOffset
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.assertFailsWith
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.runBlocking
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
@@ -213,6 +218,28 @@ class RefreshableAwsCredentialsProviderTest {
 
     assertThat(second).isSameInstanceAs(first)
     assertThat(callCount).isEqualTo(1)
+  }
+
+  @Test
+  fun `concurrent calls invoke supplier exactly once`() = runBlocking {
+    val callCount = AtomicInteger(0)
+    val clock = Clock.fixed(Instant.parse("2026-06-03T12:00:00Z"), ZoneOffset.UTC)
+    val provider =
+      RefreshableAwsCredentialsProvider(refreshMargin = Duration.ofMinutes(5), clock = clock) {
+        Thread.sleep(100)
+        val count = callCount.incrementAndGet()
+        TimeBoundCredentials(
+          credentials = makeCredentials("key-$count"),
+          expiration = Instant.parse("2026-06-03T13:00:00Z"),
+        )
+      }
+
+    val results =
+      (1..50).map { async(Dispatchers.Default) { provider.resolveCredentials() } }.awaitAll()
+
+    assertThat(callCount.get()).isEqualTo(1)
+    val first = results.first()
+    results.forEach { assertThat(it).isSameInstanceAs(first) }
   }
 
   private fun makeCredentials(accessKeyId: String): AwsSessionCredentials {

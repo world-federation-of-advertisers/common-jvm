@@ -25,6 +25,8 @@ import java.time.Clock
 import java.time.Duration
 import java.util.logging.Logger
 import org.wfanet.measurement.aws.kms.AwsKmsClient
+import org.wfanet.measurement.aws.kms.RefreshableAwsCredentialsProvider
+import org.wfanet.measurement.aws.kms.TimeBoundCredentials
 import org.wfanet.measurement.common.crypto.tink.GCloudToAwsWifCredentials
 import org.wfanet.measurement.common.crypto.tink.KmsClientFactory
 import software.amazon.awssdk.auth.credentials.AnonymousCredentialsProvider
