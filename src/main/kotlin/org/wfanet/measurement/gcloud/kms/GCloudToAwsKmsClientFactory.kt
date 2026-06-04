@@ -21,14 +21,13 @@ import com.google.crypto.tink.KmsClient
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import java.security.GeneralSecurityException
-import java.time.Instant
+import java.time.Clock
+import java.time.Duration
 import java.util.logging.Logger
 import org.wfanet.measurement.aws.kms.AwsKmsClient
 import org.wfanet.measurement.common.crypto.tink.GCloudToAwsWifCredentials
 import org.wfanet.measurement.common.crypto.tink.KmsClientFactory
 import software.amazon.awssdk.auth.credentials.AnonymousCredentialsProvider
-import software.amazon.awssdk.auth.credentials.AwsCredentials
-import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider
 import software.amazon.awssdk.auth.credentials.AwsSessionCredentials
 import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.sts.StsClient
@@ -41,9 +40,13 @@ import software.amazon.awssdk.services.sts.model.AssumeRoleWithWebIdentityReques
  * Confidential Space attestation token for Google Cloud credentials, then impersonates a service
  * account to obtain an OIDC ID token. That ID token is exchanged with AWS STS
  * `AssumeRoleWithWebIdentity` for temporary AWS credentials.
+ *
+ * @param refreshMargin How far before expiration to proactively refresh credentials.
+ * @param clock Clock used to determine the current time.
  */
 class GCloudToAwsKmsClientFactory(
-  private val refreshMarginSeconds: Long = DEFAULT_REFRESH_MARGIN_SECONDS
+  private val refreshMargin: Duration = DEFAULT_REFRESH_MARGIN,
+  private val clock: Clock = Clock.systemUTC(),
 ) : KmsClientFactory<GCloudToAwsWifCredentials> {
   /**
    * Returns an [AwsKmsClient] using Google Cloud Confidential Space identity to authenticate with
@@ -59,17 +62,18 @@ class GCloudToAwsKmsClientFactory(
    */
   override fun getKmsClient(config: GCloudToAwsWifCredentials): KmsClient {
     val credentialsProvider =
-      RefreshableGCloudToAwsCredentialsProvider(refreshMarginSeconds) {
+      RefreshableAwsCredentialsProvider(refreshMargin = refreshMargin, clock = clock) {
         obtainAwsCredentials(config)
       }
     return AwsKmsClient(credentialsProvider)
   }
 
   companion object {
-    private val logger: Logger = Logger.getLogger(GCloudToAwsKmsClientFactory::class.java.name)
+    private val DEFAULT_REFRESH_MARGIN: Duration = Duration.ofMinutes(15)
 
-    /** Default margin before expiration at which credentials are proactively refreshed. */
-    private const val DEFAULT_REFRESH_MARGIN_SECONDS: Long = 900
+    private val SERVICE_ACCOUNT_REGEX = Regex("serviceAccounts/([^:/]+)")
+
+    private val logger: Logger = Logger.getLogger(this::class.java.enclosingClass.name)
 
     private fun buildExternalAccountCredentials(
       config: GCloudToAwsWifCredentials
@@ -97,20 +101,13 @@ class GCloudToAwsKmsClientFactory(
     }
 
     private fun extractServiceAccount(impersonationUrl: String): String {
-      val regex = Regex("serviceAccounts/([^:/]+)")
-      return regex.find(impersonationUrl)?.groupValues?.get(1)
+      return SERVICE_ACCOUNT_REGEX.find(impersonationUrl)?.groupValues?.get(1)
         ?: throw GeneralSecurityException(
           "Cannot extract service account from impersonation URL: $impersonationUrl"
         )
     }
 
-    /**
-     * Executes the full GCP-to-AWS credential chain and returns session credentials with their
-     * expiration time.
-     */
-    private fun obtainAwsCredentials(
-      config: GCloudToAwsWifCredentials
-    ): Pair<AwsSessionCredentials, Instant> {
+    private fun obtainAwsCredentials(config: GCloudToAwsWifCredentials): TimeBoundCredentials {
       val externalAccountCredentials: GoogleCredentials = buildExternalAccountCredentials(config)
 
       val impersonatedCredentials: ImpersonatedCredentials =
@@ -167,56 +164,15 @@ class GCloudToAwsKmsClientFactory(
         }
 
       val awsCredentials = stsResponse.credentials()
-      val sessionCredentials =
-        AwsSessionCredentials.create(
-          awsCredentials.accessKeyId(),
-          awsCredentials.secretAccessKey(),
-          awsCredentials.sessionToken(),
-        )
-      val expiration = awsCredentials.expiration()
-      return sessionCredentials to expiration
-    }
-  }
-
-  /**
-   * An [AwsCredentialsProvider] that caches credentials and refreshes them when they are within
-   * [refreshMarginSeconds] of expiration.
-   *
-   * @param refreshMarginSeconds Seconds before expiration to trigger a refresh.
-   * @param credentialSupplier Function that obtains fresh credentials and their expiration.
-   */
-  internal class RefreshableGCloudToAwsCredentialsProvider(
-    private val refreshMarginSeconds: Long,
-    private val credentialSupplier: () -> Pair<AwsSessionCredentials, Instant>,
-  ) : AwsCredentialsProvider {
-
-    @Volatile private var cachedCredentials: AwsSessionCredentials? = null
-    @Volatile private var expiration: Instant = Instant.EPOCH
-
-    override fun resolveCredentials(): AwsCredentials {
-      val now = Instant.now()
-      val current = cachedCredentials
-      if (current != null && now.plusSeconds(refreshMarginSeconds).isBefore(expiration)) {
-        return current
-      }
-
-      synchronized(this) {
-        val nowAfterLock = Instant.now()
-        val currentAfterLock = cachedCredentials
-        if (
-          currentAfterLock != null &&
-            nowAfterLock.plusSeconds(refreshMarginSeconds).isBefore(expiration)
-        ) {
-          return currentAfterLock
-        }
-
-        logger.info("Refreshing AWS credentials via GCP-to-AWS credential chain")
-        val (newCredentials, newExpiration) = credentialSupplier()
-        cachedCredentials = newCredentials
-        expiration = newExpiration
-        logger.info("AWS credentials refreshed, expiration: $newExpiration")
-        return newCredentials
-      }
+      return TimeBoundCredentials(
+        credentials =
+          AwsSessionCredentials.create(
+            awsCredentials.accessKeyId(),
+            awsCredentials.secretAccessKey(),
+            awsCredentials.sessionToken(),
+          ),
+        expiration = awsCredentials.expiration(),
+      )
     }
   }
 }
