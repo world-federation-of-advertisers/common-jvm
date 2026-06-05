@@ -31,7 +31,7 @@ import org.wfanet.measurement.common.crypto.tink.GCloudToAwsWifCredentials
 class GCloudToAwsKmsClientFactoryTest {
 
   @Test
-  fun `getKmsClient fails with invalid config`() {
+  fun `getKmsClient with invalid config fails on first use`() {
     val factory = GCloudToAwsKmsClientFactory()
     val config =
       GCloudToAwsWifCredentials(
@@ -47,6 +47,7 @@ class GCloudToAwsKmsClientFactoryTest {
         region = "us-east-1",
         awsAudience = "https://example.com/oidc",
       )
-    assertFails { factory.getKmsClient(config) }
+    val kmsClient = factory.getKmsClient(config)
+    assertFails { kmsClient.getAead("aws-kms://arn:aws:kms:us-east-1:123456789012:key/test-key") }
   }
 }

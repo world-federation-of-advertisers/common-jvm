@@ -21,6 +21,7 @@ kt_jvm_library(
         "//imports/java/software/amazon/awssdk/auth",
         "//imports/java/software/amazon/awssdk/services/regions",
         "//imports/java/software/amazon/awssdk/services/sts",
+        "//src/main/kotlin/org/wfanet/measurement/aws:refreshable_aws_credentials_provider",
         "//src/main/kotlin/org/wfanet/measurement/aws/kms:aws_kms_client_factory",
         "//src/main/kotlin/org/wfanet/measurement/common/crypto/tink",
         "@maven//:com_google_auth_google_auth_library_credentials",
