@@ -54,7 +54,7 @@ import org.jetbrains.annotations.BlockingExecutor
  * emission, returned as a `Map<String, Any?>` keyed by parquet column name.
  *
  * ```
- *   underlying StorageClient (plaintext or any other decryption wrapper)
+ *   underlying StorageClient (delivers raw blob bytes from storage)
  *     wrapped by ParquetStorageClient
  *       getBlob -> ParquetBlob
  *         readRows()              -> Flow<Map<String, Any?>>   (column data)
@@ -105,44 +105,28 @@ import org.jetbrains.annotations.BlockingExecutor
  * [StorageClient.Blob] (which doesn't exist today) and a buffered
  * range-read `SeekableInputStream`. Out of scope here.
  *
- * ## Parquet Modular Encryption (PME) — why caller-supplied, not Tink
+ * The temp file is created with whatever permissions the JVM default
+ * umask grants on the system temp directory. The bytes it holds are
+ * exactly the bytes returned by the underlying [StorageClient.Blob.read]
+ * — see the encryption section below for what that implies.
  *
- * PME is parquet's native column-level encryption (AES-GCM, page-level).
- * Files written with PME in `PLAINTEXT_FOOTER` mode have their schema and
- * key-value metadata readable WITHOUT any decryption setup — that's the
- * bootstrap point that lets the caller pull an encrypted DEK out of the
- * footer, unwrap it via KMS, and supply column-decryption material.
+ * ## Parquet Modular Encryption (PME) — the recommended encryption path
  *
- * PME's [FileDecryptionProperties.Builder.withFooterKey] requires **raw
- * AES key bytes** (validated as length 16/24/32; see
- * `FileDecryptionProperties.java:51`). The existing
- * `org.wfanet.measurement.common.crypto.tink.withEnvelopeEncryption` path
- * — used by ResultsFulfiller today for whole-blob streaming-AEAD
- * decryption — produces a Tink `KeysetHandle` and exposes only Tink
- * primitives (`StreamingAead` / `Aead`). It deliberately hides raw key
- * bytes; extracting them means reaching into `KeyData.value` and parsing
- * Tink-internal protos, which Tink discourages. Additionally, Tink's
- * `AesGcmHkdfStreamingKey` is algorithmically incompatible with PME (PME
- * uses plain page-level AES-GCM; no HKDF segment derivation).
+ * For data that must remain encrypted at rest, encrypt the file at the
+ * **parquet level** using PME (`AES_GCM_V1`) in `PLAINTEXT_FOOTER` mode.
+ * Column row data is then encrypted page-by-page inside the parquet file
+ * itself; the footer body (schema + key-value metadata) is plaintext on
+ * disk. Bytes on disk — including in the temp file this client writes —
+ * stay PME-encrypted; decryption happens inside parquet-mr at read time,
+ * into in-memory page buffers that never get written back out.
  *
- * So PME cannot reuse `withEnvelopeEncryption`. What it CAN reuse is the
- * KMS access layer (`KmsClient` factories such as
- * `GCloudKmsClientFactory` and `GCloudToAwsKmsClientFactory`, plus
- * `kmsClient.getAead(kekUri)` — generic Tink-KMS primitives that apply
- * unchanged).
+ * To enable PME column decryption, supply an optional
+ * [decryptionPropertiesProvider] callback. The caller — which already
+ * owns the `KmsClient`, knows where in the footer the encrypted DEK
+ * lives, and knows how it's serialized — implements the closure:
  *
- * Only `PLAINTEXT_FOOTER` PME files are supported here. `ENCRYPTED_FOOTER`
- * mode is rejected with a clear error — the bootstrap pattern this class
- * is built around (read footer first to obtain the DEK) is only possible
- * when the footer body is plaintext on disk. See [readKeyValueMetadata]
- * for the bootstrap path.
- *
- * Rather than baking any of this into the library, this client takes an
- * optional [decryptionPropertiesProvider] callback. The caller — which
- * already owns the `KmsClient`, knows where in the footer the encrypted
- * DEK lives, and knows how it's serialized — implements the closure:
- *
- *  1. `blob.readKeyValueMetadata()` (no decryption needed — see below)
+ *  1. `blob.readKeyValueMetadata()` (no decryption needed — see bootstrap
+ *     section below)
  *  2. read the encrypted-DEK entry + kek-URI entry from the returned map
  *  3. `kmsClient.getAead(kekUri).decrypt(encryptedDekBytes, aad)`
  *     -> raw AES bytes
@@ -151,6 +135,35 @@ import org.jetbrains.annotations.BlockingExecutor
  * The library stays generic: no KMS dependency, no opinion on
  * footer-key naming, no opinion on DEK serialization. The callback is
  * invoked AT MOST ONCE per [ParquetBlob] (cached after first row read).
+ *
+ * Only `PLAINTEXT_FOOTER` PME files are supported. `ENCRYPTED_FOOTER`
+ * mode is rejected with a clear error — the bootstrap pattern this class
+ * is built around (read footer first to obtain the DEK) is only possible
+ * when the footer body is plaintext on disk.
+ *
+ * ### Why not Tink whole-blob envelope encryption (e.g. `withEnvelopeEncryption`)
+ *
+ * It is *technically possible* to wrap this client around a decrypting
+ * `StorageClient` (e.g. `StreamingAeadStorageClient` produced by
+ * `withEnvelopeEncryption`) so that `delegate.read()` returns plaintext
+ * parquet bytes. **This is NOT recommended** for two reasons:
+ *
+ *  - The temp file would then hold **plaintext** on local disk with the
+ *    default umask permissions — visible to any other process/user with
+ *    `/tmp` read access on a multi-tenant host. PME keeps the bytes on
+ *    disk encrypted by construction; the wrapper pattern bypasses that
+ *    guarantee.
+ *  - PME's `FileDecryptionProperties` requires **raw AES key bytes**
+ *    (length 16/24/32). Tink's `KeysetHandle` deliberately hides raw
+ *    bytes behind primitives, and `AesGcmHkdfStreamingKey` is
+ *    algorithmically incompatible with PME's page-level AES-GCM (no
+ *    HKDF segment derivation). The two stacks don't share a key shape.
+ *
+ * Only the KMS access layer (`KmsClient` factories such as
+ * `GCloudKmsClientFactory` / `GCloudToAwsKmsClientFactory` plus
+ * `kmsClient.getAead(kekUri)`) is reused between the existing
+ * envelope-encryption path and PME — those are generic Tink-KMS
+ * primitives that apply unchanged. Everything above that is different.
  *
  * **Callback re-entry constraint**: from inside
  * [decryptionPropertiesProvider] the caller MAY invoke
@@ -226,11 +239,6 @@ import org.jetbrains.annotations.BlockingExecutor
  *   download (default [Dispatchers.IO]).
  * @param decryptionPropertiesProvider optional per-blob PME callback.
  *   `null` = treat all blobs as plaintext. Invoked at most once per blob.
- * @param tempDir optional directory under which temp files are created.
- *   `null` (default) means the JVM's `java.io.tmpdir`. Callers in
- *   security-sensitive environments can point this at an already
- *   access-controlled location (e.g. a Confidential Space ephemeral
- *   disk, `/dev/shm`, or a per-process secure scratch dir).
  */
 class ParquetStorageClient(
   private val storageClient: StorageClient,
@@ -238,7 +246,6 @@ class ParquetStorageClient(
   private val decryptionPropertiesProvider:
     (suspend (ParquetBlob) -> FileDecryptionProperties?)? =
     null,
-  private val tempDir: Path? = null,
 ) : StorageClient {
 
   /**
@@ -339,12 +346,7 @@ class ParquetStorageClient(
       tempFile?.let { return it }
       return tempFileMutex.withLock {
         tempFile?.let { return@withLock it }
-        val path =
-          if (tempDir != null) {
-            Files.createTempFile(tempDir, "parquet-storage-client-", ".parquet")
-          } else {
-            Files.createTempFile("parquet-storage-client-", ".parquet")
-          }
+        val path = Files.createTempFile("parquet-storage-client-", ".parquet")
         try {
           Files.newByteChannel(path, StandardOpenOption.WRITE).use { ch ->
             delegate.read().collect { chunk -> writeFully(ch, chunk.asReadOnlyByteBuffer()) }
@@ -419,9 +421,8 @@ class ParquetStorageClient(
       try {
         Files.deleteIfExists(path)
       } catch (_: IOException) {
-        // Best-effort. Temp file lives under java.io.tmpdir (or the
-        // configured tempDir) which is typically cleaned by the OS /
-        // sandbox lifecycle.
+        // Best-effort. Temp file lives under java.io.tmpdir which is
+        // typically cleaned by the OS / sandbox lifecycle.
       }
     }
   }
