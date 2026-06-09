@@ -17,15 +17,16 @@
 package org.wfanet.measurement.storage
 
 import com.google.protobuf.ByteString
-import com.google.protobuf.Descriptors
-import com.google.protobuf.DynamicMessage
-import com.google.protobuf.Message
-import java.io.ByteArrayOutputStream
+import java.io.ByteArrayInputStream
 import java.io.EOFException
 import java.io.IOException
 import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import java.nio.channels.FileChannel
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.StandardOpenOption
 import java.time.Instant
-import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -34,197 +35,223 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import org.apache.parquet.crypto.FileDecryptionProperties
 import org.apache.parquet.example.data.Group
-import org.apache.parquet.hadoop.ParquetFileReader
+import org.apache.parquet.format.Util
 import org.apache.parquet.hadoop.ParquetReader
-import org.apache.parquet.hadoop.api.InitContext
 import org.apache.parquet.hadoop.api.ReadSupport
 import org.apache.parquet.hadoop.example.GroupReadSupport
 import org.apache.parquet.io.InputFile
-import org.apache.parquet.io.SeekableInputStream
-import org.apache.parquet.schema.GroupType
-import org.apache.parquet.schema.MessageType
-import org.apache.parquet.schema.PrimitiveType
+import org.apache.parquet.io.LocalInputFile
+import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
 import org.apache.parquet.schema.Type
 import org.jetbrains.annotations.BlockingExecutor
 
 /**
- * A wrapper for [StorageClient] that exposes parquet-aware reads with
- * **typed** per-row projections.
+ * A [StorageClient] wrapper that exposes parquet-aware reads — one row per
+ * emission, returned as a `Map<String, Any?>` keyed by parquet column name.
  *
- * Composes naturally with other [StorageClient] wrappers — e.g. envelope
- * encryption around the underlying blob bytes:
  * ```
- * GcsStorageClient                       (raw bytes)
- *   wrapped by StreamingAeadStorageClient   (decrypted bytes)
- *     wrapped by ParquetStorageClient       (parquet rows projected to proto + footer metadata)
+ *   underlying StorageClient (plaintext or any other decryption wrapper)
+ *     wrapped by ParquetStorageClient
+ *       getBlob -> ParquetBlob
+ *         readRows()              -> Flow<Map<String, Any?>>   (column data)
+ *         readKeyValueMetadata()  -> Map<String, String>       (plaintext footer)
+ *         close()                 -> deletes the on-disk temp file
  * ```
  *
- * Each [Projection] declares (a) a target proto [Descriptors.Descriptor],
- * and (b) a `fieldMapping` from target-field path → source parquet column
- * name. For each parquet row, the wrapper produces one [DynamicMessage]
- * per configured [Projection], with proto fields populated by reading the
- * corresponding parquet columns.
+ * ## What this client deliberately is NOT
  *
- * Multiple projections per construction support the common case of one
- * source row populating several target schemas (e.g. a labeler-input proto
- * and a market event template) in a single file pass.
+ * Type-agnostic by design: no target proto descriptor, no field mapping,
+ * no support for nested or repeated columns. Callers project each row
+ * `Map` into their own shape (a proto, a domain object). Keeping this
+ * surface narrow means the library has no opinion about the caller's
+ * schema or mapping conventions and stays a thin pass-through over
+ * parquet's own readers.
  *
- * Column pushdown: only parquet columns referenced by a [Projection] are
- * decoded. The wrapper installs a [ReadSupport] that projects parquet's
- * read schema to the requested-column subset; unmapped columns are not
- * decoded. For wide EDP rows (dozens of columns mapped to a handful)
- * this is a substantial CPU/IO saving over reading the full row.
+ * Repeated fields and nested (group-typed) fields are rejected at row time
+ * with [IllegalStateException]. See [ParquetBlob.readRows] for the
+ * supported primitive types.
  *
- * Hadoop runtime classes ARE required at runtime: parquet-mr 1.14.x
- * instantiates a `Hadoop Configuration` from inside `ParquetReader.Builder`
- * constructors and `ParquetFileReader.open`, and `ParquetReadOptions.Builder`
- * also references `org.apache.hadoop.mapreduce.lib.input.FileInputFormat`.
- * The `hadoop-common` and `hadoop-mapreduce-client-core` dependencies are
- * therefore real runtime requirements.
+ * ## Streaming I/O — why a temp file
  *
- * Materialisation: parquet's footer-at-end layout requires a
- * [SeekableInputStream]. The wrapper materialises the underlying blob into
- * a `byte[]` once per [ParquetBlob] instance and caches it across the three
- * read methods, so callers that need both row projections and footer
- * metadata pay one underlying read. The internal buffer of the materialise
- * sink is reused without a defensive `toByteArray()` copy.
+ * Parquet's footer lives at the END of the file: a reader must seek to
+ * the end, read the footer length, read the footer thrift struct, then
+ * seek back to row-group offsets to decode pages. There is no way to
+ * read a parquet file without a seekable input.
  *
- * Hot-path note: parquet decode and the materialisation `collect` are
- * blocking. All three read methods run their blocking sections under
- * [parquetContext] (default [Dispatchers.IO]) via `flowOn` / `withContext`.
+ * Two viable seekable-input backings for a remote blob:
+ *  1. **In-memory `byte[]`** — load the whole blob into a `byte[]`, wrap
+ *     in a `ByteArrayInputFile`. Simple but capped at ~2 GB
+ *     (`Integer.MAX_VALUE` JVM array limit) and pressures heap with the
+ *     full blob size.
+ *  2. **On-disk temp file (this implementation)** — stream the blob bytes
+ *     into a `Files.createTempFile(...)` via NIO [FileChannel] as they
+ *     arrive, then hand the temp-file path to parquet's official
+ *     [LocalInputFile] (which uses `FileChannel` internally for
+ *     random-access reads). Disk-bound (terabytes), not heap-bound;
+ *     bytes never accumulate in JVM heap. Requires writable local disk
+ *     and caller-driven cleanup via [ParquetBlob.close].
  *
- * Writes pass through to the underlying [StorageClient] unchanged — this
- * wrapper does not encode parquet on the write side. Producers should
- * already supply parquet-encoded bytes.
+ * We pick (2) — (1) caps file size at 2 GB AND inflates heap pressure
+ * proportional to blob size. (2) leverages parquet's own
+ * [LocalInputFile] and requires no new common-jvm APIs.
  *
- * Supported projection types:
- *  - Top-level and arbitrarily-nested message paths in the proto target
- *    (dot notation, e.g. `"event_id.id"`).
- *  - Proto field types `INT`, `LONG`, `FLOAT`, `DOUBLE`, `BOOLEAN`,
- *    `STRING`, `BYTE_STRING`, `ENUM` (enum is matched against the parquet
- *    column's primitive type: parquet `INT32` → enum number,
- *    parquet `BINARY/UTF8` → enum name).
- *  - Direct message-typed leaves and repeated leaves are NOT supported —
- *    rejected at construction (for repeated) or at read (for direct
- *    message-typed leaves).
+ * A future, fully-network-streamed design would back the
+ * `SeekableInputStream` with HTTP range GETs directly against GCS / S3.
+ * That requires adding a `readRange(offset, length)` primitive to
+ * [StorageClient.Blob] (which doesn't exist today) and a buffered
+ * range-read `SeekableInputStream`. Out of scope here.
  *
- * Validation phasing — important to understand when each kind of
- * misconfiguration throws:
- *  - **Construction (`IllegalArgumentException`)**: projection name
- *    uniqueness; target field paths must exist in the target proto
- *    descriptor; intermediate path segments must be message-typed; leaf
- *    fields must be non-repeated.
- *  - **First row read per blob (`IllegalStateException` inside the flow
- *    at `collect` time)**: source parquet column existence; per-row
- *    repetition (a REPEATED parquet column with `count > 1` mapped to a
- *    non-repeated proto target is rejected).
- *  - **Each row at decode (`IllegalStateException`)**: enum integer/name
- *    not present in the target enum type.
+ * ## Parquet Modular Encryption (PME) — why caller-supplied, not Tink
  *
- * Limitations / caveats:
- *  - Source parquet column paths are FLAT (top-level only). Nested
- *    parquet `Group` source columns are not supported.
- *  - Proto `uint32`/`uint64` targets read as signed `Int`/`Long`; values
- *    above `Int.MAX_VALUE`/`Long.MAX_VALUE` silently wrap (JVM has no
- *    unsigned ints — a proto-on-JVM quirk).
- *  - [listBlobs] returns the underlying client's `StorageClient.Blob`,
- *    NOT a [ParquetBlob]. Use [getBlob] to obtain a parquet-aware blob.
- *    (Matches the convention used by `MesosRecordIoStorageClient`.)
- *  - [StorageClient.Blob.size] reports the underlying blob's size — when
- *    wrapped by a decrypting client this is the ciphertext size, NOT the
- *    materialised parquet size.
- *  - First concurrent call to any read method that triggers materialise
- *    will serialise the others through the materialise mutex. After the
- *    first call resolves, subsequent calls hit the volatile fast path.
+ * PME is parquet's native column-level encryption (AES-GCM, page-level).
+ * Files written with PME in `PLAINTEXT_FOOTER` mode have their schema and
+ * key-value metadata readable WITHOUT any decryption setup — that's the
+ * bootstrap point that lets the caller pull an encrypted DEK out of the
+ * footer, unwrap it via KMS, and supply column-decryption material.
  *
- * Known follow-up (not addressed here): the full in-memory materialise caps
- * supported file size and pressures heap. A future range-read-backed
- * [SeekableInputStream] would make reads genuinely streaming, but requires
- * adding a range-read primitive to the [StorageClient] interface.
+ * PME's [FileDecryptionProperties.Builder.withFooterKey] requires **raw
+ * AES key bytes** (validated as length 16/24/32; see
+ * `FileDecryptionProperties.java:51`). The existing
+ * `org.wfanet.measurement.common.crypto.tink.withEnvelopeEncryption` path
+ * — used by ResultsFulfiller today for whole-blob streaming-AEAD
+ * decryption — produces a Tink `KeysetHandle` and exposes only Tink
+ * primitives (`StreamingAead` / `Aead`). It deliberately hides raw key
+ * bytes; extracting them means reaching into `KeyData.value` and parsing
+ * Tink-internal protos, which Tink discourages. Additionally, Tink's
+ * `AesGcmHkdfStreamingKey` is algorithmically incompatible with PME (PME
+ * uses plain page-level AES-GCM; no HKDF segment derivation).
  *
- * @param storageClient underlying client for accessing blob/object storage.
- * @param projections projections to populate per parquet row.
- * @param parquetContext blocking context for parquet decode + materialise.
+ * So PME cannot reuse `withEnvelopeEncryption`. What it CAN reuse is the
+ * KMS access layer (`KmsClient` factories such as
+ * `GCloudKmsClientFactory` and `GCloudToAwsKmsClientFactory`, plus
+ * `kmsClient.getAead(kekUri)` — generic Tink-KMS primitives that apply
+ * unchanged).
+ *
+ * Rather than baking any of this into the library, this client takes an
+ * optional [decryptionPropertiesProvider] callback. The caller — which
+ * already owns the `KmsClient`, knows where in the footer the encrypted
+ * DEK lives, and knows how it's serialized — implements the closure:
+ *
+ *  1. `blob.readKeyValueMetadata()` (no decryption needed — see below)
+ *  2. read the encrypted-DEK entry + kek-URI entry from the returned map
+ *  3. `kmsClient.getAead(kekUri).decrypt(encryptedDekBytes, aad)`
+ *     -> raw AES bytes
+ *  4. `FileDecryptionProperties.builder().withFooterKey(rawBytes).build()`
+ *
+ * The library stays generic: no KMS dependency, no opinion on
+ * footer-key naming, no opinion on DEK serialization. The callback is
+ * invoked AT MOST ONCE per [ParquetBlob] (cached after first row read).
+ *
+ * Write side (not implemented here): producers should use parquet-mr's
+ * `FileEncryptionProperties.builder(footerKey).withPlaintextFooter().build()`
+ * with `AES_GCM_V1` and stash the encrypted DEK + KEK URI as plaintext
+ * key-value entries in the parquet footer.
+ *
+ * ### Bootstrap without keys: how [readKeyValueMetadata] reads PME footers
+ *
+ * Under PME `PLAINTEXT_FOOTER` mode, the FOOTER BODY (schema, key-value
+ * metadata) is plaintext on disk, BUT per-column metadata is still
+ * encrypted with the footer key. Parquet-mr's high-level
+ * [org.apache.parquet.hadoop.ParquetFileReader] decrypts column metadata
+ * eagerly when opening the file — meaning a naive
+ * `ParquetFileReader.open` requires the footer key here, defeating the
+ * bootstrap.
+ *
+ * To make [readKeyValueMetadata] work WITHOUT any key bootstrap
+ * material, this implementation bypasses `ParquetFileReader` for that
+ * one call and reads the raw thrift `FileMetaData` struct directly via
+ * `parquet-format-structures`' `Util.readFileMetaData(in, skipRowGroups =
+ * true)`. With `skipRowGroups = true`, the per-row-group / per-column
+ * portions (including the encrypted per-column-metadata blobs) are
+ * skipped during deserialization. Only file-level fields — including
+ * the always-plaintext `key_value_metadata` — are returned.
+ *
+ * [readRows] still uses the high-level reader (and so still requires
+ * the caller's [decryptionPropertiesProvider] for PME blobs), since
+ * that's where column data actually has to be decrypted.
+ *
+ * ## Resource lifecycle
+ *
+ * Each [ParquetBlob] holds a local temp file from the first read
+ * onward. The temp file is deleted by [ParquetBlob.close]. Callers MUST
+ * close — use Kotlin's `.use { }` idiom:
+ *
+ * ```kotlin
+ * parquetClient.getBlob(uri)?.use { blob ->
+ *   blob.readRows().collect { row -> ... }
+ * }
+ * ```
+ *
+ * Multiple reads on the same [ParquetBlob] share one temp file
+ * (downloaded once on first read, reused thereafter).
+ *
+ * @param storageClient underlying client for blob bytes.
+ * @param parquetContext blocking context for parquet decode + temp-file
+ *   download (default [Dispatchers.IO]).
+ * @param decryptionPropertiesProvider optional per-blob PME callback.
+ *   `null` = treat all blobs as plaintext. Invoked at most once per blob.
  */
 class ParquetStorageClient(
   private val storageClient: StorageClient,
-  private val projections: List<Projection>,
   private val parquetContext: @BlockingExecutor CoroutineContext = Dispatchers.IO,
+  private val decryptionPropertiesProvider:
+    (suspend (ParquetBlob) -> FileDecryptionProperties?)? =
+    null,
 ) : StorageClient {
 
   /**
-   * Declares one typed projection from parquet rows to a target proto.
-   *
-   * @param name caller-chosen identifier — used as the map key in
-   *   [ParquetBlob.readProjectedMessages] and as the lookup argument in
-   *   [ParquetBlob.readMessages]. Must be unique across the projections
-   *   passed to a single [ParquetStorageClient].
-   * @param descriptor target proto descriptor whose fields are populated.
-   * @param fieldMapping `key = target field path within descriptor (dot
-   *   notation for nesting); value = source parquet column name`.
+   * A [StorageClient.Blob] that exposes parquet-aware reads + cleanup of
+   * the local temp file backing the random-access reader.
    */
-  data class Projection(
-    val name: String,
-    val descriptor: Descriptors.Descriptor,
-    val fieldMapping: Map<String, String>,
-  )
-
-  /**
-   * A [StorageClient.Blob] that exposes parquet-aware reads driven by the
-   * [Projection]s supplied to its [ParquetStorageClient].
-   */
-  interface ParquetBlob : StorageClient.Blob {
+  interface ParquetBlob : StorageClient.Blob, AutoCloseable {
     /**
-     * Cold flow of typed projected messages. One emission per parquet row;
-     * each emission is a `Map<projectionName, DynamicMessage>` covering
-     * every configured [Projection].
+     * Cold flow of rows. Each emission is one row, represented as a
+     * `Map<column name, value>`. Supported primitive types:
+     *
+     *  - parquet `INT32`   -> Kotlin [Int]
+     *  - parquet `INT64`   -> Kotlin [Long]
+     *  - parquet `FLOAT`   -> Kotlin [Float]
+     *  - parquet `DOUBLE`  -> Kotlin [Double]
+     *  - parquet `BOOLEAN` -> Kotlin [Boolean]
+     *  - parquet `BINARY` with `STRING` logical type -> Kotlin [String]
+     *  - parquet `BINARY` (no logical type) -> [ByteString]
+     *  - parquet `FIXED_LEN_BYTE_ARRAY` -> [ByteString]
+     *  - parquet `INT96` (legacy timestamps) -> [ByteString] (raw 12 bytes)
+     *
+     * OPTIONAL columns with no value present in a row map to `null`.
+     * REPEATED columns (count > 1) and nested group-typed columns throw
+     * [IllegalStateException] at row time.
      */
-    fun readProjectedMessages(): Flow<Map<String, DynamicMessage>>
+    fun readRows(): Flow<Map<String, Any?>>
 
     /**
-     * Cold flow of one projection. Equivalent to
-     * `readProjectedMessages().map { it.getValue(projectionName) }` but
-     * avoids constructing the per-row map AND restricts parquet column
-     * pushdown to only this projection's source columns. As a result,
-     * `readMessages("a")` will not fail because of a misconfiguration in
-     * an unrelated projection `"b"`.
+     * Parquet file's footer key-value metadata. Reads the plaintext
+     * footer body directly from the thrift `FileMetaData` struct without
+     * involving the high-level reader, so it works on both plaintext AND
+     * PME-with-plaintext-footer blobs without any decryption setup —
+     * making it suitable as a bootstrap step for the caller's
+     * [decryptionPropertiesProvider].
      */
-    fun readMessages(projectionName: String): Flow<DynamicMessage>
-
-    /** Parquet file's footer key/value metadata. */
     suspend fun readKeyValueMetadata(): Map<String, String>
+
+    /** Deletes the local temp file backing this blob's parquet reads. */
+    override fun close()
   }
 
-  // Validate uniqueness BEFORE resolver construction so duplicate-name
-  // errors win over per-projection path errors.
-  init {
-    require(projections.distinctBy { it.name }.size == projections.size) {
-      "Projection names must be unique; got duplicates in ${projections.map { it.name }}"
-    }
-  }
+  // === StorageClient ===
 
-  // Pre-compile target field paths at construction so the per-row
-  // projection cost is just navigation + value reads, not string parsing.
-  private val resolvers: List<ProjectionResolver> = projections.map(::ProjectionResolver)
-
-  private val resolversByName: Map<String, ProjectionResolver> = resolvers.associateBy { it.name }
-
-  // === StorageClient — implemented explicitly (no `by` delegation) to ===
-  // === match the convention used by MesosRecordIoStorageClient.       ===
-
-  override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
-    return storageClient.writeBlob(blobKey, content)
-  }
+  override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob =
+    storageClient.writeBlob(blobKey, content)
 
   override suspend fun getBlob(blobKey: String): ParquetBlob? {
     val raw = storageClient.getBlob(blobKey) ?: return null
     return ParquetBlobImpl(raw)
   }
 
-  override suspend fun listBlobs(prefix: String?): Flow<StorageClient.Blob> {
-    return storageClient.listBlobs(prefix)
-  }
+  override suspend fun listBlobs(prefix: String?): Flow<StorageClient.Blob> =
+    storageClient.listBlobs(prefix)
 
   // === ParquetBlob impl ===
 
@@ -246,73 +273,62 @@ class ParquetStorageClient(
 
     override suspend fun delete() = delegate.delete()
 
-    // Cached materialised view, shared across readProjectedMessages /
-    // readMessages / readKeyValueMetadata — pay the underlying read once.
-    @Volatile private var cached: Materialised? = null
-    private val cacheMutex = Mutex()
+    // === Temp-file backing for parquet's random-access reads ===
 
-    // Per-resolver-name lazy bind cache. Each entry materialises on first
-    // use of THAT projection only — readMessages("a") never forces a
-    // bind() for unrelated projection "b".
-    private val boundCache = ConcurrentHashMap<String, BoundResolver>()
+    @Volatile private var tempFile: Path? = null
+    private val tempFileMutex = Mutex()
 
-    private suspend fun materialised(): Materialised {
-      cached?.let { return it }
-      return cacheMutex.withLock {
-        cached?.let { return it }
-        val sink = GrowableByteBuffer()
-        delegate.read().collect { chunk -> chunk.writeTo(sink) }
-        Materialised(sink.internalBuffer(), sink.length()).also { cached = it }
-      }
-    }
-
-    private fun bindOne(name: String, schema: GroupType): BoundResolver {
-      return boundCache.computeIfAbsent(name) {
-        val resolver =
-          resolversByName[name]
-            ?: error("No Projection named '$name'; available: ${resolversByName.keys}")
-        resolver.bind(schema)
-      }
-    }
-
-    override fun readProjectedMessages(): Flow<Map<String, DynamicMessage>> =
-      flow {
-          require(resolvers.isNotEmpty()) {
-            "readProjectedMessages requires at least one Projection at construction"
+    private suspend fun ensureTempFile(): Path {
+      tempFile?.let { return it }
+      return tempFileMutex.withLock {
+        tempFile?.let { return@withLock it }
+        val path = Files.createTempFile("parquet-storage-client-", ".parquet")
+        try {
+          Files.newByteChannel(path, StandardOpenOption.WRITE).use { ch ->
+            delegate.read().collect { chunk -> ch.write(chunk.asReadOnlyByteBuffer()) }
           }
-          // Union of source columns across all projections for pushdown.
-          val requested = resolvers.flatMap { it.sourceColumns }.toSet()
-          val inputFile = materialised().toInputFile()
-          GroupParquetReaderBuilder(inputFile, requested).build().use { reader ->
-            val first = reader.read() ?: return@use
-            val bound = resolvers.map { bindOne(it.name, first.type) }
-            emit(bound.associate { it.name to it.project(first) })
-            var group: Group? = reader.read()
-            while (group != null) {
-              val current = group
-              emit(bound.associate { it.name to it.project(current) })
-              group = reader.read()
-            }
-          }
+        } catch (t: Throwable) {
+          try {
+            Files.deleteIfExists(path)
+          } catch (_: IOException) {}
+          throw t
         }
-        .flowOn(parquetContext)
+        tempFile = path
+        path
+      }
+    }
 
-    override fun readMessages(projectionName: String): Flow<DynamicMessage> =
+    // === Cached PME decryption properties (resolved at most once per blob) ===
+
+    @Volatile private var decryptionResolved: Boolean = false
+    @Volatile private var decryptionProps: FileDecryptionProperties? = null
+    private val decryptionMutex = Mutex()
+
+    private suspend fun resolveDecryption(): FileDecryptionProperties? {
+      val provider = decryptionPropertiesProvider ?: return null
+      if (decryptionResolved) return decryptionProps
+      return decryptionMutex.withLock {
+        if (decryptionResolved) return@withLock decryptionProps
+        decryptionProps = provider.invoke(this)
+        decryptionResolved = true
+        decryptionProps
+      }
+    }
+
+    // === Reads ===
+
+    override fun readRows(): Flow<Map<String, Any?>> =
       flow {
-          val resolver =
-            resolversByName[projectionName]
-              ?: throw IllegalArgumentException(
-                "No Projection named '$projectionName'; available: ${resolversByName.keys}"
-              )
-          // Pushdown only this projection's source columns.
-          val inputFile = materialised().toInputFile()
-          GroupParquetReaderBuilder(inputFile, resolver.sourceColumns).build().use { reader ->
+          val path = ensureTempFile()
+          val decryption = resolveDecryption()
+          val inputFile: InputFile = LocalInputFile(path)
+          GroupParquetReaderBuilder(inputFile, decryption).build().use { reader ->
             val first = reader.read() ?: return@use
-            val bound = bindOne(projectionName, first.type)
-            emit(bound.project(first))
+            val topLevelFields = first.type.fields
+            emit(groupToMap(first, topLevelFields))
             var group: Group? = reader.read()
             while (group != null) {
-              emit(bound.project(group))
+              emit(groupToMap(group, topLevelFields))
               group = reader.read()
             }
           }
@@ -320,347 +336,168 @@ class ParquetStorageClient(
         .flowOn(parquetContext)
 
     override suspend fun readKeyValueMetadata(): Map<String, String> =
-      withContext(parquetContext) {
-        val inputFile = materialised().toInputFile()
-        ParquetFileReader.open(inputFile).use { reader ->
-          reader.fileMetaData.keyValueMetaData.toMap()
-        }
+      withContext(parquetContext) { readFooterKeyValueMetadata(ensureTempFile()) }
+
+    override fun close() {
+      val path = tempFile ?: return
+      tempFile = null
+      try {
+        Files.deleteIfExists(path)
+      } catch (_: IOException) {
+        // Best-effort. Temp file lives under java.io.tmpdir which is
+        // typically cleaned by the OS / sandbox lifecycle.
       }
-  }
-
-  // === Materialisation primitive ===
-
-  /**
-   * Zero-copy holder for the decrypted blob bytes. [buffer] is the
-   * underlying `ByteArrayOutputStream` internal array (may be larger than
-   * [length] — only `[0, length)` is valid).
-   */
-  private class Materialised(val buffer: ByteArray, val length: Int) {
-    fun toInputFile(): InputFile = ByteArrayInputFile(buffer, length)
-  }
-
-  /**
-   * [ByteArrayOutputStream] subclass that exposes its internal buffer
-   * without the `toByteArray()` defensive copy — avoids doubling peak heap
-   * during materialise of large blobs.
-   */
-  private class GrowableByteBuffer : ByteArrayOutputStream() {
-    fun internalBuffer(): ByteArray = buf
-
-    fun length(): Int = count
-  }
-
-  // === Projector: compiles a Projection into per-target metadata. ===
-
-  /**
-   * Compiles a [Projection] into resolved target paths. Field-by-field
-   * binding against the parquet schema (validation + repetition + parquet
-   * type) is deferred to [bind], which is invoked once per blob.
-   */
-  private class ProjectionResolver(projection: Projection) {
-    val name: String = projection.name
-    private val descriptor: Descriptors.Descriptor = projection.descriptor
-
-    /** Resolved target path; bound to a parquet column at [bind] time. */
-    data class Resolved(
-      val path: List<Descriptors.FieldDescriptor>,
-      val sourceColumn: String,
-    )
-
-    val resolvedMappings: List<Resolved> =
-      projection.fieldMapping.map { (targetPath, sourceColumn) ->
-        require(targetPath.isNotBlank()) {
-          "Empty target field path in projection '${projection.name}'"
-        }
-        require(sourceColumn.isNotBlank()) {
-          "Empty source column for target '$targetPath' in projection '${projection.name}'"
-        }
-        val parts = targetPath.split('.')
-        val chain = mutableListOf<Descriptors.FieldDescriptor>()
-        var currentDescriptor: Descriptors.Descriptor = projection.descriptor
-        parts.forEachIndexed { idx, partName ->
-          val field =
-            currentDescriptor.findFieldByName(partName)
-              ?: throw IllegalArgumentException(
-                "Projection '${projection.name}' target path '$targetPath' references " +
-                  "non-existent field '$partName' in ${currentDescriptor.fullName}"
-              )
-          chain.add(field)
-          if (idx < parts.size - 1) {
-            require(field.javaType == Descriptors.FieldDescriptor.JavaType.MESSAGE) {
-              "Projection '${projection.name}' target path '$targetPath' navigates through " +
-                "non-message field '$partName' (javaType=${field.javaType})"
-            }
-            currentDescriptor = field.messageType
-          }
-        }
-        val leaf = chain.last()
-        require(!leaf.isRepeated) {
-          "Projection '${projection.name}' target '$targetPath' is a repeated field — not supported"
-        }
-        Resolved(chain.toList(), sourceColumn)
-      }
-
-    /** The set of parquet column names this projection reads. */
-    val sourceColumns: Set<String> = resolvedMappings.map { it.sourceColumn }.toSet()
-
-    init {
-      require(name.isNotBlank()) { "Projection.name must be non-blank" }
     }
+  }
 
-    /** Validates against a parquet schema and returns a per-row projector. */
-    fun bind(schema: GroupType): BoundResolver {
-      val bound =
-        resolvedMappings.map { resolved ->
-          if (!schema.containsField(resolved.sourceColumn)) {
-            error(
-              "Projection '$name' references parquet column '${resolved.sourceColumn}' that " +
-                "is not in the row schema. Available: ${schema.fields.map { it.name }}"
+  // === Per-row conversion: Group -> Map<String, Any?> ===
+
+  private fun groupToMap(group: Group, fields: List<Type>): Map<String, Any?> {
+    val out = LinkedHashMap<String, Any?>(fields.size)
+    for (field in fields) {
+      val name = field.name
+      if (!field.isPrimitive) {
+        throw IllegalStateException(
+          "Nested message field '$name' is not supported by ParquetStorageClient"
+        )
+      }
+      val count = group.getFieldRepetitionCount(name)
+      if (count == 0) {
+        out[name] = null
+        continue
+      }
+      if (count > 1) {
+        throw IllegalStateException(
+          "Repeated field '$name' (count=$count) is not supported by ParquetStorageClient"
+        )
+      }
+      val prim = field.asPrimitiveType()
+      out[name] =
+        when (prim.primitiveTypeName) {
+          PrimitiveTypeName.INT32 -> group.getInteger(name, 0)
+          PrimitiveTypeName.INT64 -> group.getLong(name, 0)
+          PrimitiveTypeName.FLOAT -> group.getFloat(name, 0)
+          PrimitiveTypeName.DOUBLE -> group.getDouble(name, 0)
+          PrimitiveTypeName.BOOLEAN -> group.getBoolean(name, 0)
+          PrimitiveTypeName.BINARY -> {
+            val binary = group.getBinary(name, 0)
+            val annotation = prim.logicalTypeAnnotation
+            // Treat BINARY as String iff annotated as UTF-8 (STRING /
+            // ENUM logical types). Otherwise hand back raw bytes.
+            if (annotation != null && annotation.toString().startsWith("STRING")) {
+              binary.toStringUsingUTF8()
+            } else {
+              ByteString.copyFrom(binary.toByteBuffer())
+            }
+          }
+          PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY ->
+            ByteString.copyFrom(group.getBinary(name, 0).toByteBuffer())
+          PrimitiveTypeName.INT96 -> ByteString.copyFrom(group.getInt96(name, 0).bytes)
+          else ->
+            throw IllegalStateException(
+              "Unsupported primitive type '${prim.primitiveTypeName}' for field '$name'"
             )
-          }
-          val sourceField = schema.getType(resolved.sourceColumn)
-          val primitive: PrimitiveType.PrimitiveTypeName? =
-            if (sourceField.isPrimitive) sourceField.asPrimitiveType().primitiveTypeName else null
-          BoundResolver.Bound(resolved, sourceField.repetition, primitive)
         }
-      return BoundResolver(name, descriptor, bound)
     }
+    return out
   }
 
-  /**
-   * Schema-bound projector for one [Projection] against one blob's parquet
-   * schema. Per-row `project(group)` does only column reads + setField
-   * calls — no string lookups in the parquet schema (paid once at [bind]).
-   */
-  private class BoundResolver(
-    val name: String,
-    private val descriptor: Descriptors.Descriptor,
-    private val mappings: List<Bound>,
-  ) {
-    /** A resolved target path bound to a parquet column with cached metadata. */
-    data class Bound(
-      val resolved: ProjectionResolver.Resolved,
-      val repetition: Type.Repetition,
-      val primitive: PrimitiveType.PrimitiveTypeName?,
-    )
-
-    /** Projects one parquet row [Group] into a [DynamicMessage] of [descriptor]. */
-    fun project(group: Group): DynamicMessage {
-      val builder = DynamicMessage.newBuilder(descriptor)
-      mappings.forEach { bound ->
-        val value = readValue(group, bound) ?: return@forEach
-        setNested(builder, bound.resolved.path, value)
-      }
-      return builder.build()
-    }
-
-    private fun readValue(group: Group, bound: Bound): Any? {
-      val column = bound.resolved.sourceColumn
-      // Repetition-aware fast path: REQUIRED is guaranteed count==1.
-      // OPTIONAL needs the empty check. REPEATED additionally rejects
-      // count>1 since the target proto field is non-repeated (validated
-      // at construction).
-      when (bound.repetition) {
-        Type.Repetition.REQUIRED -> {
-          /* count is always 1 — skip the per-row getFieldRepetitionCount call */
-        }
-        Type.Repetition.OPTIONAL -> {
-          if (group.getFieldRepetitionCount(column) == 0) return null
-        }
-        Type.Repetition.REPEATED -> {
-          val count = group.getFieldRepetitionCount(column)
-          if (count == 0) return null
-          if (count > 1) {
-            error(
-              "Projection '$name' source column '$column' has $count values in this row; " +
-                "mapping a REPEATED parquet column to a non-repeated proto target is " +
-                "not supported."
-            )
-          }
-        }
-      }
-      val targetField = bound.resolved.path.last()
-      // getFieldBuilder for nested paths is called per row inside setNested;
-      // proto's DynamicMessage.Builder makes this cheap.
-      return when (targetField.javaType) {
-        Descriptors.FieldDescriptor.JavaType.INT -> group.getInteger(column, 0)
-        Descriptors.FieldDescriptor.JavaType.LONG -> group.getLong(column, 0)
-        Descriptors.FieldDescriptor.JavaType.FLOAT -> group.getFloat(column, 0)
-        Descriptors.FieldDescriptor.JavaType.DOUBLE -> group.getDouble(column, 0)
-        Descriptors.FieldDescriptor.JavaType.BOOLEAN -> group.getBoolean(column, 0)
-        Descriptors.FieldDescriptor.JavaType.STRING -> group.getBinary(column, 0).toStringUsingUTF8()
-        Descriptors.FieldDescriptor.JavaType.BYTE_STRING ->
-          // toByteBuffer + ByteString.copyFrom avoids the second copy
-          // Binary.getBytes -> ByteString.copyFrom(byte[]) would cost.
-          ByteString.copyFrom(group.getBinary(column, 0).toByteBuffer())
-        Descriptors.FieldDescriptor.JavaType.ENUM -> {
-          val enumType = targetField.enumType
-          when (bound.primitive) {
-            PrimitiveType.PrimitiveTypeName.INT32 -> {
-              val number = group.getInteger(column, 0)
-              enumType.findValueByNumber(number)
-                ?: error(
-                  "Projection '$name' enum target '${targetField.fullName}' has no value with " +
-                    "number=$number (from parquet column '$column'). Known values: " +
-                    enumType.values.map { it.number to it.name }
-                )
-            }
-            PrimitiveType.PrimitiveTypeName.BINARY -> {
-              val str = group.getBinary(column, 0).toStringUsingUTF8()
-              enumType.findValueByName(str)
-                ?: error(
-                  "Projection '$name' enum target '${targetField.fullName}' has no value with " +
-                    "name='$str' (from parquet column '$column'). Known values: " +
-                    enumType.values.map { it.name }
-                )
-            }
-            else ->
-              error(
-                "Projection '$name' enum target '${targetField.fullName}' must be sourced from " +
-                  "a parquet INT32 (enum number) or BINARY/UTF8 (enum name) column. " +
-                  "Got parquet primitive=${bound.primitive} on column '$column'."
-              )
-          }
-        }
-        Descriptors.FieldDescriptor.JavaType.MESSAGE ->
-          error(
-            "Projection '$name' leaf field '${targetField.fullName}' has unsupported " +
-              "javaType=MESSAGE. Direct message-typed leaves are not supported; use " +
-              "dot-notation paths into nested-message fields instead."
-          )
-      }
-    }
-
-    private fun setNested(
-      builder: Message.Builder,
-      path: List<Descriptors.FieldDescriptor>,
-      value: Any,
-    ) {
-      if (path.size == 1) {
-        builder.setField(path[0], value)
-        return
-      }
-      val parent = path[0]
-      // getFieldBuilder returns the same Builder instance for the same
-      // message field on repeated calls within one row — multiple mappings
-      // into the same nested message correctly share one parent builder.
-      val nestedBuilder = builder.getFieldBuilder(parent)
-      setNested(nestedBuilder, path.drop(1), value)
-    }
-  }
-
-  // === Plumbing: parquet-mr Builder access + projected ReadSupport ===
+  // === Parquet plumbing ===
 
   /**
    * Subclass of [ParquetReader.Builder] needed to reach the protected
-   * `Builder(InputFile)` constructor — parquet-mr's public `builder()`
-   * static factory only accepts Hadoop `Path`. Installs a
-   * [ProjectedGroupReadSupport] so parquet only decodes the requested
-   * column subset (column pushdown).
+   * `Builder(InputFile)` constructor — parquet-mr's public static factory
+   * `builder()` only accepts a Hadoop `Path`. If [decryption] is
+   * non-null, install it via the parquet-mr `withDecryption` builder API,
+   * which flows into the eventual `ParquetReadOptions` and enables PME
+   * column decryption.
    */
-  private class GroupParquetReaderBuilder(file: InputFile, private val requestedColumns: Set<String>) :
-    ParquetReader.Builder<Group>(file) {
-    override fun getReadSupport(): ReadSupport<Group> =
-      ProjectedGroupReadSupport(requestedColumns)
-  }
-
-  /**
-   * [GroupReadSupport] that asks parquet to decode only the columns whose
-   * name appears in [requestedColumns]. Columns referenced by the
-   * projection but not in the file schema are dropped from the projected
-   * schema; the per-blob bind step will surface a clear error for them.
-   */
-  private class ProjectedGroupReadSupport(private val requestedColumns: Set<String>) :
-    GroupReadSupport() {
-    override fun init(context: InitContext): ReadContext {
-      if (requestedColumns.isEmpty()) {
-        return super.init(context)
-      }
-      val fullSchema = context.fileSchema
-      val projectedFields: List<Type> =
-        fullSchema.fields.filter { it.name in requestedColumns }
-      if (projectedFields.isEmpty()) {
-        // No intersection between requested and file schema. Fall back to
-        // the full schema so the per-blob bind step can produce a clear
-        // "column not in schema" error rather than parquet's internal one.
-        return super.init(context)
-      }
-      val projected = MessageType(fullSchema.name, projectedFields)
-      return ReadContext(projected)
-    }
-  }
-
-  /**
-   * Minimal in-memory [InputFile] backed by a `byte[]`. Parquet needs a
-   * seekable input because the footer lives at the end of the file. The
-   * underlying buffer may be larger than [length] (e.g. when reusing a
-   * `ByteArrayOutputStream`'s internal buffer); only `[0, length)` is read.
-   */
-  private class ByteArrayInputFile(private val data: ByteArray, private val length: Int) :
-    InputFile {
+  private class GroupParquetReaderBuilder(
+    file: InputFile,
+    decryption: FileDecryptionProperties?,
+  ) : ParquetReader.Builder<Group>(file) {
     init {
-      require(length in 0..data.size) { "length($length) out of [0, ${data.size}]" }
+      decryption?.let { withDecryption(it) }
     }
 
-    override fun getLength(): Long = length.toLong()
-
-    override fun newStream(): SeekableInputStream = ByteArraySeekableInputStream(data, length)
+    override fun getReadSupport(): ReadSupport<Group> = GroupReadSupport()
   }
 
-  private class ByteArraySeekableInputStream(private val data: ByteArray, private val limit: Int) :
-    SeekableInputStream() {
-    private var pos: Int = 0
+  // === Direct thrift footer parse (bypasses ParquetFileReader) ===
 
-    override fun getPos(): Long = pos.toLong()
-
-    override fun seek(newPos: Long) {
-      require(newPos in 0..limit.toLong()) { "seek($newPos) out of range [0, $limit]" }
-      pos = newPos.toInt()
-    }
-
-    override fun read(): Int = if (pos < limit) data[pos++].toInt() and 0xFF else -1
-
-    override fun read(buf: ByteArray, off: Int, len: Int): Int {
-      // InputStream contract: zero-length request returns 0, not -1, even at EOF.
-      if (len == 0) return 0
-      if (pos >= limit) return -1
-      val available = minOf(len, limit - pos)
-      System.arraycopy(data, pos, buf, off, available)
-      pos += available
-      return available
-    }
-
-    override fun readFully(buf: ByteArray) = readFully(buf, 0, buf.size)
-
-    override fun readFully(buf: ByteArray, off: Int, len: Int) {
-      if (pos + len > limit) {
-        throw EOFException("readFully past end: pos=$pos, len=$len, limit=$limit")
+  /**
+   * Reads the parquet file's footer key-value metadata directly from
+   * the thrift `FileMetaData` struct, bypassing parquet-mr's high-level
+   * [org.apache.parquet.hadoop.ParquetFileReader].
+   *
+   * Why bypass: under PME `PLAINTEXT_FOOTER` mode the footer body
+   * (schema, key-value metadata) IS plaintext on disk, but per-column
+   * metadata is still encrypted with the footer key.
+   * `ParquetFileReader.open` decrypts ALL column metadata eagerly when
+   * opening the file, which requires the footer key here — defeating
+   * the whole point of reading the footer first to obtain key
+   * bootstrap material.
+   *
+   * Solution: read the raw FileMetaData thrift struct via
+   * `parquet-format-structures`' `Util.readFileMetaData(in,
+   * skipRowGroups = true)`. With `skipRowGroups = true`, the
+   * per-row-group / per-column portions are skipped during
+   * deserialization, so the encrypted per-column-metadata blobs are
+   * never touched. Only file-level fields, including the
+   * always-plaintext `key_value_metadata`, are returned.
+   *
+   * Parquet file footer layout (last bytes):
+   * ```
+   *   ...FileMetaData (thrift) bytes...
+   *   [int32 footer length LE][4-byte magic]
+   * ```
+   * Magic is `"PAR1"` for plaintext-footer files and `"PARE"` for
+   * encrypted-footer PME files. We accept both — the FileMetaData
+   * thrift itself is still parseable for `PARE` files as long as we
+   * use `skipRowGroups = true` (per-column encryption never engages).
+   */
+  private fun readFooterKeyValueMetadata(path: Path): Map<String, String> {
+    FileChannel.open(path, StandardOpenOption.READ).use { ch ->
+      val fileLen = ch.size()
+      require(fileLen >= MIN_PARQUET_FILE_SIZE) {
+        "File too small to be parquet: $path (size=$fileLen)"
       }
-      System.arraycopy(data, pos, buf, off, len)
-      pos += len
-    }
-
-    override fun read(buf: ByteBuffer): Int {
-      // InputStream contract: zero-length request returns 0, not -1, even at EOF.
-      if (buf.remaining() == 0) return 0
-      if (pos >= limit) return -1
-      val available = minOf(buf.remaining(), limit - pos)
-      buf.put(data, pos, available)
-      pos += available
-      return available
-    }
-
-    override fun readFully(buf: ByteBuffer) {
-      val needed = buf.remaining()
-      if (pos + needed > limit) {
-        throw EOFException(
-          "readFully(ByteBuffer) past end: pos=$pos, need=$needed, limit=$limit"
-        )
+      // Read the 8-byte trailer: [footer length: int32 LE][magic: 4 bytes].
+      val tail = ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN)
+      ch.position(fileLen - 8)
+      readFully(ch, tail)
+      tail.flip()
+      val footerLen = tail.int
+      val magicBytes = ByteArray(4).also { tail.get(it) }
+      val magic = String(magicBytes, Charsets.US_ASCII)
+      require(magic == PARQUET_MAGIC_PLAINTEXT || magic == PARQUET_MAGIC_ENCRYPTED_FOOTER) {
+        "Not a parquet file: $path (bad magic '$magic')"
       }
-      buf.put(data, pos, needed)
-      pos += needed
+      require(footerLen in 1..(fileLen - 8)) {
+        "Implausible parquet footer length $footerLen for file size $fileLen"
+      }
+      val footerStart = fileLen - 8 - footerLen
+      val footerBuf = ByteBuffer.allocate(footerLen)
+      ch.position(footerStart)
+      readFully(ch, footerBuf)
+      footerBuf.flip()
+      val footerBytes = ByteArray(footerLen).also { footerBuf.get(it) }
+      val md = Util.readFileMetaData(ByteArrayInputStream(footerBytes), /* skipRowGroups = */ true)
+      val kv = md.key_value_metadata ?: return emptyMap()
+      return kv.associate { it.key to (it.value ?: "") }
     }
+  }
 
-    @Throws(IOException::class) override fun close() = Unit
+  private fun readFully(ch: FileChannel, buf: ByteBuffer) {
+    while (buf.hasRemaining()) {
+      val n = ch.read(buf)
+      if (n < 0) throw EOFException("Unexpected EOF reading parquet bytes")
+    }
+  }
+
+  private companion object {
+    private const val PARQUET_MAGIC_PLAINTEXT = "PAR1"
+    private const val PARQUET_MAGIC_ENCRYPTED_FOOTER = "PARE"
+    private const val MIN_PARQUET_FILE_SIZE = 12L // 4-byte header + 8-byte trailer minimum.
   }
 }

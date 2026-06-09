@@ -18,14 +18,3 @@ kt_jvm_proto_library(
     name = "complex_message_kt_jvm_proto",
     deps = [":complex_message_proto"],
 )
-
-proto_library(
-    name = "parquet_test_message_proto",
-    srcs = ["parquet_test_message.proto"],
-    strip_import_prefix = IMPORT_PREFIX,
-)
-
-kt_jvm_proto_library(
-    name = "parquet_test_message_kt_jvm_proto",
-    deps = [":parquet_test_message_proto"],
-)
