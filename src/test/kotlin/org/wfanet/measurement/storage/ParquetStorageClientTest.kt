@@ -22,12 +22,13 @@ import com.google.crypto.tink.KeyTemplates
 import com.google.crypto.tink.KeysetHandle
 import com.google.crypto.tink.aead.AeadConfig
 import com.google.protobuf.ByteString
-import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
 import java.security.SecureRandom
 import java.util.Base64
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.assertFailsWith
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
@@ -41,9 +42,7 @@ import org.apache.parquet.io.LocalOutputFile
 import org.apache.parquet.io.api.Binary
 import org.apache.parquet.schema.MessageType
 import org.apache.parquet.schema.MessageTypeParser
-import org.junit.Rule
 import org.junit.Test
-import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 import org.wfanet.measurement.common.crypto.tink.testing.FakeKmsClient
@@ -51,13 +50,6 @@ import org.wfanet.measurement.storage.testing.InMemoryStorageClient
 
 @RunWith(JUnit4::class)
 class ParquetStorageClientTest {
-
-  @get:Rule val tempFolder: TemporaryFolder = TemporaryFolder()
-
-  private fun newClient(
-    blobs: InMemoryStorageClient,
-    provider: (suspend (ParquetStorageClient.ParquetBlob) -> FileDecryptionProperties?)? = null,
-  ) = ParquetStorageClient(blobs, decryptionPropertiesProvider = provider, tempDir = tempFolder.root.toPath())
 
   // ===== Plaintext round trip =====
 
@@ -67,7 +59,7 @@ class ParquetStorageClientTest {
       val blobs = InMemoryStorageClient()
       blobs.writeBlob("data.parquet", flowOf(ByteString.copyFrom(plaintextSampleBytes())))
 
-      newClient(blobs).getBlob("data.parquet")!!.use { blob ->
+      ParquetStorageClient(blobs).getBlob("data.parquet")!!.use { blob ->
         val rows = blob.readRows().toList()
         assertThat(rows).hasSize(3)
         assertThat(rows[0]).containsExactly("id", 1L, "name", "alice", "data", BYTES_AB)
@@ -84,7 +76,7 @@ class ParquetStorageClientTest {
       flowOf(ByteString.copyFrom(plaintextSampleBytes(metadata = mapOf("foo" to "bar")))),
     )
 
-    newClient(blobs).getBlob("data.parquet")!!.use { blob ->
+    ParquetStorageClient(blobs).getBlob("data.parquet")!!.use { blob ->
       assertThat(blob.readKeyValueMetadata()).containsAtLeast("foo", "bar")
     }
   }
@@ -128,7 +120,7 @@ class ParquetStorageClientTest {
       flowOf(ByteString.copyFrom(writeParquet(schema, listOf(row), null, emptyMap(), null))),
     )
 
-    newClient(blobs).getBlob("p.parquet")!!.use { blob ->
+    ParquetStorageClient(blobs).getBlob("p.parquet")!!.use { blob ->
       val map = blob.readRows().toList().single()
       assertThat(map["i32"]).isEqualTo(42)
       assertThat(map["i64"]).isEqualTo(1234567890123L)
@@ -136,8 +128,8 @@ class ParquetStorageClientTest {
       assertThat(map["f64"]).isEqualTo(2.5)
       assertThat(map["flag"]).isEqualTo(true)
       assertThat(map["str"]).isEqualTo("hello")
-      // ENUM-annotated BINARY must be String (fix #4: typed `is` check
-      // covers EnumLogicalTypeAnnotation, not just startsWith("STRING")).
+      // ENUM-annotated BINARY must be String (typed `is`-check covers
+      // EnumLogicalTypeAnnotation, not just startsWith("STRING")).
       assertThat(map["enm"]).isEqualTo("RED")
       assertThat(map["raw"]).isEqualTo(ByteString.copyFrom(byteArrayOf(0x01, 0x02, 0x03)))
       assertThat(map["fixed4"])
@@ -167,7 +159,7 @@ class ParquetStorageClientTest {
       ),
     )
 
-    newClient(blobs).getBlob("opt.parquet")!!.use { blob ->
+    ParquetStorageClient(blobs).getBlob("opt.parquet")!!.use { blob ->
       val rows = blob.readRows().toList()
       assertThat(rows[0]).containsExactly("id", 1L, "maybe", null)
       assertThat(rows[1]).containsExactly("id", 2L, "maybe", "present")
@@ -196,7 +188,7 @@ class ParquetStorageClientTest {
       ),
     )
 
-    newClient(blobs).getBlob("rg.parquet")!!.use { blob ->
+    ParquetStorageClient(blobs).getBlob("rg.parquet")!!.use { blob ->
       val outRows = blob.readRows().toList()
       assertThat(outRows).hasSize(200)
       assertThat(outRows.first()).containsExactly("n", 0L, "s", "row-0")
@@ -213,7 +205,7 @@ class ParquetStorageClientTest {
     blobs.writeBlob("pme.parquet", flowOf(ByteString.copyFrom(pmeSampleBytes(footerKey, emptyMap()))))
 
     val client =
-      newClient(blobs) {
+      ParquetStorageClient(blobs) {
         FileDecryptionProperties.builder().withFooterKey(footerKey).build()
       }
 
@@ -234,7 +226,7 @@ class ParquetStorageClientTest {
       flowOf(ByteString.copyFrom(pmeSampleBytes(footerKey, mapOf("dek" to "blob")))),
     )
 
-    newClient(blobs).getBlob("pme.parquet")!!.use { blob ->
+    ParquetStorageClient(blobs).getBlob("pme.parquet")!!.use { blob ->
       assertThat(blob.readKeyValueMetadata()).containsAtLeast("dek", "blob")
     }
   }
@@ -247,7 +239,7 @@ class ParquetStorageClientTest {
 
     val ex =
       assertFailsWith<Throwable> {
-        newClient(blobs).getBlob("pme.parquet")!!.use { blob -> blob.readRows().toList() }
+        ParquetStorageClient(blobs).getBlob("pme.parquet")!!.use { blob -> blob.readRows().toList() }
       }
     assertThat(ex.toString()).ignoringCase().contains("encrypt")
   }
@@ -272,7 +264,7 @@ class ParquetStorageClientTest {
     blobs.writeBlob("pme.parquet", flowOf(ByteString.copyFrom(pmeSampleBytes(footerKey, metadata))))
 
     val client =
-      newClient(blobs) { blob ->
+      ParquetStorageClient(blobs) { blob ->
         // Provider re-entry pattern: allowed to call readKeyValueMetadata
         // on the same blob (different mutex). MUST NOT call readRows.
         val md = blob.readKeyValueMetadata()
@@ -313,7 +305,7 @@ class ParquetStorageClientTest {
 
     val ex =
       assertFailsWith<IllegalStateException> {
-        newClient(blobs).getBlob("rep.parquet")!!.use { it.readRows().toList() }
+        ParquetStorageClient(blobs).getBlob("rep.parquet")!!.use { it.readRows().toList() }
       }
     assertThat(ex.message).contains("Repeated field 'tags'")
   }
@@ -343,7 +335,7 @@ class ParquetStorageClientTest {
 
     val ex =
       assertFailsWith<IllegalStateException> {
-        newClient(blobs).getBlob("nest.parquet")!!.use { it.readRows().toList() }
+        ParquetStorageClient(blobs).getBlob("nest.parquet")!!.use { it.readRows().toList() }
       }
     assertThat(ex.message).contains("Nested message field 'nested'")
   }
@@ -351,31 +343,23 @@ class ParquetStorageClientTest {
   // ===== Lifecycle =====
 
   @Test
-  fun `close deletes the temp file`(): Unit = runBlocking {
-    val blobs = InMemoryStorageClient()
-    blobs.writeBlob("data.parquet", flowOf(ByteString.copyFrom(plaintextSampleBytes())))
-
-    val blob = newClient(blobs).getBlob("data.parquet")!!
-    blob.readRows().toList()
-    assertThat(tempFileCount()).isEqualTo(1)
-    blob.close()
-    assertThat(tempFileCount()).isEqualTo(0)
-  }
-
-  @Test
-  fun `multiple reads share one temp file`(): Unit = runBlocking {
+  fun `multiple reads on the same blob share one underlying download`(): Unit = runBlocking {
+    // Verifies the per-blob temp-file cache: regardless of how many read
+    // methods we invoke on a single ParquetBlob, the underlying
+    // StorageClient.Blob.read() is called exactly once.
     val blobs = InMemoryStorageClient()
     blobs.writeBlob(
       "data.parquet",
       flowOf(ByteString.copyFrom(plaintextSampleBytes(metadata = mapOf("foo" to "bar")))),
     )
+    val counting = ReadCountingStorageClient(blobs)
 
-    newClient(blobs).getBlob("data.parquet")!!.use { blob ->
+    ParquetStorageClient(counting).getBlob("data.parquet")!!.use { blob ->
       blob.readRows().toList()
       blob.readKeyValueMetadata()
       blob.readRows().toList()
-      assertThat(tempFileCount()).isEqualTo(1)
     }
+    assertThat(counting.readCount.get()).isEqualTo(1)
   }
 
   @Test
@@ -383,7 +367,7 @@ class ParquetStorageClientTest {
     val blobs = InMemoryStorageClient()
     blobs.writeBlob("data.parquet", flowOf(ByteString.copyFrom(plaintextSampleBytes())))
 
-    val blob = newClient(blobs).getBlob("data.parquet")!!
+    val blob = ParquetStorageClient(blobs).getBlob("data.parquet")!!
     blob.readRows().toList()
     blob.close()
     val ex =
@@ -396,7 +380,7 @@ class ParquetStorageClientTest {
     val blobs = InMemoryStorageClient()
     blobs.writeBlob("data.parquet", flowOf(ByteString.copyFrom(plaintextSampleBytes())))
 
-    val blob = newClient(blobs).getBlob("data.parquet")!!
+    val blob = ParquetStorageClient(blobs).getBlob("data.parquet")!!
     blob.readKeyValueMetadata()
     blob.close()
     val ex =
@@ -409,7 +393,7 @@ class ParquetStorageClientTest {
     val blobs = InMemoryStorageClient()
     blobs.writeBlob("data.parquet", flowOf(ByteString.copyFrom(plaintextSampleBytes())))
 
-    val blob = newClient(blobs).getBlob("data.parquet")!!
+    val blob = ParquetStorageClient(blobs).getBlob("data.parquet")!!
     blob.readRows().toList()
     blob.close()
     blob.close() // must not throw
@@ -433,7 +417,7 @@ class ParquetStorageClientTest {
 
       val ex =
         assertFailsWith<IllegalStateException> {
-          newClient(blobs).getBlob("pme-enc-footer.parquet")!!.use { blob ->
+          ParquetStorageClient(blobs).getBlob("pme-enc-footer.parquet")!!.use { blob ->
             blob.readKeyValueMetadata()
           }
         }
@@ -442,6 +426,34 @@ class ParquetStorageClientTest {
     }
 
   // ===== Helpers =====
+
+  /**
+   * Test-only [StorageClient] wrapper that counts how many times any of
+   * its blobs' `read()` flows are subscribed to. Used to verify that
+   * [ParquetStorageClient] downloads the underlying blob at most once
+   * per `ParquetBlob` instance, regardless of how many read methods are
+   * called.
+   */
+  private class ReadCountingStorageClient(private val delegate: StorageClient) : StorageClient {
+    val readCount: AtomicInteger = AtomicInteger(0)
+
+    override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>) =
+      delegate.writeBlob(blobKey, content)
+
+    override suspend fun getBlob(blobKey: String): StorageClient.Blob? {
+      val raw = delegate.getBlob(blobKey) ?: return null
+      return CountingBlob(raw)
+    }
+
+    override suspend fun listBlobs(prefix: String?) = delegate.listBlobs(prefix)
+
+    private inner class CountingBlob(private val raw: StorageClient.Blob) : StorageClient.Blob by raw {
+      override fun read(): Flow<ByteString> {
+        readCount.incrementAndGet()
+        return raw.read()
+      }
+    }
+  }
 
   private val BYTES_AB = ByteString.copyFrom(byteArrayOf(0xAB.toByte()))
   private val BYTES_CD = ByteString.copyFrom(byteArrayOf(0xCD.toByte()))
@@ -493,7 +505,7 @@ class ParquetStorageClientTest {
     metadata: Map<String, String>,
     rowGroupSize: Long?,
   ): ByteArray {
-    val path: Path = Files.createTempFile(tempFolder.root.toPath(), "pst-writer-", ".parquet")
+    val path: Path = Files.createTempFile("pst-writer-", ".parquet")
     // LocalOutputFile refuses to overwrite, so delete the empty file first.
     Files.deleteIfExists(path)
     try {
@@ -521,12 +533,5 @@ class ParquetStorageClientTest {
     val k = ByteArray(bytes)
     SecureRandom().nextBytes(k)
     return k
-  }
-
-  /** Counts ParquetStorageClient temp files in the per-test tempdir. */
-  private fun tempFileCount(): Int {
-    val dir = tempFolder.root
-    val children: Array<File>? = dir.listFiles { _, name -> name.startsWith("parquet-storage-client-") }
-    return children?.size ?: 0
   }
 }
