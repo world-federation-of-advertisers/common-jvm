@@ -1,0 +1,61 @@
+// Copyright 2026 The Cross-Media Measurement Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package wfa.measurement.storage.testing;
+
+option java_package = "org.wfanet.measurement.storage.testing";
+option java_multiple_files = true;
+
+// Test message used by ParquetStorageClientTest. Designed to cover the full
+// projection-type surface: every supported primitive proto JavaType, enum
+// (both number- and name-sourced), nested 1-level and 2-level paths, and
+// proto fields used to verify OPTIONAL-source-missing and REPEATED-source
+// behavior on the parquet side.
+message ParquetTestMessage {
+  enum Color {
+    COLOR_UNSPECIFIED = 0;
+    RED = 1;
+    GREEN = 2;
+    BLUE = 3;
+  }
+
+  message Inner {
+    string label = 1;
+  }
+
+  message Nested {
+    string str = 1;
+    int64 number = 2;
+    Inner inner = 3;
+  }
+
+  int32 i32 = 1;
+  int64 i64 = 2;
+  float f32 = 3;
+  double f64 = 4;
+  bool flag = 5;
+  string str = 6;
+  bytes data = 7;
+  // Populated from a parquet INT32 column containing the enum NUMBER.
+  Color color_num = 8;
+  // Populated from a parquet BINARY/UTF8 column containing the enum NAME.
+  Color color_name = 9;
+  Nested nested = 10;
+  // For OPTIONAL-parquet-column missing tests: when the parquet OPTIONAL
+  // column has count == 0, projector returns null and this proto field
+  // stays at default ("").
+  string maybe = 11;
+}

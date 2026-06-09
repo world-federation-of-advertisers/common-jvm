@@ -1,0 +1,17 @@
+package(default_visibility = ["//visibility:public"])
+
+# Required at RUNTIME by parquet-mr 1.14.x — Configuration is instantiated
+# from inside ParquetReader.Builder constructors and ParquetFileReader.open.
+# Not just for compile-time overload resolution.
+alias(
+    name = "hadoop_common",
+    actual = "@maven//:org_apache_hadoop_hadoop_common",
+)
+
+# Required at RUNTIME by parquet-mr 1.14.x — ParquetReadOptions.Builder
+# references org.apache.hadoop.mapreduce.lib.input.FileInputFormat in its
+# constructor; missing it throws NoClassDefFoundError at first read.
+alias(
+    name = "hadoop_mapreduce_client_core",
+    actual = "@maven//:org_apache_hadoop_hadoop_mapreduce_client_core",
+)

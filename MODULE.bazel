@@ -192,6 +192,17 @@ maven.install(
         "com.google.guava:guava:33.4.0-jre",
         "com.google.code.gson:gson:2.12.1",
 
+        # Apache Parquet — for ParquetStorageClient row-oriented reads.
+        "org.apache.parquet:parquet-hadoop:1.14.3",
+        "org.apache.parquet:parquet-column:1.14.3",
+        "org.apache.parquet:parquet-common:1.14.3",
+        # Required at RUNTIME by parquet-mr 1.14.x. Configuration is
+        # instantiated inside ParquetReader.Builder constructors and
+        # ParquetFileReader.open; ParquetReadOptions.Builder also references
+        # FileInputFormat from hadoop-mapreduce-client-core.
+        "org.apache.hadoop:hadoop-common:3.3.6",
+        "org.apache.hadoop:hadoop-mapreduce-client-core:3.3.6",
+
         # kotlinx-coroutines
         "org.jetbrains.kotlinx:kotlinx-coroutines-test",
         "org.jetbrains.kotlinx:kotlinx-coroutines-debug",
