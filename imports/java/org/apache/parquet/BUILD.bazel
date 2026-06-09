@@ -1,0 +1,16 @@
+package(default_visibility = ["//visibility:public"])
+
+alias(
+    name = "parquet_hadoop",
+    actual = "@maven//:org_apache_parquet_parquet_hadoop",
+)
+
+alias(
+    name = "parquet_column",
+    actual = "@maven//:org_apache_parquet_parquet_column",
+)
+
+alias(
+    name = "parquet_common",
+    actual = "@maven//:org_apache_parquet_parquet_common",
+)

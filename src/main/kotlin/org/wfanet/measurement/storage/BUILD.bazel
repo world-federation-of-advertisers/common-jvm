@@ -36,6 +36,25 @@ kt_jvm_library(
 )
 
 kt_jvm_library(
+    name = "parquet_storage_client",
+    srcs = ["ParquetStorageClient.kt"],
+    deps = [
+        ":client",
+        "//imports/java/com/google/protobuf",
+        # Required at RUNTIME by parquet-mr 1.14.x — Hadoop Configuration is
+        # instantiated from inside ParquetReader.Builder constructors and
+        # ParquetFileReader.open. Hadoop MapReduce client classes are also
+        # touched (FileInputFormat referenced from ParquetReadOptions.Builder).
+        "//imports/java/org/apache/hadoop:hadoop_common",
+        "//imports/java/org/apache/hadoop:hadoop_mapreduce_client_core",
+        "//imports/java/org/apache/parquet:parquet_column",
+        "//imports/java/org/apache/parquet:parquet_common",
+        "//imports/java/org/apache/parquet:parquet_hadoop",
+        "//imports/kotlin/kotlinx/coroutines:core",
+    ],
+)
+
+kt_jvm_library(
     name = "selected_storage_client",
     srcs = ["SelectedStorageClient.kt"],
     deps = [
