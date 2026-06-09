@@ -35,8 +35,8 @@ kt_jvm_test(
     deps = [
         "//imports/java/com/google/common/truth",
         "//imports/java/com/google/protobuf",
-        "//imports/java/org/apache/hadoop:hadoop_common",
-        "//imports/java/org/apache/hadoop:hadoop_mapreduce_client_core",
+        "//imports/java/org/apache/hadoop:hadoop_client_api",
+        "//imports/java/org/apache/hadoop:hadoop_client_runtime",
         "//imports/java/org/apache/parquet:parquet_column",
         "//imports/java/org/apache/parquet:parquet_common",
         "//imports/java/org/apache/parquet:parquet_hadoop",
