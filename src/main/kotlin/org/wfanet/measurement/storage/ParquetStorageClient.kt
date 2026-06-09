@@ -50,162 +50,15 @@ import org.apache.parquet.schema.Type
 import org.jetbrains.annotations.BlockingExecutor
 
 /**
- * A [StorageClient] wrapper that exposes parquet-aware reads — one row per
- * emission, returned as a `Map<String, Any?>` keyed by parquet column name.
+ * A [StorageClient] wrapper that exposes parquet-aware reads.
  *
- * ```
- *   underlying StorageClient (delivers raw blob bytes from storage)
- *     wrapped by ParquetStorageClient
- *       getBlob -> ParquetBlob
- *         readRows()              -> Flow<Map<String, Any?>>   (column data)
- *         readKeyValueMetadata()  -> Map<String, String>       (plaintext footer)
- *         close()                 -> deletes the on-disk temp file
- * ```
+ * Each [getBlob] returns a [ParquetBlob] with:
+ *  - [ParquetBlob.readRows] — `Flow<Map<String, Any?>>`, one row per
+ *    emission, keyed by parquet column name with native-typed values.
+ *  - [ParquetBlob.readKeyValueMetadata] — the file's footer key-value
+ *    metadata as a `Map<String, String>`.
  *
- * ## What this client deliberately is NOT
- *
- * Type-agnostic by design: no target proto descriptor, no field mapping,
- * no support for nested or repeated columns. Callers project each row
- * `Map` into their own shape (a proto, a domain object). Keeping this
- * surface narrow means the library has no opinion about the caller's
- * schema or mapping conventions and stays a thin pass-through over
- * parquet's own readers.
- *
- * Repeated fields and nested (group-typed) fields are rejected at row time
- * with [IllegalStateException]. See [ParquetBlob.readRows] for the
- * supported primitive types.
- *
- * ## Streaming I/O — why a temp file
- *
- * Parquet's footer lives at the END of the file: a reader must seek to
- * the end, read the footer length, read the footer thrift struct, then
- * seek back to row-group offsets to decode pages. There is no way to
- * read a parquet file without a seekable input.
- *
- * Two viable seekable-input backings for a remote blob:
- *  1. **In-memory `byte[]`** — load the whole blob into a `byte[]`, wrap
- *     in a `ByteArrayInputFile`. Simple but capped at ~2 GB
- *     (`Integer.MAX_VALUE` JVM array limit) and pressures heap with the
- *     full blob size.
- *  2. **On-disk temp file (this implementation)** — stream the blob bytes
- *     into a `Files.createTempFile(...)` via a NIO byte channel as they
- *     arrive, then hand the temp-file path to parquet's official
- *     [LocalInputFile] (which uses `FileChannel` internally for
- *     random-access reads). Disk-bound (terabytes), not heap-bound;
- *     bytes never accumulate in JVM heap. Requires writable local disk
- *     and caller-driven cleanup via [ParquetBlob.close].
- *
- * We pick (2) — (1) caps file size at 2 GB AND inflates heap pressure
- * proportional to blob size. (2) leverages parquet's own
- * [LocalInputFile] and requires no new common-jvm APIs.
- *
- * A future, fully-network-streamed design would back the
- * `SeekableInputStream` with HTTP range GETs directly against GCS / S3.
- * That requires adding a `readRange(offset, length)` primitive to
- * [StorageClient.Blob] (which doesn't exist today) and a buffered
- * range-read `SeekableInputStream`. Out of scope here.
- *
- * The temp file is created with whatever permissions the JVM default
- * umask grants on the system temp directory. The bytes it holds are
- * exactly the bytes returned by the underlying [StorageClient.Blob.read]
- * — see the encryption section below for what that implies.
- *
- * ## Parquet Modular Encryption (PME) — the recommended encryption path
- *
- * For data that must remain encrypted at rest, encrypt the file at the
- * **parquet level** using PME (`AES_GCM_V1`) in `PLAINTEXT_FOOTER` mode.
- * Column row data is then encrypted page-by-page inside the parquet file
- * itself; the footer body (schema + key-value metadata) is plaintext on
- * disk. Bytes on disk — including in the temp file this client writes —
- * stay PME-encrypted; decryption happens inside parquet-mr at read time,
- * into in-memory page buffers that never get written back out.
- *
- * To enable PME column decryption, supply an optional
- * [decryptionPropertiesProvider] callback. The caller — which already
- * owns the `KmsClient`, knows where in the footer the encrypted DEK
- * lives, and knows how it's serialized — implements the closure:
- *
- *  1. `blob.readKeyValueMetadata()` (no decryption needed — see bootstrap
- *     section below)
- *  2. read the encrypted-DEK entry + kek-URI entry from the returned map
- *  3. `kmsClient.getAead(kekUri).decrypt(encryptedDekBytes, aad)`
- *     -> raw AES bytes
- *  4. `FileDecryptionProperties.builder().withFooterKey(rawBytes).build()`
- *
- * The library stays generic: no KMS dependency, no opinion on
- * footer-key naming, no opinion on DEK serialization. The callback is
- * invoked AT MOST ONCE per [ParquetBlob] (cached after first row read).
- *
- * Only `PLAINTEXT_FOOTER` PME files are supported. `ENCRYPTED_FOOTER`
- * mode is rejected with a clear error — the bootstrap pattern this class
- * is built around (read footer first to obtain the DEK) is only possible
- * when the footer body is plaintext on disk.
- *
- * ### Why not Tink whole-blob envelope encryption (e.g. `withEnvelopeEncryption`)
- *
- * It is *technically possible* to wrap this client around a decrypting
- * `StorageClient` (e.g. `StreamingAeadStorageClient` produced by
- * `withEnvelopeEncryption`) so that `delegate.read()` returns plaintext
- * parquet bytes. **This is NOT recommended** for two reasons:
- *
- *  - The temp file would then hold **plaintext** on local disk with the
- *    default umask permissions — visible to any other process/user with
- *    `/tmp` read access on a multi-tenant host. PME keeps the bytes on
- *    disk encrypted by construction; the wrapper pattern bypasses that
- *    guarantee.
- *  - PME's `FileDecryptionProperties` requires **raw AES key bytes**
- *    (length 16/24/32). Tink's `KeysetHandle` deliberately hides raw
- *    bytes behind primitives, and `AesGcmHkdfStreamingKey` is
- *    algorithmically incompatible with PME's page-level AES-GCM (no
- *    HKDF segment derivation). The two stacks don't share a key shape.
- *
- * Only the KMS access layer (`KmsClient` factories such as
- * `GCloudKmsClientFactory` / `GCloudToAwsKmsClientFactory` plus
- * `kmsClient.getAead(kekUri)`) is reused between the existing
- * envelope-encryption path and PME — those are generic Tink-KMS
- * primitives that apply unchanged. Everything above that is different.
- *
- * **Callback re-entry constraint**: from inside
- * [decryptionPropertiesProvider] the caller MAY invoke
- * [ParquetBlob.readKeyValueMetadata] on the same blob (that's the
- * bootstrap point), but MUST NOT invoke [ParquetBlob.readRows] on the
- * same blob. The latter would re-enter the resolution path and deadlock
- * on a non-reentrant coroutine `Mutex`.
- *
- * Write side (not implemented here): producers should use parquet-mr's
- * `FileEncryptionProperties.builder(footerKey).withPlaintextFooter().build()`
- * with `AES_GCM_V1` and stash the encrypted DEK + KEK URI as plaintext
- * key-value entries in the parquet footer.
- *
- * ### Bootstrap without keys: how [readKeyValueMetadata] reads PME footers
- *
- * Under PME `PLAINTEXT_FOOTER` mode, the FOOTER BODY (schema, key-value
- * metadata) is plaintext on disk, BUT per-column metadata is still
- * encrypted with the footer key. Parquet-mr's high-level
- * [org.apache.parquet.hadoop.ParquetFileReader] decrypts column metadata
- * eagerly when opening the file — meaning a naive
- * `ParquetFileReader.open` requires the footer key here, defeating the
- * bootstrap.
- *
- * To make [readKeyValueMetadata] work WITHOUT any key bootstrap
- * material, this implementation bypasses `ParquetFileReader` for that
- * one call and reads the raw thrift `FileMetaData` struct directly via
- * `parquet-format-structures`' `Util.readFileMetaData(in, skipRowGroups =
- * true)`. With `skipRowGroups = true`, the per-row-group / per-column
- * portions (including the encrypted per-column-metadata blobs) are
- * skipped during deserialization. Only file-level fields — including
- * the always-plaintext `key_value_metadata` — are returned.
- *
- * [readRows] still uses the high-level reader (and so still requires
- * the caller's [decryptionPropertiesProvider] for PME blobs), since
- * that's where column data actually has to be decrypted.
- *
- * ## Resource lifecycle
- *
- * Each [ParquetBlob] holds a local temp file from the first read
- * onward. The temp file is deleted by [ParquetBlob.close]; subsequent
- * read calls on a closed blob throw [IllegalStateException]. Callers
- * MUST close — use Kotlin's `.use { }` idiom:
+ * ## Usage
  *
  * ```kotlin
  * parquetClient.getBlob(uri)?.use { blob ->
@@ -213,32 +66,38 @@ import org.jetbrains.annotations.BlockingExecutor
  * }
  * ```
  *
- * Each [getBlob] call returns a FRESH [ParquetBlob] with its own temp
- * file — two `getBlob(...)` calls on the same key will download the
- * underlying blob twice. Reuse a single `ParquetBlob` instance across
- * read methods if you need to share the materialised bytes; multiple
- * reads on the same instance share one temp file (downloaded once on
- * first read, reused thereafter).
+ * Each [getBlob] returns a FRESH [ParquetBlob] that downloads the
+ * underlying blob to a local temp file on first read; multiple reads on
+ * the same instance share that temp file. Callers MUST close
+ * (the `.use { }` idiom handles this); read methods on a closed blob
+ * throw [IllegalStateException].
  *
- * ## What this client does NOT optimize
+ * ## Constraints
  *
- * - **No column pushdown.** The previous typed-projection API decoded
- *   only the columns referenced by the projection; the new
- *   type-agnostic `Map` API decodes every column in the file. Trade-off
- *   accepted: callers wanting per-column read efficiency on top of this
- *   API can layer their own filtering after [readRows].
- * - **No range I/O for metadata-only reads.** Even
- *   [readKeyValueMetadata] downloads the full blob to the temp file
- *   (because the temp file is shared with [readRows] in the common case
- *   and downloading twice would be wasteful). A range-read primitive on
- *   [StorageClient.Blob] would let us fetch just the parquet footer
- *   bytes — out of scope here.
+ * - Nested (group-typed) and REPEATED columns throw
+ *   [IllegalStateException] at row time. This client is single-value,
+ *   flat-schema only.
+ * - See [ParquetBlob.readRows] for the supported primitive types and
+ *   how they map to Kotlin/Java values.
  *
- * @param storageClient underlying client for blob bytes.
+ * ## Parquet Modular Encryption (PME)
+ *
+ * For PME-encrypted blobs, supply [decryptionPropertiesProvider]. The
+ * callback runs at most once per blob and MAY call
+ * [ParquetBlob.readKeyValueMetadata] on the same blob (the typical
+ * bootstrap: read an encrypted DEK + KEK URI out of the footer, unwrap
+ * via KMS, return [org.apache.parquet.crypto.FileDecryptionProperties]).
+ * It MUST NOT call [ParquetBlob.readRows] on the same blob — that
+ * would deadlock on the resolution mutex.
+ *
+ * Only `PLAINTEXT_FOOTER` mode is supported; `ENCRYPTED_FOOTER` blobs
+ * are rejected with a clear error at read time.
+ *
+ * @param storageClient underlying client for raw blob bytes.
  * @param parquetContext blocking context for parquet decode + temp-file
  *   download (default [Dispatchers.IO]).
- * @param decryptionPropertiesProvider optional per-blob PME callback.
- *   `null` = treat all blobs as plaintext. Invoked at most once per blob.
+ * @param decryptionPropertiesProvider optional per-blob PME callback;
+ *   `null` = treat all blobs as plaintext.
  */
 class ParquetStorageClient(
   private val storageClient: StorageClient,
