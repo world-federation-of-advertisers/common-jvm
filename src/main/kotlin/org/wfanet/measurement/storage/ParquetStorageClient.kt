@@ -45,6 +45,7 @@ import org.apache.parquet.hadoop.example.GroupReadSupport
 import org.apache.parquet.io.InputFile
 import org.apache.parquet.io.LocalInputFile
 import org.apache.parquet.schema.LogicalTypeAnnotation
+import org.apache.parquet.schema.PrimitiveType
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
 import org.apache.parquet.schema.Type
 import org.jetbrains.annotations.BlockingExecutor
@@ -90,8 +91,16 @@ import org.jetbrains.annotations.BlockingExecutor
  * It MUST NOT call [ParquetBlob.readRows] on the same blob — that
  * would deadlock on the resolution mutex.
  *
- * Only `PLAINTEXT_FOOTER` mode is supported; `ENCRYPTED_FOOTER` blobs
- * are rejected with a clear error at read time.
+ * The callback runs on [parquetContext] (default [Dispatchers.IO]).
+ * Keep KMS / network work IO-bound; if you need a different dispatcher
+ * for CPU work inside the callback, use `withContext(...)` internally.
+ *
+ * `ENCRYPTED_FOOTER` blobs are not supported by [readKeyValueMetadata]
+ * (rejected with a clear error). [readRows] can technically decode
+ * `ENCRYPTED_FOOTER` blobs if the supplied decryption properties carry
+ * the right footer key, but the bootstrap pattern this class is built
+ * around requires `PLAINTEXT_FOOTER`; writers SHOULD use
+ * `PLAINTEXT_FOOTER` mode.
  *
  * @param storageClient underlying client for raw blob bytes.
  * @param parquetContext blocking context for parquet decode + temp-file
@@ -151,6 +160,13 @@ class ParquetStorageClient(
     suspend fun readKeyValueMetadata(): Map<String, String>
 
     /**
+     * Deletes the underlying blob from storage. Does NOT close this
+     * [ParquetBlob]'s local temp file — call [close] (or use `.use {}`)
+     * to release local resources.
+     */
+    override suspend fun delete()
+
+    /**
      * Deletes the local temp file backing this blob's parquet reads.
      * After `close()`, all read methods throw [IllegalStateException].
      * Idempotent — calling `close()` multiple times is safe.
@@ -201,9 +217,23 @@ class ParquetStorageClient(
       check(!closed) { "ParquetBlob '$blobKey' has been closed" }
     }
 
+    /**
+     * Materialises the underlying blob to a local temp file on first
+     * call; subsequent calls return the same path.
+     *
+     * Race handling vs. [close]: the `closed` flag is re-checked BOTH
+     * at mutex entry AND after the download completes. If [close] runs
+     * mid-download, we delete the partial file and throw instead of
+     * publishing the path. There's a residual microsecond-wide window
+     * between the post-download check and the [tempFile] publish where
+     * a concurrent [close] would not observe the path; that case is
+     * acceptable under the documented "MUST close after reads complete"
+     * contract.
+     */
     private suspend fun ensureTempFile(): Path {
       tempFile?.let { return it }
       return tempFileMutex.withLock {
+        if (closed) error("ParquetBlob '$blobKey' has been closed")
         tempFile?.let { return@withLock it }
         val path = Files.createTempFile("parquet-storage-client-", ".parquet")
         try {
@@ -215,6 +245,15 @@ class ParquetStorageClient(
             Files.deleteIfExists(path)
           } catch (_: IOException) {}
           throw t
+        }
+        if (closed) {
+          // close() ran during the download. Clean up the orphan so we
+          // don't leak the temp file and bail out — the caller's read
+          // attempt is racing a close and should fail.
+          try {
+            Files.deleteIfExists(path)
+          } catch (_: IOException) {}
+          error("ParquetBlob '$blobKey' was closed during the underlying download")
         }
         tempFile = path
         path
@@ -255,11 +294,16 @@ class ParquetStorageClient(
           val inputFile: InputFile = LocalInputFile(path)
           GroupParquetReaderBuilder(inputFile, decryption).build().use { reader ->
             val first = reader.read() ?: return@use
-            val topLevelFields = first.type.fields
-            emit(groupToMap(first, topLevelFields))
+            // Pre-compile per-column extractors from the schema of the
+            // first row, then reuse on every subsequent row. The schema
+            // is fixed for the whole file, so primitive-type dispatch +
+            // BINARY logical-type detection happen ONCE per column
+            // instead of per row × per column.
+            val extractors = buildExtractors(first.type.fields)
+            emit(extractToMap(first, extractors))
             var group: Group? = reader.read()
             while (group != null) {
-              emit(groupToMap(group, topLevelFields))
+              emit(extractToMap(group, extractors))
               group = reader.read()
             }
           }
@@ -286,56 +330,78 @@ class ParquetStorageClient(
     }
   }
 
-  // === Per-row conversion: Group -> Map<String, Any?> ===
+  // === Per-column extractor compilation (runs once per file) ===
 
-  private fun groupToMap(group: Group, fields: List<Type>): Map<String, Any?> {
-    val out = LinkedHashMap<String, Any?>(fields.size)
-    for (field in fields) {
-      val name = field.name
-      if (!field.isPrimitive) {
-        throw IllegalStateException(
-          "Nested message field '$name' is not supported by ParquetStorageClient"
-        )
-      }
-      val count = group.getFieldRepetitionCount(name)
-      if (count == 0) {
-        out[name] = null
-        continue
-      }
-      if (count > 1) {
-        throw IllegalStateException(
-          "Repeated field '$name' (count=$count) is not supported by ParquetStorageClient"
-        )
-      }
-      val prim = field.asPrimitiveType()
-      out[name] =
-        when (prim.primitiveTypeName) {
-          PrimitiveTypeName.INT32 -> group.getInteger(name, 0)
-          PrimitiveTypeName.INT64 -> group.getLong(name, 0)
-          PrimitiveTypeName.FLOAT -> group.getFloat(name, 0)
-          PrimitiveTypeName.DOUBLE -> group.getDouble(name, 0)
-          PrimitiveTypeName.BOOLEAN -> group.getBoolean(name, 0)
-          PrimitiveTypeName.BINARY -> {
-            val binary = group.getBinary(name, 0)
-            // STRING / ENUM / JSON are UTF-8 text logical types -> decode
-            // to String. Everything else (including BSON, UUID, raw
-            // bytes, or no annotation) stays as raw bytes.
-            when (prim.logicalTypeAnnotation) {
-              is LogicalTypeAnnotation.StringLogicalTypeAnnotation,
-              is LogicalTypeAnnotation.EnumLogicalTypeAnnotation,
-              is LogicalTypeAnnotation.JsonLogicalTypeAnnotation -> binary.toStringUsingUTF8()
-              else -> ByteString.copyFrom(binary.toByteBuffer())
-            }
-          }
-          PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY ->
-            ByteString.copyFrom(group.getBinary(name, 0).toByteBuffer())
-          PrimitiveTypeName.INT96 -> ByteString.copyFrom(group.getInt96(name, 0).bytes)
-          else ->
-            throw IllegalStateException(
-              "Unsupported primitive type '${prim.primitiveTypeName}' for field '$name'"
-            )
-        }
+  /**
+   * Per-column value extractor. Carries `(column name, (Group) -> value)`.
+   * The closure handles OPTIONAL (absent -> null) and REPEATED (count > 1
+   * -> throw) at row time; the primitive-type / annotation dispatch is
+   * baked in at build time so the row hot path is just a closure call.
+   */
+  private data class ColumnExtractor(val name: String, val extract: (Group) -> Any?)
+
+  private fun buildExtractors(fields: List<Type>): List<ColumnExtractor> =
+    fields.map { field -> buildExtractor(field) }
+
+  private fun buildExtractor(field: Type): ColumnExtractor {
+    val name = field.name
+    if (!field.isPrimitive) {
+      throw IllegalStateException(
+        "Nested message field '$name' is not supported by ParquetStorageClient"
+      )
     }
+    val valueExtractor: (Group) -> Any = buildPrimitiveExtractor(name, field.asPrimitiveType())
+    return ColumnExtractor(name) { group ->
+      when (val count = group.getFieldRepetitionCount(name)) {
+        0 -> null
+        1 -> valueExtractor(group)
+        else ->
+          throw IllegalStateException(
+            "Repeated field '$name' (count=$count) is not supported by ParquetStorageClient"
+          )
+      }
+    }
+  }
+
+  private fun buildPrimitiveExtractor(name: String, prim: PrimitiveType): (Group) -> Any =
+    when (prim.primitiveTypeName) {
+      PrimitiveTypeName.INT32 -> { g -> g.getInteger(name, 0) }
+      PrimitiveTypeName.INT64 -> { g -> g.getLong(name, 0) }
+      PrimitiveTypeName.FLOAT -> { g -> g.getFloat(name, 0) }
+      PrimitiveTypeName.DOUBLE -> { g -> g.getDouble(name, 0) }
+      PrimitiveTypeName.BOOLEAN -> { g -> g.getBoolean(name, 0) }
+      PrimitiveTypeName.BINARY -> {
+        // STRING / ENUM / JSON are UTF-8 text logical types -> decode
+        // to String. Everything else (including BSON, UUID, raw bytes,
+        // or no annotation) stays as raw bytes. Annotation lookup
+        // happens ONCE per column here, not per row.
+        val annotation = prim.logicalTypeAnnotation
+        if (
+          annotation is LogicalTypeAnnotation.StringLogicalTypeAnnotation ||
+            annotation is LogicalTypeAnnotation.EnumLogicalTypeAnnotation ||
+            annotation is LogicalTypeAnnotation.JsonLogicalTypeAnnotation
+        ) {
+          { g -> g.getBinary(name, 0).toStringUsingUTF8() }
+        } else {
+          { g -> ByteString.copyFrom(g.getBinary(name, 0).toByteBuffer()) }
+        }
+      }
+      PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY -> { g ->
+        ByteString.copyFrom(g.getBinary(name, 0).toByteBuffer())
+      }
+      PrimitiveTypeName.INT96 -> { g -> ByteString.copyFrom(g.getInt96(name, 0).bytes) }
+      else ->
+        throw IllegalStateException(
+          "Unsupported primitive type '${prim.primitiveTypeName}' for field '$name'"
+        )
+    }
+
+  /** Row hot path: pure indirect call per column, no reflection / no dispatch. */
+  private fun extractToMap(group: Group, extractors: List<ColumnExtractor>): Map<String, Any?> {
+    // Load factor 1.0 sizes the bucket array exactly; saves one resize
+    // vs the default 0.75.
+    val out = LinkedHashMap<String, Any?>(extractors.size, 1f)
+    for (e in extractors) out[e.name] = e.extract(group)
     return out
   }
 

@@ -81,6 +81,27 @@ class ParquetStorageClientTest {
     }
   }
 
+  @Test
+  fun `getBlob returns null for missing key`(): Unit = runBlocking {
+    val client = ParquetStorageClient(InMemoryStorageClient())
+    assertThat(client.getBlob("nothing-here.parquet")).isNull()
+  }
+
+  @Test
+  fun `empty parquet file emits no rows`(): Unit = runBlocking {
+    val blobs = InMemoryStorageClient()
+    blobs.writeBlob(
+      "empty.parquet",
+      flowOf(
+        ByteString.copyFrom(writeParquet(SAMPLE_SCHEMA, emptyList(), null, emptyMap(), null))
+      ),
+    )
+
+    ParquetStorageClient(blobs).getBlob("empty.parquet")!!.use { blob ->
+      assertThat(blob.readRows().toList()).isEmpty()
+    }
+  }
+
   // ===== Primitive-type coverage =====
 
   @Test
@@ -128,12 +149,44 @@ class ParquetStorageClientTest {
       assertThat(map["f64"]).isEqualTo(2.5)
       assertThat(map["flag"]).isEqualTo(true)
       assertThat(map["str"]).isEqualTo("hello")
-      // ENUM-annotated BINARY must be String (typed `is`-check covers
-      // EnumLogicalTypeAnnotation, not just startsWith("STRING")).
+      // ENUM-annotated BINARY must decode to String (typed `is`-check
+      // covers EnumLogicalTypeAnnotation, not just startsWith("STRING")).
       assertThat(map["enm"]).isEqualTo("RED")
       assertThat(map["raw"]).isEqualTo(ByteString.copyFrom(byteArrayOf(0x01, 0x02, 0x03)))
       assertThat(map["fixed4"])
         .isEqualTo(ByteString.copyFrom(byteArrayOf(0x0A, 0x0B, 0x0C, 0x0D)))
+    }
+  }
+
+  @Test
+  fun `JSON-annotated BINARY decodes to String`(): Unit = runBlocking {
+    val schema = MessageTypeParser.parseMessageType("""message Row { required binary j (JSON); }""")
+    val row = groupOf(schema) { add("j", """{"k":1}""") }
+    val blobs = InMemoryStorageClient()
+    blobs.writeBlob(
+      "json.parquet",
+      flowOf(ByteString.copyFrom(writeParquet(schema, listOf(row), null, emptyMap(), null))),
+    )
+
+    ParquetStorageClient(blobs).getBlob("json.parquet")!!.use { blob ->
+      assertThat(blob.readRows().toList().single()["j"]).isEqualTo("""{"k":1}""")
+    }
+  }
+
+  @Test
+  fun `BSON-annotated BINARY decodes to ByteString`(): Unit = runBlocking {
+    val schema = MessageTypeParser.parseMessageType("""message Row { required binary b (BSON); }""")
+    val raw = byteArrayOf(0x11, 0x22, 0x33)
+    val row = groupOf(schema) { add("b", Binary.fromConstantByteArray(raw)) }
+    val blobs = InMemoryStorageClient()
+    blobs.writeBlob(
+      "bson.parquet",
+      flowOf(ByteString.copyFrom(writeParquet(schema, listOf(row), null, emptyMap(), null))),
+    )
+
+    ParquetStorageClient(blobs).getBlob("bson.parquet")!!.use { blob ->
+      // BSON is bytes-encoded (not UTF-8 text) -> kept as ByteString.
+      assertThat(blob.readRows().toList().single()["b"]).isEqualTo(ByteString.copyFrom(raw))
     }
   }
 
@@ -245,6 +298,36 @@ class ParquetStorageClientTest {
   }
 
   @Test
+  fun `decryption provider returning null on PME blob fails readRows`(): Unit = runBlocking {
+    val footerKey = randomAesKey(32)
+    val blobs = InMemoryStorageClient()
+    blobs.writeBlob("pme.parquet", flowOf(ByteString.copyFrom(pmeSampleBytes(footerKey, emptyMap()))))
+
+    // null from provider means "treat as plaintext" — for an encrypted
+    // blob, parquet-mr surfaces a crypto error at read time.
+    val client = ParquetStorageClient(blobs) { null }
+    val ex =
+      assertFailsWith<Throwable> {
+        client.getBlob("pme.parquet")!!.use { blob -> blob.readRows().toList() }
+      }
+    assertThat(ex.toString()).ignoringCase().contains("encrypt")
+  }
+
+  @Test
+  fun `decryption provider exception is propagated`(): Unit = runBlocking {
+    val footerKey = randomAesKey(32)
+    val blobs = InMemoryStorageClient()
+    blobs.writeBlob("pme.parquet", flowOf(ByteString.copyFrom(pmeSampleBytes(footerKey, emptyMap()))))
+
+    val client = ParquetStorageClient(blobs) { error("kms unreachable") }
+    val ex =
+      assertFailsWith<IllegalStateException> {
+        client.getBlob("pme.parquet")!!.use { blob -> blob.readRows().toList() }
+      }
+    assertThat(ex.message).contains("kms unreachable")
+  }
+
+  @Test
   fun `KMS-driven decryption provider round-trip`(): Unit = runBlocking {
     AeadConfig.register()
     val kekUri = "fake-kms://kek1"
@@ -344,9 +427,6 @@ class ParquetStorageClientTest {
 
   @Test
   fun `multiple reads on the same blob share one underlying download`(): Unit = runBlocking {
-    // Verifies the per-blob temp-file cache: regardless of how many read
-    // methods we invoke on a single ParquetBlob, the underlying
-    // StorageClient.Blob.read() is called exactly once.
     val blobs = InMemoryStorageClient()
     blobs.writeBlob(
       "data.parquet",
@@ -363,6 +443,48 @@ class ParquetStorageClientTest {
   }
 
   @Test
+  fun `two getBlob calls for the same key download twice`(): Unit = runBlocking {
+    // Locks in the documented "fresh ParquetBlob per getBlob call"
+    // behavior — getBlob does NOT share temp files across calls.
+    val blobs = InMemoryStorageClient()
+    blobs.writeBlob("data.parquet", flowOf(ByteString.copyFrom(plaintextSampleBytes())))
+    val counting = ReadCountingStorageClient(blobs)
+    val client = ParquetStorageClient(counting)
+
+    client.getBlob("data.parquet")!!.use { it.readRows().toList() }
+    client.getBlob("data.parquet")!!.use { it.readRows().toList() }
+    assertThat(counting.readCount.get()).isEqualTo(2)
+  }
+
+  @Test
+  fun `two ParquetBlobs from one client are independent`(): Unit = runBlocking {
+    val blobs = InMemoryStorageClient()
+    blobs.writeBlob(
+      "a.parquet",
+      flowOf(ByteString.copyFrom(plaintextSampleBytes(metadata = mapOf("which" to "a")))),
+    )
+    blobs.writeBlob(
+      "b.parquet",
+      flowOf(ByteString.copyFrom(plaintextSampleBytes(metadata = mapOf("which" to "b")))),
+    )
+    val client = ParquetStorageClient(blobs)
+
+    val a = client.getBlob("a.parquet")!!
+    val b = client.getBlob("b.parquet")!!
+    try {
+      assertThat(a.readKeyValueMetadata()).containsAtLeast("which", "a")
+      assertThat(b.readKeyValueMetadata()).containsAtLeast("which", "b")
+      // Closing one must not affect the other.
+      a.close()
+      assertFailsWith<IllegalStateException> { a.readRows().toList() }
+      assertThat(b.readRows().toList()).hasSize(3)
+    } finally {
+      a.close()
+      b.close()
+    }
+  }
+
+  @Test
   fun `readRows after close throws`(): Unit = runBlocking {
     val blobs = InMemoryStorageClient()
     blobs.writeBlob("data.parquet", flowOf(ByteString.copyFrom(plaintextSampleBytes())))
@@ -370,8 +492,7 @@ class ParquetStorageClientTest {
     val blob = ParquetStorageClient(blobs).getBlob("data.parquet")!!
     blob.readRows().toList()
     blob.close()
-    val ex =
-      assertFailsWith<IllegalStateException> { blob.readRows().toList() }
+    val ex = assertFailsWith<IllegalStateException> { blob.readRows().toList() }
     assertThat(ex.message).contains("closed")
   }
 
@@ -383,8 +504,7 @@ class ParquetStorageClientTest {
     val blob = ParquetStorageClient(blobs).getBlob("data.parquet")!!
     blob.readKeyValueMetadata()
     blob.close()
-    val ex =
-      assertFailsWith<IllegalStateException> { runBlocking { blob.readKeyValueMetadata() } }
+    val ex = assertFailsWith<IllegalStateException> { blob.readKeyValueMetadata() }
     assertThat(ex.message).contains("closed")
   }
 
@@ -429,10 +549,9 @@ class ParquetStorageClientTest {
 
   /**
    * Test-only [StorageClient] wrapper that counts how many times any of
-   * its blobs' `read()` flows are subscribed to. Used to verify that
-   * [ParquetStorageClient] downloads the underlying blob at most once
-   * per `ParquetBlob` instance, regardless of how many read methods are
-   * called.
+   * its blobs' `read()` flows are subscribed to. Used to verify
+   * download-frequency behavior (cache hit per ParquetBlob, no cache
+   * across getBlob calls).
    */
   private class ReadCountingStorageClient(private val delegate: StorageClient) : StorageClient {
     val readCount: AtomicInteger = AtomicInteger(0)
