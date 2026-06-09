@@ -23,6 +23,7 @@ import java.io.IOException
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.channels.FileChannel
+import java.nio.channels.SeekableByteChannel
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardOpenOption
@@ -43,6 +44,7 @@ import org.apache.parquet.hadoop.api.ReadSupport
 import org.apache.parquet.hadoop.example.GroupReadSupport
 import org.apache.parquet.io.InputFile
 import org.apache.parquet.io.LocalInputFile
+import org.apache.parquet.schema.LogicalTypeAnnotation
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
 import org.apache.parquet.schema.Type
 import org.jetbrains.annotations.BlockingExecutor
@@ -86,7 +88,7 @@ import org.jetbrains.annotations.BlockingExecutor
  *     (`Integer.MAX_VALUE` JVM array limit) and pressures heap with the
  *     full blob size.
  *  2. **On-disk temp file (this implementation)** — stream the blob bytes
- *     into a `Files.createTempFile(...)` via NIO [FileChannel] as they
+ *     into a `Files.createTempFile(...)` via a NIO byte channel as they
  *     arrive, then hand the temp-file path to parquet's official
  *     [LocalInputFile] (which uses `FileChannel` internally for
  *     random-access reads). Disk-bound (terabytes), not heap-bound;
@@ -129,6 +131,12 @@ import org.jetbrains.annotations.BlockingExecutor
  * `kmsClient.getAead(kekUri)` — generic Tink-KMS primitives that apply
  * unchanged).
  *
+ * Only `PLAINTEXT_FOOTER` PME files are supported here. `ENCRYPTED_FOOTER`
+ * mode is rejected with a clear error — the bootstrap pattern this class
+ * is built around (read footer first to obtain the DEK) is only possible
+ * when the footer body is plaintext on disk. See [readKeyValueMetadata]
+ * for the bootstrap path.
+ *
  * Rather than baking any of this into the library, this client takes an
  * optional [decryptionPropertiesProvider] callback. The caller — which
  * already owns the `KmsClient`, knows where in the footer the encrypted
@@ -143,6 +151,13 @@ import org.jetbrains.annotations.BlockingExecutor
  * The library stays generic: no KMS dependency, no opinion on
  * footer-key naming, no opinion on DEK serialization. The callback is
  * invoked AT MOST ONCE per [ParquetBlob] (cached after first row read).
+ *
+ * **Callback re-entry constraint**: from inside
+ * [decryptionPropertiesProvider] the caller MAY invoke
+ * [ParquetBlob.readKeyValueMetadata] on the same blob (that's the
+ * bootstrap point), but MUST NOT invoke [ParquetBlob.readRows] on the
+ * same blob. The latter would re-enter the resolution path and deadlock
+ * on a non-reentrant coroutine `Mutex`.
  *
  * Write side (not implemented here): producers should use parquet-mr's
  * `FileEncryptionProperties.builder(footerKey).withPlaintextFooter().build()`
@@ -175,8 +190,9 @@ import org.jetbrains.annotations.BlockingExecutor
  * ## Resource lifecycle
  *
  * Each [ParquetBlob] holds a local temp file from the first read
- * onward. The temp file is deleted by [ParquetBlob.close]. Callers MUST
- * close — use Kotlin's `.use { }` idiom:
+ * onward. The temp file is deleted by [ParquetBlob.close]; subsequent
+ * read calls on a closed blob throw [IllegalStateException]. Callers
+ * MUST close — use Kotlin's `.use { }` idiom:
  *
  * ```kotlin
  * parquetClient.getBlob(uri)?.use { blob ->
@@ -184,14 +200,37 @@ import org.jetbrains.annotations.BlockingExecutor
  * }
  * ```
  *
- * Multiple reads on the same [ParquetBlob] share one temp file
- * (downloaded once on first read, reused thereafter).
+ * Each [getBlob] call returns a FRESH [ParquetBlob] with its own temp
+ * file — two `getBlob(...)` calls on the same key will download the
+ * underlying blob twice. Reuse a single `ParquetBlob` instance across
+ * read methods if you need to share the materialised bytes; multiple
+ * reads on the same instance share one temp file (downloaded once on
+ * first read, reused thereafter).
+ *
+ * ## What this client does NOT optimize
+ *
+ * - **No column pushdown.** The previous typed-projection API decoded
+ *   only the columns referenced by the projection; the new
+ *   type-agnostic `Map` API decodes every column in the file. Trade-off
+ *   accepted: callers wanting per-column read efficiency on top of this
+ *   API can layer their own filtering after [readRows].
+ * - **No range I/O for metadata-only reads.** Even
+ *   [readKeyValueMetadata] downloads the full blob to the temp file
+ *   (because the temp file is shared with [readRows] in the common case
+ *   and downloading twice would be wasteful). A range-read primitive on
+ *   [StorageClient.Blob] would let us fetch just the parquet footer
+ *   bytes — out of scope here.
  *
  * @param storageClient underlying client for blob bytes.
  * @param parquetContext blocking context for parquet decode + temp-file
  *   download (default [Dispatchers.IO]).
  * @param decryptionPropertiesProvider optional per-blob PME callback.
  *   `null` = treat all blobs as plaintext. Invoked at most once per blob.
+ * @param tempDir optional directory under which temp files are created.
+ *   `null` (default) means the JVM's `java.io.tmpdir`. Callers in
+ *   security-sensitive environments can point this at an already
+ *   access-controlled location (e.g. a Confidential Space ephemeral
+ *   disk, `/dev/shm`, or a per-process secure scratch dir).
  */
 class ParquetStorageClient(
   private val storageClient: StorageClient,
@@ -199,6 +238,7 @@ class ParquetStorageClient(
   private val decryptionPropertiesProvider:
     (suspend (ParquetBlob) -> FileDecryptionProperties?)? =
     null,
+  private val tempDir: Path? = null,
 ) : StorageClient {
 
   /**
@@ -215,14 +255,19 @@ class ParquetStorageClient(
      *  - parquet `FLOAT`   -> Kotlin [Float]
      *  - parquet `DOUBLE`  -> Kotlin [Double]
      *  - parquet `BOOLEAN` -> Kotlin [Boolean]
-     *  - parquet `BINARY` with `STRING` logical type -> Kotlin [String]
-     *  - parquet `BINARY` (no logical type) -> [ByteString]
+     *  - parquet `BINARY` with `STRING` / `ENUM` / `JSON` logical type
+     *    -> Kotlin [String] (UTF-8 decoded)
+     *  - parquet `BINARY` with any other (or no) logical type
+     *    -> [ByteString] (raw bytes; this covers `BSON`, `UUID`, raw
+     *    bytes columns, etc.)
      *  - parquet `FIXED_LEN_BYTE_ARRAY` -> [ByteString]
      *  - parquet `INT96` (legacy timestamps) -> [ByteString] (raw 12 bytes)
      *
      * OPTIONAL columns with no value present in a row map to `null`.
      * REPEATED columns (count > 1) and nested group-typed columns throw
      * [IllegalStateException] at row time.
+     *
+     * Throws [IllegalStateException] if the blob has been [close]d.
      */
     fun readRows(): Flow<Map<String, Any?>>
 
@@ -230,13 +275,20 @@ class ParquetStorageClient(
      * Parquet file's footer key-value metadata. Reads the plaintext
      * footer body directly from the thrift `FileMetaData` struct without
      * involving the high-level reader, so it works on both plaintext AND
-     * PME-with-plaintext-footer blobs without any decryption setup —
+     * PME-with-`PLAINTEXT_FOOTER` blobs without any decryption setup —
      * making it suitable as a bootstrap step for the caller's
-     * [decryptionPropertiesProvider].
+     * `decryptionPropertiesProvider`.
+     *
+     * Throws [IllegalStateException] if the blob has been [close]d, or
+     * the file is a PME `ENCRYPTED_FOOTER` blob (not supported).
      */
     suspend fun readKeyValueMetadata(): Map<String, String>
 
-    /** Deletes the local temp file backing this blob's parquet reads. */
+    /**
+     * Deletes the local temp file backing this blob's parquet reads.
+     * After `close()`, all read methods throw [IllegalStateException].
+     * Idempotent — calling `close()` multiple times is safe.
+     */
     override fun close()
   }
 
@@ -276,16 +328,26 @@ class ParquetStorageClient(
     // === Temp-file backing for parquet's random-access reads ===
 
     @Volatile private var tempFile: Path? = null
+    @Volatile private var closed: Boolean = false
     private val tempFileMutex = Mutex()
+
+    private fun checkOpen() {
+      check(!closed) { "ParquetBlob '$blobKey' has been closed" }
+    }
 
     private suspend fun ensureTempFile(): Path {
       tempFile?.let { return it }
       return tempFileMutex.withLock {
         tempFile?.let { return@withLock it }
-        val path = Files.createTempFile("parquet-storage-client-", ".parquet")
+        val path =
+          if (tempDir != null) {
+            Files.createTempFile(tempDir, "parquet-storage-client-", ".parquet")
+          } else {
+            Files.createTempFile("parquet-storage-client-", ".parquet")
+          }
         try {
           Files.newByteChannel(path, StandardOpenOption.WRITE).use { ch ->
-            delegate.read().collect { chunk -> ch.write(chunk.asReadOnlyByteBuffer()) }
+            delegate.read().collect { chunk -> writeFully(ch, chunk.asReadOnlyByteBuffer()) }
           }
         } catch (t: Throwable) {
           try {
@@ -304,6 +366,13 @@ class ParquetStorageClient(
     @Volatile private var decryptionProps: FileDecryptionProperties? = null
     private val decryptionMutex = Mutex()
 
+    /**
+     * Holds [decryptionMutex] while invoking the caller-supplied
+     * provider. The provider may call [readKeyValueMetadata] on the
+     * same blob (different mutex) but MUST NOT call [readRows] on the
+     * same blob — that would re-enter this method and deadlock on the
+     * non-reentrant coroutine `Mutex`. See class KDoc.
+     */
     private suspend fun resolveDecryption(): FileDecryptionProperties? {
       val provider = decryptionPropertiesProvider ?: return null
       if (decryptionResolved) return decryptionProps
@@ -319,6 +388,7 @@ class ParquetStorageClient(
 
     override fun readRows(): Flow<Map<String, Any?>> =
       flow {
+          checkOpen()
           val path = ensureTempFile()
           val decryption = resolveDecryption()
           val inputFile: InputFile = LocalInputFile(path)
@@ -336,16 +406,22 @@ class ParquetStorageClient(
         .flowOn(parquetContext)
 
     override suspend fun readKeyValueMetadata(): Map<String, String> =
-      withContext(parquetContext) { readFooterKeyValueMetadata(ensureTempFile()) }
+      withContext(parquetContext) {
+        checkOpen()
+        readFooterKeyValueMetadata(ensureTempFile())
+      }
 
     override fun close() {
+      if (closed) return
+      closed = true
       val path = tempFile ?: return
       tempFile = null
       try {
         Files.deleteIfExists(path)
       } catch (_: IOException) {
-        // Best-effort. Temp file lives under java.io.tmpdir which is
-        // typically cleaned by the OS / sandbox lifecycle.
+        // Best-effort. Temp file lives under java.io.tmpdir (or the
+        // configured tempDir) which is typically cleaned by the OS /
+        // sandbox lifecycle.
       }
     }
   }
@@ -381,13 +457,14 @@ class ParquetStorageClient(
           PrimitiveTypeName.BOOLEAN -> group.getBoolean(name, 0)
           PrimitiveTypeName.BINARY -> {
             val binary = group.getBinary(name, 0)
-            val annotation = prim.logicalTypeAnnotation
-            // Treat BINARY as String iff annotated as UTF-8 (STRING /
-            // ENUM logical types). Otherwise hand back raw bytes.
-            if (annotation != null && annotation.toString().startsWith("STRING")) {
-              binary.toStringUsingUTF8()
-            } else {
-              ByteString.copyFrom(binary.toByteBuffer())
+            // STRING / ENUM / JSON are UTF-8 text logical types -> decode
+            // to String. Everything else (including BSON, UUID, raw
+            // bytes, or no annotation) stays as raw bytes.
+            when (prim.logicalTypeAnnotation) {
+              is LogicalTypeAnnotation.StringLogicalTypeAnnotation,
+              is LogicalTypeAnnotation.EnumLogicalTypeAnnotation,
+              is LogicalTypeAnnotation.JsonLogicalTypeAnnotation -> binary.toStringUsingUTF8()
+              else -> ByteString.copyFrom(binary.toByteBuffer())
             }
           }
           PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY ->
@@ -451,10 +528,14 @@ class ParquetStorageClient(
    *   ...FileMetaData (thrift) bytes...
    *   [int32 footer length LE][4-byte magic]
    * ```
-   * Magic is `"PAR1"` for plaintext-footer files and `"PARE"` for
-   * encrypted-footer PME files. We accept both — the FileMetaData
-   * thrift itself is still parseable for `PARE` files as long as we
-   * use `skipRowGroups = true` (per-column encryption never engages).
+   * Magic is `"PAR1"` for plaintext-footer files (including PME with
+   * `PLAINTEXT_FOOTER`). `"PARE"` indicates PME `ENCRYPTED_FOOTER`
+   * mode, which we explicitly REJECT here: in that mode the footer body
+   * is a `FileCryptoMetaData` thrift followed by the encrypted
+   * `FileMetaData`, so `Util.readFileMetaData` would hit ciphertext and
+   * throw an obscure thrift parse error. The bootstrap design built
+   * around this class requires `PLAINTEXT_FOOTER`; fail fast with a
+   * clear message instead.
    */
   private fun readFooterKeyValueMetadata(path: Path): Map<String, String> {
     FileChannel.open(path, StandardOpenOption.READ).use { ch ->
@@ -470,7 +551,15 @@ class ParquetStorageClient(
       val footerLen = tail.int
       val magicBytes = ByteArray(4).also { tail.get(it) }
       val magic = String(magicBytes, Charsets.US_ASCII)
-      require(magic == PARQUET_MAGIC_PLAINTEXT || magic == PARQUET_MAGIC_ENCRYPTED_FOOTER) {
+      if (magic == PARQUET_MAGIC_ENCRYPTED_FOOTER) {
+        throw IllegalStateException(
+          "Parquet file '$path' uses PME ENCRYPTED_FOOTER mode, which is not supported by " +
+            "ParquetStorageClient. Re-write the file with PLAINTEXT_FOOTER mode " +
+            "(FileEncryptionProperties.Builder.withPlaintextFooter()) so the footer key-value " +
+            "metadata can be read without the footer key."
+        )
+      }
+      require(magic == PARQUET_MAGIC_PLAINTEXT) {
         "Not a parquet file: $path (bad magic '$magic')"
       }
       require(footerLen in 1..(fileLen - 8)) {
@@ -492,6 +581,20 @@ class ParquetStorageClient(
     while (buf.hasRemaining()) {
       val n = ch.read(buf)
       if (n < 0) throw EOFException("Unexpected EOF reading parquet bytes")
+    }
+  }
+
+  /**
+   * Loops until the channel has consumed all bytes in [buf].
+   * `SeekableByteChannel.write` is contractually allowed to return a
+   * short write; on local files the JDK almost always writes fully in
+   * one call, but the spec doesn't guarantee it. A silent short-write
+   * here would corrupt the temp file (parquet footer at the wrong
+   * offset), so we explicitly loop.
+   */
+  private fun writeFully(ch: SeekableByteChannel, buf: ByteBuffer) {
+    while (buf.hasRemaining()) {
+      ch.write(buf)
     }
   }
 
