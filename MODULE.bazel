@@ -196,6 +196,7 @@ maven.install(
         "org.apache.parquet:parquet-hadoop:1.14.3",
         "org.apache.parquet:parquet-column:1.14.3",
         "org.apache.parquet:parquet-common:1.14.3",
+        "org.apache.parquet:parquet-format-structures:1.14.3",
         # Required at RUNTIME by parquet-mr 1.14.x — Configuration is
         # instantiated inside ParquetReader.Builder constructors and
         # ParquetFileReader.open; ParquetReadOptions.Builder also references

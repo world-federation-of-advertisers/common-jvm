@@ -49,6 +49,7 @@ kt_jvm_library(
         "//imports/java/org/apache/hadoop:hadoop_client_runtime",
         "//imports/java/org/apache/parquet:parquet_column",
         "//imports/java/org/apache/parquet:parquet_common",
+        "//imports/java/org/apache/parquet:parquet_format_structures",
         "//imports/java/org/apache/parquet:parquet_hadoop",
         "//imports/kotlin/kotlinx/coroutines:core",
     ],

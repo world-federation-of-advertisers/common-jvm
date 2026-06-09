@@ -34,6 +34,7 @@ kt_jvm_test(
     test_class = "org.wfanet.measurement.storage.ParquetStorageClientTest",
     deps = [
         "//imports/java/com/google/common/truth",
+        "//imports/java/com/google/crypto/tink",
         "//imports/java/com/google/protobuf",
         "//imports/java/org/apache/hadoop:hadoop_client_api",
         "//imports/java/org/apache/hadoop:hadoop_client_runtime",
@@ -43,10 +44,9 @@ kt_jvm_test(
         "//imports/java/org/junit",
         "//imports/kotlin/kotlin/test",
         "//imports/kotlin/kotlinx/coroutines:core",
+        "//src/main/kotlin/org/wfanet/measurement/common/crypto/tink/testing",
         "//src/main/kotlin/org/wfanet/measurement/storage:client",
         "//src/main/kotlin/org/wfanet/measurement/storage:parquet_storage_client",
         "//src/main/kotlin/org/wfanet/measurement/storage/testing",
-        "//src/main/proto/wfa/measurement/storage/testing:complex_message_kt_jvm_proto",
-        "//src/main/proto/wfa/measurement/storage/testing:parquet_test_message_kt_jvm_proto",
     ],
 )
