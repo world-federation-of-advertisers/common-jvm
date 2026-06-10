@@ -16,345 +16,437 @@
 
 package org.wfanet.measurement.storage
 
+import com.google.crypto.tink.KmsClient
 import com.google.protobuf.ByteString
+import com.google.protobuf.Timestamp
+import com.google.type.Date
 import java.io.ByteArrayInputStream
-import java.io.EOFException
-import java.io.IOException
+import java.io.FileNotFoundException
+import java.net.URI
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
-import java.nio.channels.FileChannel
-import java.nio.channels.SeekableByteChannel
-import java.nio.file.Files
-import java.nio.file.Path
-import java.nio.file.StandardOpenOption
 import java.time.Instant
+import java.time.LocalDate
+import java.util.Base64
 import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.trySendBlocking
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.FileStatus
+import org.apache.hadoop.fs.FileSystem
+import org.apache.hadoop.fs.Path
 import org.apache.parquet.crypto.FileDecryptionProperties
+import org.apache.parquet.crypto.FileEncryptionProperties
 import org.apache.parquet.example.data.Group
+import org.apache.parquet.example.data.simple.SimpleGroupFactory
 import org.apache.parquet.format.Util
+import org.apache.parquet.hadoop.ParquetFileWriter
 import org.apache.parquet.hadoop.ParquetReader
+import org.apache.parquet.hadoop.ParquetWriter
 import org.apache.parquet.hadoop.api.ReadSupport
+import org.apache.parquet.hadoop.example.ExampleParquetWriter
 import org.apache.parquet.hadoop.example.GroupReadSupport
+import org.apache.parquet.hadoop.example.GroupWriteSupport
+import org.apache.parquet.hadoop.metadata.CompressionCodecName
+import org.apache.parquet.hadoop.util.HadoopInputFile
+import org.apache.parquet.hadoop.util.HadoopOutputFile
 import org.apache.parquet.io.InputFile
-import org.apache.parquet.io.LocalInputFile
+import org.apache.parquet.io.OutputFile
+import org.apache.parquet.io.api.Binary
 import org.apache.parquet.schema.LogicalTypeAnnotation
+import org.apache.parquet.schema.MessageType
 import org.apache.parquet.schema.PrimitiveType
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
 import org.apache.parquet.schema.Type
+import org.apache.parquet.schema.Types
 import org.jetbrains.annotations.BlockingExecutor
 
 /**
- * A [StorageClient] wrapper that exposes parquet-aware reads.
+ * Declarative PME read-decryption config for the standard envelope-encryption
+ * convention: the parquet footer key-value metadata carries a KEK URI and a
+ * base64-encoded, KMS-wrapped DEK. The client reads the footer, unwraps the
+ * DEK via [kmsClient], and uses it as the parquet footer key — no caller code.
  *
- * Each [getBlob] returns a [ParquetBlob] with:
- *  - [ParquetBlob.readRows] — `Flow<Map<String, Any?>>`, one row per
- *    emission, keyed by parquet column name with native-typed values.
+ * Single-DEK only (one footer key for the whole file), matching the EDP
+ * convention. Per-column keys are not supported.
+ *
+ * @param kmsClient KMS client used to unwrap the DEK via `getAead(kekUri)`.
+ * @param kekUriMetadataKey footer metadata key holding the KEK URI.
+ * @param encryptedDekMetadataKey footer metadata key holding the base64-encoded
+ *   KMS-wrapped DEK.
+ */
+data class ParquetDecryptionConfig(
+  val kmsClient: KmsClient,
+  val kekUriMetadataKey: String = "edpa.kek_uri",
+  val encryptedDekMetadataKey: String = "edpa.encrypted_dek",
+)
+
+/**
+ * A [StorageClient] backed by a Hadoop [Configuration] that reads and writes
+ * parquet blobs.
+ *
+ * The [Configuration] selects the storage backend through Hadoop's
+ * `FileSystem` abstraction, so the same client transparently reads from
+ * cloud or local storage depending on the [blobKey][StorageClient.Blob.blobKey]
+ * scheme:
+ *  - `gs://…` — Google Cloud Storage (requires the `gcs-connector` runtime
+ *    dependency and `fs.gs.impl` configured to `GoogleHadoopFileSystem`).
+ *  - `file://…` / relative — the local filesystem (works with no extra
+ *    dependency; used by unit tests).
+ *
+ * All blob keys are resolved relative to [rootPath]. Reads are performed as
+ * random-access range reads through the backend connector (parquet seeks to
+ * the footer, then to the row groups it needs) — nothing is staged on local
+ * disk, so reads scale to the backend's object-size limits.
+ *
+ * ## Two read APIs
+ *
+ * [getBlob] returns a [ParquetBlob] exposing:
+ *  - [ParquetBlob.readRows] — `Flow<Map<String, Any?>>`, one map per row,
+ *    keyed by parquet column name with native-typed values (see
+ *    [ParquetBlob.readRows] for the type mapping).
  *  - [ParquetBlob.readKeyValueMetadata] — the file's footer key-value
  *    metadata as a `Map<String, String>`.
  *
- * ## Usage
+ * The base [StorageClient.Blob.read] / [writeBlob] pair speaks a row-proto
+ * codec: each `ByteString` in the flow is one serialized [ParquetRow]. This
+ * makes the [StorageClient] contract parquet-aware on both ends — `writeBlob`
+ * encodes rows into a parquet file, `read` decodes them back — but note it is
+ * NOT the opaque byte pass-through that the other [StorageClient]
+ * implementations provide; the unit of content here is a row, not a file.
  *
- * ```kotlin
- * parquetClient.getBlob(uri)?.use { blob ->
- *   blob.readRows().collect { row -> ... }
- * }
- * ```
+ * ## Type mapping
  *
- * Each [getBlob] returns a FRESH [ParquetBlob] that downloads the
- * underlying blob to a local temp file on first read; multiple reads on
- * the same instance share that temp file. Callers MUST close
- * (the `.use { }` idiom handles this); read methods on a closed blob
- * throw [IllegalStateException].
+ * See [ParquetRow]/[ParquetValue] for the full parquet ⇄ proto ⇄ Kotlin type
+ * table. Reads collapse three physical byte types to `bytes` and three
+ * timestamp precisions to `timestamp`; writes pick a canonical physical type
+ * per value, so round-trips are value-preserving, not parquet-physical-byte
+ * preserving.
  *
  * ## Constraints
  *
- * - Nested (group-typed) and REPEATED columns throw
- *   [IllegalStateException] at row time. This client is single-value,
- *   flat-schema only.
- * - See [ParquetBlob.readRows] for the supported primitive types and
- *   how they map to Kotlin/Java values.
+ * - Nested (group-typed) and REPEATED columns throw [IllegalStateException]
+ *   at row time. This client is single-value, flat-schema only.
+ * - [writeBlob] derives the parquet schema from the first [ParquetRow]; the
+ *   first row MUST set every column (no `KIND_NOT_SET`/null values) so each
+ *   column's type can be inferred. Subsequent rows may omit columns (NULL).
+ * - [writeBlob] writes plaintext parquet unless [encryptionPropertiesProvider]
+ *   is supplied. In production the EDP path writes encrypted files elsewhere,
+ *   so write-side PME is mainly for symmetry / round-trip testing.
  *
  * ## Parquet Modular Encryption (PME)
  *
- * For PME-encrypted blobs, supply [decryptionPropertiesProvider]. The
- * callback runs at most once per blob and MAY call
- * [ParquetBlob.readKeyValueMetadata] on the same blob (the typical
- * bootstrap: read an encrypted DEK + KEK URI out of the footer, unwrap
- * via KMS, return [org.apache.parquet.crypto.FileDecryptionProperties]).
- * It MUST NOT call [ParquetBlob.readRows] on the same blob — that
- * would deadlock on the resolution mutex.
- *
- * The callback runs on [parquetContext] (default [Dispatchers.IO]).
- * Keep KMS / network work IO-bound; if you need a different dispatcher
- * for CPU work inside the callback, use `withContext(...)` internally.
+ * For PME-encrypted blobs following the standard envelope-encryption
+ * convention (footer metadata carries a KEK URI + a KMS-wrapped DEK), supply
+ * [decryptionConfig]: the client reads the footer, unwraps the DEK via the
+ * configured KMS, and uses it as the footer key — no caller code. See
+ * [ParquetDecryptionConfig]. `null` config = plaintext reads.
  *
  * `ENCRYPTED_FOOTER` blobs are not supported by [readKeyValueMetadata]
- * (rejected with a clear error). [readRows] can technically decode
- * `ENCRYPTED_FOOTER` blobs if the supplied decryption properties carry
- * the right footer key, but the bootstrap pattern this class is built
- * around requires `PLAINTEXT_FOOTER`; writers SHOULD use
- * `PLAINTEXT_FOOTER` mode.
+ * (rejected with a clear error). The bootstrap pattern this class is built
+ * around requires `PLAINTEXT_FOOTER`; writers SHOULD use `PLAINTEXT_FOOTER`
+ * mode.
  *
- * @param storageClient underlying client for raw blob bytes.
- * @param parquetContext blocking context for parquet decode + temp-file
- *   download (default [Dispatchers.IO]).
- * @param decryptionPropertiesProvider optional per-blob PME callback;
- *   `null` = treat all blobs as plaintext.
+ * @param conf Hadoop configuration selecting the storage backend.
+ * @param rootPath base path; all blob keys are resolved relative to it.
+ * @param parquetContext blocking context for parquet decode/encode + the
+ *   backend FileSystem calls (default [Dispatchers.IO]).
+ * @param decryptionConfig optional declarative PME read config for the
+ *   standard KEK-URI + wrapped-DEK convention; `null` = plaintext reads.
+ * @param encryptionPropertiesProvider optional per-blob-key PME write
+ *   callback resolved once per [writeBlob]; return `null` (or omit) to write
+ *   plaintext. Use `PLAINTEXT_FOOTER` mode if the file's footer key-value
+ *   metadata must remain readable for the read-side bootstrap.
  */
 class ParquetStorageClient(
-  private val storageClient: StorageClient,
+  private val conf: Configuration,
+  rootPath: Path,
   private val parquetContext: @BlockingExecutor CoroutineContext = Dispatchers.IO,
-  private val decryptionPropertiesProvider:
-    (suspend (ParquetBlob) -> FileDecryptionProperties?)? =
+  private val decryptionConfig: ParquetDecryptionConfig? = null,
+  private val encryptionPropertiesProvider:
+    (suspend (String) -> FileEncryptionProperties?)? =
     null,
 ) : StorageClient {
 
-  /**
-   * A [StorageClient.Blob] that exposes parquet-aware reads + cleanup of
-   * the local temp file backing the random-access reader.
-   */
-  interface ParquetBlob : StorageClient.Blob, AutoCloseable {
+  private val fileSystem: FileSystem = rootPath.getFileSystem(conf)
+  private val qualifiedRoot: Path = fileSystem.makeQualified(rootPath)
+
+  // Base URI for relativizing listed paths back to blob keys; computed once
+  // (must end in "/" for URI.relativize to treat it as a directory).
+  private val rootUri: URI = URI.create(qualifiedRoot.toUri().toString().trimEnd('/') + "/")
+
+  /** A [StorageClient.Blob] that exposes parquet-aware reads. */
+  interface ParquetBlob : StorageClient.Blob {
     /**
      * Cold flow of rows. Each emission is one row, represented as a
      * `Map<column name, value>`. Supported primitive types:
      *
-     *  - parquet `INT32`   -> Kotlin [Int]
-     *  - parquet `INT64`   -> Kotlin [Long]
-     *  - parquet `FLOAT`   -> Kotlin [Float]
-     *  - parquet `DOUBLE`  -> Kotlin [Double]
-     *  - parquet `BOOLEAN` -> Kotlin [Boolean]
-     *  - parquet `BINARY` with `STRING` / `ENUM` / `JSON` logical type
-     *    -> Kotlin [String] (UTF-8 decoded)
-     *  - parquet `BINARY` with any other (or no) logical type
-     *    -> [ByteString] (raw bytes; this covers `BSON`, `UUID`, raw
-     *    bytes columns, etc.)
-     *  - parquet `FIXED_LEN_BYTE_ARRAY` -> [ByteString]
-     *  - parquet `INT96` (legacy timestamps) -> [ByteString] (raw 12 bytes)
+     *  - `INT32`                       -> [Int]
+     *  - `INT32` + `DATE`              -> [java.time.LocalDate]
+     *  - `INT64`                       -> [Long]
+     *  - `INT64` + `TIMESTAMP_*`       -> [java.time.Instant]
+     *  - `FLOAT`                       -> [Float]
+     *  - `DOUBLE`                      -> [Double]
+     *  - `BOOLEAN`                     -> [Boolean]
+     *  - `BINARY` + `STRING`/`ENUM`/`JSON` -> [String] (UTF-8 decoded)
+     *  - `BINARY` (any other / none)   -> [ByteString] (raw bytes; covers
+     *    `BSON`, `UUID`, raw bytes columns, etc.)
+     *  - `FIXED_LEN_BYTE_ARRAY`        -> [ByteString]
+     *  - `INT96` (legacy timestamps)   -> [ByteString] (raw 12 bytes)
      *
      * OPTIONAL columns with no value present in a row map to `null`.
      * REPEATED columns (count > 1) and nested group-typed columns throw
      * [IllegalStateException] at row time.
-     *
-     * Throws [IllegalStateException] if the blob has been [close]d.
      */
     fun readRows(): Flow<Map<String, Any?>>
 
     /**
-     * Parquet file's footer key-value metadata. Reads the plaintext
-     * footer body directly from the thrift `FileMetaData` struct without
-     * involving the high-level reader, so it works on both plaintext AND
-     * PME-with-`PLAINTEXT_FOOTER` blobs without any decryption setup —
-     * making it suitable as a bootstrap step for the caller's
-     * `decryptionPropertiesProvider`.
+     * Parquet file's footer key-value metadata. Reads the plaintext footer
+     * body directly from the thrift `FileMetaData` struct without involving
+     * the high-level reader, so it works on both plaintext AND
+     * PME-with-`PLAINTEXT_FOOTER` blobs without any decryption setup — it is
+     * the same footer read the client uses internally to bootstrap
+     * [ParquetDecryptionConfig].
      *
-     * Throws [IllegalStateException] if the blob has been [close]d, or
-     * the file is a PME `ENCRYPTED_FOOTER` blob (not supported).
+     * Throws [IllegalStateException] if the file is a PME `ENCRYPTED_FOOTER`
+     * blob (not supported).
      */
     suspend fun readKeyValueMetadata(): Map<String, String>
-
-    /**
-     * Deletes the underlying blob from storage. Does NOT close this
-     * [ParquetBlob]'s local temp file — call [close] (or use `.use {}`)
-     * to release local resources.
-     */
-    override suspend fun delete()
-
-    /**
-     * Deletes the local temp file backing this blob's parquet reads.
-     * After `close()`, all read methods throw [IllegalStateException].
-     * Idempotent — calling `close()` multiple times is safe.
-     */
-    override fun close()
   }
 
   // === StorageClient ===
 
-  override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob =
-    storageClient.writeBlob(blobKey, content)
+  /**
+   * Encodes [content] (a flow of serialized [ParquetRow]) into a parquet file
+   * at [blobKey]. The schema is derived from the first row; see the class
+   * KDoc for the first-row constraint. An empty flow writes a valid, zero-row
+   * parquet file.
+   */
+  override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
+    val path = resolvePath(blobKey)
+    val encryption: FileEncryptionProperties? = encryptionPropertiesProvider?.invoke(blobKey)
+    withContext(parquetContext) {
+      val outputFile: OutputFile = HadoopOutputFile.fromPath(path, conf)
+      var writer: ParquetWriter<Group>? = null
+      var factory: SimpleGroupFactory? = null
+      var schema: MessageType? = null
+      var expectedKinds: Map<String, ParquetValue.KindCase>? = null
+      try {
+        content.collect { bytes ->
+          val row = ParquetRow.parseFrom(bytes)
+          if (writer == null) {
+            schema = deriveSchema(row)
+            expectedKinds = row.columnsMap.mapValues { it.value.kindCase }
+            factory = SimpleGroupFactory(schema)
+            writer = newWriter(outputFile, schema!!, encryption)
+          }
+          validateRow(row, expectedKinds!!)
+          writer!!.write(rowToGroup(row, schema!!, factory!!))
+        }
+        if (writer == null) {
+          // Parquet rejects an empty (zero-column) schema, so empty input
+          // writes a single placeholder column with zero rows; reads then
+          // yield no rows.
+          writer = newWriter(outputFile, EMPTY_SCHEMA, encryption)
+        }
+      } catch (t: Throwable) {
+        // Release the open writer without masking the original failure, then
+        // delete the partial object so a failed write never leaves a
+        // half-written / corrupt blob behind.
+        try {
+          writer?.close()
+        } catch (closeError: Throwable) {
+          t.addSuppressed(closeError)
+        }
+        deleteQuietly(path)
+        throw t
+      }
+      // Finalize: close() writes the footer. A failure here is also a failed
+      // write, so clean up the partial object.
+      try {
+        writer!!.close()
+      } catch (t: Throwable) {
+        deleteQuietly(path)
+        throw t
+      }
+    }
+    return ParquetBlobImpl(blobKey, path)
+  }
+
+  private fun deleteQuietly(path: Path) {
+    try {
+      fileSystem.delete(path, /* recursive = */ false)
+    } catch (_: Exception) {
+      // Best-effort cleanup; the original failure is what matters.
+    }
+  }
 
   override suspend fun getBlob(blobKey: String): ParquetBlob? {
-    val raw = storageClient.getBlob(blobKey) ?: return null
-    return ParquetBlobImpl(raw)
+    val path = resolvePath(blobKey)
+    return withContext(parquetContext) {
+      // One metadata call that doubles as the existence check and primes the
+      // blob's status cache (size/createTime/updateTime reuse it).
+      val status =
+        try {
+          fileSystem.getFileStatus(path)
+        } catch (e: FileNotFoundException) {
+          return@withContext null
+        }
+      ParquetBlobImpl(blobKey, path, status)
+    }
   }
 
   override suspend fun listBlobs(prefix: String?): Flow<StorageClient.Blob> =
-    storageClient.listBlobs(prefix)
+    channelFlow {
+        if (fileSystem.exists(qualifiedRoot)) {
+          val iter = fileSystem.listFiles(qualifiedRoot, /* recursive = */ true)
+          while (iter.hasNext()) {
+            val status = iter.next()
+            val key = relativeKey(status.path)
+            if (prefix.isNullOrEmpty() || key.startsWith(prefix)) {
+              // listFiles already returned the status — reuse it instead of
+              // re-fetching per metadata access.
+              trySendBlocking(ParquetBlobImpl(key, status.path, status))
+            }
+          }
+        }
+      }
+      .flowOn(parquetContext)
 
   // === ParquetBlob impl ===
 
-  private inner class ParquetBlobImpl(private val delegate: StorageClient.Blob) : ParquetBlob {
+  private inner class ParquetBlobImpl(
+    override val blobKey: String,
+    private val path: Path,
+    preloadedStatus: FileStatus? = null,
+  ) : ParquetBlob {
     override val storageClient: StorageClient = this@ParquetStorageClient
-    override val blobKey: String
-      get() = delegate.blobKey
+
+    // Snapshot of the file's status. Preloaded from getBlob/listBlobs when
+    // available, otherwise fetched once and reused across the three metadata
+    // accessors below (avoids redundant getFileStatus round trips).
+    @Volatile private var cachedStatus: FileStatus? = preloadedStatus
+
+    private fun status(): FileStatus =
+      cachedStatus ?: fileSystem.getFileStatus(path).also { cachedStatus = it }
 
     override val size: Long
-      get() = delegate.size
+      get() = status().len
 
+    // Hadoop FileStatus exposes only a modification time; use it for both.
     override val createTime: Instant
-      get() = delegate.createTime
+      get() = Instant.ofEpochMilli(status().modificationTime)
 
     override val updateTime: Instant
-      get() = delegate.updateTime
+      get() = Instant.ofEpochMilli(status().modificationTime)
 
-    override fun read(): Flow<ByteString> = delegate.read()
-
-    override suspend fun delete() = delegate.delete()
-
-    // === Temp-file backing for parquet's random-access reads ===
-
-    @Volatile private var tempFile: Path? = null
-    @Volatile private var closed: Boolean = false
-    private val tempFileMutex = Mutex()
-
-    private fun checkOpen() {
-      check(!closed) { "ParquetBlob '$blobKey' has been closed" }
-    }
-
-    /**
-     * Materialises the underlying blob to a local temp file on first
-     * call; subsequent calls return the same path.
-     *
-     * Race handling vs. [close]: the `closed` flag is re-checked BOTH
-     * at mutex entry AND after the download completes. If [close] runs
-     * mid-download, we delete the partial file and throw instead of
-     * publishing the path. There's a residual microsecond-wide window
-     * between the post-download check and the [tempFile] publish where
-     * a concurrent [close] would not observe the path; that case is
-     * acceptable under the documented "MUST close after reads complete"
-     * contract.
-     */
-    private suspend fun ensureTempFile(): Path {
-      tempFile?.let { return it }
-      return tempFileMutex.withLock {
-        if (closed) error("ParquetBlob '$blobKey' has been closed")
-        tempFile?.let { return@withLock it }
-        val path = Files.createTempFile("parquet-storage-client-", ".parquet")
-        try {
-          Files.newByteChannel(path, StandardOpenOption.WRITE).use { ch ->
-            delegate.read().collect { chunk -> writeFully(ch, chunk.asReadOnlyByteBuffer()) }
-          }
-        } catch (t: Throwable) {
-          try {
-            Files.deleteIfExists(path)
-          } catch (_: IOException) {}
-          throw t
-        }
-        if (closed) {
-          // close() ran during the download. Clean up the orphan so we
-          // don't leak the temp file and bail out — the caller's read
-          // attempt is racing a close and should fail.
-          try {
-            Files.deleteIfExists(path)
-          } catch (_: IOException) {}
-          error("ParquetBlob '$blobKey' was closed during the underlying download")
-        }
-        tempFile = path
-        path
-      }
-    }
-
-    // === Cached PME decryption properties (resolved at most once per blob) ===
-
-    @Volatile private var decryptionResolved: Boolean = false
-    @Volatile private var decryptionProps: FileDecryptionProperties? = null
-    private val decryptionMutex = Mutex()
-
-    /**
-     * Holds [decryptionMutex] while invoking the caller-supplied
-     * provider. The provider may call [readKeyValueMetadata] on the
-     * same blob (different mutex) but MUST NOT call [readRows] on the
-     * same blob — that would re-enter this method and deadlock on the
-     * non-reentrant coroutine `Mutex`. See class KDoc.
-     */
-    private suspend fun resolveDecryption(): FileDecryptionProperties? {
-      val provider = decryptionPropertiesProvider ?: return null
-      if (decryptionResolved) return decryptionProps
-      return decryptionMutex.withLock {
-        if (decryptionResolved) return@withLock decryptionProps
-        decryptionProps = provider.invoke(this)
-        decryptionResolved = true
-        decryptionProps
-      }
-    }
-
-    // === Reads ===
+    /** Row-proto codec read: one serialized [ParquetRow] per parquet row. */
+    override fun read(): Flow<ByteString> =
+      rowFlow { group, decoders -> rowToProto(group, decoders).toByteString() }
 
     override fun readRows(): Flow<Map<String, Any?>> =
+      rowFlow { group, decoders -> rowToNativeMap(group, decoders) }
+
+    override suspend fun readKeyValueMetadata(): Map<String, String> =
+      withContext(parquetContext) { readFooterKeyValueMetadata(path) }
+
+    override suspend fun delete() {
+      withContext(parquetContext) { fileSystem.delete(path, /* recursive = */ false) }
+    }
+
+    // === PME decryption (declarative config bootstrap) ===
+
+    /**
+     * Standard envelope-encryption bootstrap: read the plaintext footer
+     * metadata, pull the KEK URI + base64 KMS-wrapped DEK from the configured
+     * keys, unwrap the DEK via KMS, and use it as the parquet footer key.
+     * Returns `null` when no [decryptionConfig] is set (plaintext blobs).
+     *
+     * Resolved fresh per read flow: a [org.apache.parquet.crypto.FileDecryptionProperties]
+     * is single-use in parquet-mr, and reads are not hot enough to warrant
+     * caching the KMS unwrap.
+     */
+    private suspend fun resolveDecryption(): FileDecryptionProperties? {
+      val config = decryptionConfig ?: return null
+      val metadata = readFooterKeyValueMetadata(path)
+      val kekUri =
+        metadata[config.kekUriMetadataKey]
+          ?: throw IllegalStateException(
+            "Parquet blob '$blobKey' is missing KEK URI metadata key " +
+              "'${config.kekUriMetadataKey}'"
+          )
+      val wrappedDek =
+        metadata[config.encryptedDekMetadataKey]
+          ?: throw IllegalStateException(
+            "Parquet blob '$blobKey' is missing encrypted-DEK metadata key " +
+              "'${config.encryptedDekMetadataKey}'"
+          )
+      val dek = config.kmsClient.getAead(kekUri).decrypt(Base64.getDecoder().decode(wrappedDek), EMPTY_AAD)
+      return FileDecryptionProperties.builder().withFooterKey(dek).build()
+    }
+
+    /**
+     * Cold flow over the file's parquet rows. Opens a fresh reader per
+     * collection (range reads through the backend connector), pre-compiles
+     * per-column decoders once from the first row's schema, then applies
+     * [transform] to each parquet [Group]. The transform decides whether to
+     * materialize a [ParquetRow] proto ([read]) or go straight to a native map
+     * ([readRows]) — the latter skips proto allocation entirely.
+     */
+    private fun <T> rowFlow(transform: (Group, List<ColumnDecoder>) -> T): Flow<T> =
       flow {
-          checkOpen()
-          val path = ensureTempFile()
           val decryption = resolveDecryption()
-          val inputFile: InputFile = LocalInputFile(path)
+          val inputFile: InputFile = HadoopInputFile.fromPath(path, conf)
           GroupParquetReaderBuilder(inputFile, decryption).build().use { reader ->
             val first = reader.read() ?: return@use
-            // Pre-compile per-column extractors from the schema of the
-            // first row, then reuse on every subsequent row. The schema
-            // is fixed for the whole file, so primitive-type dispatch +
-            // BINARY logical-type detection happen ONCE per column
-            // instead of per row × per column.
-            val extractors = buildExtractors(first.type.fields)
-            emit(extractToMap(first, extractors))
+            val decoders = buildDecoders(first.type.fields)
+            emit(transform(first, decoders))
             var group: Group? = reader.read()
             while (group != null) {
-              emit(extractToMap(group, extractors))
+              emit(transform(group, decoders))
               group = reader.read()
             }
           }
         }
         .flowOn(parquetContext)
-
-    override suspend fun readKeyValueMetadata(): Map<String, String> =
-      withContext(parquetContext) {
-        checkOpen()
-        readFooterKeyValueMetadata(ensureTempFile())
-      }
-
-    override fun close() {
-      if (closed) return
-      closed = true
-      val path = tempFile ?: return
-      tempFile = null
-      try {
-        Files.deleteIfExists(path)
-      } catch (_: IOException) {
-        // Best-effort. Temp file lives under java.io.tmpdir which is
-        // typically cleaned by the OS / sandbox lifecycle.
-      }
-    }
   }
 
-  // === Per-column extractor compilation (runs once per file) ===
+  // === Path helpers ===
+
+  private fun resolvePath(blobKey: String): Path = Path(qualifiedRoot, blobKey)
+
+  private fun relativeKey(child: Path): String = rootUri.relativize(child.toUri()).path
+
+  // === Read: per-column decoder compilation (runs once per file) ===
 
   /**
-   * Per-column value extractor. Carries `(column name, (Group) -> value)`.
-   * The closure handles OPTIONAL (absent -> null) and REPEATED (count > 1
-   * -> throw) at row time; the primitive-type / annotation dispatch is
-   * baked in at build time so the row hot path is just a closure call.
+   * Per-column decoder: `(column name, (Group) -> native value or null)`. The
+   * native value is the Kotlin/Java type from the [ParquetBlob.readRows] table
+   * ([Int]/[Long]/[Float]/[Double]/[Boolean]/[String]/[ByteString]/[Instant]/
+   * [LocalDate]), or `null` for an absent OPTIONAL column.
    */
-  private data class ColumnExtractor(val name: String, val extract: (Group) -> Any?)
+  private class ColumnDecoder(val name: String, val extract: (Group) -> Any?)
 
-  private fun buildExtractors(fields: List<Type>): List<ColumnExtractor> =
-    fields.map { field -> buildExtractor(field) }
+  private fun buildDecoders(fields: List<Type>): List<ColumnDecoder> =
+    fields.map { buildDecoder(it) }
 
-  private fun buildExtractor(field: Type): ColumnExtractor {
+  private fun buildDecoder(field: Type): ColumnDecoder {
     val name = field.name
     if (!field.isPrimitive) {
       throw IllegalStateException(
         "Nested message field '$name' is not supported by ParquetStorageClient"
       )
     }
-    val valueExtractor: (Group) -> Any = buildPrimitiveExtractor(name, field.asPrimitiveType())
-    return ColumnExtractor(name) { group ->
+    val valueOf: (Group) -> Any = buildPrimitiveExtractor(name, field.asPrimitiveType())
+    return ColumnDecoder(name) { group ->
       when (val count = group.getFieldRepetitionCount(name)) {
         0 -> null
-        1 -> valueExtractor(group)
+        1 -> valueOf(group)
         else ->
           throw IllegalStateException(
             "Repeated field '$name' (count=$count) is not supported by ParquetStorageClient"
@@ -363,19 +455,33 @@ class ParquetStorageClient(
     }
   }
 
-  private fun buildPrimitiveExtractor(name: String, prim: PrimitiveType): (Group) -> Any =
-    when (prim.primitiveTypeName) {
-      PrimitiveTypeName.INT32 -> { g -> g.getInteger(name, 0) }
-      PrimitiveTypeName.INT64 -> { g -> g.getLong(name, 0) }
+  /**
+   * Compiles the native-value extractor for a single primitive column.
+   * Primitive-type dispatch and BINARY/INT32/INT64 logical-type detection
+   * happen ONCE here, not per row. The `when` is exhaustive over
+   * [PrimitiveTypeName] (no `else`) so a future parquet primitive surfaces as
+   * a compile error rather than a silent runtime fallthrough.
+   */
+  private fun buildPrimitiveExtractor(name: String, prim: PrimitiveType): (Group) -> Any {
+    val annotation = prim.logicalTypeAnnotation
+    return when (prim.primitiveTypeName) {
+      PrimitiveTypeName.INT32 ->
+        if (annotation is LogicalTypeAnnotation.DateLogicalTypeAnnotation) {
+          { g -> LocalDate.ofEpochDay(g.getInteger(name, 0).toLong()) }
+        } else {
+          { g -> g.getInteger(name, 0) }
+        }
+      PrimitiveTypeName.INT64 ->
+        if (annotation is LogicalTypeAnnotation.TimestampLogicalTypeAnnotation) {
+          val unit = annotation.unit
+          { g -> instantOf(g.getLong(name, 0), unit) }
+        } else {
+          { g -> g.getLong(name, 0) }
+        }
       PrimitiveTypeName.FLOAT -> { g -> g.getFloat(name, 0) }
       PrimitiveTypeName.DOUBLE -> { g -> g.getDouble(name, 0) }
       PrimitiveTypeName.BOOLEAN -> { g -> g.getBoolean(name, 0) }
-      PrimitiveTypeName.BINARY -> {
-        // STRING / ENUM / JSON are UTF-8 text logical types -> decode
-        // to String. Everything else (including BSON, UUID, raw bytes,
-        // or no annotation) stays as raw bytes. Annotation lookup
-        // happens ONCE per column here, not per row.
-        val annotation = prim.logicalTypeAnnotation
+      PrimitiveTypeName.BINARY ->
         if (
           annotation is LogicalTypeAnnotation.StringLogicalTypeAnnotation ||
             annotation is LogicalTypeAnnotation.EnumLogicalTypeAnnotation ||
@@ -385,35 +491,159 @@ class ParquetStorageClient(
         } else {
           { g -> ByteString.copyFrom(g.getBinary(name, 0).toByteBuffer()) }
         }
-      }
       PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY -> { g ->
         ByteString.copyFrom(g.getBinary(name, 0).toByteBuffer())
       }
       PrimitiveTypeName.INT96 -> { g -> ByteString.copyFrom(g.getInt96(name, 0).bytes) }
-      else ->
-        throw IllegalStateException(
-          "Unsupported primitive type '${prim.primitiveTypeName}' for field '$name'"
-        )
     }
+  }
 
-  /** Row hot path: pure indirect call per column, no reflection / no dispatch. */
-  private fun extractToMap(group: Group, extractors: List<ColumnExtractor>): Map<String, Any?> {
-    // Load factor 1.0 sizes the bucket array exactly; saves one resize
-    // vs the default 0.75.
-    val out = LinkedHashMap<String, Any?>(extractors.size, 1f)
-    for (e in extractors) out[e.name] = e.extract(group)
+  /**
+   * Builds a [ParquetRow] proto from a parquet [Group] (the [read] codec path).
+   * Only invoked when a serialized proto is actually needed; [readRows] skips
+   * this and builds a native map directly.
+   */
+  private fun rowToProto(group: Group, decoders: List<ColumnDecoder>): ParquetRow {
+    val builder = ParquetRow.newBuilder()
+    for (decoder in decoders) {
+      builder.putColumns(decoder.name, valueToProto(decoder.extract(group)))
+    }
+    return builder.build()
+  }
+
+  /** Projects a parquet [Group] straight into a column-ordered native map. */
+  private fun rowToNativeMap(group: Group, decoders: List<ColumnDecoder>): Map<String, Any?> {
+    val out = LinkedHashMap<String, Any?>(decoders.size, 1f)
+    for (decoder in decoders) out[decoder.name] = decoder.extract(group)
     return out
+  }
+
+  // === Write: schema derivation + Group construction ===
+
+  private fun newWriter(
+    outputFile: OutputFile,
+    schema: MessageType,
+    encryption: FileEncryptionProperties?,
+  ): ParquetWriter<Group> {
+    // ExampleParquetWriter installs a GroupWriteSupport bound to this schema,
+    // so no shared-Configuration mutation is needed.
+    val builder =
+      ExampleParquetWriter.builder(outputFile)
+        .withConf(conf)
+        .withType(schema)
+        .withWriteMode(ParquetFileWriter.Mode.OVERWRITE)
+        .withCompressionCodec(CompressionCodecName.UNCOMPRESSED)
+    if (encryption != null) builder.withEncryption(encryption)
+    return builder.build()
+  }
+
+  /**
+   * Derives the parquet [MessageType] from the first [ParquetRow]. Every
+   * column is OPTIONAL so later rows can omit values (NULL). Each
+   * [ParquetValue.KindCase] maps to a canonical physical type. The first row
+   * must set every column; a `KIND_NOT_SET` value cannot be typed and throws.
+   */
+  private fun deriveSchema(row: ParquetRow): MessageType {
+    val fields =
+      row.columnsMap.map { (name, value) ->
+        when (value.kindCase) {
+          ParquetValue.KindCase.INT32_VALUE ->
+            Types.optional(PrimitiveTypeName.INT32).named(name)
+          ParquetValue.KindCase.INT64_VALUE ->
+            Types.optional(PrimitiveTypeName.INT64).named(name)
+          ParquetValue.KindCase.FLOAT_VALUE ->
+            Types.optional(PrimitiveTypeName.FLOAT).named(name)
+          ParquetValue.KindCase.DOUBLE_VALUE ->
+            Types.optional(PrimitiveTypeName.DOUBLE).named(name)
+          ParquetValue.KindCase.BOOL_VALUE ->
+            Types.optional(PrimitiveTypeName.BOOLEAN).named(name)
+          ParquetValue.KindCase.STRING_VALUE ->
+            Types.optional(PrimitiveTypeName.BINARY)
+              .`as`(LogicalTypeAnnotation.stringType())
+              .named(name)
+          ParquetValue.KindCase.BYTES_VALUE ->
+            Types.optional(PrimitiveTypeName.BINARY).named(name)
+          ParquetValue.KindCase.TIMESTAMP_VALUE ->
+            Types.optional(PrimitiveTypeName.INT64)
+              .`as`(
+                LogicalTypeAnnotation.timestampType(
+                  /* isAdjustedToUTC = */ true,
+                  LogicalTypeAnnotation.TimeUnit.MICROS,
+                )
+              )
+              .named(name)
+          ParquetValue.KindCase.DATE_VALUE ->
+            Types.optional(PrimitiveTypeName.INT32)
+              .`as`(LogicalTypeAnnotation.dateType())
+              .named(name)
+          ParquetValue.KindCase.KIND_NOT_SET ->
+            throw IllegalArgumentException(
+              "First ParquetRow column '$name' has no value; the first row must be fully " +
+                "populated so the parquet schema can be derived."
+            )
+        }
+      }
+    return MessageType("ParquetRow", fields)
+  }
+
+  /**
+   * Validates a row against the column→kind map derived from the first row.
+   * Rejects columns absent from the first row (would be silently dropped) and
+   * kind mismatches (would produce a wrong-typed parquet write). Columns the
+   * row omits, or sets to `KIND_NOT_SET`, are allowed (OPTIONAL → NULL).
+   */
+  private fun validateRow(row: ParquetRow, expectedKinds: Map<String, ParquetValue.KindCase>) {
+    for ((name, value) in row.columnsMap) {
+      if (value.kindCase == ParquetValue.KindCase.KIND_NOT_SET) continue
+      val expected =
+        expectedKinds[name]
+          ?: throw IllegalArgumentException(
+            "ParquetRow column '$name' is not in the schema derived from the first row " +
+              "(columns: ${expectedKinds.keys}); all rows must share the first row's columns."
+          )
+      if (value.kindCase != expected) {
+        throw IllegalArgumentException(
+          "ParquetRow column '$name' has kind ${value.kindCase} but the schema (from the first " +
+            "row) expects $expected"
+        )
+      }
+    }
+  }
+
+  private fun rowToGroup(row: ParquetRow, schema: MessageType, factory: SimpleGroupFactory): Group {
+    val group = factory.newGroup()
+    for (field in schema.fields) {
+      val value = row.columnsMap[field.name] ?: continue
+      appendToGroup(group, field.name, value)
+    }
+    return group
+  }
+
+  private fun appendToGroup(group: Group, name: String, value: ParquetValue) {
+    when (value.kindCase) {
+      ParquetValue.KindCase.INT32_VALUE -> group.add(name, value.int32Value)
+      ParquetValue.KindCase.INT64_VALUE -> group.add(name, value.int64Value)
+      ParquetValue.KindCase.FLOAT_VALUE -> group.add(name, value.floatValue)
+      ParquetValue.KindCase.DOUBLE_VALUE -> group.add(name, value.doubleValue)
+      ParquetValue.KindCase.BOOL_VALUE -> group.add(name, value.boolValue)
+      ParquetValue.KindCase.STRING_VALUE -> group.add(name, value.stringValue)
+      ParquetValue.KindCase.BYTES_VALUE ->
+        group.add(name, Binary.fromConstantByteArray(value.bytesValue.toByteArray()))
+      ParquetValue.KindCase.TIMESTAMP_VALUE -> group.add(name, instantToMicros(value.timestampValue))
+      ParquetValue.KindCase.DATE_VALUE ->
+        group.add(name, dateToEpochDay(value.dateValue).toInt())
+      // NULL: leave the OPTIONAL column unset.
+      ParquetValue.KindCase.KIND_NOT_SET -> {}
+    }
   }
 
   // === Parquet plumbing ===
 
   /**
    * Subclass of [ParquetReader.Builder] needed to reach the protected
-   * `Builder(InputFile)` constructor — parquet-mr's public static factory
-   * `builder()` only accepts a Hadoop `Path`. If [decryption] is
-   * non-null, install it via the parquet-mr `withDecryption` builder API,
-   * which flows into the eventual `ParquetReadOptions` and enables PME
-   * column decryption.
+   * `Builder(InputFile)` constructor. If [decryption] is non-null, install it
+   * via the parquet-mr `withDecryption` builder API, enabling PME column
+   * decryption.
    */
   private class GroupParquetReaderBuilder(
     file: InputFile,
@@ -429,50 +659,41 @@ class ParquetStorageClient(
   // === Direct thrift footer parse (bypasses ParquetFileReader) ===
 
   /**
-   * Reads the parquet file's footer key-value metadata directly from
-   * the thrift `FileMetaData` struct, bypassing parquet-mr's high-level
-   * [org.apache.parquet.hadoop.ParquetFileReader].
+   * Reads the parquet file's footer key-value metadata directly from the
+   * thrift `FileMetaData` struct, bypassing parquet-mr's high-level
+   * `ParquetFileReader`.
    *
-   * Why bypass: under PME `PLAINTEXT_FOOTER` mode the footer body
-   * (schema, key-value metadata) IS plaintext on disk, but per-column
-   * metadata is still encrypted with the footer key.
-   * `ParquetFileReader.open` decrypts ALL column metadata eagerly when
-   * opening the file, which requires the footer key here — defeating
-   * the whole point of reading the footer first to obtain key
-   * bootstrap material.
+   * Why bypass: under PME `PLAINTEXT_FOOTER` mode the footer body (schema,
+   * key-value metadata) IS plaintext on disk, but per-column metadata is
+   * still encrypted with the footer key. `ParquetFileReader.open` decrypts
+   * ALL column metadata eagerly, which requires the footer key here —
+   * defeating the point of reading the footer first to obtain key bootstrap
+   * material.
    *
    * Solution: read the raw FileMetaData thrift struct via
-   * `parquet-format-structures`' `Util.readFileMetaData(in,
-   * skipRowGroups = true)`. With `skipRowGroups = true`, the
-   * per-row-group / per-column portions are skipped during
-   * deserialization, so the encrypted per-column-metadata blobs are
-   * never touched. Only file-level fields, including the
-   * always-plaintext `key_value_metadata`, are returned.
+   * `Util.readFileMetaData(in, skipRowGroups = true)`. Skipping row groups
+   * means the encrypted per-column-metadata blobs are never touched; only
+   * file-level fields, including the always-plaintext `key_value_metadata`,
+   * are returned.
    *
-   * Parquet file footer layout (last bytes):
-   * ```
-   *   ...FileMetaData (thrift) bytes...
-   *   [int32 footer length LE][4-byte magic]
-   * ```
-   * Magic is `"PAR1"` for plaintext-footer files (including PME with
-   * `PLAINTEXT_FOOTER`). `"PARE"` indicates PME `ENCRYPTED_FOOTER`
-   * mode, which we explicitly REJECT here: in that mode the footer body
-   * is a `FileCryptoMetaData` thrift followed by the encrypted
-   * `FileMetaData`, so `Util.readFileMetaData` would hit ciphertext and
-   * throw an obscure thrift parse error. The bootstrap design built
-   * around this class requires `PLAINTEXT_FOOTER`; fail fast with a
-   * clear message instead.
+   * Parquet footer trailer layout (last 8 bytes):
+   * `[int32 footer length LE][4-byte magic]`. Magic is `"PAR1"` for
+   * plaintext-footer files (including PME `PLAINTEXT_FOOTER`). `"PARE"`
+   * indicates PME `ENCRYPTED_FOOTER`, which we explicitly REJECT: that mode
+   * stores a `FileCryptoMetaData` thrift followed by the encrypted
+   * `FileMetaData`, so the parse would hit ciphertext.
    */
   private fun readFooterKeyValueMetadata(path: Path): Map<String, String> {
-    FileChannel.open(path, StandardOpenOption.READ).use { ch ->
-      val fileLen = ch.size()
-      require(fileLen >= MIN_PARQUET_FILE_SIZE) {
-        "File too small to be parquet: $path (size=$fileLen)"
-      }
+    val inputFile = HadoopInputFile.fromPath(path, conf)
+    val fileLen = inputFile.length
+    require(fileLen >= MIN_PARQUET_FILE_SIZE) {
+      "File too small to be parquet: $path (size=$fileLen)"
+    }
+    inputFile.newStream().use { stream ->
       // Read the 8-byte trailer: [footer length: int32 LE][magic: 4 bytes].
       val tail = ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN)
-      ch.position(fileLen - 8)
-      readFully(ch, tail)
+      stream.seek(fileLen - 8)
+      stream.readFully(tail)
       tail.flip()
       val footerLen = tail.int
       val magicBytes = ByteArray(4).also { tail.get(it) }
@@ -485,16 +706,14 @@ class ParquetStorageClient(
             "metadata can be read without the footer key."
         )
       }
-      require(magic == PARQUET_MAGIC_PLAINTEXT) {
-        "Not a parquet file: $path (bad magic '$magic')"
-      }
+      require(magic == PARQUET_MAGIC_PLAINTEXT) { "Not a parquet file: $path (bad magic '$magic')" }
       require(footerLen in 1..(fileLen - 8)) {
         "Implausible parquet footer length $footerLen for file size $fileLen"
       }
       val footerStart = fileLen - 8 - footerLen
       val footerBuf = ByteBuffer.allocate(footerLen)
-      ch.position(footerStart)
-      readFully(ch, footerBuf)
+      stream.seek(footerStart)
+      stream.readFully(footerBuf)
       footerBuf.flip()
       val footerBytes = ByteArray(footerLen).also { footerBuf.get(it) }
       val md = Util.readFileMetaData(ByteArrayInputStream(footerBytes), /* skipRowGroups = */ true)
@@ -503,30 +722,87 @@ class ParquetStorageClient(
     }
   }
 
-  private fun readFully(ch: FileChannel, buf: ByteBuffer) {
-    while (buf.hasRemaining()) {
-      val n = ch.read(buf)
-      if (n < 0) throw EOFException("Unexpected EOF reading parquet bytes")
-    }
-  }
-
-  /**
-   * Loops until the channel has consumed all bytes in [buf].
-   * `SeekableByteChannel.write` is contractually allowed to return a
-   * short write; on local files the JDK almost always writes fully in
-   * one call, but the spec doesn't guarantee it. A silent short-write
-   * here would corrupt the temp file (parquet footer at the wrong
-   * offset), so we explicitly loop.
-   */
-  private fun writeFully(ch: SeekableByteChannel, buf: ByteBuffer) {
-    while (buf.hasRemaining()) {
-      ch.write(buf)
-    }
-  }
-
   private companion object {
     private const val PARQUET_MAGIC_PLAINTEXT = "PAR1"
     private const val PARQUET_MAGIC_ENCRYPTED_FOOTER = "PARE"
     private const val MIN_PARQUET_FILE_SIZE = 12L // 4-byte header + 8-byte trailer minimum.
+
+    /** Associated data for KMS DEK unwrapping (the EDP convention uses none). */
+    private val EMPTY_AAD = ByteArray(0)
+
+    private val NULL_VALUE: ParquetValue = ParquetValue.getDefaultInstance()
+
+    /** Placeholder schema for empty writes (parquet rejects a zero-column schema). */
+    private val EMPTY_SCHEMA: MessageType =
+      MessageType("ParquetRow", Types.optional(PrimitiveTypeName.BINARY).named("placeholder"))
+
+    private fun int32Value(v: Int) = ParquetValue.newBuilder().setInt32Value(v).build()
+
+    private fun int64Value(v: Long) = ParquetValue.newBuilder().setInt64Value(v).build()
+
+    private fun floatValue(v: Float) = ParquetValue.newBuilder().setFloatValue(v).build()
+
+    private fun doubleValue(v: Double) = ParquetValue.newBuilder().setDoubleValue(v).build()
+
+    private fun boolValue(v: Boolean) = ParquetValue.newBuilder().setBoolValue(v).build()
+
+    private fun stringValue(v: String) = ParquetValue.newBuilder().setStringValue(v).build()
+
+    private fun bytesValue(v: ByteString) = ParquetValue.newBuilder().setBytesValue(v).build()
+
+    private fun timestampValue(instant: Instant): ParquetValue =
+      ParquetValue.newBuilder()
+        .setTimestampValue(
+          Timestamp.newBuilder().setSeconds(instant.epochSecond).setNanos(instant.nano).build()
+        )
+        .build()
+
+    private fun dateValue(date: LocalDate): ParquetValue =
+      ParquetValue.newBuilder()
+        .setDateValue(
+          Date.newBuilder()
+            .setYear(date.year)
+            .setMonth(date.monthValue)
+            .setDay(date.dayOfMonth)
+            .build()
+        )
+        .build()
+
+    /**
+     * Maps a native column value (from [ColumnDecoder.extract]) to a
+     * [ParquetValue] for the [read] proto codec. `null` -> unset (NULL).
+     */
+    private fun valueToProto(value: Any?): ParquetValue =
+      when (value) {
+        null -> NULL_VALUE
+        is Int -> int32Value(value)
+        is Long -> int64Value(value)
+        is Float -> floatValue(value)
+        is Double -> doubleValue(value)
+        is Boolean -> boolValue(value)
+        is String -> stringValue(value)
+        is ByteString -> bytesValue(value)
+        is Instant -> timestampValue(value)
+        is LocalDate -> dateValue(value)
+        else ->
+          throw IllegalStateException(
+            "Unsupported native value type ${value.javaClass.name} for ParquetValue conversion"
+          )
+      }
+
+    private fun instantOf(raw: Long, unit: LogicalTypeAnnotation.TimeUnit): Instant =
+      when (unit) {
+        LogicalTypeAnnotation.TimeUnit.MILLIS -> Instant.ofEpochMilli(raw)
+        LogicalTypeAnnotation.TimeUnit.MICROS ->
+          Instant.ofEpochSecond(Math.floorDiv(raw, 1_000_000L), Math.floorMod(raw, 1_000_000L) * 1_000L)
+        LogicalTypeAnnotation.TimeUnit.NANOS ->
+          Instant.ofEpochSecond(Math.floorDiv(raw, 1_000_000_000L), Math.floorMod(raw, 1_000_000_000L))
+      }
+
+    private fun instantToMicros(ts: Timestamp): Long =
+      Math.addExact(Math.multiplyExact(ts.seconds, 1_000_000L), (ts.nanos / 1_000).toLong())
+
+    private fun dateToEpochDay(date: Date): Long =
+      LocalDate.of(date.year, date.month, date.day).toEpochDay()
   }
 }

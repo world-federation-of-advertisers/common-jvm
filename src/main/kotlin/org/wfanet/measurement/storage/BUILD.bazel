@@ -40,18 +40,30 @@ kt_jvm_library(
     srcs = ["ParquetStorageClient.kt"],
     deps = [
         ":client",
+        # KmsClient for the declarative ParquetDecryptionConfig PME bootstrap.
+        "//imports/java/com/google/crypto/tink",
         "//imports/java/com/google/protobuf",
-        # Required at RUNTIME by parquet-mr 1.14.x — Hadoop Configuration is
-        # instantiated from inside ParquetReader.Builder constructors and
-        # ParquetFileReader.open. Hadoop MapReduce client classes are also
-        # touched (FileInputFormat referenced from ParquetReadOptions.Builder).
+        # Hadoop FileSystem + Configuration provide the storage backend that
+        # parquet-mr reads/writes through (HadoopInputFile / HadoopOutputFile).
+        # The shaded hadoop-client artifacts expose Hadoop's classes WITHOUT
+        # leaking ~80 transitive deps onto the classpath — see the comment in
+        # MODULE.bazel and imports/java/org/apache/hadoop/BUILD.bazel.
         "//imports/java/org/apache/hadoop:hadoop_client_api",
         "//imports/java/org/apache/hadoop:hadoop_client_runtime",
         "//imports/java/org/apache/parquet:parquet_column",
         "//imports/java/org/apache/parquet:parquet_common",
         "//imports/java/org/apache/parquet:parquet_format_structures",
         "//imports/java/org/apache/parquet:parquet_hadoop",
+        # google.type.Date used by the ParquetRow/ParquetValue codec.
+        "//imports/kotlin/com/google/type:date_kt_jvm_proto",
         "//imports/kotlin/kotlinx/coroutines:core",
+        "//src/main/proto/wfa/measurement/storage:parquet_row_kt_jvm_proto",
+    ],
+    runtime_deps = [
+        # GoogleHadoopFileSystem for gs:// blob keys in production. Runtime
+        # only — selected via Configuration (fs.gs.impl), never compiled
+        # against. Local-filesystem reads/writes (tests) need nothing here.
+        "//imports/java/com/google/cloud/bigdataoss:gcs_connector",
     ],
 )
 

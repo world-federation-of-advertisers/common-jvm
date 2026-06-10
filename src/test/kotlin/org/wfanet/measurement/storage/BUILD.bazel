@@ -42,11 +42,37 @@ kt_jvm_test(
         "//imports/java/org/apache/parquet:parquet_common",
         "//imports/java/org/apache/parquet:parquet_hadoop",
         "//imports/java/org/junit",
+        "//imports/kotlin/com/google/type:date_kt_jvm_proto",
         "//imports/kotlin/kotlin/test",
         "//imports/kotlin/kotlinx/coroutines:core",
         "//src/main/kotlin/org/wfanet/measurement/common/crypto/tink/testing",
-        "//src/main/kotlin/org/wfanet/measurement/storage:client",
         "//src/main/kotlin/org/wfanet/measurement/storage:parquet_storage_client",
-        "//src/main/kotlin/org/wfanet/measurement/storage/testing",
+        "//src/main/proto/wfa/measurement/storage:parquet_row_kt_jvm_proto",
+    ],
+)
+
+kt_jvm_test(
+    name = "ParquetStorageClientEmulatorTest",
+    srcs = ["ParquetStorageClientEmulatorTest.kt"],
+    tags = [
+        # Uses Docker (GCS storage-testbench emulator).
+        "no-remote-exec",
+    ],
+    test_class = "org.wfanet.measurement.storage.ParquetStorageClientEmulatorTest",
+    deps = [
+        "//imports/java/com/google/cloud/storage",
+        "//imports/java/com/google/common/truth",
+        "//imports/java/org/apache/hadoop:hadoop_client_api",
+        "//imports/java/org/apache/parquet:parquet_hadoop",
+        "//imports/java/org/junit",
+        "//imports/kotlin/kotlin/test",
+        "//imports/kotlin/kotlinx/coroutines:core",
+        "//src/main/kotlin/org/wfanet/measurement/gcloud/gcs/testing:storage_emulator_rule",
+        "//src/main/kotlin/org/wfanet/measurement/storage:parquet_storage_client",
+        "//src/main/proto/wfa/measurement/storage:parquet_row_kt_jvm_proto",
+    ],
+    runtime_deps = [
+        # GoogleHadoopFileSystem for the gs:// scheme at runtime.
+        "//imports/java/com/google/cloud/bigdataoss:gcs_connector",
     ],
 )
