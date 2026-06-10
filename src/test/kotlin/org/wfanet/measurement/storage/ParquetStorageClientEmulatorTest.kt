@@ -17,14 +17,11 @@
 package org.wfanet.measurement.storage
 
 import com.google.common.truth.Truth.assertThat
-import java.security.SecureRandom
-import kotlin.test.assertFailsWith
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
-import org.apache.parquet.crypto.FileEncryptionProperties
 import org.junit.After
 import org.junit.Before
 import org.junit.ClassRule
@@ -34,11 +31,12 @@ import org.junit.runners.JUnit4
 import org.wfanet.measurement.gcloud.gcs.testing.StorageEmulatorRule
 
 /**
- * End-to-end tests for [ParquetStorageClient] over the `gs://` scheme, backed
- * by the GCS storage-testbench emulator (Docker). Exercises the real Hadoop
- * GCS connector path: ranged network reads of the parquet footer + row groups,
- * network writes via `HadoopOutputFile`, and the PME footer bootstrap over the
- * wire — none of which the local-filesystem unit tests cover.
+ * End-to-end tests for [ParquetStorageClient] over the `gs://` scheme, backed by
+ * the GCS storage-testbench emulator (Docker). Exercises the real Hadoop GCS
+ * connector path: ranged network reads of the parquet footer + row groups and
+ * network writes via `HadoopOutputFile` — none of which the local-filesystem
+ * unit tests cover. PME is transport-agnostic (parquet-mr's native key tools)
+ * and is covered by [ParquetStorageClientTest].
  */
 @RunWith(JUnit4::class)
 class ParquetStorageClientEmulatorTest {
@@ -65,16 +63,8 @@ class ParquetStorageClientEmulatorTest {
       set("fs.gs.storage.root.url", "${storageEmulator.storage.options.host}/")
     }
 
-  private fun newClient(
-    decryptionConfig: ParquetDecryptionConfig? = null,
-    encryption: (suspend (String) -> FileEncryptionProperties?)? = null,
-  ): ParquetStorageClient =
-    ParquetStorageClient(
-      gcsConfiguration(),
-      Path("gs://$BUCKET/"),
-      decryptionConfig = decryptionConfig,
-      encryptionPropertiesProvider = encryption,
-    )
+  private fun newClient(): ParquetStorageClient =
+    ParquetStorageClient(gcsConfiguration(), Path("gs://$BUCKET/"))
 
   private fun rowOf(id: Long, name: String): ParquetRow =
     ParquetRow.newBuilder()
@@ -108,30 +98,6 @@ class ParquetStorageClientEmulatorTest {
     val keys = client.listBlobs().toList().map { it.blobKey }.toSet()
 
     assertThat(keys).containsExactly("a.parquet", "sub/b.parquet")
-  }
-
-  @Test
-  fun `PME write produces an encrypted blob over gs scheme`(): Unit = runBlocking {
-    val footerKey = randomAesKey(32)
-    val client =
-      newClient(
-        encryption = {
-          FileEncryptionProperties.builder(footerKey).withPlaintextFooter().build()
-        }
-      )
-
-    client.writeBlob("enc.parquet", flowOf(rowOf(5L, "grace").toByteString()))
-
-    // Footer stays readable over the network (plaintext footer)...
-    assertThat(newClient().getBlob("enc.parquet")!!.readKeyValueMetadata()).isNotNull()
-    // ...but the encrypted rows are unreadable without decryption.
-    assertFailsWith<Throwable> { newClient().getBlob("enc.parquet")!!.readRows().toList() }
-  }
-
-  private fun randomAesKey(bytes: Int): ByteArray {
-    val k = ByteArray(bytes)
-    SecureRandom().nextBytes(k)
-    return k
   }
 
   companion object {

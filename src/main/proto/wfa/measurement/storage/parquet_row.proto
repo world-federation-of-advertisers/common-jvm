@@ -41,9 +41,11 @@ message ParquetRow {
 //
 //   read  (parquet -> ParquetValue)        write (ParquetValue -> parquet)
 //   ------------------------------------   --------------------------------
-//   INT32                       int32      INT32
+//   INT32 (signed)              int32      INT32
+//   INT32 + UINT_8/16/32        uint32     INT32 + INT(32, unsigned)
 //   INT32 + DATE                date       INT32 + DATE
-//   INT64                       int64      INT64
+//   INT64 (signed)              int64      INT64
+//   INT64 + UINT_64             uint64     INT64 + INT(64, unsigned)
 //   INT64 + TIMESTAMP_*         timestamp  INT64 + TIMESTAMP(UTC, MICROS)
 //   FLOAT                       float      FLOAT
 //   DOUBLE                      double     DOUBLE
@@ -53,10 +55,12 @@ message ParquetRow {
 //   FIXED_LEN_BYTE_ARRAY        bytes      BINARY
 //   INT96                       bytes      BINARY
 //
-// The read side is intentionally lossy: three physical byte types collapse
-// to `bytes` and three timestamp precisions collapse to `timestamp`. The
-// write side therefore picks a canonical physical type per `kind` (right
-// column). Round-trips are value-preserving, not parquet-physical-preserving.
+// Unsigned integer logical types map to `uint32`/`uint64` so a large value
+// (e.g. a UINT_32 of 3 billion) is not corrupted into a negative signed int.
+// The read side is otherwise intentionally lossy: three physical byte types
+// collapse to `bytes` and three timestamp precisions collapse to `timestamp`.
+// The write side picks a canonical physical type per `kind` (right column).
+// Round-trips are value-preserving, not parquet-physical-preserving.
 message ParquetValue {
   // An unset `kind` represents a NULL value.
   oneof kind {
@@ -69,5 +73,7 @@ message ParquetValue {
     bytes bytes_value = 7;
     google.protobuf.Timestamp timestamp_value = 8;
     google.type.Date date_value = 9;
+    uint32 uint32_value = 10;
+    uint64 uint64_value = 11;
   }
 }
