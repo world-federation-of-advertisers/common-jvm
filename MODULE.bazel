@@ -178,7 +178,22 @@ maven.artifact(
     group = "org.liquibase.ext",
     version = "4.33.0",
 )
+maven.artifact(
+    # GCS Hadoop FileSystem connector — RUNTIME ONLY, for gs:// blob keys in
+    # production (ParquetStorageClient). We use the pre-shaded artifact (its
+    # deps are relocated internally) and exclude ALL transitives so it cannot
+    # re-introduce unshaded hadoop-common / guava / jackson and downgrade
+    # existing pins. Hadoop's FileSystem API itself is provided by the
+    # hadoop-client-api / hadoop-client-runtime artifacts.
+    artifact = "gcs-connector",
+    classifier = "shaded",
+    exclusions = ["*:*"],
+    group = "com.google.cloud.bigdataoss",
+    version = "hadoop3-2.2.26",
+)
+
 maven.install(
+
     name = "maven",
     artifacts = [
         "junit:junit:4.13.2",

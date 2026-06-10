@@ -22,18 +22,22 @@ import com.google.crypto.tink.KeyTemplates
 import com.google.crypto.tink.KeysetHandle
 import com.google.crypto.tink.aead.AeadConfig
 import com.google.protobuf.ByteString
-import java.nio.file.Files
-import java.nio.file.Path
+import com.google.protobuf.Timestamp
+import com.google.type.Date
+import java.io.File
 import java.security.SecureRandom
+import java.time.Instant
+import java.time.LocalDate
 import java.util.Base64
-import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.assertFailsWith
-import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
-import org.apache.parquet.crypto.FileDecryptionProperties
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.Path
 import org.apache.parquet.crypto.FileEncryptionProperties
+import org.apache.parquet.crypto.ParquetCipher
 import org.apache.parquet.example.data.Group
 import org.apache.parquet.example.data.simple.SimpleGroupFactory
 import org.apache.parquet.hadoop.example.ExampleParquetWriter
@@ -42,67 +46,272 @@ import org.apache.parquet.io.LocalOutputFile
 import org.apache.parquet.io.api.Binary
 import org.apache.parquet.schema.MessageType
 import org.apache.parquet.schema.MessageTypeParser
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 import org.wfanet.measurement.common.crypto.tink.testing.FakeKmsClient
-import org.wfanet.measurement.storage.testing.InMemoryStorageClient
 
 @RunWith(JUnit4::class)
 class ParquetStorageClientTest {
+  @Rule @JvmField val tempDir = TemporaryFolder()
 
-  // ===== Plaintext round trip =====
+  private fun newClient(
+    decryptionConfig: ParquetDecryptionConfig? = null,
+    encryption: (suspend (String) -> FileEncryptionProperties?)? = null,
+  ): ParquetStorageClient =
+    ParquetStorageClient(
+      Configuration(),
+      Path(tempDir.root.absolutePath),
+      decryptionConfig = decryptionConfig,
+      encryptionPropertiesProvider = encryption,
+    )
+
+  /**
+   * Builds a [ParquetDecryptionConfig] (via a [FakeKmsClient]) plus the footer
+   * metadata that wraps [footerKey] under it — write the metadata into a PME
+   * blob and the config can bootstrap the footer key from it.
+   */
+  private fun kmsConfigFor(footerKey: ByteArray): Pair<ParquetDecryptionConfig, Map<String, String>> {
+    AeadConfig.register()
+    val kekUri = "fake-kms://kek1"
+    val kekAead: Aead =
+      KeysetHandle.generateNew(KeyTemplates.get("AES256_GCM")).getPrimitive(Aead::class.java)
+    val kmsClient = FakeKmsClient().also { it.setAead(kekUri, kekAead) }
+    val metadata =
+      mapOf(
+        "edpa.kek_uri" to kekUri,
+        "edpa.encrypted_dek" to
+          Base64.getEncoder().encodeToString(kekAead.encrypt(footerKey, ByteArray(0))),
+      )
+    return ParquetDecryptionConfig(kmsClient) to metadata
+  }
+
+  // ===== Plaintext reads =====
 
   @Test
   fun `readRows on plaintext blob returns native-typed values keyed by column name`(): Unit =
     runBlocking {
-      val blobs = InMemoryStorageClient()
-      blobs.writeBlob("data.parquet", flowOf(ByteString.copyFrom(plaintextSampleBytes())))
+      val key = plaintextSample("data.parquet")
 
-      ParquetStorageClient(blobs).getBlob("data.parquet")!!.use { blob ->
-        val rows = blob.readRows().toList()
-        assertThat(rows).hasSize(3)
-        assertThat(rows[0]).containsExactly("id", 1L, "name", "alice", "data", BYTES_AB)
-        assertThat(rows[1]).containsExactly("id", 2L, "name", "bob", "data", BYTES_CD)
-        assertThat(rows[2]).containsExactly("id", 3L, "name", "carol", "data", BYTES_EF)
-      }
+      val rows = newClient().getBlob(key)!!.readRows().toList()
+
+      assertThat(rows).hasSize(3)
+      assertThat(rows[0]).containsExactly("id", 1L, "name", "alice", "data", BYTES_AB)
+      assertThat(rows[1]).containsExactly("id", 2L, "name", "bob", "data", BYTES_CD)
+      assertThat(rows[2]).containsExactly("id", 3L, "name", "carol", "data", BYTES_EF)
     }
 
   @Test
   fun `readKeyValueMetadata returns plaintext footer entries`(): Unit = runBlocking {
-    val blobs = InMemoryStorageClient()
-    blobs.writeBlob(
-      "data.parquet",
-      flowOf(ByteString.copyFrom(plaintextSampleBytes(metadata = mapOf("foo" to "bar")))),
-    )
+    val key = plaintextSample("data.parquet", metadata = mapOf("foo" to "bar"))
 
-    ParquetStorageClient(blobs).getBlob("data.parquet")!!.use { blob ->
-      assertThat(blob.readKeyValueMetadata()).containsAtLeast("foo", "bar")
-    }
+    assertThat(newClient().getBlob(key)!!.readKeyValueMetadata()).containsAtLeast("foo", "bar")
   }
 
   @Test
   fun `getBlob returns null for missing key`(): Unit = runBlocking {
-    val client = ParquetStorageClient(InMemoryStorageClient())
-    assertThat(client.getBlob("nothing-here.parquet")).isNull()
+    assertThat(newClient().getBlob("nothing-here.parquet")).isNull()
   }
 
   @Test
   fun `empty parquet file emits no rows`(): Unit = runBlocking {
-    val blobs = InMemoryStorageClient()
-    blobs.writeBlob(
-      "empty.parquet",
-      flowOf(
-        ByteString.copyFrom(writeParquet(SAMPLE_SCHEMA, emptyList(), null, emptyMap(), null))
-      ),
-    )
+    val key = writeParquetBlob("empty.parquet", SAMPLE_SCHEMA, emptyList(), null, emptyMap(), null)
 
-    ParquetStorageClient(blobs).getBlob("empty.parquet")!!.use { blob ->
-      assertThat(blob.readRows().toList()).isEmpty()
-    }
+    assertThat(newClient().getBlob(key)!!.readRows().toList()).isEmpty()
   }
 
-  // ===== Primitive-type coverage =====
+  @Test
+  fun `listBlobs returns written blobs`(): Unit = runBlocking {
+    plaintextSample("a.parquet")
+    plaintextSample("b.parquet")
+
+    val keys = newClient().listBlobs().toList().map { it.blobKey }.toSet()
+
+    assertThat(keys).containsExactly("a.parquet", "b.parquet")
+  }
+
+  @Test
+  fun `listBlobs lists recursively and includes a non-parquet marker`(): Unit = runBlocking {
+    // Mirrors the EDP layout: a `done` marker plus parquet files in the
+    // directory and a subdirectory. Listing must surface all of them
+    // (including the non-parquet marker) so the caller can filter it out.
+    File(tempDir.root, "done").writeText("")
+    plaintextSample("file1.parquet")
+    plaintextSample("file2.parquet")
+    File(tempDir.root, "sub").mkdirs()
+    plaintextSample("sub/file3.parquet")
+
+    val keys = newClient().listBlobs().toList().map { it.blobKey }.toSet()
+
+    assertThat(keys)
+      .containsExactly("done", "file1.parquet", "file2.parquet", "sub/file3.parquet")
+  }
+
+  @Test
+  fun `listBlobs filters by prefix`(): Unit = runBlocking {
+    plaintextSample("a.parquet")
+    File(tempDir.root, "sub").mkdirs()
+    plaintextSample("sub/b.parquet")
+
+    val keys = newClient().listBlobs("sub/").toList().map { it.blobKey }.toSet()
+
+    assertThat(keys).containsExactly("sub/b.parquet")
+  }
+
+  @Test
+  fun `blob exposes size and timestamps`(): Unit = runBlocking {
+    val key = plaintextSample("data.parquet")
+
+    val blob = newClient().getBlob(key)!!
+
+    assertThat(blob.size).isGreaterThan(0L)
+    assertThat(blob.createTime).isNotNull()
+    assertThat(blob.updateTime).isNotNull()
+  }
+
+  // ===== StorageClient codec round trip (writeBlob <-> read) =====
+
+  @Test
+  fun `read after writeBlob round-trips all supported ParquetValue kinds`(): Unit = runBlocking {
+    val timestamp =
+      // Micro-aligned nanos: the canonical write precision is MICROS, so a
+      // non-micro nanos value would not survive the round trip.
+      Timestamp.newBuilder().setSeconds(1_700_000_000L).setNanos(123_456_000).build()
+    val date = Date.newBuilder().setYear(2026).setMonth(6).setDay(10).build()
+    val row =
+      ParquetRow.newBuilder()
+        .putColumns("i32", ParquetValue.newBuilder().setInt32Value(7).build())
+        .putColumns("i64", ParquetValue.newBuilder().setInt64Value(8L).build())
+        .putColumns("f32", ParquetValue.newBuilder().setFloatValue(1.5f).build())
+        .putColumns("f64", ParquetValue.newBuilder().setDoubleValue(2.5).build())
+        .putColumns("flag", ParquetValue.newBuilder().setBoolValue(true).build())
+        .putColumns("s", ParquetValue.newBuilder().setStringValue("hi").build())
+        .putColumns(
+          "b",
+          ParquetValue.newBuilder()
+            .setBytesValue(ByteString.copyFrom(byteArrayOf(0x01, 0x02, 0x03)))
+            .build(),
+        )
+        .putColumns("t", ParquetValue.newBuilder().setTimestampValue(timestamp).build())
+        .putColumns("d", ParquetValue.newBuilder().setDateValue(date).build())
+        .build()
+
+    val client = newClient()
+    client.writeBlob("rt.parquet", flowOf(row.toByteString()))
+    val blob = client.getBlob("rt.parquet")!!
+
+    // read() round-trips the ParquetRow proto.
+    val readBack = blob.read().toList().map { ParquetRow.parseFrom(it) }
+    assertThat(readBack).containsExactly(row)
+
+    // readRows() projects the same row into native types.
+    val native = blob.readRows().toList().single()
+    assertThat(native["i32"]).isEqualTo(7)
+    assertThat(native["i64"]).isEqualTo(8L)
+    assertThat(native["f32"]).isEqualTo(1.5f)
+    assertThat(native["f64"]).isEqualTo(2.5)
+    assertThat(native["flag"]).isEqualTo(true)
+    assertThat(native["s"]).isEqualTo("hi")
+    assertThat(native["b"]).isEqualTo(ByteString.copyFrom(byteArrayOf(0x01, 0x02, 0x03)))
+    assertThat(native["t"]).isEqualTo(Instant.ofEpochSecond(1_700_000_000L, 123_456_000L))
+    assertThat(native["d"]).isEqualTo(LocalDate.of(2026, 6, 10))
+  }
+
+  @Test
+  fun `writeBlob with empty flow writes a readable zero-row blob`(): Unit = runBlocking {
+    val client = newClient()
+    client.writeBlob("empty-rt.parquet", emptyFlow())
+
+    val blob = client.getBlob("empty-rt.parquet")!!
+    assertThat(blob.read().toList()).isEmpty()
+    assertThat(blob.readRows().toList()).isEmpty()
+  }
+
+  @Test
+  fun `writeBlob then read round-trips multiple rows including a NULL value`(): Unit = runBlocking {
+    // First row fully populated (schema is derived from it); second row omits
+    // the optional column, which round-trips as a KIND_NOT_SET value.
+    val row1 =
+      ParquetRow.newBuilder()
+        .putColumns("id", ParquetValue.newBuilder().setInt64Value(1L).build())
+        .putColumns("name", ParquetValue.newBuilder().setStringValue("alice").build())
+        .build()
+    val row2 =
+      ParquetRow.newBuilder()
+        .putColumns("id", ParquetValue.newBuilder().setInt64Value(2L).build())
+        .putColumns("name", ParquetValue.getDefaultInstance()) // explicit NULL
+        .build()
+
+    val client = newClient()
+    client.writeBlob("rows.parquet", flowOf(row1.toByteString(), row2.toByteString()))
+
+    val readBack = client.getBlob("rows.parquet")!!.read().toList().map { ParquetRow.parseFrom(it) }
+    assertThat(readBack).containsExactly(row1, row2).inOrder()
+  }
+
+  @Test
+  fun `writeBlob rejects a later row with a column absent from the first row`(): Unit = runBlocking {
+    val row1 =
+      ParquetRow.newBuilder()
+        .putColumns("id", ParquetValue.newBuilder().setInt64Value(1L).build())
+        .build()
+    val row2 =
+      ParquetRow.newBuilder()
+        .putColumns("id", ParquetValue.newBuilder().setInt64Value(2L).build())
+        .putColumns("extra", ParquetValue.newBuilder().setStringValue("x").build())
+        .build()
+
+    val ex =
+      assertFailsWith<IllegalArgumentException> {
+        newClient().writeBlob("rows.parquet", flowOf(row1.toByteString(), row2.toByteString()))
+      }
+    assertThat(ex.message).contains("extra")
+  }
+
+  @Test
+  fun `writeBlob rejects a later row whose column kind differs from the first`(): Unit =
+    runBlocking {
+      val row1 =
+        ParquetRow.newBuilder()
+          .putColumns("v", ParquetValue.newBuilder().setInt64Value(1L).build())
+          .build()
+      val row2 =
+        ParquetRow.newBuilder()
+          .putColumns("v", ParquetValue.newBuilder().setStringValue("two").build())
+          .build()
+
+      val ex =
+        assertFailsWith<IllegalArgumentException> {
+          newClient().writeBlob("rows.parquet", flowOf(row1.toByteString(), row2.toByteString()))
+        }
+      assertThat(ex.message).contains("v")
+    }
+
+  @Test
+  fun `writeBlob failure deletes the partial blob`(): Unit = runBlocking {
+    val client = newClient()
+    // Row 1 is valid (creates the output file); row 2 fails validation, which
+    // must trigger cleanup so no half-written blob is left behind.
+    val row1 =
+      ParquetRow.newBuilder()
+        .putColumns("id", ParquetValue.newBuilder().setInt64Value(1L).build())
+        .build()
+    val row2 =
+      ParquetRow.newBuilder()
+        .putColumns("id", ParquetValue.newBuilder().setInt64Value(2L).build())
+        .putColumns("extra", ParquetValue.newBuilder().setStringValue("x").build())
+        .build()
+
+    assertFailsWith<IllegalArgumentException> {
+      client.writeBlob("partial.parquet", flowOf(row1.toByteString(), row2.toByteString()))
+    }
+
+    assertThat(client.getBlob("partial.parquet")).isNull()
+  }
+
+  // ===== Primitive-type coverage (reads) =====
 
   @Test
   fun `readRows decodes every supported primitive type`(): Unit = runBlocking {
@@ -119,6 +328,8 @@ class ParquetStorageClientTest {
           required binary enm (ENUM);
           required binary raw;
           required fixed_len_byte_array(4) fixed4;
+          required int32 d (DATE);
+          required int64 t (TIMESTAMP(MILLIS, true));
         }
         """
           .trimIndent()
@@ -134,43 +345,35 @@ class ParquetStorageClientTest {
         add("enm", "RED")
         add("raw", Binary.fromConstantByteArray(byteArrayOf(0x01, 0x02, 0x03)))
         add("fixed4", Binary.fromConstantByteArray(byteArrayOf(0x0A, 0x0B, 0x0C, 0x0D)))
+        add("d", LocalDate.of(2026, 6, 10).toEpochDay().toInt())
+        add("t", 1_700_000_000_123L)
       }
-    val blobs = InMemoryStorageClient()
-    blobs.writeBlob(
-      "p.parquet",
-      flowOf(ByteString.copyFrom(writeParquet(schema, listOf(row), null, emptyMap(), null))),
-    )
+    val key = writeParquetBlob("p.parquet", schema, listOf(row), null, emptyMap(), null)
 
-    ParquetStorageClient(blobs).getBlob("p.parquet")!!.use { blob ->
-      val map = blob.readRows().toList().single()
-      assertThat(map["i32"]).isEqualTo(42)
-      assertThat(map["i64"]).isEqualTo(1234567890123L)
-      assertThat(map["f32"]).isEqualTo(1.5f)
-      assertThat(map["f64"]).isEqualTo(2.5)
-      assertThat(map["flag"]).isEqualTo(true)
-      assertThat(map["str"]).isEqualTo("hello")
-      // ENUM-annotated BINARY must decode to String (typed `is`-check
-      // covers EnumLogicalTypeAnnotation, not just startsWith("STRING")).
-      assertThat(map["enm"]).isEqualTo("RED")
-      assertThat(map["raw"]).isEqualTo(ByteString.copyFrom(byteArrayOf(0x01, 0x02, 0x03)))
-      assertThat(map["fixed4"])
-        .isEqualTo(ByteString.copyFrom(byteArrayOf(0x0A, 0x0B, 0x0C, 0x0D)))
-    }
+    val map = newClient().getBlob(key)!!.readRows().toList().single()
+    assertThat(map["i32"]).isEqualTo(42)
+    assertThat(map["i64"]).isEqualTo(1234567890123L)
+    assertThat(map["f32"]).isEqualTo(1.5f)
+    assertThat(map["f64"]).isEqualTo(2.5)
+    assertThat(map["flag"]).isEqualTo(true)
+    assertThat(map["str"]).isEqualTo("hello")
+    // ENUM-annotated BINARY must decode to String.
+    assertThat(map["enm"]).isEqualTo("RED")
+    assertThat(map["raw"]).isEqualTo(ByteString.copyFrom(byteArrayOf(0x01, 0x02, 0x03)))
+    assertThat(map["fixed4"]).isEqualTo(ByteString.copyFrom(byteArrayOf(0x0A, 0x0B, 0x0C, 0x0D)))
+    // DATE-annotated INT32 -> LocalDate; TIMESTAMP-annotated INT64 -> Instant.
+    assertThat(map["d"]).isEqualTo(LocalDate.of(2026, 6, 10))
+    assertThat(map["t"]).isEqualTo(Instant.ofEpochMilli(1_700_000_000_123L))
   }
 
   @Test
   fun `JSON-annotated BINARY decodes to String`(): Unit = runBlocking {
     val schema = MessageTypeParser.parseMessageType("""message Row { required binary j (JSON); }""")
     val row = groupOf(schema) { add("j", """{"k":1}""") }
-    val blobs = InMemoryStorageClient()
-    blobs.writeBlob(
-      "json.parquet",
-      flowOf(ByteString.copyFrom(writeParquet(schema, listOf(row), null, emptyMap(), null))),
-    )
+    val key = writeParquetBlob("json.parquet", schema, listOf(row), null, emptyMap(), null)
 
-    ParquetStorageClient(blobs).getBlob("json.parquet")!!.use { blob ->
-      assertThat(blob.readRows().toList().single()["j"]).isEqualTo("""{"k":1}""")
-    }
+    assertThat(newClient().getBlob(key)!!.readRows().toList().single()["j"])
+      .isEqualTo("""{"k":1}""")
   }
 
   @Test
@@ -178,16 +381,11 @@ class ParquetStorageClientTest {
     val schema = MessageTypeParser.parseMessageType("""message Row { required binary b (BSON); }""")
     val raw = byteArrayOf(0x11, 0x22, 0x33)
     val row = groupOf(schema) { add("b", Binary.fromConstantByteArray(raw)) }
-    val blobs = InMemoryStorageClient()
-    blobs.writeBlob(
-      "bson.parquet",
-      flowOf(ByteString.copyFrom(writeParquet(schema, listOf(row), null, emptyMap(), null))),
-    )
+    val key = writeParquetBlob("bson.parquet", schema, listOf(row), null, emptyMap(), null)
 
-    ParquetStorageClient(blobs).getBlob("bson.parquet")!!.use { blob ->
-      // BSON is bytes-encoded (not UTF-8 text) -> kept as ByteString.
-      assertThat(blob.readRows().toList().single()["b"]).isEqualTo(ByteString.copyFrom(raw))
-    }
+    // BSON is bytes-encoded (not UTF-8 text) -> kept as ByteString.
+    assertThat(newClient().getBlob(key)!!.readRows().toList().single()["b"])
+      .isEqualTo(ByteString.copyFrom(raw))
   }
 
   @Test
@@ -202,30 +400,29 @@ class ParquetStorageClientTest {
         add("id", 2L)
         add("maybe", "present")
       }
-    val blobs = InMemoryStorageClient()
-    blobs.writeBlob(
-      "opt.parquet",
-      flowOf(
-        ByteString.copyFrom(
-          writeParquet(schema, listOf(rowWithoutMaybe, rowWithMaybe), null, emptyMap(), null)
-        )
-      ),
-    )
+    val key =
+      writeParquetBlob(
+        "opt.parquet",
+        schema,
+        listOf(rowWithoutMaybe, rowWithMaybe),
+        null,
+        emptyMap(),
+        null,
+      )
 
-    ParquetStorageClient(blobs).getBlob("opt.parquet")!!.use { blob ->
-      val rows = blob.readRows().toList()
-      assertThat(rows[0]).containsExactly("id", 1L, "maybe", null)
-      assertThat(rows[1]).containsExactly("id", 2L, "maybe", "present")
-    }
+    val rows = newClient().getBlob(key)!!.readRows().toList()
+    assertThat(rows[0]).containsExactly("id", 1L, "maybe", null)
+    assertThat(rows[1]).containsExactly("id", 2L, "maybe", "present")
   }
 
   @Test
   fun `multi-row-group file reads all rows in order`(): Unit = runBlocking {
-    // Force multiple row groups by setting a tiny row-group size so each
-    // few rows trigger a new group. Reading across row groups exercises
-    // parquet's seek-back path against the temp file.
+    // Tiny row-group size forces multiple row groups; reading across them
+    // exercises parquet's seek-back path against the backend stream.
     val schema =
-      MessageTypeParser.parseMessageType("""message Row { required int64 n; required binary s (STRING); }""")
+      MessageTypeParser.parseMessageType(
+        """message Row { required int64 n; required binary s (STRING); }"""
+      )
     val rows =
       (0 until 200).map { i ->
         groupOf(schema) {
@@ -233,137 +430,109 @@ class ParquetStorageClientTest {
           add("s", "row-$i")
         }
       }
-    val blobs = InMemoryStorageClient()
-    blobs.writeBlob(
-      "rg.parquet",
-      flowOf(
-        ByteString.copyFrom(writeParquet(schema, rows, null, emptyMap(), rowGroupSize = 1024L))
-      ),
-    )
+    val key = writeParquetBlob("rg.parquet", schema, rows, null, emptyMap(), rowGroupSize = 1024L)
 
-    ParquetStorageClient(blobs).getBlob("rg.parquet")!!.use { blob ->
-      val outRows = blob.readRows().toList()
-      assertThat(outRows).hasSize(200)
-      assertThat(outRows.first()).containsExactly("n", 0L, "s", "row-0")
-      assertThat(outRows.last()).containsExactly("n", 199L, "s", "row-199")
-    }
+    val outRows = newClient().getBlob(key)!!.readRows().toList()
+    assertThat(outRows).hasSize(200)
+    assertThat(outRows.first()).containsExactly("n", 0L, "s", "row-0")
+    assertThat(outRows.last()).containsExactly("n", 199L, "s", "row-199")
   }
 
-  // ===== PME paths =====
+  // ===== PME paths (declarative ParquetDecryptionConfig) =====
 
   @Test
-  fun `readRows on PME blob with correct footer key returns rows`(): Unit = runBlocking {
+  fun `readRows on PME blob decrypts via ParquetDecryptionConfig`(): Unit = runBlocking {
     val footerKey = randomAesKey(32)
-    val blobs = InMemoryStorageClient()
-    blobs.writeBlob("pme.parquet", flowOf(ByteString.copyFrom(pmeSampleBytes(footerKey, emptyMap()))))
+    val (config, metadata) = kmsConfigFor(footerKey)
+    val key = pmeSample("pme.parquet", footerKey, metadata)
 
-    val client =
-      ParquetStorageClient(blobs) {
-        FileDecryptionProperties.builder().withFooterKey(footerKey).build()
-      }
+    val rows = newClient(config).getBlob(key)!!.readRows().toList()
+    assertThat(rows).hasSize(3)
+    assertThat(rows[0]["id"]).isEqualTo(1L)
+    assertThat(rows[2]["name"]).isEqualTo("carol")
+  }
 
-    client.getBlob("pme.parquet")!!.use { blob ->
-      val rows = blob.readRows().toList()
+  @Test
+  fun `readRows on PME blob written with AES_GCM_CTR_V1 cipher decrypts correctly`(): Unit =
+    runBlocking {
+      // PME supports AES_GCM_V1 (default) and AES_GCM_CTR_V1 (CTR for data
+      // pages, GCM for metadata). The cipher is recorded in the file and
+      // parquet-mr selects it transparently on read.
+      val footerKey = randomAesKey(32)
+      val (config, metadata) = kmsConfigFor(footerKey)
+      val encryption =
+        FileEncryptionProperties.builder(footerKey)
+          .withPlaintextFooter()
+          .withAlgorithm(ParquetCipher.AES_GCM_CTR_V1)
+          .build()
+      val key =
+        writeParquetBlob(
+          "pme-ctr.parquet",
+          SAMPLE_SCHEMA,
+          sampleRows(SAMPLE_SCHEMA),
+          encryption,
+          metadata,
+          null,
+        )
+
+      val rows = newClient(config).getBlob(key)!!.readRows().toList()
       assertThat(rows).hasSize(3)
       assertThat(rows[0]["id"]).isEqualTo(1L)
       assertThat(rows[2]["name"]).isEqualTo("carol")
     }
+
+  @Test
+  fun `readKeyValueMetadata on PME blob works without decryption config`(): Unit = runBlocking {
+    val footerKey = randomAesKey(32)
+    val key = pmeSample("pme.parquet", footerKey, mapOf("dek" to "blob"))
+
+    assertThat(newClient().getBlob(key)!!.readKeyValueMetadata()).containsAtLeast("dek", "blob")
   }
 
   @Test
-  fun `readKeyValueMetadata on PME blob works without decryption provider`(): Unit = runBlocking {
+  fun `readRows on PME blob without decryption config fails`(): Unit = runBlocking {
     val footerKey = randomAesKey(32)
-    val blobs = InMemoryStorageClient()
-    blobs.writeBlob(
-      "pme.parquet",
-      flowOf(ByteString.copyFrom(pmeSampleBytes(footerKey, mapOf("dek" to "blob")))),
-    )
+    val key = pmeSample("pme.parquet", footerKey, emptyMap())
 
-    ParquetStorageClient(blobs).getBlob("pme.parquet")!!.use { blob ->
-      assertThat(blob.readKeyValueMetadata()).containsAtLeast("dek", "blob")
-    }
-  }
-
-  @Test
-  fun `readRows on PME blob without decryption provider fails`(): Unit = runBlocking {
-    val footerKey = randomAesKey(32)
-    val blobs = InMemoryStorageClient()
-    blobs.writeBlob("pme.parquet", flowOf(ByteString.copyFrom(pmeSampleBytes(footerKey, emptyMap()))))
-
-    val ex =
-      assertFailsWith<Throwable> {
-        ParquetStorageClient(blobs).getBlob("pme.parquet")!!.use { blob -> blob.readRows().toList() }
-      }
+    val ex = assertFailsWith<Throwable> { newClient().getBlob(key)!!.readRows().toList() }
     assertThat(ex.toString()).ignoringCase().contains("encrypt")
   }
 
   @Test
-  fun `decryption provider returning null on PME blob fails readRows`(): Unit = runBlocking {
+  fun `ParquetDecryptionConfig with missing metadata key fails clearly`(): Unit = runBlocking {
     val footerKey = randomAesKey(32)
-    val blobs = InMemoryStorageClient()
-    blobs.writeBlob("pme.parquet", flowOf(ByteString.copyFrom(pmeSampleBytes(footerKey, emptyMap()))))
+    // Footer has no edpa.kek_uri / edpa.encrypted_dek entries.
+    val key = pmeSample("pme.parquet", footerKey, emptyMap())
 
-    // null from provider means "treat as plaintext" — for an encrypted
-    // blob, parquet-mr surfaces a crypto error at read time.
-    val client = ParquetStorageClient(blobs) { null }
-    val ex =
-      assertFailsWith<Throwable> {
-        client.getBlob("pme.parquet")!!.use { blob -> blob.readRows().toList() }
-      }
-    assertThat(ex.toString()).ignoringCase().contains("encrypt")
+    val client = newClient(ParquetDecryptionConfig(FakeKmsClient()))
+
+    val ex = assertFailsWith<IllegalStateException> { client.getBlob(key)!!.readRows().toList() }
+    assertThat(ex.message).contains("edpa.kek_uri")
   }
 
   @Test
-  fun `decryption provider exception is propagated`(): Unit = runBlocking {
+  fun `writeBlob with encryption provider produces an encrypted blob`(): Unit = runBlocking {
+    // Write-side PME: encrypt columns under a footer key (plaintext footer).
+    // The file's footer stays readable, but a plaintext client cannot read the
+    // (encrypted) rows — proving encryption was applied on write.
     val footerKey = randomAesKey(32)
-    val blobs = InMemoryStorageClient()
-    blobs.writeBlob("pme.parquet", flowOf(ByteString.copyFrom(pmeSampleBytes(footerKey, emptyMap()))))
-
-    val client = ParquetStorageClient(blobs) { error("kms unreachable") }
-    val ex =
-      assertFailsWith<IllegalStateException> {
-        client.getBlob("pme.parquet")!!.use { blob -> blob.readRows().toList() }
-      }
-    assertThat(ex.message).contains("kms unreachable")
-  }
-
-  @Test
-  fun `KMS-driven decryption provider round-trip`(): Unit = runBlocking {
-    AeadConfig.register()
-    val kekUri = "fake-kms://kek1"
-    val kekHandle = KeysetHandle.generateNew(KeyTemplates.get("AES256_GCM"))
-    val kekAead: Aead = kekHandle.getPrimitive(Aead::class.java)
-    val kmsClient = FakeKmsClient().also { it.setAead(kekUri, kekAead) }
-
-    val footerKey = randomAesKey(32)
-    val encryptedDek: ByteArray = kekAead.encrypt(footerKey, ByteArray(0))
-    val metadata =
-      mapOf(
-        "edpa.kek_uri" to kekUri,
-        "edpa.encrypted_dek" to Base64.getEncoder().encodeToString(encryptedDek),
-      )
-
-    val blobs = InMemoryStorageClient()
-    blobs.writeBlob("pme.parquet", flowOf(ByteString.copyFrom(pmeSampleBytes(footerKey, metadata))))
-
     val client =
-      ParquetStorageClient(blobs) { blob ->
-        // Provider re-entry pattern: allowed to call readKeyValueMetadata
-        // on the same blob (different mutex). MUST NOT call readRows.
-        val md = blob.readKeyValueMetadata()
-        val kek = md.getValue("edpa.kek_uri")
-        val ciphertext = Base64.getDecoder().decode(md.getValue("edpa.encrypted_dek"))
-        val raw = kmsClient.getAead(kek).decrypt(ciphertext, ByteArray(0))
-        FileDecryptionProperties.builder().withFooterKey(raw).build()
-      }
+      newClient(
+        encryption = {
+          FileEncryptionProperties.builder(footerKey).withPlaintextFooter().build()
+        }
+      )
+    val row =
+      ParquetRow.newBuilder()
+        .putColumns("id", ParquetValue.newBuilder().setInt64Value(7L).build())
+        .putColumns("name", ParquetValue.newBuilder().setStringValue("zoe").build())
+        .build()
+    client.writeBlob("enc.parquet", flowOf(row.toByteString()))
 
-    client.getBlob("pme.parquet")!!.use { blob ->
-      val rows = blob.readRows().toList()
-      assertThat(rows).hasSize(3)
-      assertThat(rows[1]["name"]).isEqualTo("bob")
-      // Caller can re-read the footer; same temp file is reused.
-      assertThat(blob.readKeyValueMetadata()).containsAtLeast("edpa.kek_uri", kekUri)
-    }
+    // Footer remains readable without keys (plaintext footer)...
+    assertThat(newClient().getBlob("enc.parquet")!!.readKeyValueMetadata()).isNotNull()
+    // ...but the encrypted rows are unreadable without decryption.
+    assertFailsWith<Throwable> { newClient().getBlob("enc.parquet")!!.readRows().toList() }
   }
 
   // ===== Schema-shape rejections =====
@@ -380,16 +549,10 @@ class ParquetStorageClientTest {
         add("tags", 10L)
         add("tags", 20L)
       }
-    val blobs = InMemoryStorageClient()
-    blobs.writeBlob(
-      "rep.parquet",
-      flowOf(ByteString.copyFrom(writeParquet(schema, listOf(row), null, emptyMap(), null))),
-    )
+    val key = writeParquetBlob("rep.parquet", schema, listOf(row), null, emptyMap(), null)
 
     val ex =
-      assertFailsWith<IllegalStateException> {
-        ParquetStorageClient(blobs).getBlob("rep.parquet")!!.use { it.readRows().toList() }
-      }
+      assertFailsWith<IllegalStateException> { newClient().getBlob(key)!!.readRows().toList() }
     assertThat(ex.message).contains("Repeated field 'tags'")
   }
 
@@ -410,113 +573,11 @@ class ParquetStorageClientTest {
         add("id", 1L)
         addGroup("nested").add("inner_id", 99L)
       }
-    val blobs = InMemoryStorageClient()
-    blobs.writeBlob(
-      "nest.parquet",
-      flowOf(ByteString.copyFrom(writeParquet(schema, listOf(row), null, emptyMap(), null))),
-    )
+    val key = writeParquetBlob("nest.parquet", schema, listOf(row), null, emptyMap(), null)
 
     val ex =
-      assertFailsWith<IllegalStateException> {
-        ParquetStorageClient(blobs).getBlob("nest.parquet")!!.use { it.readRows().toList() }
-      }
+      assertFailsWith<IllegalStateException> { newClient().getBlob(key)!!.readRows().toList() }
     assertThat(ex.message).contains("Nested message field 'nested'")
-  }
-
-  // ===== Lifecycle =====
-
-  @Test
-  fun `multiple reads on the same blob share one underlying download`(): Unit = runBlocking {
-    val blobs = InMemoryStorageClient()
-    blobs.writeBlob(
-      "data.parquet",
-      flowOf(ByteString.copyFrom(plaintextSampleBytes(metadata = mapOf("foo" to "bar")))),
-    )
-    val counting = ReadCountingStorageClient(blobs)
-
-    ParquetStorageClient(counting).getBlob("data.parquet")!!.use { blob ->
-      blob.readRows().toList()
-      blob.readKeyValueMetadata()
-      blob.readRows().toList()
-    }
-    assertThat(counting.readCount.get()).isEqualTo(1)
-  }
-
-  @Test
-  fun `two getBlob calls for the same key download twice`(): Unit = runBlocking {
-    // Locks in the documented "fresh ParquetBlob per getBlob call"
-    // behavior — getBlob does NOT share temp files across calls.
-    val blobs = InMemoryStorageClient()
-    blobs.writeBlob("data.parquet", flowOf(ByteString.copyFrom(plaintextSampleBytes())))
-    val counting = ReadCountingStorageClient(blobs)
-    val client = ParquetStorageClient(counting)
-
-    client.getBlob("data.parquet")!!.use { it.readRows().toList() }
-    client.getBlob("data.parquet")!!.use { it.readRows().toList() }
-    assertThat(counting.readCount.get()).isEqualTo(2)
-  }
-
-  @Test
-  fun `two ParquetBlobs from one client are independent`(): Unit = runBlocking {
-    val blobs = InMemoryStorageClient()
-    blobs.writeBlob(
-      "a.parquet",
-      flowOf(ByteString.copyFrom(plaintextSampleBytes(metadata = mapOf("which" to "a")))),
-    )
-    blobs.writeBlob(
-      "b.parquet",
-      flowOf(ByteString.copyFrom(plaintextSampleBytes(metadata = mapOf("which" to "b")))),
-    )
-    val client = ParquetStorageClient(blobs)
-
-    val a = client.getBlob("a.parquet")!!
-    val b = client.getBlob("b.parquet")!!
-    try {
-      assertThat(a.readKeyValueMetadata()).containsAtLeast("which", "a")
-      assertThat(b.readKeyValueMetadata()).containsAtLeast("which", "b")
-      // Closing one must not affect the other.
-      a.close()
-      assertFailsWith<IllegalStateException> { a.readRows().toList() }
-      assertThat(b.readRows().toList()).hasSize(3)
-    } finally {
-      a.close()
-      b.close()
-    }
-  }
-
-  @Test
-  fun `readRows after close throws`(): Unit = runBlocking {
-    val blobs = InMemoryStorageClient()
-    blobs.writeBlob("data.parquet", flowOf(ByteString.copyFrom(plaintextSampleBytes())))
-
-    val blob = ParquetStorageClient(blobs).getBlob("data.parquet")!!
-    blob.readRows().toList()
-    blob.close()
-    val ex = assertFailsWith<IllegalStateException> { blob.readRows().toList() }
-    assertThat(ex.message).contains("closed")
-  }
-
-  @Test
-  fun `readKeyValueMetadata after close throws`(): Unit = runBlocking {
-    val blobs = InMemoryStorageClient()
-    blobs.writeBlob("data.parquet", flowOf(ByteString.copyFrom(plaintextSampleBytes())))
-
-    val blob = ParquetStorageClient(blobs).getBlob("data.parquet")!!
-    blob.readKeyValueMetadata()
-    blob.close()
-    val ex = assertFailsWith<IllegalStateException> { blob.readKeyValueMetadata() }
-    assertThat(ex.message).contains("closed")
-  }
-
-  @Test
-  fun `double close is idempotent`(): Unit = runBlocking {
-    val blobs = InMemoryStorageClient()
-    blobs.writeBlob("data.parquet", flowOf(ByteString.copyFrom(plaintextSampleBytes())))
-
-    val blob = ParquetStorageClient(blobs).getBlob("data.parquet")!!
-    blob.readRows().toList()
-    blob.close()
-    blob.close() // must not throw
   }
 
   // ===== ENCRYPTED_FOOTER rejection =====
@@ -525,54 +586,21 @@ class ParquetStorageClientTest {
   fun `readKeyValueMetadata rejects ENCRYPTED_FOOTER mode with a clear error`(): Unit =
     runBlocking {
       val footerKey = randomAesKey(32)
-      val encryption =
-        FileEncryptionProperties.builder(footerKey).build() // default = ENCRYPTED_FOOTER
+      val encryption = FileEncryptionProperties.builder(footerKey).build() // default ENCRYPTED_FOOTER
       val schema = MessageTypeParser.parseMessageType("""message Row { required int64 id; }""")
       val row = groupOf(schema) { add("id", 1L) }
-      val blobs = InMemoryStorageClient()
-      blobs.writeBlob(
-        "pme-enc-footer.parquet",
-        flowOf(ByteString.copyFrom(writeParquet(schema, listOf(row), encryption, emptyMap(), null))),
-      )
+      val key =
+        writeParquetBlob("pme-enc-footer.parquet", schema, listOf(row), encryption, emptyMap(), null)
 
       val ex =
         assertFailsWith<IllegalStateException> {
-          ParquetStorageClient(blobs).getBlob("pme-enc-footer.parquet")!!.use { blob ->
-            blob.readKeyValueMetadata()
-          }
+          newClient().getBlob(key)!!.readKeyValueMetadata()
         }
       assertThat(ex.message).contains("ENCRYPTED_FOOTER")
       assertThat(ex.message).contains("PLAINTEXT_FOOTER")
     }
 
   // ===== Helpers =====
-
-  /**
-   * Test-only [StorageClient] wrapper that counts how many times any of
-   * its blobs' `read()` flows are subscribed to. Used to verify
-   * download-frequency behavior (cache hit per ParquetBlob, no cache
-   * across getBlob calls).
-   */
-  private class ReadCountingStorageClient(private val delegate: StorageClient) : StorageClient {
-    val readCount: AtomicInteger = AtomicInteger(0)
-
-    override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>) =
-      delegate.writeBlob(blobKey, content)
-
-    override suspend fun getBlob(blobKey: String): StorageClient.Blob? {
-      val raw = delegate.getBlob(blobKey) ?: return null
-      return CountingBlob(raw)
-    }
-
-    override suspend fun listBlobs(prefix: String?) = delegate.listBlobs(prefix)
-
-    private inner class CountingBlob(private val raw: StorageClient.Blob) : StorageClient.Blob by raw {
-      override fun read(): Flow<ByteString> {
-        readCount.incrementAndGet()
-        return raw.read()
-      }
-    }
-  }
 
   private val BYTES_AB = ByteString.copyFrom(byteArrayOf(0xAB.toByte()))
   private val BYTES_CD = ByteString.copyFrom(byteArrayOf(0xCD.toByte()))
@@ -609,37 +637,33 @@ class ParquetStorageClientTest {
       },
     )
 
-  private fun plaintextSampleBytes(metadata: Map<String, String> = emptyMap()): ByteArray =
-    writeParquet(SAMPLE_SCHEMA, sampleRows(SAMPLE_SCHEMA), null, metadata, null)
+  private fun plaintextSample(name: String, metadata: Map<String, String> = emptyMap()): String =
+    writeParquetBlob(name, SAMPLE_SCHEMA, sampleRows(SAMPLE_SCHEMA), null, metadata, null)
 
-  private fun pmeSampleBytes(footerKey: ByteArray, metadata: Map<String, String>): ByteArray {
+  private fun pmeSample(name: String, footerKey: ByteArray, metadata: Map<String, String>): String {
     val props = FileEncryptionProperties.builder(footerKey).withPlaintextFooter().build()
-    return writeParquet(SAMPLE_SCHEMA, sampleRows(SAMPLE_SCHEMA), props, metadata, null)
+    return writeParquetBlob(name, SAMPLE_SCHEMA, sampleRows(SAMPLE_SCHEMA), props, metadata, null)
   }
 
-  private fun writeParquet(
+  /** Writes a parquet file directly into [tempDir] and returns its blob key. */
+  private fun writeParquetBlob(
+    name: String,
     schema: MessageType,
     rows: List<Group>,
     encryption: FileEncryptionProperties?,
     metadata: Map<String, String>,
     rowGroupSize: Long?,
-  ): ByteArray {
-    val path: Path = Files.createTempFile("pst-writer-", ".parquet")
-    // LocalOutputFile refuses to overwrite, so delete the empty file first.
-    Files.deleteIfExists(path)
-    try {
-      val builder =
-        ExampleParquetWriter.builder(LocalOutputFile(path))
-          .withType(schema)
-          .withCompressionCodec(CompressionCodecName.UNCOMPRESSED)
-          .withExtraMetaData(metadata)
-      if (encryption != null) builder.withEncryption(encryption)
-      if (rowGroupSize != null) builder.withRowGroupSize(rowGroupSize)
-      builder.build().use { writer -> rows.forEach { writer.write(it) } }
-      return Files.readAllBytes(path)
-    } finally {
-      Files.deleteIfExists(path)
-    }
+  ): String {
+    val file = File(tempDir.root, name)
+    val builder =
+      ExampleParquetWriter.builder(LocalOutputFile(file.toPath()))
+        .withType(schema)
+        .withCompressionCodec(CompressionCodecName.UNCOMPRESSED)
+        .withExtraMetaData(metadata)
+    if (encryption != null) builder.withEncryption(encryption)
+    if (rowGroupSize != null) builder.withRowGroupSize(rowGroupSize)
+    builder.build().use { writer -> rows.forEach { writer.write(it) } }
+    return name
   }
 
   private fun groupOf(schema: MessageType, block: Group.() -> Unit): Group {
