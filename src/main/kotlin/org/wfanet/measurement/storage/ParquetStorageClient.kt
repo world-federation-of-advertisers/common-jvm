@@ -16,7 +16,6 @@
 
 package org.wfanet.measurement.storage
 
-import com.google.crypto.tink.KmsClient
 import com.google.protobuf.ByteString
 import com.google.protobuf.Timestamp
 import com.google.type.Date
@@ -28,9 +27,11 @@ import java.nio.ByteOrder
 import java.time.Instant
 import java.time.LocalDate
 import java.util.Base64
+import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
+import java.util.logging.Logger
 import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.channels.trySendBlocking
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.flow
@@ -40,8 +41,6 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.FileStatus
 import org.apache.hadoop.fs.FileSystem
 import org.apache.hadoop.fs.Path
-import org.apache.parquet.crypto.FileDecryptionProperties
-import org.apache.parquet.crypto.FileEncryptionProperties
 import org.apache.parquet.example.data.Group
 import org.apache.parquet.example.data.simple.SimpleGroupFactory
 import org.apache.parquet.format.Util
@@ -67,24 +66,116 @@ import org.apache.parquet.schema.Types
 import org.jetbrains.annotations.BlockingExecutor
 
 /**
- * Declarative PME read-decryption config for the standard envelope-encryption
- * convention: the parquet footer key-value metadata carries a KEK URI and a
- * base64-encoded, KMS-wrapped DEK. The client reads the footer, unwraps the
- * DEK via [kmsClient], and uses it as the parquet footer key — no caller code.
+ * Declarative PME config for parquet-mr's native key-tools encryption.
  *
- * Single-DEK only (one footer key for the whole file), matching the EDP
- * convention. Per-column keys are not supported.
+ * Wires parquet-mr's `PropertiesDrivenCryptoFactory` to a WFA Tink KMS client so
+ * parquet handles DEK generation, wrapping/unwrapping, per-column keys, key
+ * caching, and the standard `KeyMaterial` on-disk metadata natively — we only
+ * bridge Tink to parquet's KMS interface (see [ParquetKmsClientBridge]).
  *
- * @param kmsClient KMS client used to unwrap the DEK via `getAead(kekUri)`.
- * @param kekUriMetadataKey footer metadata key holding the KEK URI.
- * @param encryptedDekMetadataKey footer metadata key holding the base64-encoded
- *   KMS-wrapped DEK.
+ * The encryption keys themselves are set on the Hadoop `Configuration`:
+ *  - `parquet.encryption.footer.key`  = footer KEK URI/name
+ *  - `parquet.encryption.column.keys` = `"kekA:col1,col2;kekB:col3"` (optional)
+ *  - `parquet.encryption.plaintext.footer` = `true` to keep the footer (and
+ *    [ParquetBlob.readKeyValueMetadata]) readable without keys.
+ *
+ * @param kmsProvider returns a WFA Tink [com.google.crypto.tink.KmsClient]
+ *   (GCP/AWS/Fake). Invoked once per reader/writer and cached for its lifetime.
+ * @param keyMapping maps logical master-key names to full Tink URIs; only needed
+ *   when reading files written by external tools (Spark, etc.) that use short
+ *   key names instead of full URIs.
  */
-data class ParquetDecryptionConfig(
-  val kmsClient: KmsClient,
-  val kekUriMetadataKey: String = "edpa.kek_uri",
-  val encryptedDekMetadataKey: String = "edpa.encrypted_dek",
+data class ParquetEncryptionConfig(
+  val kmsProvider: () -> com.google.crypto.tink.KmsClient,
+  val keyMapping: Map<String, String> = emptyMap(),
 )
+
+/**
+ * Bridges WFA's Tink [com.google.crypto.tink.KmsClient] to parquet-mr's key-tools
+ * [org.apache.parquet.crypto.keytools.KmsClient].
+ *
+ * parquet-mr instantiates this reflectively (no-arg ctor) and calls [initialize]
+ * once per reader/writer; it then drives all DEK/KEK wrapping through [wrapKey] /
+ * [unwrapKey], which we forward to a Tink `Aead`. The [ParquetEncryptionConfig]
+ * for a given client is looked up via a per-instance registration keyed by a
+ * UUID stored in the [Configuration] — no global mutable singletons.
+ */
+class ParquetKmsClientBridge : org.apache.parquet.crypto.keytools.KmsClient {
+  private lateinit var kmsClient: com.google.crypto.tink.KmsClient
+  private lateinit var keyMapping: Map<String, String>
+
+  override fun initialize(
+    configuration: Configuration,
+    kmsInstanceID: String?,
+    kmsInstanceURL: String?,
+    accessToken: String?,
+  ) {
+    val id = configuration.get(PROVIDER_KEY)
+    val registration = registrations[id] ?: error("No KMS provider registered for id '$id'")
+    kmsClient = registration.kmsProvider()
+    keyMapping = registration.keyMapping
+  }
+
+  override fun wrapKey(keyBytes: ByteArray, masterKeyIdentifier: String): String {
+    val aead = kmsClient.getAead(resolveUri(masterKeyIdentifier))
+    return Base64.getEncoder().encodeToString(aead.encrypt(keyBytes, EMPTY_AAD))
+  }
+
+  override fun unwrapKey(wrappedKey: String, masterKeyIdentifier: String): ByteArray {
+    val aead = kmsClient.getAead(resolveUri(masterKeyIdentifier))
+    return aead.decrypt(Base64.getDecoder().decode(wrappedKey), EMPTY_AAD)
+  }
+
+  /** Full Tink URIs pass through; short logical names resolve via [keyMapping]. */
+  private fun resolveUri(masterKeyId: String): String {
+    val uri =
+      if (kmsClient.doesSupport(masterKeyId)) masterKeyId
+      else
+        keyMapping[masterKeyId]
+          ?: error(
+            "No KMS URI for key '$masterKeyId'. Add it to ParquetEncryptionConfig.keyMapping."
+          )
+    logger.fine { "Resolved master key id '$masterKeyId' to KMS URI '$uri'" }
+    return uri
+  }
+
+  companion object {
+    /** Conf key holding the per-instance registration UUID. */
+    const val PROVIDER_KEY = "wfa.parquet.kms.provider.id"
+
+    private val logger = Logger.getLogger(ParquetKmsClientBridge::class.java.name)
+
+    private val EMPTY_AAD = ByteArray(0)
+
+    private data class Registration(
+      val kmsProvider: () -> com.google.crypto.tink.KmsClient,
+      val keyMapping: Map<String, String>,
+    )
+
+    private val registrations = ConcurrentHashMap<String, Registration>()
+
+    /**
+     * Registers [config] against [conf] and points parquet-mr's crypto factory +
+     * KMS-client class at this bridge, so reads and writes through [conf] use it.
+     */
+    fun register(conf: Configuration, config: ParquetEncryptionConfig) {
+      val id = UUID.randomUUID().toString()
+      registrations[id] = Registration(config.kmsProvider, config.keyMapping)
+      conf.set(PROVIDER_KEY, id)
+      conf.set(
+        "parquet.crypto.factory.class",
+        "org.apache.parquet.crypto.keytools.PropertiesDrivenCryptoFactory",
+      )
+      conf.set("parquet.encryption.kms.client.class", ParquetKmsClientBridge::class.java.name)
+      // parquet-mr's KeyToolkit caches the KMS client per (kms.instance.id,
+      // access.token), both defaulting to "DEFAULT". Use the per-registration
+      // UUID as the instance id so each client gets its own bridge (initialized
+      // with its own conf) instead of colliding on the default cache key with
+      // other ParquetStorageClient instances in the same JVM.
+      conf.set("parquet.encryption.kms.instance.id", id)
+    }
+  }
+}
 
 /**
  * A [StorageClient] backed by a Hadoop [Configuration] that reads and writes
@@ -135,43 +226,47 @@ data class ParquetDecryptionConfig(
  * - [writeBlob] derives the parquet schema from the first [ParquetRow]; the
  *   first row MUST set every column (no `KIND_NOT_SET`/null values) so each
  *   column's type can be inferred. Subsequent rows may omit columns (NULL).
- * - [writeBlob] writes plaintext parquet unless [encryptionPropertiesProvider]
- *   is supplied. In production the EDP path writes encrypted files elsewhere,
- *   so write-side PME is mainly for symmetry / round-trip testing.
+ * - Encryption is configured on [conf] (not via a callback). When
+ *   [ParquetEncryptionConfig] is supplied, parquet-mr's native PME encrypts on
+ *   write and decrypts on read automatically; without it, reads/writes are
+ *   plaintext.
  *
  * ## Parquet Modular Encryption (PME)
  *
- * For PME-encrypted blobs following the standard envelope-encryption
- * convention (footer metadata carries a KEK URI + a KMS-wrapped DEK), supply
- * [decryptionConfig]: the client reads the footer, unwraps the DEK via the
- * configured KMS, and uses it as the footer key — no caller code. See
- * [ParquetDecryptionConfig]. `null` config = plaintext reads.
+ * Pass [encryptionConfig] to wire parquet-mr's native key-tools PME
+ * ([ParquetKmsClientBridge]) to a WFA Tink KMS client. The constructor registers
+ * the bridge on [conf]; thereafter the `ParquetReader`/`ParquetWriter` apply
+ * encryption/decryption from [conf] with no per-call code. Which keys to use are
+ * set on [conf] (`parquet.encryption.footer.key`, `parquet.encryption.column.keys`).
+ * `null` config = plaintext.
  *
- * `ENCRYPTED_FOOTER` blobs are not supported by [readKeyValueMetadata]
- * (rejected with a clear error). The bootstrap pattern this class is built
- * around requires `PLAINTEXT_FOOTER`; writers SHOULD use `PLAINTEXT_FOOTER`
- * mode.
+ * `ENCRYPTED_FOOTER` blobs are not supported by [readKeyValueMetadata] (rejected
+ * with a clear error) since it parses the footer directly; set
+ * `parquet.encryption.plaintext.footer = true` if that metadata must stay
+ * readable without keys. [readRows] works with either footer mode.
  *
- * @param conf Hadoop configuration selecting the storage backend.
+ * @param conf Hadoop configuration selecting the storage backend (and, when
+ *   [encryptionConfig] is set, carrying the PME key configuration).
  * @param rootPath base path; all blob keys are resolved relative to it.
  * @param parquetContext blocking context for parquet decode/encode + the
  *   backend FileSystem calls (default [Dispatchers.IO]).
- * @param decryptionConfig optional declarative PME read config for the
- *   standard KEK-URI + wrapped-DEK convention; `null` = plaintext reads.
- * @param encryptionPropertiesProvider optional per-blob-key PME write
- *   callback resolved once per [writeBlob]; return `null` (or omit) to write
- *   plaintext. Use `PLAINTEXT_FOOTER` mode if the file's footer key-value
- *   metadata must remain readable for the read-side bootstrap.
+ * @param encryptionConfig optional PME config bridging parquet-mr's key-tools to
+ *   a WFA Tink KMS client; `null` = plaintext reads/writes.
  */
 class ParquetStorageClient(
   private val conf: Configuration,
   rootPath: Path,
   private val parquetContext: @BlockingExecutor CoroutineContext = Dispatchers.IO,
-  private val decryptionConfig: ParquetDecryptionConfig? = null,
-  private val encryptionPropertiesProvider:
-    (suspend (String) -> FileEncryptionProperties?)? =
-    null,
+  encryptionConfig: ParquetEncryptionConfig? = null,
 ) : StorageClient {
+
+  init {
+    // Wire parquet-mr's native PME to the Tink KMS client. Once registered on
+    // `conf`, the ParquetReader/ParquetWriter pick up encryption automatically.
+    if (encryptionConfig != null) {
+      ParquetKmsClientBridge.register(conf, encryptionConfig)
+    }
+  }
 
   private val fileSystem: FileSystem = rootPath.getFileSystem(conf)
   private val qualifiedRoot: Path = fileSystem.makeQualified(rootPath)
@@ -186,9 +281,11 @@ class ParquetStorageClient(
      * Cold flow of rows. Each emission is one row, represented as a
      * `Map<column name, value>`. Supported primitive types:
      *
-     *  - `INT32`                       -> [Int]
+     *  - `INT32` (signed)              -> [Int]
+     *  - `INT32` + `UINT_8/16/32`      -> [UInt] (unsigned; avoids negative wrap)
      *  - `INT32` + `DATE`              -> [java.time.LocalDate]
-     *  - `INT64`                       -> [Long]
+     *  - `INT64` (signed)              -> [Long]
+     *  - `INT64` + `UINT_64`           -> [ULong] (unsigned; avoids negative wrap)
      *  - `INT64` + `TIMESTAMP_*`       -> [java.time.Instant]
      *  - `FLOAT`                       -> [Float]
      *  - `DOUBLE`                      -> [Double]
@@ -209,9 +306,8 @@ class ParquetStorageClient(
      * Parquet file's footer key-value metadata. Reads the plaintext footer
      * body directly from the thrift `FileMetaData` struct without involving
      * the high-level reader, so it works on both plaintext AND
-     * PME-with-`PLAINTEXT_FOOTER` blobs without any decryption setup — it is
-     * the same footer read the client uses internally to bootstrap
-     * [ParquetDecryptionConfig].
+     * PME-with-`PLAINTEXT_FOOTER` blobs without any decryption setup. Useful for
+     * non-crypto footer metadata; the DEK is handled natively by parquet-mr.
      *
      * Throws [IllegalStateException] if the file is a PME `ENCRYPTED_FOOTER`
      * blob (not supported).
@@ -229,7 +325,6 @@ class ParquetStorageClient(
    */
   override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
     val path = resolvePath(blobKey)
-    val encryption: FileEncryptionProperties? = encryptionPropertiesProvider?.invoke(blobKey)
     withContext(parquetContext) {
       val outputFile: OutputFile = HadoopOutputFile.fromPath(path, conf)
       var writer: ParquetWriter<Group>? = null
@@ -243,7 +338,8 @@ class ParquetStorageClient(
             schema = deriveSchema(row)
             expectedKinds = row.columnsMap.mapValues { it.value.kindCase }
             factory = SimpleGroupFactory(schema)
-            writer = newWriter(outputFile, schema!!, encryption)
+            writer = newWriter(outputFile, schema!!)
+            logger.fine { "Writing '$blobKey' with ${schema!!.fields.size} columns" }
           }
           validateRow(row, expectedKinds!!)
           writer!!.write(rowToGroup(row, schema!!, factory!!))
@@ -252,7 +348,7 @@ class ParquetStorageClient(
           // Parquet rejects an empty (zero-column) schema, so empty input
           // writes a single placeholder column with zero rows; reads then
           // yield no rows.
-          writer = newWriter(outputFile, EMPTY_SCHEMA, encryption)
+          writer = newWriter(outputFile, EMPTY_SCHEMA)
         }
       } catch (t: Throwable) {
         // Release the open writer without masking the original failure, then
@@ -274,6 +370,7 @@ class ParquetStorageClient(
         deleteQuietly(path)
         throw t
       }
+      logger.fine { "Wrote parquet blob '$blobKey' (${fileSystem.getFileStatus(path).len} bytes)" }
     }
     return ParquetBlobImpl(blobKey, path)
   }
@@ -297,21 +394,29 @@ class ParquetStorageClient(
         } catch (e: FileNotFoundException) {
           return@withContext null
         }
+      logger.fine { "Opened parquet blob '$blobKey' (${status.len} bytes)" }
       ParquetBlobImpl(blobKey, path, status)
     }
   }
 
   override suspend fun listBlobs(prefix: String?): Flow<StorageClient.Blob> =
     channelFlow {
-        if (fileSystem.exists(qualifiedRoot)) {
-          val iter = fileSystem.listFiles(qualifiedRoot, /* recursive = */ true)
+        // Scope the server-side listing to the prefix's directory part so the GCS
+        // connector issues a prefix query instead of listing the whole bucket;
+        // the trailing client-side `startsWith` preserves string-prefix semantics
+        // (a bare prefix with no '/' still lists from the root).
+        val dirPart = if (prefix.isNullOrEmpty()) "" else prefix.substringBeforeLast('/', "")
+        val listRoot = if (dirPart.isEmpty()) qualifiedRoot else Path(qualifiedRoot, dirPart)
+        if (fileSystem.exists(listRoot)) {
+          val iter = fileSystem.listFiles(listRoot, /* recursive = */ true)
           while (iter.hasNext()) {
             val status = iter.next()
             val key = relativeKey(status.path)
             if (prefix.isNullOrEmpty() || key.startsWith(prefix)) {
               // listFiles already returned the status — reuse it instead of
-              // re-fetching per metadata access.
-              trySendBlocking(ParquetBlobImpl(key, status.path, status))
+              // re-fetching per metadata access. `send` suspends cooperatively
+              // (we are inside the channelFlow coroutine).
+              send(ParquetBlobImpl(key, status.path, status))
             }
           }
         }
@@ -359,37 +464,6 @@ class ParquetStorageClient(
       withContext(parquetContext) { fileSystem.delete(path, /* recursive = */ false) }
     }
 
-    // === PME decryption (declarative config bootstrap) ===
-
-    /**
-     * Standard envelope-encryption bootstrap: read the plaintext footer
-     * metadata, pull the KEK URI + base64 KMS-wrapped DEK from the configured
-     * keys, unwrap the DEK via KMS, and use it as the parquet footer key.
-     * Returns `null` when no [decryptionConfig] is set (plaintext blobs).
-     *
-     * Resolved fresh per read flow: a [org.apache.parquet.crypto.FileDecryptionProperties]
-     * is single-use in parquet-mr, and reads are not hot enough to warrant
-     * caching the KMS unwrap.
-     */
-    private suspend fun resolveDecryption(): FileDecryptionProperties? {
-      val config = decryptionConfig ?: return null
-      val metadata = readFooterKeyValueMetadata(path)
-      val kekUri =
-        metadata[config.kekUriMetadataKey]
-          ?: throw IllegalStateException(
-            "Parquet blob '$blobKey' is missing KEK URI metadata key " +
-              "'${config.kekUriMetadataKey}'"
-          )
-      val wrappedDek =
-        metadata[config.encryptedDekMetadataKey]
-          ?: throw IllegalStateException(
-            "Parquet blob '$blobKey' is missing encrypted-DEK metadata key " +
-              "'${config.encryptedDekMetadataKey}'"
-          )
-      val dek = config.kmsClient.getAead(kekUri).decrypt(Base64.getDecoder().decode(wrappedDek), EMPTY_AAD)
-      return FileDecryptionProperties.builder().withFooterKey(dek).build()
-    }
-
     /**
      * Cold flow over the file's parquet rows. Opens a fresh reader per
      * collection (range reads through the backend connector), pre-compiles
@@ -397,12 +471,14 @@ class ParquetStorageClient(
      * [transform] to each parquet [Group]. The transform decides whether to
      * materialize a [ParquetRow] proto ([read]) or go straight to a native map
      * ([readRows]) — the latter skips proto allocation entirely.
+     *
+     * PME decryption (when configured) is applied natively by parquet-mr via the
+     * crypto factory + KMS-client bridge registered on [conf]; no per-read code.
      */
     private fun <T> rowFlow(transform: (Group, List<ColumnDecoder>) -> T): Flow<T> =
       flow {
-          val decryption = resolveDecryption()
           val inputFile: InputFile = HadoopInputFile.fromPath(path, conf)
-          GroupParquetReaderBuilder(inputFile, decryption).build().use { reader ->
+          GroupParquetReaderBuilder(inputFile).withConf(conf).build().use { reader ->
             val first = reader.read() ?: return@use
             val decoders = buildDecoders(first.type.fields)
             emit(transform(first, decoders))
@@ -466,17 +542,33 @@ class ParquetStorageClient(
     val annotation = prim.logicalTypeAnnotation
     return when (prim.primitiveTypeName) {
       PrimitiveTypeName.INT32 ->
-        if (annotation is LogicalTypeAnnotation.DateLogicalTypeAnnotation) {
-          { g -> LocalDate.ofEpochDay(g.getInteger(name, 0).toLong()) }
-        } else {
-          { g -> g.getInteger(name, 0) }
+        when {
+          annotation is LogicalTypeAnnotation.DateLogicalTypeAnnotation -> {
+            { g -> LocalDate.ofEpochDay(g.getInteger(name, 0).toLong()) }
+          }
+          // UINT_8/16/32: reinterpret the 32 bits as unsigned so a value > 2^31-1
+          // (e.g. 3 billion) is preserved instead of read back as a negative int.
+          annotation is LogicalTypeAnnotation.IntLogicalTypeAnnotation && !annotation.isSigned -> {
+            { g -> g.getInteger(name, 0).toUInt() }
+          }
+          else -> {
+            { g -> g.getInteger(name, 0) }
+          }
         }
       PrimitiveTypeName.INT64 ->
-        if (annotation is LogicalTypeAnnotation.TimestampLogicalTypeAnnotation) {
-          val unit = annotation.unit
-          { g -> instantOf(g.getLong(name, 0), unit) }
-        } else {
-          { g -> g.getLong(name, 0) }
+        when {
+          annotation is LogicalTypeAnnotation.TimestampLogicalTypeAnnotation -> {
+            val unit = annotation.unit
+            { g -> instantOf(g.getLong(name, 0), unit) }
+          }
+          // UINT_64: reinterpret the 64 bits as unsigned so a value > 2^63-1 is
+          // preserved instead of read back as a negative long.
+          annotation is LogicalTypeAnnotation.IntLogicalTypeAnnotation && !annotation.isSigned -> {
+            { g -> g.getLong(name, 0).toULong() }
+          }
+          else -> {
+            { g -> g.getLong(name, 0) }
+          }
         }
       PrimitiveTypeName.FLOAT -> { g -> g.getFloat(name, 0) }
       PrimitiveTypeName.DOUBLE -> { g -> g.getDouble(name, 0) }
@@ -520,22 +612,16 @@ class ParquetStorageClient(
 
   // === Write: schema derivation + Group construction ===
 
-  private fun newWriter(
-    outputFile: OutputFile,
-    schema: MessageType,
-    encryption: FileEncryptionProperties?,
-  ): ParquetWriter<Group> {
-    // ExampleParquetWriter installs a GroupWriteSupport bound to this schema,
-    // so no shared-Configuration mutation is needed.
-    val builder =
-      ExampleParquetWriter.builder(outputFile)
-        .withConf(conf)
-        .withType(schema)
-        .withWriteMode(ParquetFileWriter.Mode.OVERWRITE)
-        .withCompressionCodec(CompressionCodecName.UNCOMPRESSED)
-    if (encryption != null) builder.withEncryption(encryption)
-    return builder.build()
-  }
+  private fun newWriter(outputFile: OutputFile, schema: MessageType): ParquetWriter<Group> =
+    // ExampleParquetWriter installs a GroupWriteSupport bound to this schema.
+    // When a PME crypto factory is configured on `conf`, the writer encrypts
+    // automatically; otherwise it writes plaintext.
+    ExampleParquetWriter.builder(outputFile)
+      .withConf(conf)
+      .withType(schema)
+      .withWriteMode(ParquetFileWriter.Mode.OVERWRITE)
+      .withCompressionCodec(CompressionCodecName.UNCOMPRESSED)
+      .build()
 
   /**
    * Derives the parquet [MessageType] from the first [ParquetRow]. Every
@@ -549,8 +635,16 @@ class ParquetStorageClient(
         when (value.kindCase) {
           ParquetValue.KindCase.INT32_VALUE ->
             Types.optional(PrimitiveTypeName.INT32).named(name)
+          ParquetValue.KindCase.UINT32_VALUE ->
+            Types.optional(PrimitiveTypeName.INT32)
+              .`as`(LogicalTypeAnnotation.intType(/* bitWidth = */ 32, /* isSigned = */ false))
+              .named(name)
           ParquetValue.KindCase.INT64_VALUE ->
             Types.optional(PrimitiveTypeName.INT64).named(name)
+          ParquetValue.KindCase.UINT64_VALUE ->
+            Types.optional(PrimitiveTypeName.INT64)
+              .`as`(LogicalTypeAnnotation.intType(/* bitWidth = */ 64, /* isSigned = */ false))
+              .named(name)
           ParquetValue.KindCase.FLOAT_VALUE ->
             Types.optional(PrimitiveTypeName.FLOAT).named(name)
           ParquetValue.KindCase.DOUBLE_VALUE ->
@@ -622,7 +716,11 @@ class ParquetStorageClient(
   private fun appendToGroup(group: Group, name: String, value: ParquetValue) {
     when (value.kindCase) {
       ParquetValue.KindCase.INT32_VALUE -> group.add(name, value.int32Value)
+      // proto uint32/uint64 getters return the raw Int/Long bits; the INT(unsigned)
+      // logical annotation on the column carries the unsigned interpretation.
+      ParquetValue.KindCase.UINT32_VALUE -> group.add(name, value.uint32Value)
       ParquetValue.KindCase.INT64_VALUE -> group.add(name, value.int64Value)
+      ParquetValue.KindCase.UINT64_VALUE -> group.add(name, value.uint64Value)
       ParquetValue.KindCase.FLOAT_VALUE -> group.add(name, value.floatValue)
       ParquetValue.KindCase.DOUBLE_VALUE -> group.add(name, value.doubleValue)
       ParquetValue.KindCase.BOOL_VALUE -> group.add(name, value.boolValue)
@@ -641,18 +739,12 @@ class ParquetStorageClient(
 
   /**
    * Subclass of [ParquetReader.Builder] needed to reach the protected
-   * `Builder(InputFile)` constructor. If [decryption] is non-null, install it
-   * via the parquet-mr `withDecryption` builder API, enabling PME column
-   * decryption.
+   * `Builder(InputFile)` constructor. PME decryption (when configured) is applied
+   * by parquet-mr from the `conf` passed via `withConf`, which loads the crypto
+   * factory + KMS-client bridge — no explicit `FileDecryptionProperties`.
    */
-  private class GroupParquetReaderBuilder(
-    file: InputFile,
-    decryption: FileDecryptionProperties?,
-  ) : ParquetReader.Builder<Group>(file) {
-    init {
-      decryption?.let { withDecryption(it) }
-    }
-
+  private class GroupParquetReaderBuilder(file: InputFile) :
+    ParquetReader.Builder<Group>(file) {
     override fun getReadSupport(): ReadSupport<Group> = GroupReadSupport()
   }
 
@@ -723,12 +815,11 @@ class ParquetStorageClient(
   }
 
   private companion object {
+    private val logger = Logger.getLogger(ParquetStorageClient::class.java.name)
+
     private const val PARQUET_MAGIC_PLAINTEXT = "PAR1"
     private const val PARQUET_MAGIC_ENCRYPTED_FOOTER = "PARE"
     private const val MIN_PARQUET_FILE_SIZE = 12L // 4-byte header + 8-byte trailer minimum.
-
-    /** Associated data for KMS DEK unwrapping (the EDP convention uses none). */
-    private val EMPTY_AAD = ByteArray(0)
 
     private val NULL_VALUE: ParquetValue = ParquetValue.getDefaultInstance()
 
@@ -739,6 +830,12 @@ class ParquetStorageClient(
     private fun int32Value(v: Int) = ParquetValue.newBuilder().setInt32Value(v).build()
 
     private fun int64Value(v: Long) = ParquetValue.newBuilder().setInt64Value(v).build()
+
+    // proto uint32/uint64 setters take the raw Int/Long bits; UInt/ULong hold the
+    // same bits, so this preserves the unsigned value.
+    private fun uint32Value(v: UInt) = ParquetValue.newBuilder().setUint32Value(v.toInt()).build()
+
+    private fun uint64Value(v: ULong) = ParquetValue.newBuilder().setUint64Value(v.toLong()).build()
 
     private fun floatValue(v: Float) = ParquetValue.newBuilder().setFloatValue(v).build()
 
@@ -776,7 +873,9 @@ class ParquetStorageClient(
       when (value) {
         null -> NULL_VALUE
         is Int -> int32Value(value)
+        is UInt -> uint32Value(value)
         is Long -> int64Value(value)
+        is ULong -> uint64Value(value)
         is Float -> floatValue(value)
         is Double -> doubleValue(value)
         is Boolean -> boolValue(value)
@@ -799,8 +898,16 @@ class ParquetStorageClient(
           Instant.ofEpochSecond(Math.floorDiv(raw, 1_000_000_000L), Math.floorMod(raw, 1_000_000_000L))
       }
 
-    private fun instantToMicros(ts: Timestamp): Long =
-      Math.addExact(Math.multiplyExact(ts.seconds, 1_000_000L), (ts.nanos / 1_000).toLong())
+    private fun instantToMicros(ts: Timestamp): Long {
+      // The codec writes TIMESTAMP(MICROS); reject sub-microsecond precision
+      // rather than silently truncating it (e.g. 999 nanos -> 0 micros). Callers
+      // must round to microseconds before writing.
+      require(ts.nanos % 1_000 == 0) {
+        "Timestamp has sub-microsecond precision (nanos=${ts.nanos}); the parquet codec writes " +
+          "TIMESTAMP(MICROS) and would truncate it. Round to microseconds before writing."
+      }
+      return Math.addExact(Math.multiplyExact(ts.seconds, 1_000_000L), (ts.nanos / 1_000).toLong())
+    }
 
     private fun dateToEpochDay(date: Date): Long =
       LocalDate.of(date.year, date.month, date.day).toEpochDay()
