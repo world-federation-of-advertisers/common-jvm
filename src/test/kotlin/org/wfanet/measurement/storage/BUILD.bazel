@@ -59,6 +59,10 @@ kt_jvm_test(
         "no-remote-exec",
     ],
     test_class = "org.wfanet.measurement.storage.ParquetStorageClientEmulatorTest",
+    runtime_deps = [
+        # GoogleHadoopFileSystem for the gs:// scheme at runtime.
+        "//imports/java/com/google/cloud/bigdataoss:gcs_connector",
+    ],
     deps = [
         "//imports/java/com/google/cloud/storage",
         "//imports/java/com/google/common/truth",
@@ -69,10 +73,6 @@ kt_jvm_test(
         "//src/main/kotlin/org/wfanet/measurement/storage:parquet_storage_client",
         "//src/main/proto/wfa/measurement/storage:parquet_row_kt_jvm_proto",
     ],
-    runtime_deps = [
-        # GoogleHadoopFileSystem for the gs:// scheme at runtime.
-        "//imports/java/com/google/cloud/bigdataoss:gcs_connector",
-    ],
 )
 
 kt_jvm_test(
@@ -80,6 +80,9 @@ kt_jvm_test(
     timeout = "short",
     srcs = ["ParquetKmsClientBridgeTest.kt"],
     test_class = "org.wfanet.measurement.storage.ParquetKmsClientBridgeTest",
+    runtime_deps = [
+        "//imports/java/org/apache/hadoop:hadoop_client_runtime",
+    ],
     deps = [
         "//imports/java/com/google/common/truth",
         "//imports/java/com/google/crypto/tink",
@@ -88,8 +91,5 @@ kt_jvm_test(
         "//imports/kotlin/kotlin/test",
         "//src/main/kotlin/org/wfanet/measurement/common/crypto/tink/testing",
         "//src/main/kotlin/org/wfanet/measurement/storage:parquet_storage_client",
-    ],
-    runtime_deps = [
-        "//imports/java/org/apache/hadoop:hadoop_client_runtime",
     ],
 )

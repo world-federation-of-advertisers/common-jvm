@@ -25,14 +25,14 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.parquet.crypto.keytools.KmsClient
 
 /**
- * Bridges a WFA Tink KMS client (`com.google.crypto.tink.KmsClient`) to parquet-mr's
- * key-tools KMS interface (`org.apache.parquet.crypto.keytools.KmsClient`).
+ * Bridges a WFA Tink KMS client (`com.google.crypto.tink.KmsClient`) to parquet-mr's key-tools KMS
+ * interface (`org.apache.parquet.crypto.keytools.KmsClient`).
  *
- * parquet-mr instantiates this reflectively (no-arg ctor) and calls [initialize]
- * once per reader/writer; it then drives all DEK/KEK wrapping through [wrapKey] /
- * [unwrapKey], which we forward to a Tink `Aead`. The [ParquetEncryptionConfig] for
- * a given client is looked up via a per-instance registration keyed by a UUID stored
- * in the [Configuration] — no global mutable singletons.
+ * parquet-mr instantiates this reflectively (no-arg ctor) and calls [initialize] once per
+ * reader/writer; it then drives all DEK/KEK wrapping through [wrapKey] / [unwrapKey], which we
+ * forward to a Tink `Aead`. The [ParquetEncryptionConfig] for a given client is looked up via a
+ * per-instance registration keyed by a UUID stored in the [Configuration] — no global mutable
+ * singletons.
  */
 class ParquetKmsClientBridge : KmsClient {
   private lateinit var kmsClient: TinkKmsClient
@@ -88,14 +88,13 @@ class ParquetKmsClientBridge : KmsClient {
     private val registrations = ConcurrentHashMap<String, Registration>()
 
     /**
-     * Registers [config] against [conf] and points parquet-mr's crypto factory +
-     * KMS-client class at this bridge, so reads and writes through [conf] use it.
+     * Registers [config] against [conf] and points parquet-mr's crypto factory + KMS-client class
+     * at this bridge, so reads and writes through [conf] use it.
      *
-     * Mutates [conf]: sets [PROVIDER_KEY] (plus the parquet crypto-factory,
-     * kms-client-class, and kms-instance-id keys) to a per-registration UUID.
-     * Each `ParquetStorageClient` MUST therefore use its **own** [Configuration]
-     * instance — registering a second client on the same [conf] overwrites the
-     * first's provider id, after which both resolve to the last registration.
+     * Mutates [conf]: sets [PROVIDER_KEY] (plus the parquet crypto-factory, kms-client-class, and
+     * kms-instance-id keys) to a per-registration UUID. Each `ParquetStorageClient` MUST therefore
+     * use its **own** [Configuration] instance — registering a second client on the same [conf]
+     * overwrites the first's provider id, after which both resolve to the last registration.
      */
     fun register(conf: Configuration, config: ParquetEncryptionConfig) {
       val id = UUID.randomUUID().toString()

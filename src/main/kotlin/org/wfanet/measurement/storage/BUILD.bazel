@@ -37,7 +37,16 @@ kt_jvm_library(
 
 kt_jvm_library(
     name = "parquet_storage_client",
-    srcs = ["ParquetKmsClientBridge.kt", "ParquetStorageClient.kt"],
+    srcs = [
+        "ParquetKmsClientBridge.kt",
+        "ParquetStorageClient.kt",
+    ],
+    runtime_deps = [
+        # GoogleHadoopFileSystem for gs:// blob keys in production. Runtime
+        # only — selected via Configuration (fs.gs.impl), never compiled
+        # against. Local-filesystem reads/writes (tests) need nothing here.
+        "//imports/java/com/google/cloud/bigdataoss:gcs_connector",
+    ],
     deps = [
         ":client",
         # Tink KmsClient bridged to parquet-mr key tools via ParquetEncryptionConfig.
@@ -58,12 +67,6 @@ kt_jvm_library(
         "//imports/kotlin/com/google/type:date_kt_jvm_proto",
         "//imports/kotlin/kotlinx/coroutines:core",
         "//src/main/proto/wfa/measurement/storage:parquet_row_kt_jvm_proto",
-    ],
-    runtime_deps = [
-        # GoogleHadoopFileSystem for gs:// blob keys in production. Runtime
-        # only — selected via Configuration (fs.gs.impl), never compiled
-        # against. Local-filesystem reads/writes (tests) need nothing here.
-        "//imports/java/com/google/cloud/bigdataoss:gcs_connector",
     ],
 )
 
