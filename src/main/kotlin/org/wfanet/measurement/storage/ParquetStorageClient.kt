@@ -16,6 +16,7 @@
 
 package org.wfanet.measurement.storage
 
+import com.google.crypto.tink.KmsClient
 import com.google.protobuf.ByteString
 import com.google.protobuf.Timestamp
 import com.google.type.Date
@@ -26,9 +27,6 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.time.Instant
 import java.time.LocalDate
-import java.util.Base64
-import java.util.UUID
-import java.util.concurrent.ConcurrentHashMap
 import java.util.logging.Logger
 import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.Dispatchers
@@ -79,103 +77,16 @@ import org.jetbrains.annotations.BlockingExecutor
  *  - `parquet.encryption.plaintext.footer` = `true` to keep the footer (and
  *    [ParquetBlob.readKeyValueMetadata]) readable without keys.
  *
- * @param kmsProvider returns a WFA Tink [com.google.crypto.tink.KmsClient]
- *   (GCP/AWS/Fake). Invoked once per reader/writer and cached for its lifetime.
+ * @param kmsProvider returns a WFA Tink [KmsClient] (GCP/AWS/Fake). Invoked once
+ *   per reader/writer and cached for its lifetime.
  * @param keyMapping maps logical master-key names to full Tink URIs; only needed
  *   when reading files written by external tools (Spark, etc.) that use short
  *   key names instead of full URIs.
  */
 data class ParquetEncryptionConfig(
-  val kmsProvider: () -> com.google.crypto.tink.KmsClient,
+  val kmsProvider: () -> KmsClient,
   val keyMapping: Map<String, String> = emptyMap(),
 )
-
-/**
- * Bridges WFA's Tink [com.google.crypto.tink.KmsClient] to parquet-mr's key-tools
- * [org.apache.parquet.crypto.keytools.KmsClient].
- *
- * parquet-mr instantiates this reflectively (no-arg ctor) and calls [initialize]
- * once per reader/writer; it then drives all DEK/KEK wrapping through [wrapKey] /
- * [unwrapKey], which we forward to a Tink `Aead`. The [ParquetEncryptionConfig]
- * for a given client is looked up via a per-instance registration keyed by a
- * UUID stored in the [Configuration] — no global mutable singletons.
- */
-class ParquetKmsClientBridge : org.apache.parquet.crypto.keytools.KmsClient {
-  private lateinit var kmsClient: com.google.crypto.tink.KmsClient
-  private lateinit var keyMapping: Map<String, String>
-
-  override fun initialize(
-    configuration: Configuration,
-    kmsInstanceID: String?,
-    kmsInstanceURL: String?,
-    accessToken: String?,
-  ) {
-    val id = configuration.get(PROVIDER_KEY)
-    val registration = registrations[id] ?: error("No KMS provider registered for id '$id'")
-    kmsClient = registration.kmsProvider()
-    keyMapping = registration.keyMapping
-  }
-
-  override fun wrapKey(keyBytes: ByteArray, masterKeyIdentifier: String): String {
-    val aead = kmsClient.getAead(resolveUri(masterKeyIdentifier))
-    return Base64.getEncoder().encodeToString(aead.encrypt(keyBytes, EMPTY_AAD))
-  }
-
-  override fun unwrapKey(wrappedKey: String, masterKeyIdentifier: String): ByteArray {
-    val aead = kmsClient.getAead(resolveUri(masterKeyIdentifier))
-    return aead.decrypt(Base64.getDecoder().decode(wrappedKey), EMPTY_AAD)
-  }
-
-  /** Full Tink URIs pass through; short logical names resolve via [keyMapping]. */
-  private fun resolveUri(masterKeyId: String): String {
-    val uri =
-      if (kmsClient.doesSupport(masterKeyId)) masterKeyId
-      else
-        keyMapping[masterKeyId]
-          ?: error(
-            "No KMS URI for key '$masterKeyId'. Add it to ParquetEncryptionConfig.keyMapping."
-          )
-    logger.fine { "Resolved master key id '$masterKeyId' to KMS URI '$uri'" }
-    return uri
-  }
-
-  companion object {
-    /** Conf key holding the per-instance registration UUID. */
-    const val PROVIDER_KEY = "wfa.parquet.kms.provider.id"
-
-    private val logger = Logger.getLogger(ParquetKmsClientBridge::class.java.name)
-
-    private val EMPTY_AAD = ByteArray(0)
-
-    private data class Registration(
-      val kmsProvider: () -> com.google.crypto.tink.KmsClient,
-      val keyMapping: Map<String, String>,
-    )
-
-    private val registrations = ConcurrentHashMap<String, Registration>()
-
-    /**
-     * Registers [config] against [conf] and points parquet-mr's crypto factory +
-     * KMS-client class at this bridge, so reads and writes through [conf] use it.
-     */
-    fun register(conf: Configuration, config: ParquetEncryptionConfig) {
-      val id = UUID.randomUUID().toString()
-      registrations[id] = Registration(config.kmsProvider, config.keyMapping)
-      conf.set(PROVIDER_KEY, id)
-      conf.set(
-        "parquet.crypto.factory.class",
-        "org.apache.parquet.crypto.keytools.PropertiesDrivenCryptoFactory",
-      )
-      conf.set("parquet.encryption.kms.client.class", ParquetKmsClientBridge::class.java.name)
-      // parquet-mr's KeyToolkit caches the KMS client per (kms.instance.id,
-      // access.token), both defaulting to "DEFAULT". Use the per-registration
-      // UUID as the instance id so each client gets its own bridge (initialized
-      // with its own conf) instead of colliding on the default cache key with
-      // other ParquetStorageClient instances in the same JVM.
-      conf.set("parquet.encryption.kms.instance.id", id)
-    }
-  }
-}
 
 /**
  * A [StorageClient] backed by a Hadoop [Configuration] that reads and writes
@@ -246,7 +157,11 @@ class ParquetKmsClientBridge : org.apache.parquet.crypto.keytools.KmsClient {
  * readable without keys. [readRows] works with either footer mode.
  *
  * @param conf Hadoop configuration selecting the storage backend (and, when
- *   [encryptionConfig] is set, carrying the PME key configuration).
+ *   [encryptionConfig] is set, carrying the PME key configuration). When
+ *   [encryptionConfig] is set the constructor mutates [conf] to register the KMS
+ *   bridge, so each [ParquetStorageClient] MUST use its own [Configuration]
+ *   instance — a shared instance would clobber the previous registration (see
+ *   [ParquetKmsClientBridge.register]).
  * @param rootPath base path; all blob keys are resolved relative to it.
  * @param parquetContext blocking context for parquet decode/encode + the
  *   backend FileSystem calls (default [Dispatchers.IO]).
@@ -263,6 +178,10 @@ class ParquetStorageClient(
   init {
     // Wire parquet-mr's native PME to the Tink KMS client. Once registered on
     // `conf`, the ParquetReader/ParquetWriter pick up encryption automatically.
+    // TODO(world-federation-of-advertisers/cross-media-measurement#3965): the
+    // registration entry in ParquetKmsClientBridge is never removed; implement
+    // Closeable on ParquetStorageClient to unregister it (matters for
+    // long-running processes that create many encrypting clients).
     if (encryptionConfig != null) {
       ParquetKmsClientBridge.register(conf, encryptionConfig)
     }

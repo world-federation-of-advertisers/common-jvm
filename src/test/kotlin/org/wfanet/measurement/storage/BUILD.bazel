@@ -74,3 +74,22 @@ kt_jvm_test(
         "//imports/java/com/google/cloud/bigdataoss:gcs_connector",
     ],
 )
+
+kt_jvm_test(
+    name = "ParquetKmsClientBridgeTest",
+    timeout = "short",
+    srcs = ["ParquetKmsClientBridgeTest.kt"],
+    test_class = "org.wfanet.measurement.storage.ParquetKmsClientBridgeTest",
+    deps = [
+        "//imports/java/com/google/common/truth",
+        "//imports/java/com/google/crypto/tink",
+        "//imports/java/org/apache/hadoop:hadoop_client_api",
+        "//imports/java/org/junit",
+        "//imports/kotlin/kotlin/test",
+        "//src/main/kotlin/org/wfanet/measurement/common/crypto/tink/testing",
+        "//src/main/kotlin/org/wfanet/measurement/storage:parquet_storage_client",
+    ],
+    runtime_deps = [
+        "//imports/java/org/apache/hadoop:hadoop_client_runtime",
+    ],
+)
