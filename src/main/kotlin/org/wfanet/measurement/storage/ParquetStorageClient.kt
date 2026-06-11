@@ -109,9 +109,10 @@ data class ParquetEncryptionConfig(
  * ## Two read APIs
  *
  * [getBlob] returns a [ParquetBlob] exposing:
- *  - [ParquetBlob.readRows] — `Flow<Map<String, Any?>>`, one map per row,
- *    keyed by parquet column name with native-typed values (see
- *    [ParquetBlob.readRows] for the type mapping).
+ *  - [ParquetBlob.readRows] — `Flow<Map<String, ParquetValue>>`, one map per row,
+ *    keyed by parquet column name with each value a typed [ParquetValue] (a
+ *    `oneof` over all parquet types). Consumers switch on [ParquetValue.kindCase]
+ *    instead of casting out of `Any?`.
  *  - [ParquetBlob.readKeyValueMetadata] — the file's footer key-value
  *    metadata as a `Map<String, String>`.
  *
@@ -198,28 +199,30 @@ class ParquetStorageClient(
   interface ParquetBlob : StorageClient.Blob {
     /**
      * Cold flow of rows. Each emission is one row, represented as a
-     * `Map<column name, value>`. Supported primitive types:
+     * `Map<column name, ParquetValue>` where each value is a typed [ParquetValue]
+     * (`oneof` over all parquet types). Consumers switch on [ParquetValue.kindCase]
+     * rather than casting out of `Any?`. The parquet type → `kind` mapping:
      *
-     *  - `INT32` (signed)              -> [Int]
-     *  - `INT32` + `UINT_8/16/32`      -> [UInt] (unsigned; avoids negative wrap)
-     *  - `INT32` + `DATE`              -> [java.time.LocalDate]
-     *  - `INT64` (signed)              -> [Long]
-     *  - `INT64` + `UINT_64`           -> [ULong] (unsigned; avoids negative wrap)
-     *  - `INT64` + `TIMESTAMP_*`       -> [java.time.Instant]
-     *  - `FLOAT`                       -> [Float]
-     *  - `DOUBLE`                      -> [Double]
-     *  - `BOOLEAN`                     -> [Boolean]
-     *  - `BINARY` + `STRING`/`ENUM`/`JSON` -> [String] (UTF-8 decoded)
-     *  - `BINARY` (any other / none)   -> [ByteString] (raw bytes; covers
+     *  - `INT32` (signed)              -> `int32_value`
+     *  - `INT32` + `UINT_8/16/32`      -> `uint32_value` (unsigned; avoids negative wrap)
+     *  - `INT32` + `DATE`              -> `date_value`
+     *  - `INT64` (signed)              -> `int64_value`
+     *  - `INT64` + `UINT_64`           -> `uint64_value` (unsigned; avoids negative wrap)
+     *  - `INT64` + `TIMESTAMP_*`       -> `timestamp_value`
+     *  - `FLOAT`                       -> `float_value`
+     *  - `DOUBLE`                      -> `double_value`
+     *  - `BOOLEAN`                     -> `bool_value`
+     *  - `BINARY` + `STRING`/`ENUM`/`JSON` -> `string_value` (UTF-8 decoded)
+     *  - `BINARY` (any other / none)   -> `bytes_value` (raw bytes; covers
      *    `BSON`, `UUID`, raw bytes columns, etc.)
-     *  - `FIXED_LEN_BYTE_ARRAY`        -> [ByteString]
-     *  - `INT96` (legacy timestamps)   -> [ByteString] (raw 12 bytes)
+     *  - `FIXED_LEN_BYTE_ARRAY`        -> `bytes_value`
+     *  - `INT96` (legacy timestamps)   -> `bytes_value` (raw 12 bytes)
      *
-     * OPTIONAL columns with no value present in a row map to `null`.
-     * REPEATED columns (count > 1) and nested group-typed columns throw
-     * [IllegalStateException] at row time.
+     * OPTIONAL columns with no value present in a row map to a [ParquetValue]
+     * with `KIND_NOT_SET` (i.e. SQL NULL). REPEATED columns (count > 1) and
+     * nested group-typed columns throw [IllegalStateException] at row time.
      */
-    fun readRows(): Flow<Map<String, Any?>>
+    fun readRows(): Flow<Map<String, ParquetValue>>
 
     /**
      * Parquet file's footer key-value metadata. Reads the plaintext footer
@@ -373,8 +376,8 @@ class ParquetStorageClient(
     override fun read(): Flow<ByteString> =
       rowFlow { group, decoders -> rowToProto(group, decoders).toByteString() }
 
-    override fun readRows(): Flow<Map<String, Any?>> =
-      rowFlow { group, decoders -> rowToNativeMap(group, decoders) }
+    override fun readRows(): Flow<Map<String, ParquetValue>> =
+      rowFlow { group, decoders -> rowToValueMap(group, decoders) }
 
     override suspend fun readKeyValueMetadata(): Map<String, String> =
       withContext(parquetContext) { readFooterKeyValueMetadata(path) }
@@ -511,21 +514,21 @@ class ParquetStorageClient(
 
   /**
    * Builds a [ParquetRow] proto from a parquet [Group] (the [read] codec path).
-   * Only invoked when a serialized proto is actually needed; [readRows] skips
-   * this and builds a native map directly.
    */
-  private fun rowToProto(group: Group, decoders: List<ColumnDecoder>): ParquetRow {
-    val builder = ParquetRow.newBuilder()
-    for (decoder in decoders) {
-      builder.putColumns(decoder.name, valueToProto(decoder.extract(group)))
-    }
-    return builder.build()
-  }
+  private fun rowToProto(group: Group, decoders: List<ColumnDecoder>): ParquetRow =
+    ParquetRow.newBuilder().putAllColumns(rowToValueMap(group, decoders)).build()
 
-  /** Projects a parquet [Group] straight into a column-ordered native map. */
-  private fun rowToNativeMap(group: Group, decoders: List<ColumnDecoder>): Map<String, Any?> {
-    val out = LinkedHashMap<String, Any?>(decoders.size, 1f)
-    for (decoder in decoders) out[decoder.name] = decoder.extract(group)
+  /**
+   * Projects a parquet [Group] into a column-ordered `Map<String, ParquetValue>`
+   * (the [readRows] path). Each native column value is wrapped into its typed
+   * [ParquetValue]; an absent OPTIONAL column becomes a `KIND_NOT_SET` value.
+   */
+  private fun rowToValueMap(
+    group: Group,
+    decoders: List<ColumnDecoder>,
+  ): Map<String, ParquetValue> {
+    val out = LinkedHashMap<String, ParquetValue>(decoders.size, 1f)
+    for (decoder in decoders) out[decoder.name] = valueToProto(decoder.extract(group))
     return out
   }
 

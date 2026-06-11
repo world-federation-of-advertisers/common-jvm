@@ -63,6 +63,32 @@ import org.wfanet.measurement.common.crypto.tink.testing.FakeKmsClient
 class ParquetStorageClientTest {
   @Rule @JvmField val tempDir = TemporaryFolder()
 
+  /**
+   * Converts a `readRows()` row back to native Kotlin values so the assertions
+   * below can stay value-oriented. This is the inverse of the client's
+   * native -> [ParquetValue] mapping; `KIND_NOT_SET` -> `null`.
+   */
+  private fun Map<String, ParquetValue>.toNative(): Map<String, Any?> =
+    mapValues { it.value.toNative() }
+
+  private fun ParquetValue.toNative(): Any? =
+    when (kindCase) {
+      ParquetValue.KindCase.INT32_VALUE -> int32Value
+      ParquetValue.KindCase.INT64_VALUE -> int64Value
+      ParquetValue.KindCase.FLOAT_VALUE -> floatValue
+      ParquetValue.KindCase.DOUBLE_VALUE -> doubleValue
+      ParquetValue.KindCase.BOOL_VALUE -> boolValue
+      ParquetValue.KindCase.STRING_VALUE -> stringValue
+      ParquetValue.KindCase.BYTES_VALUE -> bytesValue
+      ParquetValue.KindCase.UINT32_VALUE -> uint32Value.toUInt()
+      ParquetValue.KindCase.UINT64_VALUE -> uint64Value.toULong()
+      ParquetValue.KindCase.TIMESTAMP_VALUE ->
+        Instant.ofEpochSecond(timestampValue.seconds, timestampValue.nanos.toLong())
+      ParquetValue.KindCase.DATE_VALUE ->
+        LocalDate.of(dateValue.year, dateValue.month, dateValue.day)
+      ParquetValue.KindCase.KIND_NOT_SET -> null
+    }
+
   private fun newClient(): ParquetStorageClient =
     ParquetStorageClient(Configuration(), Path(tempDir.root.absolutePath))
 
@@ -105,7 +131,7 @@ class ParquetStorageClientTest {
     runBlocking {
       val key = plaintextSample("data.parquet")
 
-      val rows = newClient().getBlob(key)!!.readRows().toList()
+      val rows = newClient().getBlob(key)!!.readRows().toList().map { it.toNative() }
 
       assertThat(rows).hasSize(3)
       assertThat(rows[0]).containsExactly("id", 1L, "name", "alice", "data", BYTES_AB)
@@ -202,7 +228,7 @@ class ParquetStorageClientTest {
 
     val results =
       (1..8)
-        .map { async(Dispatchers.Default) { blob.readRows().toList().map { row -> row["name"] } } }
+        .map { async(Dispatchers.Default) { blob.readRows().toList().map { row -> row.toNative()["name"] } } }
         .awaitAll()
 
     assertThat(results).hasSize(8)
@@ -258,7 +284,7 @@ class ParquetStorageClientTest {
     assertThat(readBack).containsExactly(row)
 
     // readRows() projects the same row into native types.
-    val native = blob.readRows().toList().single()
+    val native = blob.readRows().toList().single().toNative()
     assertThat(native["i32"]).isEqualTo(7)
     assertThat(native["i64"]).isEqualTo(8L)
     assertThat(native["f32"]).isEqualTo(1.5f)
@@ -419,7 +445,7 @@ class ParquetStorageClientTest {
       }
     val key = writeParquetBlob("uint.parquet", schema, listOf(row), null, emptyMap(), null)
 
-    val map = newClient().getBlob(key)!!.readRows().toList().single()
+    val map = newClient().getBlob(key)!!.readRows().toList().single().toNative()
     assertThat(map["u32"]).isInstanceOf(UInt::class.javaObjectType)
     assertThat((map["u32"] as UInt).toLong()).isEqualTo(3_000_000_000L)
     assertThat(map["u64"]).isInstanceOf(ULong::class.javaObjectType)
@@ -444,7 +470,7 @@ class ParquetStorageClientTest {
       client.getBlob("uint-rt.parquet")!!.read().toList().map { ParquetRow.parseFrom(it) }
     assertThat(readBack).containsExactly(row)
     // And the native map exposes them as unsigned Kotlin types.
-    val map = client.getBlob("uint-rt.parquet")!!.readRows().toList().single()
+    val map = client.getBlob("uint-rt.parquet")!!.readRows().toList().single().toNative()
     assertThat((map["u32"] as UInt).toLong()).isEqualTo(3_000_000_000L)
     assertThat((map["u64"] as ULong).toString()).isEqualTo("18000000000000000000")
   }
@@ -456,7 +482,7 @@ class ParquetStorageClientTest {
     val row = groupOf(schema) { add("ts96", Binary.fromConstantByteArray(raw)) }
     val key = writeParquetBlob("int96.parquet", schema, listOf(row), null, emptyMap(), null)
 
-    assertThat(newClient().getBlob(key)!!.readRows().toList().single()["ts96"])
+    assertThat(newClient().getBlob(key)!!.readRows().toList().single().toNative()["ts96"])
       .isEqualTo(ByteString.copyFrom(raw))
   }
 
@@ -470,7 +496,7 @@ class ParquetStorageClientTest {
     val row = groupOf(schema) { add("t", epochNanos) }
     val key = writeParquetBlob("ts-nanos.parquet", schema, listOf(row), null, emptyMap(), null)
 
-    assertThat(newClient().getBlob(key)!!.readRows().toList().single()["t"])
+    assertThat(newClient().getBlob(key)!!.readRows().toList().single().toNative()["t"])
       .isEqualTo(Instant.ofEpochSecond(1_700_000_000L, 123_456_789L))
   }
 
@@ -511,7 +537,7 @@ class ParquetStorageClientTest {
       }
     val key = writeParquetBlob("p.parquet", schema, listOf(row), null, emptyMap(), null)
 
-    val map = newClient().getBlob(key)!!.readRows().toList().single()
+    val map = newClient().getBlob(key)!!.readRows().toList().single().toNative()
     assertThat(map["i32"]).isEqualTo(42)
     assertThat(map["i64"]).isEqualTo(1234567890123L)
     assertThat(map["f32"]).isEqualTo(1.5f)
@@ -533,7 +559,7 @@ class ParquetStorageClientTest {
     val row = groupOf(schema) { add("j", """{"k":1}""") }
     val key = writeParquetBlob("json.parquet", schema, listOf(row), null, emptyMap(), null)
 
-    assertThat(newClient().getBlob(key)!!.readRows().toList().single()["j"])
+    assertThat(newClient().getBlob(key)!!.readRows().toList().single().toNative()["j"])
       .isEqualTo("""{"k":1}""")
   }
 
@@ -545,7 +571,7 @@ class ParquetStorageClientTest {
     val key = writeParquetBlob("bson.parquet", schema, listOf(row), null, emptyMap(), null)
 
     // BSON is bytes-encoded (not UTF-8 text) -> kept as ByteString.
-    assertThat(newClient().getBlob(key)!!.readRows().toList().single()["b"])
+    assertThat(newClient().getBlob(key)!!.readRows().toList().single().toNative()["b"])
       .isEqualTo(ByteString.copyFrom(raw))
   }
 
@@ -571,7 +597,7 @@ class ParquetStorageClientTest {
         null,
       )
 
-    val rows = newClient().getBlob(key)!!.readRows().toList()
+    val rows = newClient().getBlob(key)!!.readRows().toList().map { it.toNative() }
     assertThat(rows[0]).containsExactly("id", 1L, "maybe", null)
     assertThat(rows[1]).containsExactly("id", 2L, "maybe", "present")
   }
@@ -593,7 +619,7 @@ class ParquetStorageClientTest {
       }
     val key = writeParquetBlob("rg.parquet", schema, rows, null, emptyMap(), rowGroupSize = 1024L)
 
-    val outRows = newClient().getBlob(key)!!.readRows().toList()
+    val outRows = newClient().getBlob(key)!!.readRows().toList().map { it.toNative() }
     assertThat(outRows).hasSize(200)
     assertThat(outRows.first()).containsExactly("n", 0L, "s", "row-0")
     assertThat(outRows.last()).containsExactly("n", 199L, "s", "row-199")
@@ -611,7 +637,7 @@ class ParquetStorageClientTest {
     client.writeBlob("enc.parquet", flowOf(encRow()))
 
     // The same client's conf carries the crypto factory, so it decrypts on read.
-    val row = client.getBlob("enc.parquet")!!.readRows().toList().single()
+    val row = client.getBlob("enc.parquet")!!.readRows().toList().single().toNative()
     assertThat(row["id"]).isEqualTo(7L)
     assertThat(row["name"]).isEqualTo("zoe")
   }
@@ -652,7 +678,7 @@ class ParquetStorageClientTest {
 
     client.writeBlob("enc.parquet", flowOf(encRow()))
 
-    assertThat(client.getBlob("enc.parquet")!!.readRows().toList().single()["name"])
+    assertThat(client.getBlob("enc.parquet")!!.readRows().toList().single().toNative()["name"])
       .isEqualTo("zoe")
   }
 
@@ -676,7 +702,7 @@ class ParquetStorageClientTest {
     // Per-column key config is accepted and the blob round-trips through a client
     // holding both the footer and column keys (resolved from short names via
     // keyMapping). A plaintext client cannot read the encrypted blob at all.
-    assertThat(client.getBlob("enc.parquet")!!.readRows().toList().single()["name"])
+    assertThat(client.getBlob("enc.parquet")!!.readRows().toList().single().toNative()["name"])
       .isEqualTo("zoe")
     assertFailsWith<Throwable> { newClient().getBlob("enc.parquet")!!.readRows().toList() }
   }
