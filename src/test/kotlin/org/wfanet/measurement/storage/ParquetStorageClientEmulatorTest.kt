@@ -81,7 +81,9 @@ class ParquetStorageClientEmulatorTest {
 
     val blob = client.getBlob("dir/data.parquet")!!
     assertThat(blob.read().toList().map { ParquetRow.parseFrom(it) }).containsExactly(row)
-    assertThat(blob.readRows().toList().single()).containsExactly("id", 11L, "name", "ada")
+    val typedRow = blob.readRows().toList().single()
+    assertThat(typedRow.getValue("id").int64Value).isEqualTo(11L)
+    assertThat(typedRow.getValue("name").stringValue).isEqualTo("ada")
   }
 
   @Test
