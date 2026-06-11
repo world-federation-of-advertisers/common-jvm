@@ -19,7 +19,9 @@ package org.wfanet.measurement.storage
 import com.google.crypto.tink.KmsClient
 import com.google.protobuf.ByteString
 import com.google.protobuf.Timestamp
+import com.google.protobuf.timestamp
 import com.google.type.Date
+import com.google.type.date
 import java.io.ByteArrayInputStream
 import java.io.FileNotFoundException
 import java.net.URI
@@ -168,12 +170,16 @@ data class ParquetEncryptionConfig(
  *   backend FileSystem calls (default [Dispatchers.IO]).
  * @param encryptionConfig optional PME config bridging parquet-mr's key-tools to
  *   a WFA Tink KMS client; `null` = plaintext reads/writes.
+ * @param compressionCodec compression codec applied to written parquet files
+ *   (default [CompressionCodecName.SNAPPY], matching standard parquet tooling).
+ *   Reads handle any codec natively regardless of this value.
  */
 class ParquetStorageClient(
   private val conf: Configuration,
   rootPath: Path,
   private val parquetContext: @BlockingExecutor CoroutineContext = Dispatchers.IO,
   encryptionConfig: ParquetEncryptionConfig? = null,
+  private val compressionCodec: CompressionCodecName = CompressionCodecName.SNAPPY,
 ) : StorageClient {
 
   init {
@@ -516,7 +522,7 @@ class ParquetStorageClient(
    * Builds a [ParquetRow] proto from a parquet [Group] (the [read] codec path).
    */
   private fun rowToProto(group: Group, decoders: List<ColumnDecoder>): ParquetRow =
-    ParquetRow.newBuilder().putAllColumns(rowToValueMap(group, decoders)).build()
+    parquetRow { columns.putAll(rowToValueMap(group, decoders)) }
 
   /**
    * Projects a parquet [Group] into a column-ordered `Map<String, ParquetValue>`
@@ -542,7 +548,7 @@ class ParquetStorageClient(
       .withConf(conf)
       .withType(schema)
       .withWriteMode(ParquetFileWriter.Mode.OVERWRITE)
-      .withCompressionCodec(CompressionCodecName.UNCOMPRESSED)
+      .withCompressionCodec(compressionCodec)
       .build()
 
   /**
@@ -749,43 +755,40 @@ class ParquetStorageClient(
     private val EMPTY_SCHEMA: MessageType =
       MessageType("ParquetRow", Types.optional(PrimitiveTypeName.BINARY).named("placeholder"))
 
-    private fun int32Value(v: Int) = ParquetValue.newBuilder().setInt32Value(v).build()
+    private fun int32Value(v: Int) = parquetValue { int32Value = v }
 
-    private fun int64Value(v: Long) = ParquetValue.newBuilder().setInt64Value(v).build()
+    private fun int64Value(v: Long) = parquetValue { int64Value = v }
 
     // proto uint32/uint64 setters take the raw Int/Long bits; UInt/ULong hold the
     // same bits, so this preserves the unsigned value.
-    private fun uint32Value(v: UInt) = ParquetValue.newBuilder().setUint32Value(v.toInt()).build()
+    private fun uint32Value(v: UInt) = parquetValue { uint32Value = v.toInt() }
 
-    private fun uint64Value(v: ULong) = ParquetValue.newBuilder().setUint64Value(v.toLong()).build()
+    private fun uint64Value(v: ULong) = parquetValue { uint64Value = v.toLong() }
 
-    private fun floatValue(v: Float) = ParquetValue.newBuilder().setFloatValue(v).build()
+    private fun floatValue(v: Float) = parquetValue { floatValue = v }
 
-    private fun doubleValue(v: Double) = ParquetValue.newBuilder().setDoubleValue(v).build()
+    private fun doubleValue(v: Double) = parquetValue { doubleValue = v }
 
-    private fun boolValue(v: Boolean) = ParquetValue.newBuilder().setBoolValue(v).build()
+    private fun boolValue(v: Boolean) = parquetValue { boolValue = v }
 
-    private fun stringValue(v: String) = ParquetValue.newBuilder().setStringValue(v).build()
+    private fun stringValue(v: String) = parquetValue { stringValue = v }
 
-    private fun bytesValue(v: ByteString) = ParquetValue.newBuilder().setBytesValue(v).build()
+    private fun bytesValue(v: ByteString) = parquetValue { bytesValue = v }
 
-    private fun timestampValue(instant: Instant): ParquetValue =
-      ParquetValue.newBuilder()
-        .setTimestampValue(
-          Timestamp.newBuilder().setSeconds(instant.epochSecond).setNanos(instant.nano).build()
-        )
-        .build()
+    private fun timestampValue(instant: Instant): ParquetValue = parquetValue {
+      timestampValue = timestamp {
+        seconds = instant.epochSecond
+        nanos = instant.nano
+      }
+    }
 
-    private fun dateValue(date: LocalDate): ParquetValue =
-      ParquetValue.newBuilder()
-        .setDateValue(
-          Date.newBuilder()
-            .setYear(date.year)
-            .setMonth(date.monthValue)
-            .setDay(date.dayOfMonth)
-            .build()
-        )
-        .build()
+    private fun dateValue(localDate: LocalDate): ParquetValue = parquetValue {
+      dateValue = date {
+        year = localDate.year
+        month = localDate.monthValue
+        day = localDate.dayOfMonth
+      }
+    }
 
     /**
      * Maps a native column value (from [ColumnDecoder.extract]) to a
@@ -821,14 +824,13 @@ class ParquetStorageClient(
       }
 
     private fun instantToMicros(ts: Timestamp): Long {
-      // The codec writes TIMESTAMP(MICROS); reject sub-microsecond precision
-      // rather than silently truncating it (e.g. 999 nanos -> 0 micros). Callers
-      // must round to microseconds before writing.
-      require(ts.nanos % 1_000 == 0) {
-        "Timestamp has sub-microsecond precision (nanos=${ts.nanos}); the parquet codec writes " +
-          "TIMESTAMP(MICROS) and would truncate it. Round to microseconds before writing."
-      }
-      return Math.addExact(Math.multiplyExact(ts.seconds, 1_000_000L), (ts.nanos / 1_000).toLong())
+      // The codec writes TIMESTAMP(MICROS). Round sub-microsecond precision to the
+      // nearest microsecond (half up) rather than rejecting it, so an arbitrary
+      // parquet timestamp never crashes this code. The rounding can carry into the
+      // next second (e.g. 999_999_999 nanos -> 1_000_000 micros); addExact/
+      // multiplyExact fold that carry into the second component correctly.
+      val micros = (ts.nanos + 500) / 1_000
+      return Math.addExact(Math.multiplyExact(ts.seconds, 1_000_000L), micros.toLong())
     }
 
     private fun dateToEpochDay(date: Date): Long =

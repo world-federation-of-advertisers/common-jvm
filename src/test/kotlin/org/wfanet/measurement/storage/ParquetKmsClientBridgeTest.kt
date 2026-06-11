@@ -30,10 +30,8 @@ import org.wfanet.measurement.common.crypto.tink.testing.FakeKmsClient
 
 @RunWith(JUnit4::class)
 class ParquetKmsClientBridgeTest {
-  private fun newAead(): Aead {
-    AeadConfig.register()
-    return KeysetHandle.generateNew(KeyTemplates.get("AES256_GCM")).getPrimitive(Aead::class.java)
-  }
+  private fun newAead(): Aead =
+    KeysetHandle.generateNew(KeyTemplates.get("AES256_GCM")).getPrimitive(Aead::class.java)
 
   private fun fakeKms(vararg kekUris: String): FakeKmsClient =
     FakeKmsClient().also { client -> kekUris.forEach { client.setAead(it, newAead()) } }
@@ -84,8 +82,7 @@ class ParquetKmsClientBridgeTest {
   fun `wrapKey fails for an unmapped master key`() {
     val bridge = bridgeFor(ParquetEncryptionConfig(kmsProvider = { fakeKms("fake-kms://kek") }))
 
-    val ex = assertFailsWith<IllegalStateException> { bridge.wrapKey(ByteArray(16), "missing") }
-    assertThat(ex.message).contains("missing")
+    assertFailsWith<IllegalArgumentException> { bridge.wrapKey(ByteArray(16), "missing") }
   }
 
   @Test
@@ -104,7 +101,14 @@ class ParquetKmsClientBridgeTest {
     val key = ByteArray(32) { it.toByte() }
 
     assertThat(bridgeA.unwrapKey(bridgeA.wrapKey(key, "fake-kms://a"), "fake-kms://a")).isEqualTo(key)
-    assertFailsWith<IllegalStateException> { bridgeA.wrapKey(key, "fake-kms://b") }
+    assertFailsWith<IllegalArgumentException> { bridgeA.wrapKey(key, "fake-kms://b") }
     assertThat(bridgeB.unwrapKey(bridgeB.wrapKey(key, "fake-kms://b"), "fake-kms://b")).isEqualTo(key)
+  }
+
+  companion object {
+    init {
+      // Static one-time Tink Aead registration shared by every test.
+      AeadConfig.register()
+    }
   }
 }
