@@ -31,12 +31,11 @@ import org.junit.runners.JUnit4
 import org.wfanet.measurement.gcloud.gcs.testing.StorageEmulatorRule
 
 /**
- * End-to-end tests for [ParquetStorageClient] over the `gs://` scheme, backed by
- * the GCS storage-testbench emulator (Docker). Exercises the real Hadoop GCS
- * connector path: ranged network reads of the parquet footer + row groups and
- * network writes via `HadoopOutputFile` — none of which the local-filesystem
- * unit tests cover. PME is transport-agnostic (parquet-mr's native key tools)
- * and is covered by [ParquetStorageClientTest].
+ * End-to-end tests for [ParquetStorageClient] over the `gs://` scheme, backed by the GCS
+ * storage-testbench emulator (Docker). Exercises the real Hadoop GCS connector path: ranged network
+ * reads of the parquet footer + row groups and network writes via `HadoopOutputFile` — none of
+ * which the local-filesystem unit tests cover. PME is transport-agnostic (parquet-mr's native key
+ * tools) and is covered by [ParquetStorageClientTest].
  */
 @RunWith(JUnit4::class)
 class ParquetStorageClientEmulatorTest {
@@ -56,8 +55,12 @@ class ParquetStorageClientEmulatorTest {
       set("fs.gs.impl", "com.google.cloud.hadoop.fs.gcs.GoogleHadoopFileSystem")
       set("fs.AbstractFileSystem.gs.impl", "com.google.cloud.hadoop.fs.gcs.GoogleHadoopFS")
       set("fs.gs.project.id", "fake-project")
-      // No credentials against the local emulator.
-      setBoolean("fs.gs.auth.null.enabled", true)
+      // No credentials against the local emulator. Service-account auth is
+      // enabled by default and is tried before null credentials, so it must be
+      // disabled explicitly; otherwise the connector reaches for the GCE
+      // metadata server, which fails off-GCE (e.g. in CI).
+      setBoolean("fs.gs.auth.service.account.enable", false)
+      setBoolean("fs.gs.auth.null.enable", true)
       // Route the JSON API at the emulator; default service path "storage/v1/"
       // is appended by the connector.
       set("fs.gs.storage.root.url", "${storageEmulator.storage.options.host}/")

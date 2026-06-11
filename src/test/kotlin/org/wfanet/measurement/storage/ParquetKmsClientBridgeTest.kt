@@ -45,7 +45,10 @@ class ParquetKmsClientBridgeTest {
   @Test
   fun `register sets the crypto factory, kms client class, and instance id`() {
     val conf = Configuration()
-    ParquetKmsClientBridge.register(conf, ParquetEncryptionConfig(kmsProvider = { FakeKmsClient() }))
+    ParquetKmsClientBridge.register(
+      conf,
+      ParquetEncryptionConfig(kmsProvider = { FakeKmsClient() }),
+    )
 
     assertThat(conf.get("parquet.crypto.factory.class"))
       .isEqualTo("org.apache.parquet.crypto.keytools.PropertiesDrivenCryptoFactory")
@@ -71,7 +74,10 @@ class ParquetKmsClientBridgeTest {
     val kekUri = "fake-kms://kek"
     val bridge =
       bridgeFor(
-        ParquetEncryptionConfig(kmsProvider = { fakeKms(kekUri) }, keyMapping = mapOf("kek" to kekUri))
+        ParquetEncryptionConfig(
+          kmsProvider = { fakeKms(kekUri) },
+          keyMapping = mapOf("kek" to kekUri),
+        )
       )
 
     val key = ByteArray(16) { (it + 1).toByte() }
@@ -100,9 +106,11 @@ class ParquetKmsClientBridgeTest {
     val bridgeB = bridgeFor(ParquetEncryptionConfig(kmsProvider = { fakeKms("fake-kms://b") }))
     val key = ByteArray(32) { it.toByte() }
 
-    assertThat(bridgeA.unwrapKey(bridgeA.wrapKey(key, "fake-kms://a"), "fake-kms://a")).isEqualTo(key)
+    assertThat(bridgeA.unwrapKey(bridgeA.wrapKey(key, "fake-kms://a"), "fake-kms://a"))
+      .isEqualTo(key)
     assertFailsWith<IllegalArgumentException> { bridgeA.wrapKey(key, "fake-kms://b") }
-    assertThat(bridgeB.unwrapKey(bridgeB.wrapKey(key, "fake-kms://b"), "fake-kms://b")).isEqualTo(key)
+    assertThat(bridgeB.unwrapKey(bridgeB.wrapKey(key, "fake-kms://b"), "fake-kms://b"))
+      .isEqualTo(key)
   }
 
   companion object {

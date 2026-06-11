@@ -64,12 +64,13 @@ class ParquetStorageClientTest {
   @Rule @JvmField val tempDir = TemporaryFolder()
 
   /**
-   * Converts a `readRows()` row back to native Kotlin values so the assertions
-   * below can stay value-oriented. This is the inverse of the client's
-   * native -> [ParquetValue] mapping; `KIND_NOT_SET` -> `null`.
+   * Converts a `readRows()` row back to native Kotlin values so the assertions below can stay
+   * value-oriented. This is the inverse of the client's native -> [ParquetValue] mapping;
+   * `KIND_NOT_SET` -> `null`.
    */
-  private fun Map<String, ParquetValue>.toNative(): Map<String, Any?> =
-    mapValues { it.value.toNative() }
+  private fun Map<String, ParquetValue>.toNative(): Map<String, Any?> = mapValues {
+    it.value.toNative()
+  }
 
   private fun ParquetValue.toNative(): Any? =
     when (kindCase) {
@@ -179,8 +180,7 @@ class ParquetStorageClientTest {
 
     val keys = newClient().listBlobs().toList().map { it.blobKey }.toSet()
 
-    assertThat(keys)
-      .containsExactly("done", "file1.parquet", "file2.parquet", "sub/file3.parquet")
+    assertThat(keys).containsExactly("done", "file1.parquet", "file2.parquet", "sub/file3.parquet")
   }
 
   @Test
@@ -226,7 +226,11 @@ class ParquetStorageClientTest {
 
     val results =
       (1..8)
-        .map { async(Dispatchers.Default) { blob.readRows().toList().map { row -> row.toNative()["name"] } } }
+        .map {
+          async(Dispatchers.Default) {
+            blob.readRows().toList().map { row -> row.toNative()["name"] }
+          }
+        }
         .awaitAll()
 
     assertThat(results).hasSize(8)
@@ -329,17 +333,18 @@ class ParquetStorageClientTest {
   }
 
   @Test
-  fun `writeBlob rejects a later row with a column absent from the first row`(): Unit = runBlocking {
-    val row1 = parquetRow { columns.put("id", parquetValue { int64Value = 1L }) }
-    val row2 = parquetRow {
-      columns.put("id", parquetValue { int64Value = 2L })
-      columns.put("extra", parquetValue { stringValue = "x" })
-    }
+  fun `writeBlob rejects a later row with a column absent from the first row`(): Unit =
+    runBlocking {
+      val row1 = parquetRow { columns.put("id", parquetValue { int64Value = 1L }) }
+      val row2 = parquetRow {
+        columns.put("id", parquetValue { int64Value = 2L })
+        columns.put("extra", parquetValue { stringValue = "x" })
+      }
 
-    assertFailsWith<IllegalArgumentException> {
-      newClient().writeBlob("rows.parquet", flowOf(row1.toByteString(), row2.toByteString()))
+      assertFailsWith<IllegalArgumentException> {
+        newClient().writeBlob("rows.parquet", flowOf(row1.toByteString(), row2.toByteString()))
+      }
     }
-  }
 
   @Test
   fun `writeBlob rejects a later row whose column kind differs from the first`(): Unit =
@@ -752,11 +757,19 @@ class ParquetStorageClientTest {
   fun `readKeyValueMetadata rejects ENCRYPTED_FOOTER mode with a clear error`(): Unit =
     runBlocking {
       val footerKey = randomAesKey(32)
-      val encryption = FileEncryptionProperties.builder(footerKey).build() // default ENCRYPTED_FOOTER
+      val encryption =
+        FileEncryptionProperties.builder(footerKey).build() // default ENCRYPTED_FOOTER
       val schema = MessageTypeParser.parseMessageType("""message Row { required int64 id; }""")
       val row = groupOf(schema) { add("id", 1L) }
       val key =
-        writeParquetBlob("pme-enc-footer.parquet", schema, listOf(row), encryption, emptyMap(), null)
+        writeParquetBlob(
+          "pme-enc-footer.parquet",
+          schema,
+          listOf(row),
+          encryption,
+          emptyMap(),
+          null,
+        )
 
       assertFailsWith<IllegalStateException> { newClient().getBlob(key)!!.readKeyValueMetadata() }
     }
