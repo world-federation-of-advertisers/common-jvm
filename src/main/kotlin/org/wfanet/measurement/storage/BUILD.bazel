@@ -37,10 +37,10 @@ kt_jvm_library(
 
 kt_jvm_library(
     name = "parquet_storage_client",
-    srcs = ["ParquetStorageClient.kt"],
+    srcs = ["ParquetKmsClientBridge.kt", "ParquetStorageClient.kt"],
     deps = [
         ":client",
-        # KmsClient for the declarative ParquetDecryptionConfig PME bootstrap.
+        # Tink KmsClient bridged to parquet-mr key tools via ParquetEncryptionConfig.
         "//imports/java/com/google/crypto/tink",
         "//imports/java/com/google/protobuf",
         # Hadoop FileSystem + Configuration provide the storage backend that
