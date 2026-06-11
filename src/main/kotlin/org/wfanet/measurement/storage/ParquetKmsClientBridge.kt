@@ -65,10 +65,9 @@ class ParquetKmsClientBridge : KmsClient {
     val uri =
       if (kmsClient.doesSupport(masterKeyId)) masterKeyId
       else
-        keyMapping[masterKeyId]
-          ?: error(
-            "No KMS URI for key '$masterKeyId'. Add it to ParquetEncryptionConfig.keyMapping."
-          )
+        requireNotNull(keyMapping[masterKeyId]) {
+          "No KMS URI for key '$masterKeyId'. Add it to ParquetEncryptionConfig.keyMapping."
+        }
     logger.fine { "Resolved master key id '$masterKeyId' to KMS URI '$uri'" }
     return uri
   }

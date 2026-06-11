@@ -66,11 +66,10 @@ class ParquetStorageClientEmulatorTest {
   private fun newClient(): ParquetStorageClient =
     ParquetStorageClient(gcsConfiguration(), Path("gs://$BUCKET/"))
 
-  private fun rowOf(id: Long, name: String): ParquetRow =
-    ParquetRow.newBuilder()
-      .putColumns("id", ParquetValue.newBuilder().setInt64Value(id).build())
-      .putColumns("name", ParquetValue.newBuilder().setStringValue(name).build())
-      .build()
+  private fun rowOf(id: Long, name: String): ParquetRow = parquetRow {
+    columns.put("id", parquetValue { int64Value = id })
+    columns.put("name", parquetValue { stringValue = name })
+  }
 
   @Test
   fun `writeBlob then read round-trips over gs scheme`(): Unit = runBlocking {
