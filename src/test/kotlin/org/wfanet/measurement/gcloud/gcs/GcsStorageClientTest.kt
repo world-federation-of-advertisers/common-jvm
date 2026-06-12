@@ -14,8 +14,11 @@
 
 package org.wfanet.measurement.gcloud.gcs
 
+import com.google.cloud.storage.BlobId
+import com.google.cloud.storage.BlobInfo
 import com.google.common.truth.Truth.assertThat
 import com.google.protobuf.ByteString
+import com.google.protobuf.kotlin.toByteStringUtf8
 import java.time.Instant
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
@@ -77,6 +80,33 @@ class GcsStorageClientTest : AbstractBlobMetadataStorageClientTest<GcsStorageCli
 
     assertThat(keys).hasSize(totalBlobs)
     assertThat(keys.toSet()).hasSize(totalBlobs)
+  }
+
+  /**
+   * GCS-specific test: a metadata PATCH that sets a key to `null` deletes that key from the stored
+   * object. This documents the SDK behavior our [GcsStorageClient.ClientBlob.metadata] getter
+   * relies on (see the KDoc on that property) — fetched objects never carry null-valued metadata
+   * entries, so the defensive null-filter in the getter is a no-op against real (and emulated) GCS.
+   *
+   * Lives in this class rather than the abstract conformance suite because the "PATCH key=null
+   * deletes the key" behavior is a GCS REST/SDK quirk, not a property of the [StorageClient]
+   * interface.
+   */
+  @Test
+  fun `PATCH with null metadata value deletes the key on GCS`(): Unit = runBlocking {
+    val blobKey = "null-meta-blob"
+    storageClient.writeBlob(blobKey, "x".toByteStringUtf8())
+    storageClient.updateBlobMetadata(blobKey, metadata = mapOf("foo" to "bar"))
+
+    // Issue a low-level PATCH that maps "foo" -> null via the underlying GCS SDK.
+    val patch =
+      BlobInfo.newBuilder(BlobId.of(BUCKET, blobKey))
+        .apply { setMetadata(mapOf("foo" to null)) }
+        .build()
+    storageEmulator.storage.update(patch)
+
+    val refetched = checkNotNull(storageClient.getBlob(blobKey))
+    assertThat(refetched.metadata).doesNotContainKey("foo")
   }
 
   companion object {

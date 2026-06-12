@@ -18,15 +18,32 @@ package org.wfanet.measurement.storage.testing
 
 import com.google.common.truth.Truth.assertThat
 import com.google.protobuf.kotlin.toByteStringUtf8
+import java.time.Instant
 import kotlinx.coroutines.runBlocking
 import org.junit.Before
 import org.junit.Test
 import org.wfanet.measurement.common.flatten
 
-class InMemoryStorageClientTest : AbstractStorageClientTest<InMemoryStorageClient>() {
+class InMemoryStorageClientTest : AbstractBlobMetadataStorageClientTest<InMemoryStorageClient>() {
   @Before
   fun initStorageClient() {
     storageClient = InMemoryStorageClient()
+  }
+
+  override suspend fun verifyBlobMetadata(
+    blobKey: String,
+    expectedCustomCreateTime: Instant?,
+    expectedMetadata: Map<String, String>,
+  ) {
+    val blob = checkNotNull(storageClient.getBlob(blobKey)) { "Blob not found: $blobKey" }
+    if (expectedMetadata.isNotEmpty()) {
+      assertThat(blob.metadata).containsAtLeastEntriesIn(expectedMetadata)
+    }
+    if (expectedCustomCreateTime != null) {
+      val actual = storageClient.getCustomCreateTime(blobKey)
+      checkNotNull(actual) { "Custom create time not set on blob: $blobKey" }
+      assertThat(actual).isEqualTo(expectedCustomCreateTime)
+    }
   }
 
   @Test

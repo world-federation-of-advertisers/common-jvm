@@ -146,6 +146,14 @@ interface StorageClient {
     /** The time the blob was last updated. */
     val updateTime: Instant
 
+    /**
+     * Custom user-defined metadata on the blob.
+     *
+     * Defaults to an empty map for backends that do not support custom metadata.
+     */
+    val metadata: Map<String, String>
+      get() = emptyMap()
+
     /** Returns a [Flow] for the blob content. */
     fun read(): Flow<ByteString>
 

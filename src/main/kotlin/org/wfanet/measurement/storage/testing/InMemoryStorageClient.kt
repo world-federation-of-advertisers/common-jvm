@@ -21,15 +21,26 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import org.wfanet.measurement.common.flatten
+import org.wfanet.measurement.storage.BlobChangedException
+import org.wfanet.measurement.storage.BlobMetadataStorageClient
+import org.wfanet.measurement.storage.ConditionalOperationStorageClient
 import org.wfanet.measurement.storage.StorageClient
+import org.wfanet.measurement.storage.StorageException
 
-/** In-memory [StorageClient]. */
-class InMemoryStorageClient : StorageClient {
-  private val storageMap = ConcurrentHashMap<String, StorageClient.Blob>()
+/**
+ * In-memory [StorageClient] with [ConditionalOperationStorageClient] and
+ * [BlobMetadataStorageClient] support.
+ */
+class InMemoryStorageClient :
+  StorageClient, ConditionalOperationStorageClient, BlobMetadataStorageClient {
+  private val storageMap = ConcurrentHashMap<String, Blob>()
 
   /** Exposes all the blobs in the [StorageClient]. */
   val contents: Map<String, StorageClient.Blob>
     get() = storageMap
+
+  /** Returns the custom create time set on [blobKey] via [updateBlobMetadata], or null if unset. */
+  fun getCustomCreateTime(blobKey: String): Instant? = storageMap[blobKey]?.customTime
 
   private fun deleteKey(path: String) {
     storageMap.remove(path)
@@ -37,10 +48,45 @@ class InMemoryStorageClient : StorageClient {
 
   override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
     val now = Instant.now()
-    val existingCreateTime = storageMap[blobKey]?.createTime
-    val blob = Blob(blobKey, content.flatten(), existingCreateTime ?: now, now)
+    val existing = storageMap[blobKey]
+    val existingCreateTime = existing?.createTime
+    val nextGeneration = (existing?.generation ?: 0L) + 1L
+    // A fresh write replaces any prior custom metadata, mirroring GCS upload semantics where a
+    // re-upload does not carry over previously-set user metadata unless the writer sets it.
+    val blob =
+      Blob(
+        blobKey = blobKey,
+        contentBytes = content.flatten(),
+        createTime = existingCreateTime ?: now,
+        updateTime = now,
+        generation = nextGeneration,
+        customTime = null,
+        metadata = emptyMap(),
+      )
     storageMap[blobKey] = blob
     return blob
+  }
+
+  /**
+   * Conditional write that succeeds only if [blob]'s generation matches the current generation in
+   * storage.
+   *
+   * Note: the generation check and subsequent write are not atomic. This matches GCS semantics only
+   * when there is no concurrent writer for the same key; production GCS enforces atomicity via the
+   * server-side `ifGenerationMatch` precondition, but the in-memory test double does not. Safe for
+   * single-coroutine-per-key test usage.
+   */
+  override suspend fun writeBlobIfUnchanged(
+    blob: StorageClient.Blob,
+    content: Flow<ByteString>,
+  ): StorageClient.Blob {
+    require(blob.storageClient === this) { "Blob does not belong to this storage client" }
+    val current =
+      storageMap[blob.blobKey] ?: throw StorageException("Blob not found: ${blob.blobKey}")
+    if (current.generation != (blob as Blob).generation) {
+      throw BlobChangedException("Blob ${blob.blobKey} has changed since it was last read")
+    }
+    return writeBlob(blob.blobKey, content)
   }
 
   override suspend fun getBlob(blobKey: String): StorageClient.Blob? {
@@ -59,20 +105,44 @@ class InMemoryStorageClient : StorageClient {
     }
   }
 
+  override suspend fun updateBlobMetadata(
+    blobKey: String,
+    customCreateTime: Instant?,
+    metadata: Map<String, String>,
+  ) {
+    require(customCreateTime != null || metadata.isNotEmpty()) {
+      "At least one of customCreateTime or metadata must be specified"
+    }
+    val existing = storageMap[blobKey] ?: throw StorageException("Blob not found: $blobKey")
+    storageMap[blobKey] =
+      Blob(
+        blobKey = blobKey,
+        contentBytes = existing.contentBytes,
+        createTime = existing.createTime,
+        updateTime = Instant.now(),
+        generation = existing.generation,
+        customTime = customCreateTime ?: existing.customTime,
+        metadata = if (metadata.isNotEmpty()) metadata else existing.metadata,
+      )
+  }
+
   private inner class Blob(
     override val blobKey: String,
-    private val content: ByteString,
+    val contentBytes: ByteString,
     override val createTime: Instant,
     override val updateTime: Instant,
+    val generation: Long,
+    val customTime: Instant?,
+    override val metadata: Map<String, String>,
   ) : StorageClient.Blob {
 
     override val size: Long
-      get() = content.size().toLong()
+      get() = contentBytes.size().toLong()
 
     override val storageClient: InMemoryStorageClient
       get() = this@InMemoryStorageClient
 
-    override fun read(): Flow<ByteString> = flowOf(content)
+    override fun read(): Flow<ByteString> = flowOf(contentBytes)
 
     override suspend fun delete() = storageClient.deleteKey(blobKey)
   }
