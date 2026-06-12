@@ -210,6 +210,12 @@ class GcsStorageClient(
     override val updateTime: Instant
       get() = checkNotNull(blob.updateTimeOffsetDateTime).toInstant()
 
+    override val metadata: Map<String, String>
+      get() {
+        val raw: Map<String, String?> = blob.metadata ?: return emptyMap()
+        return raw.entries.mapNotNull { (k, v) -> v?.let { k to it } }.toMap()
+      }
+
     override fun read(): Flow<ByteString> {
       return blob.reader().asFlow(READ_BUFFER_SIZE, blockingContext + CoroutineName("readBlob"))
     }

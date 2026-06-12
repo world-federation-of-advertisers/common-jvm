@@ -16,9 +16,11 @@
 
 package org.wfanet.measurement.storage.testing
 
+import com.google.common.truth.Truth.assertThat
 import com.google.protobuf.kotlin.toByteStringUtf8
 import java.time.Instant
 import kotlin.test.assertFailsWith
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import org.junit.Test
 import org.wfanet.measurement.storage.BlobMetadataStorageClient
@@ -103,5 +105,38 @@ T : ConditionalOperationStorageClient {
     assertFailsWith<StorageException> {
       storageClient.updateBlobMetadata(blobKey, customCreateTime = customCreateTime)
     }
+  }
+
+  @Test
+  fun `Blob metadata returns custom metadata after updateBlobMetadata`(): Unit = runBlocking {
+    val blobKey = "blob-with-metadata-getter"
+    storageClient.writeBlob(blobKey, "content".toByteStringUtf8())
+    val expected = mapOf("synced-by" to "data-availability-sync", "k2" to "v2")
+
+    storageClient.updateBlobMetadata(blobKey, metadata = expected)
+
+    val blob = checkNotNull(storageClient.getBlob(blobKey)) { "Blob not found: $blobKey" }
+    assertThat(blob.metadata).containsAtLeastEntriesIn(expected)
+  }
+
+  @Test
+  fun `Blob metadata does not contain keys that were never set`(): Unit = runBlocking {
+    val blobKey = "blob-without-app-metadata"
+    storageClient.writeBlob(blobKey, "content".toByteStringUtf8())
+
+    val blob = checkNotNull(storageClient.getBlob(blobKey)) { "Blob not found: $blobKey" }
+    assertThat(blob.metadata).doesNotContainKey("application-marker")
+  }
+
+  @Test
+  fun `Blob metadata is visible on blobs from listBlobs`(): Unit = runBlocking {
+    val blobKey = "listed-blob"
+    storageClient.writeBlob(blobKey, "content".toByteStringUtf8())
+    val expected = mapOf("marker" to "yes")
+    storageClient.updateBlobMetadata(blobKey, metadata = expected)
+
+    val listed = storageClient.listBlobs().toList().single { it.blobKey == blobKey }
+
+    assertThat(listed.metadata).containsAtLeastEntriesIn(expected)
   }
 }
