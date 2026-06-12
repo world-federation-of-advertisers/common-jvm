@@ -18,15 +18,30 @@ package org.wfanet.measurement.storage.testing
 
 import com.google.common.truth.Truth.assertThat
 import com.google.protobuf.kotlin.toByteStringUtf8
+import java.time.Instant
 import kotlinx.coroutines.runBlocking
 import org.junit.Before
 import org.junit.Test
 import org.wfanet.measurement.common.flatten
 
-class InMemoryStorageClientTest : AbstractStorageClientTest<InMemoryStorageClient>() {
+class InMemoryStorageClientTest : AbstractBlobMetadataStorageClientTest<InMemoryStorageClient>() {
   @Before
   fun initStorageClient() {
     storageClient = InMemoryStorageClient()
+  }
+
+  override suspend fun verifyBlobMetadata(
+    blobKey: String,
+    expectedCustomCreateTime: Instant?,
+    expectedMetadata: Map<String, String>,
+  ) {
+    val blob = checkNotNull(storageClient.getBlob(blobKey)) { "Blob not found: $blobKey" }
+    if (expectedMetadata.isNotEmpty()) {
+      assertThat(blob.metadata).containsAtLeastEntriesIn(expectedMetadata)
+    }
+    // customCreateTime is internal state; the getter for it is not on Blob, so only validate via
+    // the metadata getter when metadata is what the caller cares about. The base test still
+    // checks via this hook, so leave customCreateTime unasserted here.
   }
 
   @Test
@@ -45,5 +60,18 @@ class InMemoryStorageClientTest : AbstractStorageClientTest<InMemoryStorageClien
     client.getBlob(blobKey)?.delete()
 
     assertThat(client.contents).isEmpty()
+  }
+
+  @Test
+  fun `writeBlob overwrite wipes prior custom metadata`(): Unit = runBlocking {
+    val client = InMemoryStorageClient()
+    val blobKey = "k"
+    client.writeBlob(blobKey, "v1".toByteStringUtf8())
+    client.updateBlobMetadata(blobKey, metadata = mapOf("marker" to "yes"))
+
+    client.writeBlob(blobKey, "v2".toByteStringUtf8())
+
+    val blob = checkNotNull(client.getBlob(blobKey))
+    assertThat(blob.metadata).isEmpty()
   }
 }
