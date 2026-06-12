@@ -124,6 +124,10 @@ T : ConditionalOperationStorageClient {
     val blobKey = "blob-without-app-metadata"
     storageClient.writeBlob(blobKey, "content".toByteStringUtf8())
 
+    // Assert absence of an app-level key rather than .isEmpty() because some backends surface
+    // backend-synthetic entries (e.g. the GCS storage emulator returns `x_emulator_*` keys).
+    // Real GCS does not, but the conformance contract only requires that application-set keys
+    // are the ones the application can rely on.
     val blob = checkNotNull(storageClient.getBlob(blobKey)) { "Blob not found: $blobKey" }
     assertThat(blob.metadata).doesNotContainKey("application-marker")
   }
@@ -135,7 +139,11 @@ T : ConditionalOperationStorageClient {
     val expected = mapOf("marker" to "yes")
     storageClient.updateBlobMetadata(blobKey, metadata = expected)
 
-    val listed = storageClient.listBlobs().toList().single { it.blobKey == blobKey }
+    val all = storageClient.listBlobs().toList()
+    val listed = all.firstOrNull { it.blobKey == blobKey }
+    checkNotNull(listed) {
+      "Blob '$blobKey' not in listBlobs result (got ${all.map { it.blobKey }})"
+    }
 
     assertThat(listed.metadata).containsAtLeastEntriesIn(expected)
   }

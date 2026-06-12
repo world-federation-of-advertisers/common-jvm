@@ -210,11 +210,19 @@ class GcsStorageClient(
     override val updateTime: Instant
       get() = checkNotNull(blob.updateTimeOffsetDateTime).toInstant()
 
-    override val metadata: Map<String, String>
-      get() {
-        val raw: Map<String, String?> = blob.metadata ?: return emptyMap()
-        return raw.entries.mapNotNull { (k, v) -> v?.let { k to it } }.toMap()
-      }
+    /**
+     * Custom user metadata from the underlying GCS object.
+     *
+     * The Java SDK declares the underlying [Blob.getMetadata] as `Map<String, String?>` because
+     * draft `BlobInfo` builders use `null` values as a "delete this key on PATCH" sentinel. A
+     * fetched object never contains literal null values (GCS removes such keys server-side), so the
+     * [mapNotNull] filter below is defensive against an SDK quirk that does not occur on fetched
+     * blobs in practice.
+     */
+    override val metadata: Map<String, String> by lazy {
+      val raw: Map<String, String?> = blob.metadata ?: return@lazy emptyMap()
+      raw.entries.mapNotNull { (k, v) -> v?.let { k to it } }.toMap()
+    }
 
     override fun read(): Flow<ByteString> {
       return blob.reader().asFlow(READ_BUFFER_SIZE, blockingContext + CoroutineName("readBlob"))
