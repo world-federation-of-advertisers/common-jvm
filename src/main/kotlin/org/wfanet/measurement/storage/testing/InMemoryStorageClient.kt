@@ -67,15 +67,24 @@ class InMemoryStorageClient :
     return blob
   }
 
+  /**
+   * Conditional write that succeeds only if [blob]'s generation matches the current generation in
+   * storage.
+   *
+   * Note: the generation check and subsequent write are not atomic. This matches GCS semantics only
+   * when there is no concurrent writer for the same key; production GCS enforces atomicity via the
+   * server-side `ifGenerationMatch` precondition, but the in-memory test double does not. Safe for
+   * single-coroutine-per-key test usage.
+   */
   override suspend fun writeBlobIfUnchanged(
     blob: StorageClient.Blob,
     content: Flow<ByteString>,
   ): StorageClient.Blob {
     require(blob.storageClient === this) { "Blob does not belong to this storage client" }
     val current =
-      storageMap[blob.blobKey] ?: throw StorageException("Blob not found: \${blob.blobKey}")
+      storageMap[blob.blobKey] ?: throw StorageException("Blob not found: ${blob.blobKey}")
     if (current.generation != (blob as Blob).generation) {
-      throw BlobChangedException("Blob \${blob.blobKey} has changed since it was last read")
+      throw BlobChangedException("Blob ${blob.blobKey} has changed since it was last read")
     }
     return writeBlob(blob.blobKey, content)
   }
