@@ -100,7 +100,9 @@ class GcsStorageClientTest : AbstractBlobMetadataStorageClientTest<GcsStorageCli
 
     // Issue a low-level PATCH that maps "foo" -> null via the underlying GCS SDK.
     val patch =
-      BlobInfo.newBuilder(BlobId.of(BUCKET, blobKey)).setMetadata(mapOf("foo" to null)).build()
+      BlobInfo.newBuilder(BlobId.of(BUCKET, blobKey))
+        .apply { setMetadata(mapOf("foo" to null)) }
+        .build()
     storageEmulator.storage.update(patch)
 
     val refetched = checkNotNull(storageClient.getBlob(blobKey))
