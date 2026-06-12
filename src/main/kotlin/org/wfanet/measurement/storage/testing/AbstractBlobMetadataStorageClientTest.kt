@@ -139,4 +139,16 @@ T : ConditionalOperationStorageClient {
 
     assertThat(listed.metadata).containsAtLeastEntriesIn(expected)
   }
+
+  @Test
+  fun `writeBlob overwrite wipes prior custom metadata`(): Unit = runBlocking {
+    val blobKey = "wipe-on-overwrite"
+    storageClient.writeBlob(blobKey, "v1".toByteStringUtf8())
+    storageClient.updateBlobMetadata(blobKey, metadata = mapOf("marker" to "yes"))
+
+    storageClient.writeBlob(blobKey, "v2".toByteStringUtf8())
+
+    val blob = checkNotNull(storageClient.getBlob(blobKey)) { "Blob not found: $blobKey" }
+    assertThat(blob.metadata).doesNotContainKey("marker")
+  }
 }

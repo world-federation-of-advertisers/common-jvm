@@ -39,9 +39,11 @@ class InMemoryStorageClientTest : AbstractBlobMetadataStorageClientTest<InMemory
     if (expectedMetadata.isNotEmpty()) {
       assertThat(blob.metadata).containsAtLeastEntriesIn(expectedMetadata)
     }
-    // customCreateTime is internal state; the getter for it is not on Blob, so only validate via
-    // the metadata getter when metadata is what the caller cares about. The base test still
-    // checks via this hook, so leave customCreateTime unasserted here.
+    if (expectedCustomCreateTime != null) {
+      val actual = storageClient.getCustomCreateTime(blobKey)
+      checkNotNull(actual) { "Custom create time not set on blob: $blobKey" }
+      assertThat(actual).isEqualTo(expectedCustomCreateTime)
+    }
   }
 
   @Test
@@ -60,18 +62,5 @@ class InMemoryStorageClientTest : AbstractBlobMetadataStorageClientTest<InMemory
     client.getBlob(blobKey)?.delete()
 
     assertThat(client.contents).isEmpty()
-  }
-
-  @Test
-  fun `writeBlob overwrite wipes prior custom metadata`(): Unit = runBlocking {
-    val client = InMemoryStorageClient()
-    val blobKey = "k"
-    client.writeBlob(blobKey, "v1".toByteStringUtf8())
-    client.updateBlobMetadata(blobKey, metadata = mapOf("marker" to "yes"))
-
-    client.writeBlob(blobKey, "v2".toByteStringUtf8())
-
-    val blob = checkNotNull(client.getBlob(blobKey))
-    assertThat(blob.metadata).isEmpty()
   }
 }

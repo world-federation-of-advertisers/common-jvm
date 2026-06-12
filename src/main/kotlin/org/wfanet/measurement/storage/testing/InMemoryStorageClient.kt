@@ -39,6 +39,9 @@ class InMemoryStorageClient :
   val contents: Map<String, StorageClient.Blob>
     get() = storageMap
 
+  /** Returns the custom create time set on [blobKey] via [updateBlobMetadata], or null if unset. */
+  fun getCustomCreateTime(blobKey: String): Instant? = storageMap[blobKey]?.customTime
+
   private fun deleteKey(path: String) {
     storageMap.remove(path)
   }
