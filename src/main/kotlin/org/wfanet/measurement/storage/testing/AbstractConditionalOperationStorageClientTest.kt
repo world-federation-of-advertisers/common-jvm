@@ -18,6 +18,7 @@ package org.wfanet.measurement.storage.testing
 
 import com.google.protobuf.kotlin.toByteStringUtf8
 import kotlin.test.assertFailsWith
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import org.junit.Test
@@ -72,5 +73,44 @@ abstract class AbstractConditionalOperationStorageClientTest<
 
     assertThat(checkNotNull(storageClient.getBlob(blobKey)))
       .contentEqualTo("first writer".toByteStringUtf8())
+  }
+
+  @Test
+  fun `writeBlobIfAbsent leaves no blob when precondition fails`(): Unit = runBlocking {
+    // Regression test: a failed `writeBlobIfAbsent` must not somehow create or partially-write a
+    // new blob. The blob seen after the throw must still be byte-identical to what was there
+    // before.
+    val blobKey = "regression-blob"
+    val originalContent = "first writer wins".toByteStringUtf8()
+    storageClient.writeBlob(blobKey, originalContent)
+
+    assertFailsWith<BlobChangedException> {
+      storageClient.writeBlobIfAbsent(blobKey, flowOf(testBlobContent))
+    }
+
+    val after = checkNotNull(storageClient.getBlob(blobKey))
+    assertThat(after).contentEqualTo(originalContent)
+  }
+
+  @Test
+  fun `writeBlobIfAbsent succeeds with empty content`(): Unit = runBlocking {
+    val blobKey = "empty-blob"
+
+    val written = storageClient.writeBlobIfAbsent(blobKey, emptyFlow())
+
+    assertThat(written).contentEqualTo("".toByteStringUtf8())
+  }
+
+  @Test
+  fun `writeBlobIfAbsent then writeBlob overwrites`(): Unit = runBlocking {
+    // Once a blob exists, an unconditional writeBlob should still overwrite it —
+    // `writeBlobIfAbsent`
+    // does not lock the key against future unconditional writes.
+    val blobKey = "overwritable-blob"
+    storageClient.writeBlobIfAbsent(blobKey, "first".toByteStringUtf8().let { flowOf(it) })
+
+    val overwritten = storageClient.writeBlob(blobKey, "second".toByteStringUtf8())
+
+    assertThat(overwritten).contentEqualTo("second".toByteStringUtf8())
   }
 }
