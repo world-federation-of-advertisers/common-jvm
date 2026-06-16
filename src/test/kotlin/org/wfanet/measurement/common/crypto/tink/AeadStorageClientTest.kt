@@ -30,11 +30,11 @@ import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 import org.wfanet.measurement.common.size
 import org.wfanet.measurement.common.toByteArray
-import org.wfanet.measurement.storage.testing.AbstractStorageClientTest
+import org.wfanet.measurement.storage.testing.AbstractConditionalOperationStorageClientTest
 import org.wfanet.measurement.storage.testing.InMemoryStorageClient
 
 @RunWith(JUnit4::class)
-class AeadStorageClientTest : AbstractStorageClientTest<AeadStorageClient>() {
+class AeadStorageClientTest : AbstractConditionalOperationStorageClientTest<AeadStorageClient>() {
 
   private val wrappedStorageClient = InMemoryStorageClient()
 

@@ -33,7 +33,8 @@ import kotlinx.coroutines.flow.flow
  */
 // TODO(@marcopremier): Refactor into MesosRecordIoStore<T : Message> to handle proto message
 // serialization internally and make current StorageClient implementation private.
-class MesosRecordIoStorageClient(private val storageClient: StorageClient) : StorageClient {
+class MesosRecordIoStorageClient(private val storageClient: StorageClient) :
+  StorageClient, ConditionalOperationStorageClient {
 
   /**
    * Writes RecordIO rows to storage using the RecordIO format.
@@ -67,6 +68,58 @@ class MesosRecordIoStorageClient(private val storageClient: StorageClient) : Sto
   }
 
   /**
+   * Conditional [writeBlob] that writes only if no blob currently exists at [blobKey]
+   * (write-if-absent). Frames each record with the RecordIO size+delimiter prefix before delegating
+   * to the underlying client.
+   *
+   * @throws BlobChangedException if the blob already exists
+   * @throws IllegalArgumentException if the underlying client does not implement
+   *   [ConditionalOperationStorageClient]
+   */
+  override suspend fun writeBlobIfAbsent(
+    blobKey: String,
+    content: Flow<ByteString>,
+  ): StorageClient.Blob {
+    require(storageClient is ConditionalOperationStorageClient) {
+      "Underlying storage client does not support conditional writes"
+    }
+    val processed: Flow<ByteString> = recordIoFraming(content)
+    val wrappedBlob: StorageClient.Blob = storageClient.writeBlobIfAbsent(blobKey, processed)
+    return Blob(wrappedBlob, blobKey)
+  }
+
+  /**
+   * Conditional [writeBlob] that writes only if the wrapped blob has not changed on the backend
+   * (compare-and-swap on generation). Frames each record with the RecordIO size+delimiter prefix
+   * before delegating to the underlying client.
+   *
+   * @throws BlobChangedException if the underlying blob has changed since [blob] was read
+   * @throws IllegalArgumentException if the underlying client does not implement
+   *   [ConditionalOperationStorageClient]
+   */
+  override suspend fun writeBlobIfUnchanged(
+    blob: StorageClient.Blob,
+    content: Flow<ByteString>,
+  ): StorageClient.Blob {
+    require(storageClient is ConditionalOperationStorageClient) {
+      "Underlying storage client does not support conditional writes"
+    }
+    require(blob is Blob) { "Incompatible blob type" }
+    val processed: Flow<ByteString> = recordIoFraming(content)
+    val wrappedBlob: StorageClient.Blob =
+      storageClient.writeBlobIfUnchanged(blob.underlying, processed)
+    return Blob(wrappedBlob, blob.blobKey)
+  }
+
+  /** Frames each emission of [content] with the RecordIO size+delimiter prefix. */
+  private fun recordIoFraming(content: Flow<ByteString>): Flow<ByteString> = flow {
+    content.collect { recordData: ByteString ->
+      val recordSize = recordData.size().toString().toByteStringUtf8()
+      emit(recordSize.concat(RECORD_DELIMITER).concat(recordData))
+    }
+  }
+
+  /**
    * Returns a [StorageClient.Blob] with specified blob key, or `null` if not found.
    *
    * Blob content is read as RecordIO format when [Blob.read] is called
@@ -81,8 +134,11 @@ class MesosRecordIoStorageClient(private val storageClient: StorageClient) : Sto
   }
 
   /** A blob that will read the content in RecordIO format */
-  private inner class Blob(private val blob: StorageClient.Blob, override val blobKey: String) :
+  private inner class Blob(val underlying: StorageClient.Blob, override val blobKey: String) :
     StorageClient.Blob {
+    private val blob: StorageClient.Blob
+      get() = underlying
+
     override val storageClient = this@MesosRecordIoStorageClient.storageClient
 
     override val createTime: Instant

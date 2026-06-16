@@ -89,6 +89,24 @@ class InMemoryStorageClient :
     return writeBlob(blob.blobKey, content)
   }
 
+  /**
+   * Conditional write that succeeds only if no blob currently exists at [blobKey].
+   *
+   * Note: the existence check and subsequent write are not atomic. This matches GCS semantics only
+   * when there is no concurrent writer for the same key; production GCS enforces atomicity via the
+   * server-side `IfGenerationMatch=0` precondition, but the in-memory test double does not. Safe
+   * for single-coroutine-per-key test usage.
+   */
+  override suspend fun writeBlobIfAbsent(
+    blobKey: String,
+    content: Flow<ByteString>,
+  ): StorageClient.Blob {
+    if (storageMap.containsKey(blobKey)) {
+      throw BlobChangedException("Blob $blobKey already exists")
+    }
+    return writeBlob(blobKey, content)
+  }
+
   override suspend fun getBlob(blobKey: String): StorageClient.Blob? {
     return storageMap[blobKey]
   }

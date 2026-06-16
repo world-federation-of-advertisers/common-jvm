@@ -176,6 +176,23 @@ interface ConditionalOperationStorageClient : StorageClient {
    * @throws StorageException if write failed
    */
   suspend fun writeBlobIfUnchanged(blob: Blob, content: Flow<ByteString>): Blob
+
+  /**
+   * Writes [content] to [blobKey] only if no blob currently exists at that key (write-if-absent /
+   * GCS `IfGenerationMatch=0`).
+   *
+   * The precondition is checked atomically on the server, so concurrent writers to the same key are
+   * race-free: exactly one write lands; the others fail-fast with [BlobChangedException].
+   *
+   * Use this when the caller needs first-writer-wins semantics on a fresh key. For CAS on an
+   * existing blob (read-modify-write), use [writeBlobIfUnchanged] with the [Blob] obtained from a
+   * prior read.
+   *
+   * @return the written [Blob]
+   * @throws BlobChangedException if the blob already exists (HTTP 412 from the storage backend)
+   * @throws StorageException on other write failures
+   */
+  suspend fun writeBlobIfAbsent(blobKey: String, content: Flow<ByteString>): Blob
 }
 
 /**

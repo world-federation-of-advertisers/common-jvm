@@ -50,4 +50,27 @@ abstract class AbstractConditionalOperationStorageClientTest<
       storageClient.writeBlobIfUnchanged(blob, flowOf(testBlobContent))
     }
   }
+
+  @Test
+  fun `writeBlobIfAbsent writes when no blob exists`(): Unit = runBlocking {
+    val blobKey = "fresh-blob"
+
+    val written = storageClient.writeBlobIfAbsent(blobKey, flowOf(testBlobContent))
+
+    assertThat(written).contentEqualTo(testBlobContent)
+    assertThat(checkNotNull(storageClient.getBlob(blobKey))).contentEqualTo(testBlobContent)
+  }
+
+  @Test
+  fun `writeBlobIfAbsent throws BlobChangedException when blob exists`(): Unit = runBlocking {
+    val blobKey = "existing-blob"
+    storageClient.writeBlob(blobKey, "first writer".toByteStringUtf8())
+
+    assertFailsWith<BlobChangedException> {
+      storageClient.writeBlobIfAbsent(blobKey, flowOf(testBlobContent))
+    }
+
+    assertThat(checkNotNull(storageClient.getBlob(blobKey)))
+      .contentEqualTo("first writer".toByteStringUtf8())
+  }
 }

@@ -66,14 +66,22 @@ class GcsStorageClient(
 ) : StorageClient, ConditionalOperationStorageClient, BlobMetadataStorageClient {
 
   override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
-    try {
-      return withContext(blockingContext + CoroutineName("writeBlob")) {
-        val gcsBlob: Blob = storage.create(BlobInfo.newBuilder(bucketName, blobKey).build())
-        gcsBlob.write(content)
-        ClientBlob(gcsBlob.reload(), blobKey)
+    return withContext(blockingContext + CoroutineName("writeBlob")) {
+      val blobInfo = BlobInfo.newBuilder(bucketName, blobKey).build()
+      try {
+        // Single resumable upload, no precondition: unconditional last-writer-wins semantics. The
+        // prior implementation split this into `storage.create()` + `Blob.write(generationMatch)`,
+        // which introduced a small race window where a concurrent writer between the two ops
+        // would cause this `writeBlob` to fail with a precondition error — surprising for what is
+        // documented as an unconditional write.
+        storage.writer(blobInfo).use { byteChannel -> writeChannel(byteChannel, content) }
+        val gcsBlob =
+          storage.get(BlobId.of(bucketName, blobKey))
+            ?: throw StorageException("Blob $blobKey vanished after successful writeBlob")
+        ClientBlob(gcsBlob, blobKey)
+      } catch (e: GcsStorageException) {
+        throw StorageException("Error writing blob with key $blobKey", e)
       }
-    } catch (e: GcsStorageException) {
-      throw StorageException("Error writing blob with key $blobKey", e)
     }
   }
 
@@ -82,21 +90,58 @@ class GcsStorageClient(
     content: Flow<ByteString>,
   ): StorageClient.Blob {
     require(blob is ClientBlob) { "Incompatible blob type" }
-    val gcsBlob: Blob = blob.blob
-    return withContext(blockingContext + CoroutineName("replaceBlob")) {
+    val expectedGeneration = blob.blob.generation
+    return withContext(blockingContext + CoroutineName("writeBlobIfUnchanged")) {
+      val blobInfo = BlobInfo.newBuilder(bucketName, blob.blobKey).build()
       try {
-        gcsBlob.write(content)
+        // Single resumable upload gated on `IfGenerationMatch=<expectedGeneration>`. Race-free:
+        // the server atomically checks the precondition; either this write lands at the expected
+        // generation, or it fails-fast with 412.
+        storage.writer(blobInfo, Storage.BlobWriteOption.generationMatch(expectedGeneration)).use {
+          byteChannel ->
+          writeChannel(byteChannel, content)
+        }
+        val gcsBlob =
+          storage.get(BlobId.of(bucketName, blob.blobKey))
+            ?: throw StorageException(
+              "Blob ${blob.blobKey} vanished after successful writeBlobIfUnchanged"
+            )
+        ClientBlob(gcsBlob, blob.blobKey)
       } catch (e: GcsStorageException) {
         if (e.code == HTTP_PRECONDITION_FAILED) {
           throw BlobChangedException(
             "Precondition failed when attempting to write ${blob.blobKey}",
             e,
           )
-        } else {
-          throw StorageException("Error writing blob with key ${blob.blobKey}", e)
         }
+        throw StorageException("Error writing blob with key ${blob.blobKey}", e)
       }
-      ClientBlob(gcsBlob.reload(), blob.blobKey)
+    }
+  }
+
+  override suspend fun writeBlobIfAbsent(
+    blobKey: String,
+    content: Flow<ByteString>,
+  ): StorageClient.Blob {
+    return withContext(blockingContext + CoroutineName("writeBlobIfAbsent")) {
+      val blobInfo = BlobInfo.newBuilder(bucketName, blobKey).build()
+      try {
+        // Single resumable upload gated on `IfGenerationMatch=0` (blob must not exist). The
+        // precondition is checked atomically on the server, so concurrent writers are race-free:
+        // exactly one write lands, the others fail-fast with `412 Precondition Failed`.
+        storage.writer(blobInfo, Storage.BlobWriteOption.doesNotExist()).use { byteChannel ->
+          writeChannel(byteChannel, content)
+        }
+        val gcsBlob =
+          storage.get(BlobId.of(bucketName, blobKey))
+            ?: throw StorageException("Blob $blobKey vanished after successful writeBlobIfAbsent")
+        ClientBlob(gcsBlob, blobKey)
+      } catch (e: GcsStorageException) {
+        if (e.code == HTTP_PRECONDITION_FAILED) {
+          throw BlobChangedException("Precondition failed: blob $blobKey already exists", e)
+        }
+        throw StorageException("Error writing blob with key $blobKey", e)
+      }
     }
   }
 
@@ -240,20 +285,18 @@ class GcsStorageClient(
   }
 }
 
+/** Streams [content] to [byteChannel], yielding the coroutine when the channel is full. */
 @Blocking
-private suspend fun Blob.write(content: Flow<ByteString>) {
-  writer(Storage.BlobWriteOption.generationMatch(generation)).use { byteChannel: WriteChannel ->
-    content.collect { bytes ->
-      for (buffer in bytes.asReadOnlyByteBufferList()) {
-        while (buffer.hasRemaining() && currentCoroutineContext().isActive) {
-          // Writer has its own internal buffering, so we can just use whatever buffers we
-          // already have.
-          if (byteChannel.write(buffer) == 0) {
-            // Nothing was written, so we may have a non-blocking channel that nothing can
-            // be written to right now. Suspend this coroutine to avoid monopolizing the
-            // thread.
-            yield()
-          }
+private suspend fun writeChannel(byteChannel: WriteChannel, content: Flow<ByteString>) {
+  content.collect { bytes ->
+    for (buffer in bytes.asReadOnlyByteBufferList()) {
+      while (buffer.hasRemaining() && currentCoroutineContext().isActive) {
+        // Writer has its own internal buffering, so we can just use whatever buffers we already
+        // have.
+        if (byteChannel.write(buffer) == 0) {
+          // Nothing was written, so we may have a non-blocking channel that nothing can be
+          // written to right now. Suspend this coroutine to avoid monopolizing the thread.
+          yield()
         }
       }
     }

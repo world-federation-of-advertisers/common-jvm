@@ -23,6 +23,7 @@ import java.util.logging.Logger
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import org.wfanet.measurement.common.flatten
+import org.wfanet.measurement.storage.ConditionalOperationStorageClient
 import org.wfanet.measurement.storage.StorageClient
 
 /**
@@ -35,7 +36,7 @@ import org.wfanet.measurement.storage.StorageClient
  * @param aead the Aead instance used for encryption/decryption
  */
 class AeadStorageClient(private val storageClient: StorageClient, private val aead: Aead) :
-  StorageClient {
+  StorageClient, ConditionalOperationStorageClient {
 
   /**
    * Writes an encrypted flow of data to storage using a specified blob key.
@@ -68,11 +69,47 @@ class AeadStorageClient(private val storageClient: StorageClient, private val ae
     return storageClient.listBlobs(prefix)
   }
 
+  override suspend fun writeBlobIfAbsent(
+    blobKey: String,
+    content: Flow<ByteString>,
+  ): StorageClient.Blob {
+    require(storageClient is ConditionalOperationStorageClient) {
+      "Underlying storage client does not support conditional writes"
+    }
+    val associatedData: ByteString = blobKey.toByteStringUtf8()
+    val ciphertext: ByteString =
+      aead.encrypt(content.flatten().toByteArray(), associatedData.toByteArray()).toByteString()
+    val wrappedBlob: StorageClient.Blob =
+      storageClient.writeBlobIfAbsent(blobKey, flow { emit(ciphertext) })
+    logger.fine { "Wrote encrypted content via writeBlobIfAbsent: $blobKey" }
+    return EncryptedBlob(wrappedBlob, blobKey)
+  }
+
+  override suspend fun writeBlobIfUnchanged(
+    blob: StorageClient.Blob,
+    content: Flow<ByteString>,
+  ): StorageClient.Blob {
+    require(storageClient is ConditionalOperationStorageClient) {
+      "Underlying storage client does not support conditional writes"
+    }
+    require(blob is EncryptedBlob) { "Incompatible blob type" }
+    val associatedData: ByteString = blob.blobKey.toByteStringUtf8()
+    val ciphertext: ByteString =
+      aead.encrypt(content.flatten().toByteArray(), associatedData.toByteArray()).toByteString()
+    val wrappedBlob: StorageClient.Blob =
+      storageClient.writeBlobIfUnchanged(blob.underlying, flow { emit(ciphertext) })
+    logger.fine { "Wrote encrypted content via writeBlobIfUnchanged: ${blob.blobKey}" }
+    return EncryptedBlob(wrappedBlob, blob.blobKey)
+  }
+
   /** A blob that will decrypt the content when read */
   private inner class EncryptedBlob(
-    private val blob: StorageClient.Blob,
+    val underlying: StorageClient.Blob,
     override val blobKey: String,
   ) : StorageClient.Blob {
+    private val blob: StorageClient.Blob
+      get() = underlying
+
     override val storageClient = this@AeadStorageClient.storageClient
 
     override val size: Long
