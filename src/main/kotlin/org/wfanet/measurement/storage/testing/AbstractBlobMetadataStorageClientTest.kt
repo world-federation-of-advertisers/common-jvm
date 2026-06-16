@@ -16,9 +16,11 @@
 
 package org.wfanet.measurement.storage.testing
 
+import com.google.common.truth.Truth.assertThat
 import com.google.protobuf.kotlin.toByteStringUtf8
 import java.time.Instant
 import kotlin.test.assertFailsWith
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import org.junit.Test
 import org.wfanet.measurement.storage.BlobMetadataStorageClient
@@ -103,5 +105,100 @@ T : ConditionalOperationStorageClient {
     assertFailsWith<StorageException> {
       storageClient.updateBlobMetadata(blobKey, customCreateTime = customCreateTime)
     }
+  }
+
+  @Test
+  fun `Blob metadata returns custom metadata after updateBlobMetadata`(): Unit = runBlocking {
+    val blobKey = "blob-with-metadata-getter"
+    storageClient.writeBlob(blobKey, "content".toByteStringUtf8())
+    val expected = mapOf("synced-by" to "data-availability-sync", "k2" to "v2")
+
+    storageClient.updateBlobMetadata(blobKey, metadata = expected)
+
+    val blob = checkNotNull(storageClient.getBlob(blobKey)) { "Blob not found: $blobKey" }
+    assertThat(blob.metadata).containsAtLeastEntriesIn(expected)
+  }
+
+  @Test
+  fun `Blob metadata does not contain keys that were never set`(): Unit = runBlocking {
+    val blobKey = "blob-without-app-metadata"
+    storageClient.writeBlob(blobKey, "content".toByteStringUtf8())
+
+    // Assert absence of an app-level key rather than .isEmpty() because some backends surface
+    // backend-synthetic entries (e.g. the GCS storage emulator returns `x_emulator_*` keys).
+    // Real GCS does not, but the conformance contract only requires that application-set keys
+    // are the ones the application can rely on.
+    val blob = checkNotNull(storageClient.getBlob(blobKey)) { "Blob not found: $blobKey" }
+    assertThat(blob.metadata).doesNotContainKey("application-marker")
+  }
+
+  @Test
+  fun `Blob metadata is visible on blobs from listBlobs`(): Unit = runBlocking {
+    val blobKey = "listed-blob"
+    storageClient.writeBlob(blobKey, "content".toByteStringUtf8())
+    val expected = mapOf("marker" to "yes")
+    storageClient.updateBlobMetadata(blobKey, metadata = expected)
+
+    val all = storageClient.listBlobs().toList()
+    val listed = all.firstOrNull { it.blobKey == blobKey }
+    checkNotNull(listed) {
+      "Blob '$blobKey' not in listBlobs result (got ${all.map { it.blobKey }})"
+    }
+
+    assertThat(listed.metadata).containsAtLeastEntriesIn(expected)
+  }
+
+  @Test
+  fun `updateBlobMetadata merges with existing metadata`(): Unit = runBlocking {
+    val blobKey = "merge-existing-metadata"
+    storageClient.writeBlob(blobKey, "content".toByteStringUtf8())
+    storageClient.updateBlobMetadata(blobKey, metadata = mapOf("a" to "1"))
+
+    storageClient.updateBlobMetadata(blobKey, metadata = mapOf("b" to "2"))
+
+    val blob = checkNotNull(storageClient.getBlob(blobKey)) { "Blob not found: $blobKey" }
+    assertThat(blob.metadata).containsAtLeast("a", "1", "b", "2")
+  }
+
+  @Test
+  fun `updateBlobMetadata overwrites value for an existing key`(): Unit = runBlocking {
+    val blobKey = "overwrite-existing-key"
+    storageClient.writeBlob(blobKey, "content".toByteStringUtf8())
+    storageClient.updateBlobMetadata(blobKey, metadata = mapOf("k" to "v1"))
+
+    storageClient.updateBlobMetadata(blobKey, metadata = mapOf("k" to "v2"))
+
+    val blob = checkNotNull(storageClient.getBlob(blobKey)) { "Blob not found: $blobKey" }
+    assertThat(blob.metadata).containsAtLeast("k", "v2")
+  }
+
+  @Test
+  fun `updateBlobMetadata with only metadata preserves existing customCreateTime`(): Unit =
+    runBlocking {
+      val blobKey = "preserve-custom-create-time"
+      storageClient.writeBlob(blobKey, "content".toByteStringUtf8())
+      val customCreateTime = Instant.parse("2025-01-15T10:30:00Z")
+      storageClient.updateBlobMetadata(blobKey, customCreateTime = customCreateTime)
+
+      // Subsequent call sets only metadata, must not wipe the previously-set customCreateTime.
+      storageClient.updateBlobMetadata(blobKey, metadata = mapOf("k" to "v"))
+
+      verifyBlobMetadata(
+        blobKey,
+        expectedCustomCreateTime = customCreateTime,
+        expectedMetadata = mapOf("k" to "v"),
+      )
+    }
+
+  @Test
+  fun `writeBlob overwrite wipes prior custom metadata`(): Unit = runBlocking {
+    val blobKey = "wipe-on-overwrite"
+    storageClient.writeBlob(blobKey, "v1".toByteStringUtf8())
+    storageClient.updateBlobMetadata(blobKey, metadata = mapOf("marker" to "yes"))
+
+    storageClient.writeBlob(blobKey, "v2".toByteStringUtf8())
+
+    val blob = checkNotNull(storageClient.getBlob(blobKey)) { "Blob not found: $blobKey" }
+    assertThat(blob.metadata).doesNotContainKey("marker")
   }
 }
