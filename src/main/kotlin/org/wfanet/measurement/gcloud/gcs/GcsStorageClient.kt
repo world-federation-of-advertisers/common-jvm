@@ -75,10 +75,10 @@ class GcsStorageClient(
         // would cause this `writeBlob` to fail with a precondition error — surprising for what is
         // documented as an unconditional write.
         storage.writer(blobInfo).use { byteChannel -> writeChannel(byteChannel, content) }
-        val gcsBlob =
+        val writtenBlob =
           storage.get(BlobId.of(bucketName, blobKey))
             ?: throw StorageException("Blob $blobKey vanished after successful writeBlob")
-        ClientBlob(gcsBlob, blobKey)
+        ClientBlob(writtenBlob, blobKey)
       } catch (e: GcsStorageException) {
         throw StorageException("Error writing blob with key $blobKey", e)
       }
@@ -102,12 +102,12 @@ class GcsStorageClient(
           byteChannel ->
           writeChannel(byteChannel, content)
         }
-        val gcsBlob =
+        val writtenBlob =
           storage.get(BlobId.of(bucketName, blob.blobKey))
             ?: throw StorageException(
               "Blob ${blob.blobKey} vanished after successful writeBlobIfUnchanged"
             )
-        ClientBlob(gcsBlob, blob.blobKey)
+        ClientBlob(writtenBlob, blob.blobKey)
       } catch (e: GcsStorageException) {
         if (e.code == HTTP_PRECONDITION_FAILED) {
           throw BlobChangedException(
@@ -133,10 +133,10 @@ class GcsStorageClient(
         storage.writer(blobInfo, Storage.BlobWriteOption.doesNotExist()).use { byteChannel ->
           writeChannel(byteChannel, content)
         }
-        val gcsBlob =
+        val writtenBlob =
           storage.get(BlobId.of(bucketName, blobKey))
             ?: throw StorageException("Blob $blobKey vanished after successful writeBlobIfAbsent")
-        ClientBlob(gcsBlob, blobKey)
+        ClientBlob(writtenBlob, blobKey)
       } catch (e: GcsStorageException) {
         if (e.code == HTTP_PRECONDITION_FAILED) {
           throw BlobChangedException("Precondition failed: blob $blobKey already exists", e)
