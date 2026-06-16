@@ -136,19 +136,17 @@ class MesosRecordIoStorageClient(private val storageClient: StorageClient) :
   /** A blob that will read the content in RecordIO format */
   private inner class Blob(val underlying: StorageClient.Blob, override val blobKey: String) :
     StorageClient.Blob {
-    private val blob: StorageClient.Blob
-      get() = underlying
 
     override val storageClient = this@MesosRecordIoStorageClient.storageClient
 
     override val createTime: Instant
-      get() = blob.createTime
+      get() = underlying.createTime
 
     override val updateTime: Instant
-      get() = blob.updateTime
+      get() = underlying.updateTime
 
     override val size: Long
-      get() = blob.size
+      get() = underlying.size
 
     private fun ByteString.indexOf(target: ByteString, position: Int = 0): Int {
       if (position < 0 || position >= this.size()) {
@@ -183,7 +181,7 @@ class MesosRecordIoStorageClient(private val storageClient: StorageClient) :
       var currentRecordSize = -1
       var recordBuffer = ByteString.newOutput()
 
-      blob.read().collect { chunk: ByteString ->
+      underlying.read().collect { chunk: ByteString ->
         var position = 0
 
         while (position < chunk.size()) {
@@ -226,7 +224,7 @@ class MesosRecordIoStorageClient(private val storageClient: StorageClient) :
       }
     }
 
-    override suspend fun delete() = blob.delete()
+    override suspend fun delete() = underlying.delete()
   }
 
   companion object {

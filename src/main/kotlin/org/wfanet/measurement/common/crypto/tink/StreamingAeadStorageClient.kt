@@ -118,22 +118,20 @@ class StreamingAeadStorageClient(
     val underlying: StorageClient.Blob,
     override val blobKey: String,
   ) : StorageClient.Blob {
-    private val blob: StorageClient.Blob
-      get() = underlying
 
     override val storageClient = this@StreamingAeadStorageClient.storageClient
 
     override val size: Long
-      get() = blob.size
+      get() = underlying.size
 
     override val createTime: java.time.Instant
-      get() = blob.createTime
+      get() = underlying.createTime
 
     override val updateTime: java.time.Instant
-      get() = blob.updateTime
+      get() = underlying.updateTime
 
     /**
-     * Reads and decrypts the blob's content.
+     * Reads and decrypts the underlying's content.
      *
      * This method handles the decryption of data by collecting all encrypted data first, then
      * decrypting it as a single operation.
@@ -144,10 +142,10 @@ class StreamingAeadStorageClient(
      */
     override fun read(): Flow<ByteString> {
       val associatedData: ByteString = blobKey.toByteStringUtf8()
-      return streamingAead.decrypt(blob.read(), associatedData, READ_CHUNK_SIZE_BYTES)
+      return streamingAead.decrypt(underlying.read(), associatedData, READ_CHUNK_SIZE_BYTES)
     }
 
-    override suspend fun delete() = blob.delete()
+    override suspend fun delete() = underlying.delete()
   }
 
   companion object {

@@ -107,22 +107,20 @@ class AeadStorageClient(private val storageClient: StorageClient, private val ae
     val underlying: StorageClient.Blob,
     override val blobKey: String,
   ) : StorageClient.Blob {
-    private val blob: StorageClient.Blob
-      get() = underlying
 
     override val storageClient = this@AeadStorageClient.storageClient
 
     override val size: Long
-      get() = blob.size
+      get() = underlying.size
 
     override val createTime: java.time.Instant
-      get() = blob.createTime
+      get() = underlying.createTime
 
     override val updateTime: java.time.Instant
-      get() = blob.updateTime
+      get() = underlying.updateTime
 
     /**
-     * Reads and decrypts the blob's content.
+     * Reads and decrypts the underlying's content.
      *
      * This method handles the decryption of data by collecting all encrypted data first, then
      * decrypting it as a single operation.
@@ -133,11 +131,11 @@ class AeadStorageClient(private val storageClient: StorageClient, private val ae
      */
     override fun read(): Flow<ByteString> = flow {
       val associatedData: ByteString = blobKey.toByteStringUtf8()
-      val data = blob.read().flatten().toByteArray()
+      val data = underlying.read().flatten().toByteArray()
       emit(aead.decrypt(data, associatedData.toByteArray()).toByteString())
     }
 
-    override suspend fun delete() = blob.delete()
+    override suspend fun delete() = underlying.delete()
   }
 
   companion object {
