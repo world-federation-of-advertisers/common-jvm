@@ -90,7 +90,8 @@ class GcsStorageClient(
     content: Flow<ByteString>,
   ): StorageClient.Blob {
     require(blob is ClientBlob) { "Incompatible blob type" }
-    val expectedGeneration = blob.blob.generation
+    val gcsBlob: Blob = blob.blob
+    val expectedGeneration = gcsBlob.generation
     return withContext(blockingContext + CoroutineName("writeBlobIfUnchanged")) {
       val blobInfo = BlobInfo.newBuilder(bucketName, blob.blobKey).build()
       try {
