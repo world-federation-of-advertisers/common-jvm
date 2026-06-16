@@ -102,15 +102,13 @@ abstract class AbstractConditionalOperationStorageClientTest<
   }
 
   @Test
-  fun `writeBlobIfAbsent then writeBlob overwrites`(): Unit = runBlocking {
-    // Once a blob exists, an unconditional writeBlob should still overwrite it —
-    // `writeBlobIfAbsent`
-    // does not lock the key against future unconditional writes.
-    val blobKey = "overwritable-blob"
-    storageClient.writeBlobIfAbsent(blobKey, "first".toByteStringUtf8().let { flowOf(it) })
+  fun `writeBlobIfAbsent does not lock the key against later unconditional writes`(): Unit =
+    runBlocking {
+      val blobKey = "overwritable-blob"
+      storageClient.writeBlobIfAbsent(blobKey, flowOf("first".toByteStringUtf8()))
 
-    val overwritten = storageClient.writeBlob(blobKey, "second".toByteStringUtf8())
+      val overwritten = storageClient.writeBlob(blobKey, "second".toByteStringUtf8())
 
-    assertThat(overwritten).contentEqualTo("second".toByteStringUtf8())
-  }
+      assertThat(overwritten).contentEqualTo("second".toByteStringUtf8())
+    }
 }
