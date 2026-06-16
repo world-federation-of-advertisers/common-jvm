@@ -31,29 +31,39 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
+import org.wfanet.measurement.storage.testing.AbstractConditionalOperationStorageClientTest
 import org.wfanet.measurement.storage.testing.ComplexMessage
 import org.wfanet.measurement.storage.testing.ComplexMessageKt
 import org.wfanet.measurement.storage.testing.InMemoryStorageClient
 import org.wfanet.measurement.storage.testing.complexMessage
 
 @RunWith(JUnit4::class)
-class MesosRecordIoStorageClientTest {
+class MesosRecordIoStorageClientTest :
+  AbstractConditionalOperationStorageClientTest<MesosRecordIoStorageClient>() {
 
   private lateinit var wrappedStorageClient: StorageClient
-  private lateinit var mesosRecordIoStorageClient: MesosRecordIoStorageClient
+
+  /**
+   * RecordIO framing: each record is prefixed with its size as ASCII digits followed by a single
+   * delimiter byte. For the AbstractStorageClientTest size test which writes [content] as one
+   * record, the stored byte count is `content.size + digit_count + 1`.
+   */
+  override fun computeStoredBlobSize(content: ByteString, blobKey: String): Int {
+    return content.size() + content.size().toString().length + 1
+  }
 
   @Before
   fun initStorageClient() {
     wrappedStorageClient = InMemoryStorageClient()
-    mesosRecordIoStorageClient = MesosRecordIoStorageClient(wrappedStorageClient)
+    storageClient = MesosRecordIoStorageClient(wrappedStorageClient)
   }
 
   @Test
   fun `test writing and reading single record`() = runBlocking {
     val testData = "Hello World"
     val blobKey = "test-single-record"
-    mesosRecordIoStorageClient.writeBlob(blobKey, flowOf(ByteString.copyFromUtf8(testData)))
-    val blob = mesosRecordIoStorageClient.getBlob(blobKey)
+    storageClient.writeBlob(blobKey, flowOf(ByteString.copyFromUtf8(testData)))
+    val blob = storageClient.getBlob(blobKey)
     requireNotNull(blob) { "Blob should exist" }
     val records = blob.read().toList()
     assertThat(1).isEqualTo(records.size)
@@ -67,8 +77,8 @@ class MesosRecordIoStorageClientTest {
     val testData = List(130000) { singleRecord } // ~4MB
     val blobKey = "test-large-records"
     val recordFlow = flow { testData.forEach { record -> emit(ByteString.copyFromUtf8(record)) } }
-    mesosRecordIoStorageClient.writeBlob(blobKey, recordFlow)
-    val blob = mesosRecordIoStorageClient.getBlob(blobKey)
+    storageClient.writeBlob(blobKey, recordFlow)
+    val blob = storageClient.getBlob(blobKey)
     requireNotNull(blob) { "Blob should exist" }
     val records = blob.read().toList()
     assertThat(testData.size).isEqualTo(records.size)
@@ -80,8 +90,8 @@ class MesosRecordIoStorageClientTest {
   @Test
   fun `test writing empty flow`() = runBlocking {
     val blobKey = "test-empty-flow"
-    mesosRecordIoStorageClient.writeBlob(blobKey, emptyFlow())
-    val blob = mesosRecordIoStorageClient.getBlob(blobKey)
+    storageClient.writeBlob(blobKey, emptyFlow())
+    val blob = storageClient.getBlob(blobKey)
     requireNotNull(blob) { "Blob should exist" }
     val records = blob.read().toList()
     assertThat(records).isEmpty()
@@ -91,17 +101,17 @@ class MesosRecordIoStorageClientTest {
   fun `test deleting blob`() = runBlocking {
     val blobKey = "test-delete"
     val testData = "Test Data"
-    mesosRecordIoStorageClient.writeBlob(blobKey, flowOf(ByteString.copyFromUtf8(testData)))
-    val blob = mesosRecordIoStorageClient.getBlob(blobKey)
+    storageClient.writeBlob(blobKey, flowOf(ByteString.copyFromUtf8(testData)))
+    val blob = storageClient.getBlob(blobKey)
     requireNotNull(blob) { "Blob should exist" }
     blob.delete()
-    val deletedBlob = mesosRecordIoStorageClient.getBlob(blobKey)
+    val deletedBlob = storageClient.getBlob(blobKey)
     assertThat(deletedBlob).isNull()
   }
 
   @Test
   fun `test non-existent blob returns null`() = runBlocking {
-    val nonExistentBlob = mesosRecordIoStorageClient.getBlob("non-existent-key")
+    val nonExistentBlob = storageClient.getBlob("non-existent-key")
     assertThat(nonExistentBlob).isNull()
   }
 
@@ -121,7 +131,7 @@ class MesosRecordIoStorageClientTest {
 
       wrappedStorageClient.writeBlob(blobKey, flowOf(ByteString.copyFromUtf8(formattedContent)))
 
-      val blob = mesosRecordIoStorageClient.getBlob(blobKey)
+      val blob = storageClient.getBlob(blobKey)
       requireNotNull(blob) { "Blob should exist" }
       val readRecords = blob.read().map { it.toStringUtf8() }.toList()
 
@@ -162,7 +172,7 @@ class MesosRecordIoStorageClientTest {
     invalidFormats.forEachIndexed { index, invalidContent ->
       val testBlobKey = "$blobKey-$index"
       wrappedStorageClient.writeBlob(testBlobKey, flowOf(ByteString.copyFromUtf8(invalidContent)))
-      val blob = mesosRecordIoStorageClient.getBlob(testBlobKey)
+      val blob = storageClient.getBlob(testBlobKey)
       requireNotNull(blob) { "Blob should exist" }
 
       when {
@@ -193,8 +203,8 @@ class MesosRecordIoStorageClientTest {
     val numRecords = 2
     val blobKey = "test-single-record"
     val data: Flow<ByteString> = flow { repeat(numRecords) { emit(testData.toByteString()) } }
-    mesosRecordIoStorageClient.writeBlob(blobKey, data)
-    val blob = mesosRecordIoStorageClient.getBlob(blobKey)
+    storageClient.writeBlob(blobKey, data)
+    val blob = storageClient.getBlob(blobKey)
     requireNotNull(blob) { "Blob should exist" }
     val records = blob.read().toList()
     assertThat(records.size).isEqualTo(numRecords)
@@ -221,7 +231,7 @@ class MesosRecordIoStorageClientTest {
       }
     val blobKey = "test-chunking-invariant"
     val recordFlow = flow { messages.forEach { emit(it.toByteString()) } }
-    mesosRecordIoStorageClient.writeBlob(blobKey, recordFlow)
+    storageClient.writeBlob(blobKey, recordFlow)
     val rawBlob = wrappedStorageClient.getBlob(blobKey)!!.read().toList().single()
     val expected = messages.map { it.toByteString() }
 
@@ -239,7 +249,7 @@ class MesosRecordIoStorageClientTest {
     val nonEmptyMessage = complexMessage { field1 += 1 }
     val emptyMessage = ComplexMessage.getDefaultInstance()
     val blobKey = "test-empty-proto-record"
-    mesosRecordIoStorageClient.writeBlob(
+    storageClient.writeBlob(
       blobKey,
       flowOf(
         nonEmptyMessage.toByteString(),
@@ -247,7 +257,7 @@ class MesosRecordIoStorageClientTest {
         nonEmptyMessage.toByteString(),
       ),
     )
-    val blob = mesosRecordIoStorageClient.getBlob(blobKey)
+    val blob = storageClient.getBlob(blobKey)
     requireNotNull(blob) { "Blob should exist" }
     val records = blob.read().toList()
     assertThat(records).hasSize(3)
@@ -260,7 +270,7 @@ class MesosRecordIoStorageClientTest {
   fun `test reading zero-sized record as empty proto`() = runBlocking {
     val blobKey = "test-zero-sized-record"
     wrappedStorageClient.writeBlob(blobKey, flowOf(ByteString.copyFromUtf8("0\n")))
-    val blob = mesosRecordIoStorageClient.getBlob(blobKey)
+    val blob = storageClient.getBlob(blobKey)
     requireNotNull(blob) { "Blob should exist" }
 
     val records = blob.read().toList()
@@ -349,37 +359,20 @@ class MesosRecordIoStorageClientTest {
     val testData = listOf("first", "second", "third")
     val recordFlow = flow { testData.forEach { emit(ByteString.copyFromUtf8(it)) } }
 
-    mesosRecordIoStorageClient.writeBlobIfAbsent(blobKey, recordFlow)
+    storageClient.writeBlobIfAbsent(blobKey, recordFlow)
 
-    val blob = requireNotNull(mesosRecordIoStorageClient.getBlob(blobKey))
+    val blob = requireNotNull(storageClient.getBlob(blobKey))
     val records = blob.read().toList()
     assertThat(records.map { it.toStringUtf8() }).isEqualTo(testData)
   }
 
   @Test
-  fun `writeBlobIfAbsent throws BlobChangedException when blob exists`(): Unit = runBlocking {
-    val blobKey = "writeIfAbsent-conflict"
-    mesosRecordIoStorageClient.writeBlob(blobKey, flowOf(ByteString.copyFromUtf8("original")))
-
-    assertFailsWith<BlobChangedException> {
-      mesosRecordIoStorageClient.writeBlobIfAbsent(
-        blobKey,
-        flowOf(ByteString.copyFromUtf8("clobber")),
-      )
-    }
-
-    val records = requireNotNull(mesosRecordIoStorageClient.getBlob(blobKey)).read().toList()
-    assertThat(records.map { it.toStringUtf8() }).isEqualTo(listOf("original"))
-  }
-
-  @Test
   fun `writeBlobIfUnchanged overwrites RecordIO blob with new records`() = runBlocking {
     val blobKey = "writeIfUnchanged-overwrite"
-    val firstBlob =
-      mesosRecordIoStorageClient.writeBlob(blobKey, flowOf(ByteString.copyFromUtf8("v1")))
+    val firstBlob = storageClient.writeBlob(blobKey, flowOf(ByteString.copyFromUtf8("v1")))
 
     val secondBlob =
-      mesosRecordIoStorageClient.writeBlobIfUnchanged(
+      storageClient.writeBlobIfUnchanged(
         firstBlob,
         flowOf(ByteString.copyFromUtf8("v2-a"), ByteString.copyFromUtf8("v2-b")),
       )
@@ -391,16 +384,12 @@ class MesosRecordIoStorageClientTest {
   @Test
   fun `writeBlobIfUnchanged throws when wrapped blob has changed`(): Unit = runBlocking {
     val blobKey = "writeIfUnchanged-stale"
-    val staleBlob =
-      mesosRecordIoStorageClient.writeBlob(blobKey, flowOf(ByteString.copyFromUtf8("v1")))
+    val staleBlob = storageClient.writeBlob(blobKey, flowOf(ByteString.copyFromUtf8("v1")))
     // Concurrent writer races ahead.
-    mesosRecordIoStorageClient.writeBlob(blobKey, flowOf(ByteString.copyFromUtf8("v1.5")))
+    storageClient.writeBlob(blobKey, flowOf(ByteString.copyFromUtf8("v1.5")))
 
     assertFailsWith<BlobChangedException> {
-      mesosRecordIoStorageClient.writeBlobIfUnchanged(
-        staleBlob,
-        flowOf(ByteString.copyFromUtf8("v2")),
-      )
+      storageClient.writeBlobIfUnchanged(staleBlob, flowOf(ByteString.copyFromUtf8("v2")))
     }
   }
 
