@@ -342,4 +342,86 @@ class MesosRecordIoStorageClientTest {
     }
     return chunks
   }
+
+  @Test
+  fun `writeBlobIfAbsent writes RecordIO records when blob does not exist`() = runBlocking {
+    val blobKey = "writeIfAbsent-fresh"
+    val testData = listOf("first", "second", "third")
+    val recordFlow = flow { testData.forEach { emit(ByteString.copyFromUtf8(it)) } }
+
+    mesosRecordIoStorageClient.writeBlobIfAbsent(blobKey, recordFlow)
+
+    val blob = requireNotNull(mesosRecordIoStorageClient.getBlob(blobKey))
+    val records = blob.read().toList()
+    assertThat(records.map { it.toStringUtf8() }).isEqualTo(testData)
+  }
+
+  @Test
+  fun `writeBlobIfAbsent throws BlobChangedException when blob exists`(): Unit = runBlocking {
+    val blobKey = "writeIfAbsent-conflict"
+    mesosRecordIoStorageClient.writeBlob(blobKey, flowOf(ByteString.copyFromUtf8("original")))
+
+    assertFailsWith<BlobChangedException> {
+      mesosRecordIoStorageClient.writeBlobIfAbsent(
+        blobKey,
+        flowOf(ByteString.copyFromUtf8("clobber")),
+      )
+    }
+
+    val records = requireNotNull(mesosRecordIoStorageClient.getBlob(blobKey)).read().toList()
+    assertThat(records.map { it.toStringUtf8() }).isEqualTo(listOf("original"))
+  }
+
+  @Test
+  fun `writeBlobIfUnchanged overwrites RecordIO blob with new records`() = runBlocking {
+    val blobKey = "writeIfUnchanged-overwrite"
+    val firstBlob =
+      mesosRecordIoStorageClient.writeBlob(blobKey, flowOf(ByteString.copyFromUtf8("v1")))
+
+    val secondBlob =
+      mesosRecordIoStorageClient.writeBlobIfUnchanged(
+        firstBlob,
+        flowOf(ByteString.copyFromUtf8("v2-a"), ByteString.copyFromUtf8("v2-b")),
+      )
+
+    val records = secondBlob.read().toList()
+    assertThat(records.map { it.toStringUtf8() }).isEqualTo(listOf("v2-a", "v2-b"))
+  }
+
+  @Test
+  fun `writeBlobIfUnchanged throws when wrapped blob has changed`(): Unit = runBlocking {
+    val blobKey = "writeIfUnchanged-stale"
+    val staleBlob =
+      mesosRecordIoStorageClient.writeBlob(blobKey, flowOf(ByteString.copyFromUtf8("v1")))
+    // Concurrent writer races ahead.
+    mesosRecordIoStorageClient.writeBlob(blobKey, flowOf(ByteString.copyFromUtf8("v1.5")))
+
+    assertFailsWith<BlobChangedException> {
+      mesosRecordIoStorageClient.writeBlobIfUnchanged(
+        staleBlob,
+        flowOf(ByteString.copyFromUtf8("v2")),
+      )
+    }
+  }
+
+  @Test
+  fun `writeBlobIfAbsent requires the wrapped client to support conditional writes`(): Unit =
+    runBlocking {
+      val plainClient = NonConditionalStorageClient()
+      val wrapper = MesosRecordIoStorageClient(plainClient)
+
+      assertFailsWith<IllegalArgumentException> {
+        wrapper.writeBlobIfAbsent("k", flowOf(ByteString.copyFromUtf8("x")))
+      }
+    }
+
+  /** Bare-bones StorageClient that does NOT implement ConditionalOperationStorageClient. */
+  private class NonConditionalStorageClient : StorageClient {
+    override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob =
+      error("not used")
+
+    override suspend fun getBlob(blobKey: String): StorageClient.Blob? = null
+
+    override suspend fun listBlobs(prefix: String?): Flow<StorageClient.Blob> = flowOf()
+  }
 }
