@@ -149,6 +149,30 @@ T : ConditionalOperationStorageClient {
   }
 
   @Test
+  fun `updateBlobMetadata merges with existing metadata`(): Unit = runBlocking {
+    val blobKey = "merge-existing-metadata"
+    storageClient.writeBlob(blobKey, "content".toByteStringUtf8())
+    storageClient.updateBlobMetadata(blobKey, metadata = mapOf("a" to "1"))
+
+    storageClient.updateBlobMetadata(blobKey, metadata = mapOf("b" to "2"))
+
+    val blob = checkNotNull(storageClient.getBlob(blobKey)) { "Blob not found: $blobKey" }
+    assertThat(blob.metadata).containsAtLeast("a", "1", "b", "2")
+  }
+
+  @Test
+  fun `updateBlobMetadata overwrites value for an existing key`(): Unit = runBlocking {
+    val blobKey = "overwrite-existing-key"
+    storageClient.writeBlob(blobKey, "content".toByteStringUtf8())
+    storageClient.updateBlobMetadata(blobKey, metadata = mapOf("k" to "v1"))
+
+    storageClient.updateBlobMetadata(blobKey, metadata = mapOf("k" to "v2"))
+
+    val blob = checkNotNull(storageClient.getBlob(blobKey)) { "Blob not found: $blobKey" }
+    assertThat(blob.metadata).containsAtLeast("k", "v2")
+  }
+
+  @Test
   fun `writeBlob overwrite wipes prior custom metadata`(): Unit = runBlocking {
     val blobKey = "wipe-on-overwrite"
     storageClient.writeBlob(blobKey, "v1".toByteStringUtf8())

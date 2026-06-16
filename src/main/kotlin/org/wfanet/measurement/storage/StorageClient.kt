@@ -188,9 +188,13 @@ interface BlobMetadataStorageClient : StorageClient {
   /**
    * Updates metadata on an existing blob.
    *
+   * Merge semantics — keys present in [metadata] are added or overwritten; keys already on the blob
+   * but absent from [metadata] are preserved. Matches GCS PATCH semantics.
+   *
    * @param blobKey The key of the blob to update
-   * @param customCreateTime Optional custom create timestamp (for lifecycle management)
-   * @param metadata Custom key-value metadata pairs
+   * @param customCreateTime Optional custom create timestamp (for lifecycle management). When
+   *   `null`, any existing custom create time is preserved.
+   * @param metadata Custom key-value metadata pairs to merge with any existing metadata
    * @throws StorageException if update fails
    */
   suspend fun updateBlobMetadata(

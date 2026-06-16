@@ -122,7 +122,9 @@ class InMemoryStorageClient :
         updateTime = Instant.now(),
         generation = existing.generation,
         customTime = customCreateTime ?: existing.customTime,
-        metadata = if (metadata.isNotEmpty()) metadata else existing.metadata,
+        // GCS PATCH semantics: keys in [metadata] are added or overwritten; existing keys not in
+        // [metadata] are preserved. Map+ is right-biased so collisions resolve to the new value.
+        metadata = existing.metadata + metadata,
       )
   }
 
