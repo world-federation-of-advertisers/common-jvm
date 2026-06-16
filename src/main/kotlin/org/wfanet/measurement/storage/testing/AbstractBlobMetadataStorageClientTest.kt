@@ -173,6 +173,24 @@ T : ConditionalOperationStorageClient {
   }
 
   @Test
+  fun `updateBlobMetadata with only metadata preserves existing customCreateTime`(): Unit =
+    runBlocking {
+      val blobKey = "preserve-custom-create-time"
+      storageClient.writeBlob(blobKey, "content".toByteStringUtf8())
+      val customCreateTime = Instant.parse("2025-01-15T10:30:00Z")
+      storageClient.updateBlobMetadata(blobKey, customCreateTime = customCreateTime)
+
+      // Subsequent call sets only metadata, must not wipe the previously-set customCreateTime.
+      storageClient.updateBlobMetadata(blobKey, metadata = mapOf("k" to "v"))
+
+      verifyBlobMetadata(
+        blobKey,
+        expectedCustomCreateTime = customCreateTime,
+        expectedMetadata = mapOf("k" to "v"),
+      )
+    }
+
+  @Test
   fun `writeBlob overwrite wipes prior custom metadata`(): Unit = runBlocking {
     val blobKey = "wipe-on-overwrite"
     storageClient.writeBlob(blobKey, "v1".toByteStringUtf8())
