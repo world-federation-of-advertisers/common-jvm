@@ -68,23 +68,25 @@ class MesosRecordIoStorageClient(private val storageClient: StorageClient) :
   }
 
   /**
-   * Conditional [writeBlob] that writes only if no blob currently exists at [blobKey]
-   * (write-if-absent). Frames each record with the RecordIO size+delimiter prefix before delegating
-   * to the underlying client.
+   * Conditional [writeBlob] that writes only if the blob's current generation equals
+   * [expectedGeneration] (pass `0` to require that the blob does not exist). Frames each record
+   * with the RecordIO size+delimiter prefix before delegating to the underlying client.
    *
-   * @throws BlobChangedException if the blob already exists
+   * @throws BlobChangedException if the precondition fails
    * @throws IllegalArgumentException if the underlying client does not implement
    *   [ConditionalOperationStorageClient]
    */
-  override suspend fun writeBlobIfAbsent(
+  override suspend fun writeBlobIfGeneration(
     blobKey: String,
+    expectedGeneration: Long,
     content: Flow<ByteString>,
   ): StorageClient.Blob {
     require(storageClient is ConditionalOperationStorageClient) {
       "Underlying storage client does not support conditional writes"
     }
     val processed: Flow<ByteString> = recordIoFraming(content)
-    val wrappedBlob: StorageClient.Blob = storageClient.writeBlobIfAbsent(blobKey, processed)
+    val wrappedBlob: StorageClient.Blob =
+      storageClient.writeBlobIfGeneration(blobKey, expectedGeneration, processed)
     return Blob(wrappedBlob, blobKey)
   }
 

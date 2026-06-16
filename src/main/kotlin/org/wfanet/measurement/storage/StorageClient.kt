@@ -178,21 +178,34 @@ interface ConditionalOperationStorageClient : StorageClient {
   suspend fun writeBlobIfUnchanged(blob: Blob, content: Flow<ByteString>): Blob
 
   /**
-   * Writes [content] to [blobKey] only if no blob currently exists at that key (write-if-absent /
-   * GCS `IfGenerationMatch=0`).
+   * Writes [content] to [blobKey] only if the blob's current generation on the backend equals
+   * [expectedGeneration] (GCS `IfGenerationMatch`).
    *
-   * The precondition is checked atomically on the server, so concurrent writers to the same key are
-   * race-free: exactly one write lands; the others fail-fast with [BlobChangedException].
+   * Pass `0` to require that the blob does not currently exist (first-writer-wins). Pass a non-zero
+   * value to require that the blob is currently at that exact generation (compare-and-swap on
+   * version). The precondition is checked atomically on the server, so concurrent writers are
+   * race-free: at most one write per `expectedGeneration` value lands; the others fail-fast with
+   * [BlobChangedException].
    *
-   * Use this when the caller needs first-writer-wins semantics on a fresh key. For CAS on an
-   * existing blob (read-modify-write), use [writeBlobIfUnchanged] with the [Blob] obtained from a
-   * prior read.
+   * Typical pattern for a VM that takes minutes to compute its payload and may race with
+   * redelivered peers: at task start, read the current blob's generation (or `0` if absent); after
+   * compute, call this method with that generation; on [BlobChangedException], do not retry with a
+   * fresher generation — another writer won the slot and clobbering them would corrupt their
+   * consumers.
+   *
+   * For the case where the caller already holds a [Blob] from a prior read, [writeBlobIfUnchanged]
+   * is the more convenient API and does the same thing.
    *
    * @return the written [Blob]
-   * @throws BlobChangedException if the blob already exists (HTTP 412 from the storage backend)
+   * @throws BlobChangedException if the blob's current generation does not match
+   *   [expectedGeneration] (HTTP 412 from the storage backend)
    * @throws StorageException on other write failures
    */
-  suspend fun writeBlobIfAbsent(blobKey: String, content: Flow<ByteString>): Blob
+  suspend fun writeBlobIfGeneration(
+    blobKey: String,
+    expectedGeneration: Long,
+    content: Flow<ByteString>,
+  ): Blob
 }
 
 /**

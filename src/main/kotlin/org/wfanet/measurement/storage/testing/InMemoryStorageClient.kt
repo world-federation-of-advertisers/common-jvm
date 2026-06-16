@@ -90,19 +90,25 @@ class InMemoryStorageClient :
   }
 
   /**
-   * Conditional write that succeeds only if no blob currently exists at [blobKey].
+   * Conditional write that succeeds only if the blob's current generation equals
+   * [expectedGeneration]. Pass `0` to require that the blob does not currently exist.
    *
-   * Note: the existence check and subsequent write are not atomic. This matches GCS semantics only
+   * Note: the generation check and subsequent write are not atomic. This matches GCS semantics only
    * when there is no concurrent writer for the same key; production GCS enforces atomicity via the
-   * server-side `IfGenerationMatch=0` precondition, but the in-memory test double does not. Safe
-   * for single-coroutine-per-key test usage.
+   * server-side `IfGenerationMatch` precondition, but the in-memory test double does not. Safe for
+   * single-coroutine-per-key test usage.
    */
-  override suspend fun writeBlobIfAbsent(
+  override suspend fun writeBlobIfGeneration(
     blobKey: String,
+    expectedGeneration: Long,
     content: Flow<ByteString>,
   ): StorageClient.Blob {
-    if (storageMap.containsKey(blobKey)) {
-      throw BlobChangedException("Blob $blobKey already exists")
+    require(expectedGeneration >= 0) { "expectedGeneration must be >= 0, got $expectedGeneration" }
+    val currentGeneration = storageMap[blobKey]?.generation ?: 0L
+    if (currentGeneration != expectedGeneration) {
+      throw BlobChangedException(
+        "Blob $blobKey is at generation $currentGeneration, not $expectedGeneration"
+      )
     }
     return writeBlob(blobKey, content)
   }

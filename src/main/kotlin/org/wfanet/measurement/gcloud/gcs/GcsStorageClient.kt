@@ -120,26 +120,34 @@ class GcsStorageClient(
     }
   }
 
-  override suspend fun writeBlobIfAbsent(
+  override suspend fun writeBlobIfGeneration(
     blobKey: String,
+    expectedGeneration: Long,
     content: Flow<ByteString>,
   ): StorageClient.Blob {
-    return withContext(blockingContext + CoroutineName("writeBlobIfAbsent")) {
+    require(expectedGeneration >= 0) { "expectedGeneration must be >= 0, got $expectedGeneration" }
+    return withContext(blockingContext + CoroutineName("writeBlobIfGeneration")) {
       val blobInfo = BlobInfo.newBuilder(bucketName, blobKey).build()
       try {
-        // Single resumable upload gated on `IfGenerationMatch=0` (blob must not exist). The
-        // precondition is checked atomically on the server, so concurrent writers are race-free:
-        // exactly one write lands, the others fail-fast with `412 Precondition Failed`.
-        storage.writer(blobInfo, Storage.BlobWriteOption.doesNotExist()).use { byteChannel ->
+        // Single resumable upload gated on `IfGenerationMatch=<expectedGeneration>`. Race-free:
+        // the server atomically checks the precondition; either this write lands at the expected
+        // generation, or it fails-fast with HTTP 412.
+        storage.writer(blobInfo, Storage.BlobWriteOption.generationMatch(expectedGeneration)).use {
+          byteChannel ->
           writeChannel(byteChannel, content)
         }
         val writtenBlob =
           storage.get(BlobId.of(bucketName, blobKey))
-            ?: throw StorageException("Blob $blobKey vanished after successful writeBlobIfAbsent")
+            ?: throw StorageException(
+              "Blob $blobKey vanished after successful writeBlobIfGeneration"
+            )
         ClientBlob(writtenBlob, blobKey)
       } catch (e: GcsStorageException) {
         if (e.code == HTTP_PRECONDITION_FAILED) {
-          throw BlobChangedException("Precondition failed: blob $blobKey already exists", e)
+          throw BlobChangedException(
+            "Precondition failed: blob $blobKey not at expected generation $expectedGeneration",
+            e,
+          )
         }
         throw StorageException("Error writing blob with key $blobKey", e)
       }

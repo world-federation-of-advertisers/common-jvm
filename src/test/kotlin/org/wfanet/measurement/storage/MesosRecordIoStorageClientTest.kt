@@ -354,12 +354,12 @@ class MesosRecordIoStorageClientTest :
   }
 
   @Test
-  fun `writeBlobIfAbsent writes RecordIO records when blob does not exist`() = runBlocking {
+  fun `writeBlobIfGeneration writes RecordIO records when blob does not exist`() = runBlocking {
     val blobKey = "writeIfAbsent-fresh"
     val testData = listOf("first", "second", "third")
     val recordFlow = flow { testData.forEach { emit(ByteString.copyFromUtf8(it)) } }
 
-    storageClient.writeBlobIfAbsent(blobKey, recordFlow)
+    storageClient.writeBlobIfGeneration(blobKey, expectedGeneration = 0L, recordFlow)
 
     val blob = requireNotNull(storageClient.getBlob(blobKey))
     val records = blob.read().toList()
@@ -394,13 +394,17 @@ class MesosRecordIoStorageClientTest :
   }
 
   @Test
-  fun `writeBlobIfAbsent requires the wrapped client to support conditional writes`(): Unit =
+  fun `writeBlobIfGeneration requires the wrapped client to support conditional writes`(): Unit =
     runBlocking {
       val plainClient = NonConditionalStorageClient()
       val wrapper = MesosRecordIoStorageClient(plainClient)
 
       assertFailsWith<IllegalArgumentException> {
-        wrapper.writeBlobIfAbsent("k", flowOf(ByteString.copyFromUtf8("x")))
+        wrapper.writeBlobIfGeneration(
+          "k",
+          expectedGeneration = 0L,
+          flowOf(ByteString.copyFromUtf8("x")),
+        )
       }
     }
 

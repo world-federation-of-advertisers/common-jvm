@@ -81,8 +81,9 @@ class StreamingAeadStorageClient(
     return storageClient.listBlobs(prefix)
   }
 
-  override suspend fun writeBlobIfAbsent(
+  override suspend fun writeBlobIfGeneration(
     blobKey: String,
+    expectedGeneration: Long,
     content: Flow<ByteString>,
   ): StorageClient.Blob {
     require(storageClient is ConditionalOperationStorageClient) {
@@ -91,8 +92,9 @@ class StreamingAeadStorageClient(
     val associatedData: ByteString = blobKey.toByteStringUtf8()
     val ciphertext: Flow<ByteString> =
       streamingAead.encrypt(content, associatedData, streamingAeadContext)
-    val wrappedBlob: StorageClient.Blob = storageClient.writeBlobIfAbsent(blobKey, ciphertext)
-    logger.fine { "Wrote encrypted content via writeBlobIfAbsent: $blobKey" }
+    val wrappedBlob: StorageClient.Blob =
+      storageClient.writeBlobIfGeneration(blobKey, expectedGeneration, ciphertext)
+    logger.fine { "Wrote encrypted content via writeBlobIfGeneration: $blobKey" }
     return EncryptedBlob(wrappedBlob, blobKey)
   }
 

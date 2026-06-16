@@ -52,16 +52,17 @@ class AeadStorageClientTest : AbstractConditionalOperationStorageClientTest<Aead
   }
 
   @Test
-  fun `writeBlobIfAbsent requires the wrapped client to support conditional writes`(): Unit =
+  fun `writeBlobIfGeneration requires the wrapped client to support conditional writes`(): Unit =
     runBlocking {
       // A `StorageClient` that does NOT implement `ConditionalOperationStorageClient` should make
-      // `writeBlobIfAbsent` on the AEAD wrapper throw `IllegalArgumentException` at the require()
+      // `writeBlobIfGeneration` on the AEAD wrapper throw `IllegalArgumentException` at the
+      // require()
       // check, not silently fall through and write unconditionally.
       val plainClient = NonConditionalStorageClient()
       val aeadOverPlain = AeadStorageClient(plainClient, aead)
 
       assertFailsWith<IllegalArgumentException> {
-        aeadOverPlain.writeBlobIfAbsent("k", flowOf(testBlobContent))
+        aeadOverPlain.writeBlobIfGeneration("k", expectedGeneration = 0L, flowOf(testBlobContent))
       }
     }
 

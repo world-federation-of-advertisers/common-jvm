@@ -20,6 +20,7 @@ import com.google.common.truth.Truth.assertThat
 import com.google.protobuf.ByteString
 import com.google.protobuf.kotlin.toByteStringUtf8
 import java.time.Instant
+import kotlin.test.assertFailsWith
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
@@ -30,7 +31,9 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 import org.wfanet.measurement.gcloud.gcs.testing.StorageEmulatorRule
+import org.wfanet.measurement.storage.BlobChangedException
 import org.wfanet.measurement.storage.testing.AbstractBlobMetadataStorageClientTest
+import org.wfanet.measurement.storage.testing.BlobSubject.Companion.assertThat
 
 @RunWith(JUnit4::class)
 class GcsStorageClientTest : AbstractBlobMetadataStorageClientTest<GcsStorageClient>() {
@@ -107,6 +110,37 @@ class GcsStorageClientTest : AbstractBlobMetadataStorageClientTest<GcsStorageCli
 
     val refetched = checkNotNull(storageClient.getBlob(blobKey))
     assertThat(refetched.metadata).doesNotContainKey("foo")
+  }
+
+  @Test
+  fun `writeBlobIfGeneration with stale generation throws`(): Unit = runBlocking {
+    val blobKey = "stale-gen-cas"
+    val staleBlob = storageClient.writeBlob(blobKey, "v1".toByteStringUtf8())
+    val staleGen = storageEmulator.storage.get(BUCKET, blobKey).generation
+    // Concurrent writer races ahead.
+    storageClient.writeBlob(blobKey, "v1.5".toByteStringUtf8())
+
+    assertFailsWith<BlobChangedException> {
+      storageClient.writeBlobIfGeneration(blobKey, staleGen, flowOf(testBlobContent))
+    }
+  }
+
+  @Test
+  fun `writeBlobIfGeneration with matching generation overwrites`(): Unit = runBlocking {
+    val blobKey = "matching-gen-cas"
+    storageClient.writeBlob(blobKey, "v1".toByteStringUtf8())
+    val currentGen = storageEmulator.storage.get(BUCKET, blobKey).generation
+
+    val second = storageClient.writeBlobIfGeneration(blobKey, currentGen, flowOf(testBlobContent))
+
+    assertThat(second).contentEqualTo(testBlobContent)
+  }
+
+  @Test
+  fun `writeBlobIfGeneration rejects negative expectedGeneration`(): Unit = runBlocking {
+    assertFailsWith<IllegalArgumentException> {
+      storageClient.writeBlobIfGeneration("k", expectedGeneration = -1L, flowOf(testBlobContent))
+    }
   }
 
   companion object {

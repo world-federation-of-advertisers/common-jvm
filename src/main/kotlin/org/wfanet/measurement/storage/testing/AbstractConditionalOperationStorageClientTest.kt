@@ -53,22 +53,23 @@ abstract class AbstractConditionalOperationStorageClientTest<
   }
 
   @Test
-  fun `writeBlobIfAbsent writes when no blob exists`(): Unit = runBlocking {
+  fun `writeBlobIfGeneration with expected 0 writes when no blob exists`(): Unit = runBlocking {
     val blobKey = "fresh-blob"
 
-    val written = storageClient.writeBlobIfAbsent(blobKey, flowOf(testBlobContent))
+    val written =
+      storageClient.writeBlobIfGeneration(blobKey, expectedGeneration = 0L, flowOf(testBlobContent))
 
     assertThat(written).contentEqualTo(testBlobContent)
     assertThat(checkNotNull(storageClient.getBlob(blobKey))).contentEqualTo(testBlobContent)
   }
 
   @Test
-  fun `writeBlobIfAbsent throws BlobChangedException when blob exists`(): Unit = runBlocking {
+  fun `writeBlobIfGeneration with expected 0 throws when blob exists`(): Unit = runBlocking {
     val blobKey = "existing-blob"
     storageClient.writeBlob(blobKey, "first writer".toByteStringUtf8())
 
     assertFailsWith<BlobChangedException> {
-      storageClient.writeBlobIfAbsent(blobKey, flowOf(testBlobContent))
+      storageClient.writeBlobIfGeneration(blobKey, expectedGeneration = 0L, flowOf(testBlobContent))
     }
 
     assertThat(checkNotNull(storageClient.getBlob(blobKey)))
@@ -76,16 +77,13 @@ abstract class AbstractConditionalOperationStorageClientTest<
   }
 
   @Test
-  fun `writeBlobIfAbsent leaves no blob when precondition fails`(): Unit = runBlocking {
-    // Regression test: a failed `writeBlobIfAbsent` must not somehow create or partially-write a
-    // new blob. The blob seen after the throw must still be byte-identical to what was there
-    // before.
+  fun `writeBlobIfGeneration leaves blob untouched when precondition fails`(): Unit = runBlocking {
     val blobKey = "regression-blob"
     val originalContent = "first writer wins".toByteStringUtf8()
     storageClient.writeBlob(blobKey, originalContent)
 
     assertFailsWith<BlobChangedException> {
-      storageClient.writeBlobIfAbsent(blobKey, flowOf(testBlobContent))
+      storageClient.writeBlobIfGeneration(blobKey, expectedGeneration = 0L, flowOf(testBlobContent))
     }
 
     val after = checkNotNull(storageClient.getBlob(blobKey))
@@ -93,19 +91,23 @@ abstract class AbstractConditionalOperationStorageClientTest<
   }
 
   @Test
-  fun `writeBlobIfAbsent succeeds with empty content`(): Unit = runBlocking {
+  fun `writeBlobIfGeneration with expected 0 succeeds with empty content`(): Unit = runBlocking {
     val blobKey = "empty-blob"
 
-    val written = storageClient.writeBlobIfAbsent(blobKey, emptyFlow())
+    val written = storageClient.writeBlobIfGeneration(blobKey, expectedGeneration = 0L, emptyFlow())
 
     assertThat(written).contentEqualTo("".toByteStringUtf8())
   }
 
   @Test
-  fun `writeBlobIfAbsent does not lock the key against later unconditional writes`(): Unit =
+  fun `writeBlobIfGeneration does not lock the key against later unconditional writes`(): Unit =
     runBlocking {
       val blobKey = "overwritable-blob"
-      storageClient.writeBlobIfAbsent(blobKey, flowOf("first".toByteStringUtf8()))
+      storageClient.writeBlobIfGeneration(
+        blobKey,
+        expectedGeneration = 0L,
+        flowOf("first".toByteStringUtf8()),
+      )
 
       val overwritten = storageClient.writeBlob(blobKey, "second".toByteStringUtf8())
 
