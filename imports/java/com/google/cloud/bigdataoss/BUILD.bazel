@@ -1,0 +1,11 @@
+package(default_visibility = ["//visibility:public"])
+
+# GCS Hadoop FileSystem connector (pre-shaded). RUNTIME ONLY: provides
+# GoogleHadoopFileSystem so parquet-mr's HadoopInputFile / HadoopOutputFile can
+# read and write `gs://` blobs in production. Add to `runtime_deps`, not `deps`
+# — nothing compiles against it; the Hadoop FileSystem API is selected at
+# runtime via the Configuration (`fs.gs.impl`).
+alias(
+    name = "gcs_connector",
+    actual = "@maven//:com_google_cloud_bigdataoss_gcs_connector_shaded",
+)

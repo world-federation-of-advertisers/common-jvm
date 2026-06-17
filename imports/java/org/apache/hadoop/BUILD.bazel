@@ -1,0 +1,23 @@
+package(default_visibility = ["//visibility:public"])
+
+# Required at RUNTIME by parquet-mr 1.14.x — Configuration is instantiated
+# from inside ParquetReader.Builder constructors and ParquetFileReader.open,
+# and ParquetReadOptions.Builder references
+# org.apache.hadoop.mapreduce.lib.input.FileInputFormat.
+#
+# We use Hadoop's purpose-built shaded artifacts (hadoop-client-api +
+# hadoop-client-runtime) instead of unshaded hadoop-common /
+# hadoop-mapreduce-client-core so that Hadoop's classes are exposed WITHOUT
+# leaking ~80 transitive deps (jetty 9.4, kerby, curator, zookeeper,
+# jersey, old jackson, etc.) onto the classpath. Without shading, those
+# transitives would downgrade commons-io / commons-lang3 / jetty /
+# jackson-databind and break unrelated tests — see CI breakage on PR #385.
+alias(
+    name = "hadoop_client_api",
+    actual = "@maven//:org_apache_hadoop_hadoop_client_api",
+)
+
+alias(
+    name = "hadoop_client_runtime",
+    actual = "@maven//:org_apache_hadoop_hadoop_client_runtime",
+)

@@ -178,7 +178,22 @@ maven.artifact(
     group = "org.liquibase.ext",
     version = "4.33.0",
 )
+maven.artifact(
+    # GCS Hadoop FileSystem connector — RUNTIME ONLY, for gs:// blob keys in
+    # production (ParquetStorageClient). We use the pre-shaded artifact (its
+    # deps are relocated internally) and exclude ALL transitives so it cannot
+    # re-introduce unshaded hadoop-common / guava / jackson and downgrade
+    # existing pins. Hadoop's FileSystem API itself is provided by the
+    # hadoop-client-api / hadoop-client-runtime artifacts.
+    artifact = "gcs-connector",
+    classifier = "shaded",
+    exclusions = ["*:*"],
+    group = "com.google.cloud.bigdataoss",
+    version = "hadoop3-2.2.26",
+)
+
 maven.install(
+
     name = "maven",
     artifacts = [
         "junit:junit:4.13.2",
@@ -191,6 +206,25 @@ maven.install(
         # TODO(bazelbuild/bazel-worker-api/issues#14): Remove versions when fixed.
         "com.google.guava:guava:33.4.0-jre",
         "com.google.code.gson:gson:2.12.1",
+
+        # Apache Parquet — for ParquetStorageClient row-oriented reads.
+        "org.apache.parquet:parquet-hadoop:1.14.3",
+        "org.apache.parquet:parquet-column:1.14.3",
+        "org.apache.parquet:parquet-common:1.14.3",
+        "org.apache.parquet:parquet-format-structures:1.14.3",
+        # Required at RUNTIME by parquet-mr 1.14.x — Configuration is
+        # instantiated inside ParquetReader.Builder constructors and
+        # ParquetFileReader.open; ParquetReadOptions.Builder also references
+        # FileInputFormat. We use Hadoop's purpose-built shaded artifacts
+        # (hadoop-client-api + hadoop-client-runtime) so Hadoop's classes
+        # are exposed WITHOUT leaking ~80 transitive deps (jetty 9.4,
+        # kerby, curator, zookeeper, jersey, old jackson, etc.) onto the
+        # classpath. Using the unshaded hadoop-common / hadoop-mapreduce-
+        # client-core would downgrade commons-io / commons-lang3 / jetty /
+        # jackson-databind and break unrelated tests (Riegeli, S3, Postgres,
+        # Spanner) — see CI breakage on PR #385.
+        "org.apache.hadoop:hadoop-client-api:3.3.6",
+        "org.apache.hadoop:hadoop-client-runtime:3.3.6",
 
         # kotlinx-coroutines
         "org.jetbrains.kotlinx:kotlinx-coroutines-test",
