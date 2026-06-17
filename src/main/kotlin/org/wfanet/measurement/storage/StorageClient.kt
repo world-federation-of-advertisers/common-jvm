@@ -178,28 +178,11 @@ interface ConditionalOperationStorageClient : StorageClient {
   suspend fun writeBlobIfUnchanged(blob: Blob, content: Flow<ByteString>): Blob
 
   /**
-   * Writes [content] to [blobKey] only if the blob's current generation on the backend equals
-   * [expectedGeneration] (GCS `IfGenerationMatch`).
+   * Writes [content] to [blobKey] only if the blob's current generation equals [expectedGeneration]
+   * (GCS `IfGenerationMatch`). Pass `0` to require the blob not exist. The precondition is checked
+   * atomically on the server.
    *
-   * Pass `0` to require that the blob does not currently exist (first-writer-wins). Pass a non-zero
-   * value to require that the blob is currently at that exact generation (compare-and-swap on
-   * version). The precondition is checked atomically on the server, so concurrent writers are
-   * race-free: at most one write per `expectedGeneration` value lands; the others fail-fast with
-   * [BlobChangedException].
-   *
-   * Typical pattern for a VM that takes minutes to compute its payload and may race with
-   * redelivered peers: at task start, read the current blob's generation (or `0` if absent); after
-   * compute, call this method with that generation; on [BlobChangedException], do not retry with a
-   * fresher generation — another writer won the slot and clobbering them would corrupt their
-   * consumers.
-   *
-   * For the case where the caller already holds a [Blob] from a prior read, [writeBlobIfUnchanged]
-   * is the more convenient API and does the same thing.
-   *
-   * @return the written [Blob]
-   * @throws BlobChangedException if the blob's current generation does not match
-   *   [expectedGeneration] (HTTP 412 from the storage backend)
-   * @throws StorageException on other write failures
+   * @throws BlobChangedException if the precondition fails
    */
   suspend fun writeBlobIfGeneration(
     blobKey: String,
