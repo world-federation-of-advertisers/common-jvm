@@ -16,10 +16,12 @@
 
 package org.wfanet.measurement.storage.testing
 
+import com.google.common.truth.Truth
 import com.google.protobuf.kotlin.toByteStringUtf8
 import kotlin.test.assertFailsWith
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import org.junit.Test
 import org.wfanet.measurement.storage.BlobChangedException
@@ -29,6 +31,13 @@ import org.wfanet.measurement.storage.testing.BlobSubject.Companion.assertThat
 abstract class AbstractConditionalOperationStorageClientTest<
   T : ConditionalOperationStorageClient
 > : AbstractStorageClientTest<T>() {
+
+  /**
+   * Returns the storage-backend generation for the blob at [blobKey], or throws if the blob does
+   * not exist. Each backend exposes generation differently, so the conformance suite delegates to
+   * the test subclass.
+   */
+  protected abstract suspend fun getGeneration(blobKey: String): Long
 
   @Test
   fun `writeBlobIfUnchanged overwrites existing blob`(): Unit = runBlocking {
@@ -113,4 +122,51 @@ abstract class AbstractConditionalOperationStorageClientTest<
 
       assertThat(overwritten).contentEqualTo("second".toByteStringUtf8())
     }
+
+  @Test
+  fun `writeBlobIfGeneration with stale generation throws`(): Unit = runBlocking {
+    val blobKey = "stale-gen-cas"
+    storageClient.writeBlob(blobKey, "v1".toByteStringUtf8())
+    val staleGen = getGeneration(blobKey)
+    // Concurrent writer races ahead.
+    storageClient.writeBlob(blobKey, "v1.5".toByteStringUtf8())
+
+    assertFailsWith<BlobChangedException> {
+      storageClient.writeBlobIfGeneration(blobKey, staleGen, flowOf(testBlobContent))
+    }
+  }
+
+  @Test
+  fun `writeBlobIfGeneration with matching generation overwrites`(): Unit = runBlocking {
+    val blobKey = "matching-gen-cas"
+    storageClient.writeBlob(blobKey, "v1".toByteStringUtf8())
+    val currentGen = getGeneration(blobKey)
+
+    val second = storageClient.writeBlobIfGeneration(blobKey, currentGen, flowOf(testBlobContent))
+
+    assertThat(second).contentEqualTo(testBlobContent)
+  }
+
+  @Test
+  fun `writeBlobIfGeneration rejects negative expectedGeneration`(): Unit = runBlocking {
+    storageClient.writeBlob("k", "v".toByteStringUtf8())
+
+    assertFailsWith<IllegalArgumentException> {
+      storageClient.writeBlobIfGeneration("k", expectedGeneration = -1L, flowOf(testBlobContent))
+    }
+  }
+
+  @Test
+  fun `listBlobs returns all blobs without duplicates`(): Unit = runBlocking {
+    val totalBlobs = 25
+    val prefix = "test-listblobs/"
+    for (i in 0 until totalBlobs) {
+      storageClient.writeBlob("${prefix}blob-$i", "content-$i".toByteStringUtf8())
+    }
+
+    val keys = storageClient.listBlobs(prefix).toList().map { it.blobKey }
+
+    Truth.assertThat(keys).hasSize(totalBlobs)
+    Truth.assertThat(keys.toSet()).hasSize(totalBlobs)
+  }
 }

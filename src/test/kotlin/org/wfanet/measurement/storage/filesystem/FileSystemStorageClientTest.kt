@@ -28,13 +28,17 @@ import org.wfanet.measurement.common.readByteString
 import org.wfanet.measurement.storage.testing.AbstractConditionalOperationStorageClientTest
 
 @RunWith(JUnit4::class)
-class FileSystemStorageClientTest : AbstractConditionalOperationStorageClientTest<FileSystemStorageClient>() {
+class FileSystemStorageClientTest :
+  AbstractConditionalOperationStorageClientTest<FileSystemStorageClient>() {
   @Rule @JvmField val tempDirectory = TemporaryFolder()
 
   @Before
   fun initClient() {
     storageClient = FileSystemStorageClient(tempDirectory.root)
   }
+
+  override suspend fun getGeneration(blobKey: String): Long =
+    java.io.File(tempDirectory.root, blobKey).lastModified()
 
   @Test
   fun `writeBlob writes blob to file in subdirectory`() {

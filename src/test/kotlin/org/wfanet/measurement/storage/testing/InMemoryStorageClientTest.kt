@@ -30,6 +30,9 @@ class InMemoryStorageClientTest : AbstractBlobMetadataStorageClientTest<InMemory
     storageClient = InMemoryStorageClient()
   }
 
+  override suspend fun getGeneration(blobKey: String): Long =
+    storageClient.getGenerationForTesting(blobKey)
+
   override suspend fun verifyBlobMetadata(
     blobKey: String,
     expectedCustomCreateTime: Instant?,

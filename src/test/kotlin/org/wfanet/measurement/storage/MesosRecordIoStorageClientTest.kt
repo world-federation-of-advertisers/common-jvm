@@ -58,6 +58,9 @@ class MesosRecordIoStorageClientTest :
     storageClient = MesosRecordIoStorageClient(wrappedStorageClient)
   }
 
+  override suspend fun getGeneration(blobKey: String): Long =
+    wrappedStorageClient.getGenerationForTesting(blobKey)
+
   @Test
   fun `test writing and reading single record`() = runBlocking {
     val testData = "Hello World"
