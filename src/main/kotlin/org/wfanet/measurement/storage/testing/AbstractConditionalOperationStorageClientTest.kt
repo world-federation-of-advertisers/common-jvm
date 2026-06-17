@@ -16,7 +16,7 @@
 
 package org.wfanet.measurement.storage.testing
 
-import com.google.common.truth.Truth
+import com.google.common.truth.Truth.assertThat
 import com.google.protobuf.kotlin.toByteStringUtf8
 import kotlin.test.assertFailsWith
 import kotlinx.coroutines.flow.emptyFlow
@@ -135,7 +135,7 @@ abstract class AbstractConditionalOperationStorageClientTest<
     // would pass for the wrong reason (no precondition violation). Backends with coarse
     // generation resolution (e.g. filesystem `lastModified` at millisecond precision) must
     // ensure monotonic advancement; this asserts they do.
-    Truth.assertThat(getGeneration(blobKey)).isNotEqualTo(staleGen)
+    assertThat(getGeneration(blobKey)).isNotEqualTo(staleGen)
 
     assertFailsWith<BlobChangedException> {
       storageClient.writeBlobIfGeneration(blobKey, staleGen, flowOf(testBlobContent))
@@ -188,7 +188,7 @@ abstract class AbstractConditionalOperationStorageClientTest<
 
     val keys = storageClient.listBlobs(prefix).toList().map { it.blobKey }
 
-    Truth.assertThat(keys).hasSize(totalBlobs)
-    Truth.assertThat(keys.toSet()).hasSize(totalBlobs)
+    assertThat(keys).hasSize(totalBlobs)
+    assertThat(keys.toSet()).hasSize(totalBlobs)
   }
 }
