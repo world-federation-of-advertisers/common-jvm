@@ -42,11 +42,8 @@ class InMemoryStorageClient :
   /** Returns the custom create time set on [blobKey] via [updateBlobMetadata], or null if unset. */
   fun getCustomCreateTime(blobKey: String): Instant? = storageMap[blobKey]?.customTime
 
-  /**
-   * Returns the storage-backend generation for [blobKey]. Test-only accessor — production code does
-   * not need access to generation outside the conditional-write API.
-   */
-  fun getGenerationForTesting(blobKey: String): Long =
+  /** Returns the storage-backend generation for [blobKey], or throws if it does not exist. */
+  fun getGeneration(blobKey: String): Long =
     requireNotNull(storageMap[blobKey]) { "Blob not found: $blobKey" }.generation
 
   private fun deleteKey(path: String) {

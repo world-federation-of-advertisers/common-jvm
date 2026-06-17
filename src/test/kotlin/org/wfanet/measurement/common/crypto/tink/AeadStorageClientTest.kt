@@ -48,7 +48,7 @@ class AeadStorageClientTest : AbstractConditionalOperationStorageClientTest<Aead
   }
 
   override suspend fun getGeneration(blobKey: String): Long =
-    wrappedStorageClient.getGenerationForTesting(blobKey)
+    wrappedStorageClient.getGeneration(blobKey)
 
   @Test
   fun `wrapped blob is encrypted`() = runBlocking {

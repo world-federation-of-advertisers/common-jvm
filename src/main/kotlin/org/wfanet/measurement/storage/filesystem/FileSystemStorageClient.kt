@@ -250,6 +250,10 @@ class FileSystemStorageClient(
      * Filesystem generation = file's `lastModified` snapshotted at this [Blob]'s construction. Must
      * NOT track mutations to the underlying file — `writeBlobIfUnchanged` relies on a stale
      * generation to detect that the file has changed since the [Blob] was last observed.
+     *
+     * Monotonic by construction: [writeBlob] forces `lastModified` to strictly advance across
+     * writes to defeat millisecond-resolution aliasing, so this value may exceed the file's actual
+     * wall-clock modification time by a few milliseconds.
      */
     internal val generation: Long = file.lastModified()
 

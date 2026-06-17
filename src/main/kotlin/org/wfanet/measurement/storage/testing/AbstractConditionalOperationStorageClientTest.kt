@@ -131,6 +131,12 @@ abstract class AbstractConditionalOperationStorageClientTest<
     // Concurrent writer races ahead.
     storageClient.writeBlob(blobKey, "v1.5".toByteStringUtf8())
 
+    // Sanity check: the two writes must produce distinct generations or the assertion below
+    // would pass for the wrong reason (no precondition violation). Backends with coarse
+    // generation resolution (e.g. filesystem `lastModified` at millisecond precision) must
+    // ensure monotonic advancement; this asserts they do.
+    Truth.assertThat(getGeneration(blobKey)).isNotEqualTo(staleGen)
+
     assertFailsWith<BlobChangedException> {
       storageClient.writeBlobIfGeneration(blobKey, staleGen, flowOf(testBlobContent))
     }
@@ -155,6 +161,22 @@ abstract class AbstractConditionalOperationStorageClientTest<
       storageClient.writeBlobIfGeneration("k", expectedGeneration = -1L, flowOf(testBlobContent))
     }
   }
+
+  @Test
+  fun `writeBlobIfGeneration rejects negative expectedGeneration before checking storage`(): Unit =
+    runBlocking {
+      // Distinct from the test above: this one targets a nonexistent key so that any
+      // implementation that did `getBlob`-then-validate (instead of validating first) would
+      // throw `BlobChangedException` or `StorageException` rather than `IllegalArgumentException`.
+      // Verifies the guard is at the call boundary.
+      assertFailsWith<IllegalArgumentException> {
+        storageClient.writeBlobIfGeneration(
+          "nonexistent-key",
+          expectedGeneration = -1L,
+          flowOf(testBlobContent),
+        )
+      }
+    }
 
   @Test
   fun `listBlobs returns all blobs without duplicates`(): Unit = runBlocking {

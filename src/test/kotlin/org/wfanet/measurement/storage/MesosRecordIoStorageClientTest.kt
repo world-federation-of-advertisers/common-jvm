@@ -59,7 +59,7 @@ class MesosRecordIoStorageClientTest :
   }
 
   override suspend fun getGeneration(blobKey: String): Long =
-    wrappedStorageClient.getGenerationForTesting(blobKey)
+    wrappedStorageClient.getGeneration(blobKey)
 
   @Test
   fun `test writing and reading single record`() = runBlocking {
