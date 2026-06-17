@@ -47,9 +47,22 @@ private const val READ_BUFFER_SIZE = 1024 * 4 // 4 KiB
 /**
  * [StorageClient] implementation that stores blobs as files under [directory].
  *
- * Implements [ConditionalOperationStorageClient] using the file's last-modified time as the
- * generation. Single-process semantics only: check-then-act on existing files is not atomic vs. a
- * concurrent writer for the same key. Safe for single-coroutine-per-key test usage.
+ * **Same-process, single-host only.** Implements [ConditionalOperationStorageClient] using the
+ * file's last-modified time as the generation, but the conditional methods rely on a check-then-act
+ * sequence that is only correct for callers in the same JVM. This implementation does **not** take
+ * an OS-level file lock (`flock` / `LockFileEx`) around the check-then-act, because file locks do
+ * not propagate across hosts on mounted object stores (NFS, SMB, s3fs, gcsfuse, blobfuse) where the
+ * lie would be most dangerous — adding them would only paper over the in-process race while leaving
+ * cross-host callers with the same silent corruption. As a result, concurrent writers in *different
+ * processes* (even on the same host) or on *different hosts sharing a mounted filesystem* can each
+ * pass the generation check and then silently overwrite one another's writes — no exception is
+ * thrown.
+ *
+ * Intended use cases: in-process tests, single-process CLI tools, and code paths where the only
+ * writer for a given blob key is guaranteed to be a single coroutine in a single JVM. For any
+ * cross-host workload that needs conditional writes (the typical TEE / Pub/Sub redelivery
+ * scenario), use [GcsStorageClient] (or another backend whose underlying storage system enforces
+ * the precondition atomically).
  */
 class FileSystemStorageClient(
   private val directory: File,
@@ -154,9 +167,15 @@ class FileSystemStorageClient(
 
   /**
    * Conditional write that succeeds only if the file's current `lastModified` equals
-   * [expectedGeneration] (`0` for write-if-absent). Atomic for the absent case via
-   * `Files.createFile`; for the present case it is a non-atomic check-then-act and the file is then
-   * replaced via an atomic move.
+   * [expectedGeneration] (`0` for write-if-absent).
+   *
+   * The write-if-absent case is atomic across processes on the same host via [Files.createFile].
+   * The non-zero case is a non-atomic check-then-act and is only safe when all writers for
+   * [blobKey] are coroutines in the same JVM — see the class-level KDoc for the full caveats. The
+   * replacement itself uses `ATOMIC_MOVE` so partial content is never visible to readers.
+   *
+   * @throws BlobChangedException if the precondition fails
+   * @throws IllegalArgumentException if [expectedGeneration] is negative
    */
   override suspend fun writeBlobIfGeneration(
     blobKey: String,
@@ -247,13 +266,13 @@ class FileSystemStorageClient(
       get() = this@FileSystemStorageClient
 
     /**
-     * Filesystem generation = file's `lastModified` snapshotted at this [Blob]'s construction. Must
-     * NOT track mutations to the underlying file — `writeBlobIfUnchanged` relies on a stale
-     * generation to detect that the file has changed since the [Blob] was last observed.
+     * Filesystem generation = file's `lastModified` snapshotted at this [Blob]'s construction.
      *
-     * Monotonic by construction: [writeBlob] forces `lastModified` to strictly advance across
-     * writes to defeat millisecond-resolution aliasing, so this value may exceed the file's actual
-     * wall-clock modification time by a few milliseconds.
+     * Snapshotted (not a computed property) so that mutations to the underlying file after this
+     * [Blob] was observed produce a stale generation, which is what [writeBlobIfUnchanged] needs to
+     * detect concurrent change. [FileSystemStorageClient.writeBlob] strictly advances
+     * `lastModified` across writes to defeat millisecond-resolution aliasing, so this value may
+     * exceed the file's wall-clock modification time by a few milliseconds.
      */
     internal val generation: Long = file.lastModified()
 
