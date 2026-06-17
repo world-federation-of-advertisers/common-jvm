@@ -70,7 +70,7 @@ import org.jetbrains.annotations.BlockingExecutor
  * Wires parquet-mr's `PropertiesDrivenCryptoFactory` to a WFA Tink KMS client so parquet handles
  * DEK generation, wrapping/unwrapping, per-column keys, key caching, and the standard `KeyMaterial`
  * on-disk metadata natively — we only bridge Tink to parquet's KMS interface (see
- * [ParquetKmsClientBridge]).
+ * [ParquetKmsClient]).
  *
  * The encryption keys themselves are set on the Hadoop `Configuration`:
  * - `parquet.encryption.footer.key` = footer KEK URI/name
@@ -137,7 +137,7 @@ data class ParquetEncryptionConfig(
  *
  * ## Parquet Modular Encryption (PME)
  *
- * Pass [encryptionConfig] to wire parquet-mr's native key-tools PME ([ParquetKmsClientBridge]) to a
+ * Pass [encryptionConfig] to wire parquet-mr's native key-tools PME ([ParquetKmsClient]) to a
  * WFA Tink KMS client. The constructor registers the bridge on [conf]; thereafter the
  * `ParquetReader`/`ParquetWriter` apply encryption/decryption from [conf] with no per-call code.
  * Which keys to use are set on [conf] (`parquet.encryption.footer.key`,
@@ -151,7 +151,7 @@ data class ParquetEncryptionConfig(
  *   set, carrying the PME key configuration). When [encryptionConfig] is set the constructor
  *   mutates [conf] to register the KMS bridge, so each [ParquetStorageClient] MUST use its own
  *   [Configuration] instance — a shared instance would clobber the previous registration (see
- *   [ParquetKmsClientBridge.register]).
+ *   [ParquetKmsClient.register]).
  * @param rootPath base path; all blob keys are resolved relative to it.
  * @param parquetContext blocking context for parquet decode/encode + the backend FileSystem calls
  *   (default [Dispatchers.IO]).
@@ -173,11 +173,11 @@ class ParquetStorageClient(
     // Wire parquet-mr's native PME to the Tink KMS client. Once registered on
     // `conf`, the ParquetReader/ParquetWriter pick up encryption automatically.
     // TODO(world-federation-of-advertisers/cross-media-measurement#3965): the
-    // registration entry in ParquetKmsClientBridge is never removed; implement
+    // registration entry in ParquetKmsClient is never removed; implement
     // Closeable on ParquetStorageClient to unregister it (matters for
     // long-running processes that create many encrypting clients).
     if (encryptionConfig != null) {
-      ParquetKmsClientBridge.register(conf, encryptionConfig)
+      ParquetKmsClient.register(conf, encryptionConfig)
     }
   }
 

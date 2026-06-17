@@ -34,7 +34,7 @@ import org.apache.parquet.crypto.keytools.KmsClient
  * per-instance registration keyed by a UUID stored in the [Configuration] — no global mutable
  * singletons.
  */
-class ParquetKmsClientBridge : KmsClient {
+class ParquetKmsClient : KmsClient {
   private lateinit var kmsClient: TinkKmsClient
   private lateinit var keyMapping: Map<String, String>
 
@@ -76,7 +76,7 @@ class ParquetKmsClientBridge : KmsClient {
     /** Conf key holding the per-instance registration UUID. */
     const val PROVIDER_KEY = "wfa.parquet.kms.provider.id"
 
-    private val logger = Logger.getLogger(ParquetKmsClientBridge::class.java.name)
+    private val logger = Logger.getLogger(ParquetKmsClient::class.java.name)
 
     private val EMPTY_AAD = ByteArray(0)
 
@@ -104,7 +104,7 @@ class ParquetKmsClientBridge : KmsClient {
         "parquet.crypto.factory.class",
         "org.apache.parquet.crypto.keytools.PropertiesDrivenCryptoFactory",
       )
-      conf.set("parquet.encryption.kms.client.class", ParquetKmsClientBridge::class.java.name)
+      conf.set("parquet.encryption.kms.client.class", ParquetKmsClient::class.java.name)
       // parquet-mr's KeyToolkit caches the KMS client per (kms.instance.id,
       // access.token), both defaulting to "DEFAULT". Use the per-registration
       // UUID as the instance id so each client gets its own bridge (initialized

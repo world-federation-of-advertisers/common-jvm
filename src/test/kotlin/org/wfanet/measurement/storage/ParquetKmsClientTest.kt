@@ -29,23 +29,23 @@ import org.junit.runners.JUnit4
 import org.wfanet.measurement.common.crypto.tink.testing.FakeKmsClient
 
 @RunWith(JUnit4::class)
-class ParquetKmsClientBridgeTest {
+class ParquetKmsClientTest {
   private fun newAead(): Aead =
     KeysetHandle.generateNew(KeyTemplates.get("AES256_GCM")).getPrimitive(Aead::class.java)
 
   private fun fakeKms(vararg kekUris: String): FakeKmsClient =
     FakeKmsClient().also { client -> kekUris.forEach { client.setAead(it, newAead()) } }
 
-  private fun bridgeFor(config: ParquetEncryptionConfig): ParquetKmsClientBridge {
+  private fun bridgeFor(config: ParquetEncryptionConfig): ParquetKmsClient {
     val conf = Configuration()
-    ParquetKmsClientBridge.register(conf, config)
-    return ParquetKmsClientBridge().apply { initialize(conf, null, null, null) }
+    ParquetKmsClient.register(conf, config)
+    return ParquetKmsClient().apply { initialize(conf, null, null, null) }
   }
 
   @Test
   fun `register sets the crypto factory, kms client class, and instance id`() {
     val conf = Configuration()
-    ParquetKmsClientBridge.register(
+    ParquetKmsClient.register(
       conf,
       ParquetEncryptionConfig(kmsProvider = { FakeKmsClient() }),
     )
@@ -53,8 +53,8 @@ class ParquetKmsClientBridgeTest {
     assertThat(conf.get("parquet.crypto.factory.class"))
       .isEqualTo("org.apache.parquet.crypto.keytools.PropertiesDrivenCryptoFactory")
     assertThat(conf.get("parquet.encryption.kms.client.class"))
-      .isEqualTo(ParquetKmsClientBridge::class.java.name)
-    val id = conf.get(ParquetKmsClientBridge.PROVIDER_KEY)
+      .isEqualTo(ParquetKmsClient::class.java.name)
+    val id = conf.get(ParquetKmsClient.PROVIDER_KEY)
     assertThat(id).isNotEmpty()
     // instance id == provider id keeps parquet's KeyToolkit cache per-instance.
     assertThat(conf.get("parquet.encryption.kms.instance.id")).isEqualTo(id)
@@ -93,10 +93,10 @@ class ParquetKmsClientBridgeTest {
 
   @Test
   fun `initialize fails when the provider id is not registered`() {
-    val conf = Configuration().apply { set(ParquetKmsClientBridge.PROVIDER_KEY, "nope") }
+    val conf = Configuration().apply { set(ParquetKmsClient.PROVIDER_KEY, "nope") }
 
     assertFailsWith<IllegalStateException> {
-      ParquetKmsClientBridge().initialize(conf, null, null, null)
+      ParquetKmsClient().initialize(conf, null, null, null)
     }
   }
 

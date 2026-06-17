@@ -76,10 +76,10 @@ kt_jvm_test(
 )
 
 kt_jvm_test(
-    name = "ParquetKmsClientBridgeTest",
+    name = "ParquetKmsClientTest",
     timeout = "short",
-    srcs = ["ParquetKmsClientBridgeTest.kt"],
-    test_class = "org.wfanet.measurement.storage.ParquetKmsClientBridgeTest",
+    srcs = ["ParquetKmsClientTest.kt"],
+    test_class = "org.wfanet.measurement.storage.ParquetKmsClientTest",
     runtime_deps = [
         "//imports/java/org/apache/hadoop:hadoop_client_runtime",
     ],
