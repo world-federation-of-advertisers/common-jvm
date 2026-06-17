@@ -35,6 +35,7 @@ import org.wfanet.measurement.storage.testing.AbstractConditionalOperationStorag
 import org.wfanet.measurement.storage.testing.ComplexMessage
 import org.wfanet.measurement.storage.testing.ComplexMessageKt
 import org.wfanet.measurement.storage.testing.InMemoryStorageClient
+import org.wfanet.measurement.storage.testing.NonConditionalStorageClient
 import org.wfanet.measurement.storage.testing.complexMessage
 
 @RunWith(JUnit4::class)
@@ -308,7 +309,7 @@ class MesosRecordIoStorageClientTest :
 
   private fun makeClientWithChunks(vararg chunks: ByteString) =
     MesosRecordIoStorageClient(
-      object : StorageClient {
+      object : StorageClient, ConditionalOperationStorageClient {
         override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>) =
           throw UnsupportedOperationException("not used")
 
@@ -316,6 +317,17 @@ class MesosRecordIoStorageClientTest :
 
         override suspend fun listBlobs(prefix: String?) =
           throw UnsupportedOperationException("not used")
+
+        override suspend fun writeBlobIfUnchanged(
+          blob: StorageClient.Blob,
+          content: Flow<ByteString>,
+        ) = throw UnsupportedOperationException("not used")
+
+        override suspend fun writeBlobIfGeneration(
+          blobKey: String,
+          expectedGeneration: Long,
+          content: Flow<ByteString>,
+        ) = throw UnsupportedOperationException("not used")
       }
     )
 
@@ -394,27 +406,9 @@ class MesosRecordIoStorageClientTest :
   }
 
   @Test
-  fun `writeBlobIfGeneration requires the wrapped client to support conditional writes`(): Unit =
-    runBlocking {
-      val plainClient = NonConditionalStorageClient()
-      val wrapper = MesosRecordIoStorageClient(plainClient)
+  fun `construction requires the wrapped client to support conditional writes`() {
+    val plainClient = NonConditionalStorageClient()
 
-      assertFailsWith<IllegalArgumentException> {
-        wrapper.writeBlobIfGeneration(
-          "k",
-          expectedGeneration = 0L,
-          flowOf(ByteString.copyFromUtf8("x")),
-        )
-      }
-    }
-
-  /** Bare-bones StorageClient that does NOT implement ConditionalOperationStorageClient. */
-  private class NonConditionalStorageClient : StorageClient {
-    override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob =
-      error("not used")
-
-    override suspend fun getBlob(blobKey: String): StorageClient.Blob? = null
-
-    override suspend fun listBlobs(prefix: String?): Flow<StorageClient.Blob> = flowOf()
+    assertFailsWith<IllegalArgumentException> { MesosRecordIoStorageClient(plainClient) }
   }
 }

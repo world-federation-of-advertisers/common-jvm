@@ -65,59 +65,32 @@ class GcsStorageClient(
   private val blockingContext: @BlockingExecutor CoroutineContext = Dispatchers.IO,
 ) : StorageClient, ConditionalOperationStorageClient, BlobMetadataStorageClient {
 
-  override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
-    return withContext(blockingContext + CoroutineName("writeBlob")) {
-      val blobInfo = BlobInfo.newBuilder(bucketName, blobKey).build()
-      try {
-        // Single resumable upload, no precondition: unconditional last-writer-wins semantics. The
-        // prior implementation split this into `storage.create()` + `Blob.write(generationMatch)`,
-        // which introduced a small race window where a concurrent writer between the two ops
-        // would cause this `writeBlob` to fail with a precondition error — surprising for what is
-        // documented as an unconditional write.
-        storage.writer(blobInfo).use { byteChannel -> writeChannel(byteChannel, content) }
-        val writtenBlob =
-          storage.get(BlobId.of(bucketName, blobKey))
-            ?: throw StorageException("Blob $blobKey vanished after successful writeBlob")
-        ClientBlob(writtenBlob, blobKey)
-      } catch (e: GcsStorageException) {
-        throw StorageException("Error writing blob with key $blobKey", e)
-      }
-    }
-  }
+  override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob =
+    // No precondition: unconditional last-writer-wins. Single resumable upload — the prior
+    // implementation split this into `storage.create()` + `Blob.write(generationMatch)`, which
+    // introduced a small race window where a concurrent writer between the two ops would cause
+    // this `writeBlob` to fail with a precondition error.
+    doWrite(
+      blobKey = blobKey,
+      content = content,
+      coroutineName = "writeBlob",
+      writeOptions = emptyArray(),
+      preconditionMessage = null,
+    )
 
   override suspend fun writeBlobIfUnchanged(
     blob: StorageClient.Blob,
     content: Flow<ByteString>,
   ): StorageClient.Blob {
     require(blob is ClientBlob) { "Incompatible blob type" }
-    val gcsBlob: Blob = blob.blob
-    val expectedGeneration = gcsBlob.generation
-    return withContext(blockingContext + CoroutineName("writeBlobIfUnchanged")) {
-      val blobInfo = BlobInfo.newBuilder(bucketName, blob.blobKey).build()
-      try {
-        // Single resumable upload gated on `IfGenerationMatch=<expectedGeneration>`. Race-free:
-        // the server atomically checks the precondition; either this write lands at the expected
-        // generation, or it fails-fast with 412.
-        storage.writer(blobInfo, Storage.BlobWriteOption.generationMatch(expectedGeneration)).use {
-          byteChannel ->
-          writeChannel(byteChannel, content)
-        }
-        val writtenBlob =
-          storage.get(BlobId.of(bucketName, blob.blobKey))
-            ?: throw StorageException(
-              "Blob ${blob.blobKey} vanished after successful writeBlobIfUnchanged"
-            )
-        ClientBlob(writtenBlob, blob.blobKey)
-      } catch (e: GcsStorageException) {
-        if (e.code == HTTP_PRECONDITION_FAILED) {
-          throw BlobChangedException(
-            "Precondition failed when attempting to write ${blob.blobKey}",
-            e,
-          )
-        }
-        throw StorageException("Error writing blob with key ${blob.blobKey}", e)
-      }
-    }
+    val expectedGeneration = blob.blob.generation
+    return doWrite(
+      blobKey = blob.blobKey,
+      content = content,
+      coroutineName = "writeBlobIfUnchanged",
+      writeOptions = arrayOf(Storage.BlobWriteOption.generationMatch(expectedGeneration)),
+      preconditionMessage = { "Precondition failed when attempting to write ${blob.blobKey}" },
+    )
   }
 
   override suspend fun writeBlobIfGeneration(
@@ -126,33 +99,47 @@ class GcsStorageClient(
     content: Flow<ByteString>,
   ): StorageClient.Blob {
     require(expectedGeneration >= 0) { "expectedGeneration must be >= 0, got $expectedGeneration" }
-    return withContext(blockingContext + CoroutineName("writeBlobIfGeneration")) {
+    return doWrite(
+      blobKey = blobKey,
+      content = content,
+      coroutineName = "writeBlobIfGeneration",
+      writeOptions = arrayOf(Storage.BlobWriteOption.generationMatch(expectedGeneration)),
+      preconditionMessage = {
+        "Precondition failed: blob $blobKey not at expected generation $expectedGeneration"
+      },
+    )
+  }
+
+  /**
+   * Shared body for [writeBlob], [writeBlobIfUnchanged] and [writeBlobIfGeneration]. Single
+   * resumable upload with any [writeOptions] applied; refetches the resulting blob to get its
+   * generation + updateTime. Translates HTTP 412 into [BlobChangedException] iff
+   * [preconditionMessage] is non-null (i.e. the caller actually set a precondition).
+   */
+  private suspend fun doWrite(
+    blobKey: String,
+    content: Flow<ByteString>,
+    coroutineName: String,
+    writeOptions: Array<Storage.BlobWriteOption>,
+    preconditionMessage: (() -> String)?,
+  ): ClientBlob =
+    withContext(blockingContext + CoroutineName(coroutineName)) {
       val blobInfo = BlobInfo.newBuilder(bucketName, blobKey).build()
       try {
-        // Single resumable upload gated on `IfGenerationMatch=<expectedGeneration>`. Race-free:
-        // the server atomically checks the precondition; either this write lands at the expected
-        // generation, or it fails-fast with HTTP 412.
-        storage.writer(blobInfo, Storage.BlobWriteOption.generationMatch(expectedGeneration)).use {
-          byteChannel ->
+        storage.writer(blobInfo, *writeOptions).use { byteChannel ->
           writeChannel(byteChannel, content)
         }
         val writtenBlob =
           storage.get(BlobId.of(bucketName, blobKey))
-            ?: throw StorageException(
-              "Blob $blobKey vanished after successful writeBlobIfGeneration"
-            )
+            ?: throw StorageException("Blob $blobKey vanished after successful $coroutineName")
         ClientBlob(writtenBlob, blobKey)
       } catch (e: GcsStorageException) {
-        if (e.code == HTTP_PRECONDITION_FAILED) {
-          throw BlobChangedException(
-            "Precondition failed: blob $blobKey not at expected generation $expectedGeneration",
-            e,
-          )
+        if (preconditionMessage != null && e.code == HTTP_PRECONDITION_FAILED) {
+          throw BlobChangedException(preconditionMessage(), e)
         }
         throw StorageException("Error writing blob with key $blobKey", e)
       }
     }
-  }
 
   override suspend fun getBlob(blobKey: String): StorageClient.Blob? {
     val blob: Blob =

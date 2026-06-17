@@ -32,11 +32,23 @@ import org.wfanet.measurement.storage.StorageClient
  *
  * This class provides encryption and decryption of data using Aead.
  *
- * @param storageClient underlying client for accessing blob/object storage
+ * @param storageClient underlying client for accessing blob/object storage. Must also implement
+ *   [ConditionalOperationStorageClient] since this wrapper exposes conditional-write methods.
  * @param aead the Aead instance used for encryption/decryption
  */
 class AeadStorageClient(private val storageClient: StorageClient, private val aead: Aead) :
   StorageClient, ConditionalOperationStorageClient {
+
+  /**
+   * Underlying client typed for conditional writes. Validated at construction (see [storageClient]
+   * KDoc) so misconfiguration fails immediately instead of from within a write call several frames
+   * deep.
+   */
+  private val conditional: ConditionalOperationStorageClient =
+    requireNotNull(storageClient as? ConditionalOperationStorageClient) {
+      "AeadStorageClient requires a ConditionalOperationStorageClient, but wrapped " +
+        "${storageClient::class.simpleName} does not support conditional writes"
+    }
 
   /**
    * Writes an encrypted flow of data to storage using a specified blob key.
@@ -47,10 +59,8 @@ class AeadStorageClient(private val storageClient: StorageClient, private val ae
    * @return A [StorageClient.Blob] object representing the stored encrypted blob.
    */
   override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
-    val associatedData: ByteString = blobKey.toByteStringUtf8()
-    val ciphertext: ByteString =
-      aead.encrypt(content.flatten().toByteArray(), associatedData.toByteArray()).toByteString()
-    val wrappedBlob: StorageClient.Blob = storageClient.writeBlob(blobKey, ciphertext)
+    val wrappedBlob: StorageClient.Blob =
+      storageClient.writeBlob(blobKey, encrypt(blobKey, content))
     logger.fine { "Wrote encrypted content to storage with blobKey: $blobKey" }
     return EncryptedBlob(wrappedBlob, blobKey)
   }
@@ -74,14 +84,9 @@ class AeadStorageClient(private val storageClient: StorageClient, private val ae
     expectedGeneration: Long,
     content: Flow<ByteString>,
   ): StorageClient.Blob {
-    require(storageClient is ConditionalOperationStorageClient) {
-      "Underlying storage client does not support conditional writes"
-    }
-    val associatedData: ByteString = blobKey.toByteStringUtf8()
-    val ciphertext: ByteString =
-      aead.encrypt(content.flatten().toByteArray(), associatedData.toByteArray()).toByteString()
+    require(expectedGeneration >= 0) { "expectedGeneration must be >= 0, got $expectedGeneration" }
     val wrappedBlob: StorageClient.Blob =
-      storageClient.writeBlobIfGeneration(blobKey, expectedGeneration, flow { emit(ciphertext) })
+      conditional.writeBlobIfGeneration(blobKey, expectedGeneration, encrypt(blobKey, content))
     logger.fine { "Wrote encrypted content via writeBlobIfGeneration: $blobKey" }
     return EncryptedBlob(wrappedBlob, blobKey)
   }
@@ -90,17 +95,22 @@ class AeadStorageClient(private val storageClient: StorageClient, private val ae
     blob: StorageClient.Blob,
     content: Flow<ByteString>,
   ): StorageClient.Blob {
-    require(storageClient is ConditionalOperationStorageClient) {
-      "Underlying storage client does not support conditional writes"
-    }
     require(blob is EncryptedBlob) { "Incompatible blob type" }
-    val associatedData: ByteString = blob.blobKey.toByteStringUtf8()
-    val ciphertext: ByteString =
-      aead.encrypt(content.flatten().toByteArray(), associatedData.toByteArray()).toByteString()
     val wrappedBlob: StorageClient.Blob =
-      storageClient.writeBlobIfUnchanged(blob.underlying, flow { emit(ciphertext) })
+      conditional.writeBlobIfUnchanged(blob.underlying, encrypt(blob.blobKey, content))
     logger.fine { "Wrote encrypted content via writeBlobIfUnchanged: ${blob.blobKey}" }
     return EncryptedBlob(wrappedBlob, blob.blobKey)
+  }
+
+  /**
+   * Encrypts [content] under [blobKey] as associated data. AEAD is single-shot (not streaming), so
+   * the entire content is flattened to bytes before encryption.
+   */
+  private suspend fun encrypt(blobKey: String, content: Flow<ByteString>): Flow<ByteString> {
+    val associatedData: ByteString = blobKey.toByteStringUtf8()
+    val ciphertext: ByteString =
+      aead.encrypt(content.flatten().toByteArray(), associatedData.toByteArray()).toByteString()
+    return flow { emit(ciphertext) }
   }
 
   /** A blob that will decrypt the content when read */

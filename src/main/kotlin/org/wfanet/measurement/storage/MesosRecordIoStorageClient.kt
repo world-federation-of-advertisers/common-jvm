@@ -37,6 +37,16 @@ class MesosRecordIoStorageClient(private val storageClient: StorageClient) :
   StorageClient, ConditionalOperationStorageClient {
 
   /**
+   * Underlying client typed for conditional writes. Validated at construction so misconfiguration
+   * fails immediately instead of from within a write call several frames deep.
+   */
+  private val conditional: ConditionalOperationStorageClient =
+    requireNotNull(storageClient as? ConditionalOperationStorageClient) {
+      "MesosRecordIoStorageClient requires a ConditionalOperationStorageClient, but wrapped " +
+        "${storageClient::class.simpleName} does not support conditional writes"
+    }
+
+  /**
    * Writes RecordIO rows to storage using the RecordIO format.
    *
    * This function takes a flow of RecordIO rows (represented as a Flow<ByteString>), formats each
@@ -53,17 +63,8 @@ class MesosRecordIoStorageClient(private val storageClient: StorageClient) :
    * @return A Blob object representing the RecordIO data that was written to storage.
    */
   override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
-    var recordsWritten = 0
-    val processedContent: Flow<ByteString> = flow {
-      content.collect { recordData: ByteString ->
-        val recordSize = recordData.size().toString().toByteStringUtf8()
-        recordsWritten++
-        emit(recordSize.concat(RECORD_DELIMITER).concat(recordData))
-      }
-    }
-
-    val wrappedBlob: StorageClient.Blob = storageClient.writeBlob(blobKey, processedContent)
-    logger.fine { "Wrote $recordsWritten records to storage with blobKey: $blobKey" }
+    val wrappedBlob: StorageClient.Blob = storageClient.writeBlob(blobKey, recordIoFraming(content))
+    logger.fine { "Wrote RecordIO content to storage with blobKey: $blobKey" }
     return Blob(wrappedBlob, blobKey)
   }
 
@@ -81,12 +82,9 @@ class MesosRecordIoStorageClient(private val storageClient: StorageClient) :
     expectedGeneration: Long,
     content: Flow<ByteString>,
   ): StorageClient.Blob {
-    require(storageClient is ConditionalOperationStorageClient) {
-      "Underlying storage client does not support conditional writes"
-    }
-    val processed: Flow<ByteString> = recordIoFraming(content)
+    require(expectedGeneration >= 0) { "expectedGeneration must be >= 0, got $expectedGeneration" }
     val wrappedBlob: StorageClient.Blob =
-      storageClient.writeBlobIfGeneration(blobKey, expectedGeneration, processed)
+      conditional.writeBlobIfGeneration(blobKey, expectedGeneration, recordIoFraming(content))
     return Blob(wrappedBlob, blobKey)
   }
 
@@ -103,13 +101,9 @@ class MesosRecordIoStorageClient(private val storageClient: StorageClient) :
     blob: StorageClient.Blob,
     content: Flow<ByteString>,
   ): StorageClient.Blob {
-    require(storageClient is ConditionalOperationStorageClient) {
-      "Underlying storage client does not support conditional writes"
-    }
     require(blob is Blob) { "Incompatible blob type" }
-    val processed: Flow<ByteString> = recordIoFraming(content)
     val wrappedBlob: StorageClient.Blob =
-      storageClient.writeBlobIfUnchanged(blob.underlying, processed)
+      conditional.writeBlobIfUnchanged(blob.underlying, recordIoFraming(content))
     return Blob(wrappedBlob, blob.blobKey)
   }
 

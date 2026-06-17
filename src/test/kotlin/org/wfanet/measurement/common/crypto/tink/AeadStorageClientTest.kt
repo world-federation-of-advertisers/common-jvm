@@ -24,8 +24,6 @@ import com.google.crypto.tink.aead.AeadConfig
 import com.google.protobuf.ByteString
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import org.junit.Before
 import org.junit.Test
@@ -33,9 +31,9 @@ import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 import org.wfanet.measurement.common.size
 import org.wfanet.measurement.common.toByteArray
-import org.wfanet.measurement.storage.StorageClient
 import org.wfanet.measurement.storage.testing.AbstractConditionalOperationStorageClientTest
 import org.wfanet.measurement.storage.testing.InMemoryStorageClient
+import org.wfanet.measurement.storage.testing.NonConditionalStorageClient
 
 @RunWith(JUnit4::class)
 class AeadStorageClientTest : AbstractConditionalOperationStorageClientTest<AeadStorageClient>() {
@@ -52,19 +50,14 @@ class AeadStorageClientTest : AbstractConditionalOperationStorageClientTest<Aead
   }
 
   @Test
-  fun `writeBlobIfGeneration requires the wrapped client to support conditional writes`(): Unit =
-    runBlocking {
-      // A `StorageClient` that does NOT implement `ConditionalOperationStorageClient` should make
-      // `writeBlobIfGeneration` on the AEAD wrapper throw `IllegalArgumentException` at the
-      // require()
-      // check, not silently fall through and write unconditionally.
-      val plainClient = NonConditionalStorageClient()
-      val aeadOverPlain = AeadStorageClient(plainClient, aead)
+  fun `construction requires the wrapped client to support conditional writes`() {
+    // Wrapping a `StorageClient` that does NOT implement `ConditionalOperationStorageClient`
+    // must fail fast at construction, not later from inside a write call where the user has
+    // already paid for whatever compute produced the bytes being written.
+    val plainClient = NonConditionalStorageClient()
 
-      assertFailsWith<IllegalArgumentException> {
-        aeadOverPlain.writeBlobIfGeneration("k", expectedGeneration = 0L, flowOf(testBlobContent))
-      }
-    }
+    assertFailsWith<IllegalArgumentException> { AeadStorageClient(plainClient, aead) }
+  }
 
   @Test
   fun `wrapped blob is encrypted`() = runBlocking {
@@ -75,16 +68,6 @@ class AeadStorageClientTest : AbstractConditionalOperationStorageClientTest<Aead
     assertThat(encryptedBytes).isNotEqualTo(testBlobContent)
     val decrypted = aead.decrypt(encryptedBytes, blobKey.encodeToByteArray())
     assertThat(ByteString.copyFrom(decrypted)).isEqualTo(testBlobContent)
-  }
-
-  /** Bare-bones StorageClient that does NOT implement ConditionalOperationStorageClient. */
-  private class NonConditionalStorageClient : StorageClient {
-    override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob =
-      error("not used")
-
-    override suspend fun getBlob(blobKey: String): StorageClient.Blob? = null
-
-    override suspend fun listBlobs(prefix: String?): Flow<StorageClient.Blob> = flowOf()
   }
 
   companion object {

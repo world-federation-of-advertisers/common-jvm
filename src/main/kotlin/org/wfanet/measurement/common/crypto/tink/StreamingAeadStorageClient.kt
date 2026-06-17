@@ -47,6 +47,16 @@ class StreamingAeadStorageClient(
 ) : StorageClient, ConditionalOperationStorageClient {
 
   /**
+   * Underlying client typed for conditional writes. Validated at construction so misconfiguration
+   * fails immediately instead of from within a write call several frames deep.
+   */
+  private val conditional: ConditionalOperationStorageClient =
+    requireNotNull(storageClient as? ConditionalOperationStorageClient) {
+      "StreamingAeadStorageClient requires a ConditionalOperationStorageClient, but wrapped " +
+        "${storageClient::class.simpleName} does not support conditional writes"
+    }
+
+  /**
    * Writes an encrypted flow of data to storage using a specified blob key. This function encrypts
    * each element of the [content] flow and streams it to the underlying storage client. The
    * encryption is performed by wrapping a [CoroutineWritableByteChannel] in an encrypting channel,
@@ -59,10 +69,8 @@ class StreamingAeadStorageClient(
    * @throws ClosedChannelException if the channel is closed before all data is written.
    */
   override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
-    val associatedData: ByteString = blobKey.toByteStringUtf8()
-    val ciphertext: Flow<ByteString> =
-      streamingAead.encrypt(content, associatedData, streamingAeadContext)
-    val wrappedBlob: StorageClient.Blob = storageClient.writeBlob(blobKey, ciphertext)
+    val wrappedBlob: StorageClient.Blob =
+      storageClient.writeBlob(blobKey, encrypt(blobKey, content))
     logger.fine { "Wrote encrypted content to storage with blobKey: $blobKey" }
     return EncryptedBlob(wrappedBlob, blobKey)
   }
@@ -86,14 +94,9 @@ class StreamingAeadStorageClient(
     expectedGeneration: Long,
     content: Flow<ByteString>,
   ): StorageClient.Blob {
-    require(storageClient is ConditionalOperationStorageClient) {
-      "Underlying storage client does not support conditional writes"
-    }
-    val associatedData: ByteString = blobKey.toByteStringUtf8()
-    val ciphertext: Flow<ByteString> =
-      streamingAead.encrypt(content, associatedData, streamingAeadContext)
+    require(expectedGeneration >= 0) { "expectedGeneration must be >= 0, got $expectedGeneration" }
     val wrappedBlob: StorageClient.Blob =
-      storageClient.writeBlobIfGeneration(blobKey, expectedGeneration, ciphertext)
+      conditional.writeBlobIfGeneration(blobKey, expectedGeneration, encrypt(blobKey, content))
     logger.fine { "Wrote encrypted content via writeBlobIfGeneration: $blobKey" }
     return EncryptedBlob(wrappedBlob, blobKey)
   }
@@ -102,17 +105,20 @@ class StreamingAeadStorageClient(
     blob: StorageClient.Blob,
     content: Flow<ByteString>,
   ): StorageClient.Blob {
-    require(storageClient is ConditionalOperationStorageClient) {
-      "Underlying storage client does not support conditional writes"
-    }
     require(blob is EncryptedBlob) { "Incompatible blob type" }
-    val associatedData: ByteString = blob.blobKey.toByteStringUtf8()
-    val ciphertext: Flow<ByteString> =
-      streamingAead.encrypt(content, associatedData, streamingAeadContext)
     val wrappedBlob: StorageClient.Blob =
-      storageClient.writeBlobIfUnchanged(blob.underlying, ciphertext)
+      conditional.writeBlobIfUnchanged(blob.underlying, encrypt(blob.blobKey, content))
     logger.fine { "Wrote encrypted content via writeBlobIfUnchanged: ${blob.blobKey}" }
     return EncryptedBlob(wrappedBlob, blob.blobKey)
+  }
+
+  /**
+   * Streaming-encrypts [content] under [blobKey] as associated data. Unlike single-shot AEAD, the
+   * input is consumed as a flow so large content does not need to be buffered up-front.
+   */
+  private fun encrypt(blobKey: String, content: Flow<ByteString>): Flow<ByteString> {
+    val associatedData: ByteString = blobKey.toByteStringUtf8()
+    return streamingAead.encrypt(content, associatedData, streamingAeadContext)
   }
 
   /** A blob that will decrypt the content when read */
