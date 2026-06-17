@@ -17,10 +17,12 @@ package org.wfanet.measurement.storage.filesystem
 import com.google.protobuf.ByteString
 import java.io.File
 import java.nio.channels.Channels
+import java.nio.file.FileAlreadyExistsException
 import java.nio.file.FileVisitResult
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.SimpleFileVisitor
+import java.nio.file.StandardCopyOption
 import java.nio.file.attribute.BasicFileAttributes
 import java.time.Instant
 import kotlin.coroutines.CoroutineContext
@@ -36,15 +38,23 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
 import org.jetbrains.annotations.BlockingExecutor
 import org.wfanet.measurement.common.asFlow
+import org.wfanet.measurement.storage.BlobChangedException
+import org.wfanet.measurement.storage.ConditionalOperationStorageClient
 import org.wfanet.measurement.storage.StorageClient
 
 private const val READ_BUFFER_SIZE = 1024 * 4 // 4 KiB
 
-/** [StorageClient] implementation that stores blobs as files under [directory]. */
+/**
+ * [StorageClient] implementation that stores blobs as files under [directory].
+ *
+ * Implements [ConditionalOperationStorageClient] using the file's last-modified time as the
+ * generation. Single-process semantics only: check-then-act on existing files is not atomic vs. a
+ * concurrent writer for the same key. Safe for single-coroutine-per-key test usage.
+ */
 class FileSystemStorageClient(
   private val directory: File,
   private val coroutineContext: @BlockingExecutor CoroutineContext = Dispatchers.IO,
-) : StorageClient {
+) : StorageClient, ConditionalOperationStorageClient {
   init {
     require(directory.isDirectory) { "$directory is not a directory" }
   }
@@ -53,17 +63,15 @@ class FileSystemStorageClient(
     val file: File = resolvePath(blobKey)
     withContext(coroutineContext + CoroutineName("writeBlob")) {
       file.parentFile.mkdirs()
-      file
-        .outputStream()
-        .buffered()
-        .let { Channels.newChannel(it) }
-        .use { byteChannel ->
-          content.collect { bytes ->
-            for (buffer in bytes.asReadOnlyByteBufferList()) {
-              byteChannel.write(buffer)
-            }
-          }
-        }
+      val previousLastModified = if (file.exists()) file.lastModified() else 0L
+      writeContentTo(file, content)
+      // Ensure `lastModified` strictly advances. Two writes can land at the same millisecond on
+      // fast hardware (typical filesystem resolution is 1ms or coarser), which would make this
+      // file's generation indistinguishable from the prior one — breaking writeBlobIfUnchanged
+      // for the very next caller.
+      if (file.lastModified() <= previousLastModified) {
+        file.setLastModified(previousLastModified + 1)
+      }
     }
 
     return Blob(file, blobKey)
@@ -144,6 +152,77 @@ class FileSystemStorageClient(
       .flowOn(coroutineContext)
   }
 
+  /**
+   * Conditional write that succeeds only if the file's current `lastModified` equals
+   * [expectedGeneration] (`0` for write-if-absent). Atomic for the absent case via
+   * `Files.createFile`; for the present case it is a non-atomic check-then-act and the file is then
+   * replaced via an atomic move.
+   */
+  override suspend fun writeBlobIfGeneration(
+    blobKey: String,
+    expectedGeneration: Long,
+    content: Flow<ByteString>,
+  ): StorageClient.Blob {
+    require(expectedGeneration >= 0) { "expectedGeneration must be >= 0, got $expectedGeneration" }
+    val file: File = resolvePath(blobKey)
+    return withContext(coroutineContext + CoroutineName("writeBlobIfGeneration")) {
+      file.parentFile.mkdirs()
+      if (expectedGeneration == 0L) {
+        // Write-if-absent: atomic create via NIO; throws FileAlreadyExistsException if present.
+        try {
+          Files.createFile(file.toPath())
+        } catch (e: FileAlreadyExistsException) {
+          throw BlobChangedException("Blob already exists: $blobKey", e)
+        }
+        writeContentTo(file, content)
+      } else {
+        if (!file.exists()) {
+          throw BlobChangedException("Blob does not exist: $blobKey")
+        }
+        if (file.lastModified() != expectedGeneration) {
+          throw BlobChangedException(
+            "Blob $blobKey is at generation ${file.lastModified()}, not $expectedGeneration"
+          )
+        }
+        // Write to a temp sibling and atomically move into place, so partially-written content
+        // is never visible.
+        val temp = File.createTempFile(file.name, ".tmp", file.parentFile)
+        writeContentTo(temp, content)
+        Files.move(
+          temp.toPath(),
+          file.toPath(),
+          StandardCopyOption.ATOMIC_MOVE,
+          StandardCopyOption.REPLACE_EXISTING,
+        )
+      }
+      Blob(file, blobKey)
+    }
+  }
+
+  override suspend fun writeBlobIfUnchanged(
+    blob: StorageClient.Blob,
+    content: Flow<ByteString>,
+  ): StorageClient.Blob {
+    require(blob is Blob) { "Incompatible blob type" }
+    require(blob.storageClient === this) { "Blob does not belong to this storage client" }
+    return writeBlobIfGeneration(blob.blobKey, blob.generation, content)
+  }
+
+  /** Writes [content] to [file] using a buffered channel. Caller manages file creation. */
+  private suspend fun writeContentTo(file: File, content: Flow<ByteString>) {
+    file
+      .outputStream()
+      .buffered()
+      .let { Channels.newChannel(it) }
+      .use { byteChannel ->
+        content.collect { bytes ->
+          for (buffer in bytes.asReadOnlyByteBufferList()) {
+            byteChannel.write(buffer)
+          }
+        }
+      }
+  }
+
   private fun resolvePath(blobKey: String): File {
     val relativePath =
       if (File.separatorChar == '/') {
@@ -162,10 +241,17 @@ class FileSystemStorageClient(
     }
   }
 
-  private inner class Blob(private val file: File, override val blobKey: String) :
+  internal inner class Blob(private val file: File, override val blobKey: String) :
     StorageClient.Blob {
     override val storageClient: StorageClient
       get() = this@FileSystemStorageClient
+
+    /**
+     * Filesystem generation = file's `lastModified` snapshotted at this [Blob]'s construction. Must
+     * NOT track mutations to the underlying file — `writeBlobIfUnchanged` relies on a stale
+     * generation to detect that the file has changed since the [Blob] was last observed.
+     */
+    internal val generation: Long = file.lastModified()
 
     override val size: Long
       get() = file.length()

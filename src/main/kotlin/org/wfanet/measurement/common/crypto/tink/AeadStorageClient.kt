@@ -32,23 +32,14 @@ import org.wfanet.measurement.storage.StorageClient
  *
  * This class provides encryption and decryption of data using Aead.
  *
- * @param storageClient underlying client for accessing blob/object storage. Must also implement
+ * @param storageClient underlying client for accessing blob/object storage. Must implement
  *   [ConditionalOperationStorageClient] since this wrapper exposes conditional-write methods.
  * @param aead the Aead instance used for encryption/decryption
  */
-class AeadStorageClient(private val storageClient: StorageClient, private val aead: Aead) :
-  StorageClient, ConditionalOperationStorageClient {
-
-  /**
-   * Underlying client typed for conditional writes. Validated at construction (see [storageClient]
-   * KDoc) so misconfiguration fails immediately instead of from within a write call several frames
-   * deep.
-   */
-  private val conditional: ConditionalOperationStorageClient =
-    requireNotNull(storageClient as? ConditionalOperationStorageClient) {
-      "AeadStorageClient requires a ConditionalOperationStorageClient, but wrapped " +
-        "${storageClient::class.simpleName} does not support conditional writes"
-    }
+class AeadStorageClient(
+  private val storageClient: ConditionalOperationStorageClient,
+  private val aead: Aead,
+) : StorageClient, ConditionalOperationStorageClient {
 
   /**
    * Writes an encrypted flow of data to storage using a specified blob key.
@@ -86,7 +77,7 @@ class AeadStorageClient(private val storageClient: StorageClient, private val ae
   ): StorageClient.Blob {
     require(expectedGeneration >= 0) { "expectedGeneration must be >= 0, got $expectedGeneration" }
     val wrappedBlob: StorageClient.Blob =
-      conditional.writeBlobIfGeneration(blobKey, expectedGeneration, encrypt(blobKey, content))
+      storageClient.writeBlobIfGeneration(blobKey, expectedGeneration, encrypt(blobKey, content))
     logger.fine { "Wrote encrypted content via writeBlobIfGeneration: $blobKey" }
     return EncryptedBlob(wrappedBlob, blobKey)
   }
@@ -97,7 +88,7 @@ class AeadStorageClient(private val storageClient: StorageClient, private val ae
   ): StorageClient.Blob {
     require(blob is EncryptedBlob) { "Incompatible blob type" }
     val wrappedBlob: StorageClient.Blob =
-      conditional.writeBlobIfUnchanged(blob.underlying, encrypt(blob.blobKey, content))
+      storageClient.writeBlobIfUnchanged(blob.underlying, encrypt(blob.blobKey, content))
     logger.fine { "Wrote encrypted content via writeBlobIfUnchanged: ${blob.blobKey}" }
     return EncryptedBlob(wrappedBlob, blob.blobKey)
   }

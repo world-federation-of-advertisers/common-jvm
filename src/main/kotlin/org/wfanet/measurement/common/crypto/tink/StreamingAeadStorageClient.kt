@@ -41,20 +41,10 @@ import org.wfanet.measurement.storage.StorageClient
  * @param streamingAeadContext coroutine context for encryption/decryption operations
  */
 class StreamingAeadStorageClient(
-  private val storageClient: StorageClient,
+  private val storageClient: ConditionalOperationStorageClient,
   private val streamingAead: StreamingAead,
   private val streamingAeadContext: @BlockingExecutor CoroutineContext = Dispatchers.IO,
 ) : StorageClient, ConditionalOperationStorageClient {
-
-  /**
-   * Underlying client typed for conditional writes. Validated at construction so misconfiguration
-   * fails immediately instead of from within a write call several frames deep.
-   */
-  private val conditional: ConditionalOperationStorageClient =
-    requireNotNull(storageClient as? ConditionalOperationStorageClient) {
-      "StreamingAeadStorageClient requires a ConditionalOperationStorageClient, but wrapped " +
-        "${storageClient::class.simpleName} does not support conditional writes"
-    }
 
   /**
    * Writes an encrypted flow of data to storage using a specified blob key. This function encrypts
@@ -96,7 +86,7 @@ class StreamingAeadStorageClient(
   ): StorageClient.Blob {
     require(expectedGeneration >= 0) { "expectedGeneration must be >= 0, got $expectedGeneration" }
     val wrappedBlob: StorageClient.Blob =
-      conditional.writeBlobIfGeneration(blobKey, expectedGeneration, encrypt(blobKey, content))
+      storageClient.writeBlobIfGeneration(blobKey, expectedGeneration, encrypt(blobKey, content))
     logger.fine { "Wrote encrypted content via writeBlobIfGeneration: $blobKey" }
     return EncryptedBlob(wrappedBlob, blobKey)
   }
@@ -107,7 +97,7 @@ class StreamingAeadStorageClient(
   ): StorageClient.Blob {
     require(blob is EncryptedBlob) { "Incompatible blob type" }
     val wrappedBlob: StorageClient.Blob =
-      conditional.writeBlobIfUnchanged(blob.underlying, encrypt(blob.blobKey, content))
+      storageClient.writeBlobIfUnchanged(blob.underlying, encrypt(blob.blobKey, content))
     logger.fine { "Wrote encrypted content via writeBlobIfUnchanged: ${blob.blobKey}" }
     return EncryptedBlob(wrappedBlob, blob.blobKey)
   }

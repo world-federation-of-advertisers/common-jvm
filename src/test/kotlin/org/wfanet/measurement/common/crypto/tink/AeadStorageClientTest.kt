@@ -22,7 +22,6 @@ import com.google.crypto.tink.KeyTemplates
 import com.google.crypto.tink.KeysetHandle
 import com.google.crypto.tink.aead.AeadConfig
 import com.google.protobuf.ByteString
-import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlinx.coroutines.runBlocking
 import org.junit.Before
@@ -33,7 +32,6 @@ import org.wfanet.measurement.common.size
 import org.wfanet.measurement.common.toByteArray
 import org.wfanet.measurement.storage.testing.AbstractConditionalOperationStorageClientTest
 import org.wfanet.measurement.storage.testing.InMemoryStorageClient
-import org.wfanet.measurement.storage.testing.NonConditionalStorageClient
 
 @RunWith(JUnit4::class)
 class AeadStorageClientTest : AbstractConditionalOperationStorageClientTest<AeadStorageClient>() {
@@ -47,16 +45,6 @@ class AeadStorageClientTest : AbstractConditionalOperationStorageClientTest<Aead
   @Before
   fun initStorageClient() {
     storageClient = AeadStorageClient(wrappedStorageClient, aead)
-  }
-
-  @Test
-  fun `construction requires the wrapped client to support conditional writes`() {
-    // Wrapping a `StorageClient` that does NOT implement `ConditionalOperationStorageClient`
-    // must fail fast at construction, not later from inside a write call where the user has
-    // already paid for whatever compute produced the bytes being written.
-    val plainClient = NonConditionalStorageClient()
-
-    assertFailsWith<IllegalArgumentException> { AeadStorageClient(plainClient, aead) }
   }
 
   @Test

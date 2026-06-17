@@ -35,14 +35,13 @@ import org.wfanet.measurement.storage.testing.AbstractConditionalOperationStorag
 import org.wfanet.measurement.storage.testing.ComplexMessage
 import org.wfanet.measurement.storage.testing.ComplexMessageKt
 import org.wfanet.measurement.storage.testing.InMemoryStorageClient
-import org.wfanet.measurement.storage.testing.NonConditionalStorageClient
 import org.wfanet.measurement.storage.testing.complexMessage
 
 @RunWith(JUnit4::class)
 class MesosRecordIoStorageClientTest :
   AbstractConditionalOperationStorageClientTest<MesosRecordIoStorageClient>() {
 
-  private lateinit var wrappedStorageClient: StorageClient
+  private lateinit var wrappedStorageClient: InMemoryStorageClient
 
   /**
    * RecordIO framing: each record is prefixed with its size as ASCII digits followed by a single
@@ -403,12 +402,5 @@ class MesosRecordIoStorageClientTest :
     assertFailsWith<BlobChangedException> {
       storageClient.writeBlobIfUnchanged(staleBlob, flowOf(ByteString.copyFromUtf8("v2")))
     }
-  }
-
-  @Test
-  fun `construction requires the wrapped client to support conditional writes`() {
-    val plainClient = NonConditionalStorageClient()
-
-    assertFailsWith<IllegalArgumentException> { MesosRecordIoStorageClient(plainClient) }
   }
 }

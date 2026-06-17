@@ -33,18 +33,8 @@ import kotlinx.coroutines.flow.flow
  */
 // TODO(@marcopremier): Refactor into MesosRecordIoStore<T : Message> to handle proto message
 // serialization internally and make current StorageClient implementation private.
-class MesosRecordIoStorageClient(private val storageClient: StorageClient) :
+class MesosRecordIoStorageClient(private val storageClient: ConditionalOperationStorageClient) :
   StorageClient, ConditionalOperationStorageClient {
-
-  /**
-   * Underlying client typed for conditional writes. Validated at construction so misconfiguration
-   * fails immediately instead of from within a write call several frames deep.
-   */
-  private val conditional: ConditionalOperationStorageClient =
-    requireNotNull(storageClient as? ConditionalOperationStorageClient) {
-      "MesosRecordIoStorageClient requires a ConditionalOperationStorageClient, but wrapped " +
-        "${storageClient::class.simpleName} does not support conditional writes"
-    }
 
   /**
    * Writes RecordIO rows to storage using the RecordIO format.
@@ -84,7 +74,7 @@ class MesosRecordIoStorageClient(private val storageClient: StorageClient) :
   ): StorageClient.Blob {
     require(expectedGeneration >= 0) { "expectedGeneration must be >= 0, got $expectedGeneration" }
     val wrappedBlob: StorageClient.Blob =
-      conditional.writeBlobIfGeneration(blobKey, expectedGeneration, recordIoFraming(content))
+      storageClient.writeBlobIfGeneration(blobKey, expectedGeneration, recordIoFraming(content))
     return Blob(wrappedBlob, blobKey)
   }
 
@@ -103,7 +93,7 @@ class MesosRecordIoStorageClient(private val storageClient: StorageClient) :
   ): StorageClient.Blob {
     require(blob is Blob) { "Incompatible blob type" }
     val wrappedBlob: StorageClient.Blob =
-      conditional.writeBlobIfUnchanged(blob.underlying, recordIoFraming(content))
+      storageClient.writeBlobIfUnchanged(blob.underlying, recordIoFraming(content))
     return Blob(wrappedBlob, blob.blobKey)
   }
 

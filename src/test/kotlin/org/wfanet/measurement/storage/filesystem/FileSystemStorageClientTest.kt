@@ -25,10 +25,10 @@ import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 import org.wfanet.measurement.common.readByteString
-import org.wfanet.measurement.storage.testing.AbstractStorageClientTest
+import org.wfanet.measurement.storage.testing.AbstractConditionalOperationStorageClientTest
 
 @RunWith(JUnit4::class)
-class FileSystemStorageClientTest : AbstractStorageClientTest<FileSystemStorageClient>() {
+class FileSystemStorageClientTest : AbstractConditionalOperationStorageClientTest<FileSystemStorageClient>() {
   @Rule @JvmField val tempDirectory = TemporaryFolder()
 
   @Before

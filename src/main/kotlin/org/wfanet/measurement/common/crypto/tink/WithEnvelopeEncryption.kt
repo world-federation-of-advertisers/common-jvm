@@ -28,6 +28,7 @@ import com.google.protobuf.ByteString
 import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.Dispatchers
 import org.jetbrains.annotations.BlockingExecutor
+import org.wfanet.measurement.storage.ConditionalOperationStorageClient
 import org.wfanet.measurement.storage.StorageClient
 
 /*
@@ -42,7 +43,7 @@ import org.wfanet.measurement.storage.StorageClient
  * @param parseEncryptedKeyset function used to parse and decrypt the [encryptedDek] into a [KeysetHandle].
  *        The default is [TinkProtoKeysetFormat.parseEncryptedKeyset], which assumes a Tink-encrypted binary keyset.
  */
-fun StorageClient.withEnvelopeEncryption(
+fun ConditionalOperationStorageClient.withEnvelopeEncryption(
   kmsClient: KmsClient,
   kekUri: String,
   encryptedDek: ByteString,
