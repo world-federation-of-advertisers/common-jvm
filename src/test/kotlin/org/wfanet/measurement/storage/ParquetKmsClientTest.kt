@@ -45,10 +45,7 @@ class ParquetKmsClientTest {
   @Test
   fun `register sets the crypto factory, kms client class, and instance id`() {
     val conf = Configuration()
-    ParquetKmsClient.register(
-      conf,
-      ParquetEncryptionConfig(kmsProvider = { FakeKmsClient() }),
-    )
+    ParquetKmsClient.register(conf, ParquetEncryptionConfig(kmsProvider = { FakeKmsClient() }))
 
     assertThat(conf.get("parquet.crypto.factory.class"))
       .isEqualTo("org.apache.parquet.crypto.keytools.PropertiesDrivenCryptoFactory")
@@ -95,9 +92,7 @@ class ParquetKmsClientTest {
   fun `initialize fails when the provider id is not registered`() {
     val conf = Configuration().apply { set(ParquetKmsClient.PROVIDER_KEY, "nope") }
 
-    assertFailsWith<IllegalStateException> {
-      ParquetKmsClient().initialize(conf, null, null, null)
-    }
+    assertFailsWith<IllegalStateException> { ParquetKmsClient().initialize(conf, null, null, null) }
   }
 
   @Test

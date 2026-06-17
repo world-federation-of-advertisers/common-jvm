@@ -137,8 +137,8 @@ data class ParquetEncryptionConfig(
  *
  * ## Parquet Modular Encryption (PME)
  *
- * Pass [encryptionConfig] to wire parquet-mr's native key-tools PME ([ParquetKmsClient]) to a
- * WFA Tink KMS client. The constructor registers the bridge on [conf]; thereafter the
+ * Pass [encryptionConfig] to wire parquet-mr's native key-tools PME ([ParquetKmsClient]) to a WFA
+ * Tink KMS client. The constructor registers the bridge on [conf]; thereafter the
  * `ParquetReader`/`ParquetWriter` apply encryption/decryption from [conf] with no per-call code.
  * Which keys to use are set on [conf] (`parquet.encryption.footer.key`,
  * `parquet.encryption.column.keys`). `null` config = plaintext.
