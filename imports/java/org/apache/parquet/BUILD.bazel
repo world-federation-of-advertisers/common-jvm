@@ -1,0 +1,26 @@
+package(default_visibility = ["//visibility:public"])
+
+alias(
+    name = "parquet_hadoop",
+    actual = "@maven//:org_apache_parquet_parquet_hadoop",
+)
+
+alias(
+    name = "parquet_column",
+    actual = "@maven//:org_apache_parquet_parquet_column",
+)
+
+alias(
+    name = "parquet_common",
+    actual = "@maven//:org_apache_parquet_parquet_common",
+)
+
+# Direct access to parquet-format-structures so callers can use the
+# low-level FileMetaData thrift struct + Util.readFileMetaData helpers.
+# Needed by ParquetStorageClient to read footer key-value metadata of
+# PME-encrypted files without triggering the encrypted-column-metadata
+# decryption path inside parquet-mr's ParquetFileReader.
+alias(
+    name = "parquet_format_structures",
+    actual = "@maven//:org_apache_parquet_parquet_format_structures",
+)
