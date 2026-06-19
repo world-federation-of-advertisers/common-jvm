@@ -200,7 +200,7 @@ maven.install(
         "org.conscrypt:conscrypt-openjdk-uber:2.5.2",
         "org.jetbrains:annotations:23.0.0",
         "info.picocli:picocli:4.7.6",
-        "io.netty:netty-handler:4.1.124.Final",
+        "io.netty:netty-handler:4.2.15.Final",
         "com.google.crypto.tink:tink:" + TINK_VERSION,
         "com.github.ben-manes.caffeine:caffeine:3.1.8",
         # TODO(bazelbuild/bazel-worker-api/issues#14): Remove versions when fixed.
@@ -273,7 +273,7 @@ maven.install(
         "io.opentelemetry:opentelemetry-sdk",
 
         # Reactor.
-        "org.reactivestreams:reactive-streams",
+        "org.reactivestreams:reactive-streams:1.0.4",
 
         # PostgreSQL.
         "com.google.cloud.sql:postgres-socket-factory:" + CLOUD_SQL_CONNECTOR_VERSION,
@@ -300,12 +300,11 @@ maven.install(
         "org.jetbrains.kotlinx:kotlinx-coroutines-bom:" + KOTLINX_COROUTINES_VERSION,
         "com.google.protobuf:protobuf-bom:" + PROTOBUF_JAVA_VERSION,
         "io.grpc:grpc-bom:" + GRPC_JAVA_VERSION,
-        "com.google.cloud:libraries-bom:26.62.0",
+        "com.google.cloud:libraries-bom:26.84.0",
         "software.amazon.awssdk:bom:" + AWS_JAVA_SDK_VERSION,
-        "io.opentelemetry:opentelemetry-bom:1.42.1",
-        "org.testcontainers:testcontainers-bom:2.0.3",
-        "io.projectreactor:reactor-bom:2023.0.9",
-        "io.cloudevents:cloudevents-bom:4.0.1",
+        "io.opentelemetry:opentelemetry-bom:1.63.0",
+        "org.testcontainers:testcontainers-bom:2.0.5",
+        "io.cloudevents:cloudevents-bom:4.1.1",
     ],
     fail_if_repin_required = True,
     fetch_sources = True,
