@@ -273,7 +273,7 @@ maven.install(
         "io.opentelemetry:opentelemetry-sdk",
 
         # Reactor.
-        "org.reactivestreams:reactive-streams",
+        "org.reactivestreams:reactive-streams:1.0.4",
 
         # PostgreSQL.
         "com.google.cloud.sql:postgres-socket-factory:" + CLOUD_SQL_CONNECTOR_VERSION,
@@ -304,7 +304,6 @@ maven.install(
         "software.amazon.awssdk:bom:" + AWS_JAVA_SDK_VERSION,
         "io.opentelemetry:opentelemetry-bom:1.42.1",
         "org.testcontainers:testcontainers-bom:2.0.3",
-        "io.projectreactor:reactor-bom:2023.0.9",
         "io.cloudevents:cloudevents-bom:4.0.1",
     ],
     fail_if_repin_required = True,
