@@ -304,7 +304,7 @@ maven.install(
         "software.amazon.awssdk:bom:" + AWS_JAVA_SDK_VERSION,
         "io.opentelemetry:opentelemetry-bom:1.42.1",
         "org.testcontainers:testcontainers-bom:2.0.3",
-        "io.cloudevents:cloudevents-bom:4.0.1",
+        "io.cloudevents:cloudevents-bom:4.1.1",
     ],
     fail_if_repin_required = True,
     fetch_sources = True,
