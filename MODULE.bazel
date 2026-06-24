@@ -1,6 +1,6 @@
 module(
     name = "common-jvm",
-    bazel_compatibility = [">=8.0.0"],
+    bazel_compatibility = [">=9.0.0"],
     repo_name = "wfa_common_jvm",
 )
 
@@ -35,7 +35,7 @@ bazel_dep(
 # DO_NOT_SUBMIT: use new release version
 git_override(
     module_name = "rules_kotlin_jvm",
-    commit = "e32531de30da6220a68dfd3397c3bbd05299546e",
+    commit = "abc7df30d55ffa85361ba592ffa0658cc80cabc0",
     remote = "https://github.com/world-federation-of-advertisers/rules_kotlin_jvm.git",
 )
 bazel_dep(
@@ -86,11 +86,11 @@ bazel_dep(
 )
 bazel_dep(
     name = "rules_jvm_external",
-    version = "6.8",
+    version = "7.0",
 )
 bazel_dep(
     name = "rules_oci",
-    version = "2.0.0",
+    version = "2.3.0",
 )
 
 maven = use_extension("@rules_jvm_external//:extensions.bzl", "maven")
