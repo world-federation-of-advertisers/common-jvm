@@ -1,6 +1,6 @@
 module(
     name = "common-jvm",
-    bazel_compatibility = [">=7.0.0"],
+    bazel_compatibility = [">=8.0.0"],
     repo_name = "wfa_common_jvm",
 )
 
