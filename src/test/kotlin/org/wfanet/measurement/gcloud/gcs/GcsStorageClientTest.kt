@@ -38,9 +38,6 @@ class GcsStorageClientTest : AbstractBlobMetadataStorageClientTest<GcsStorageCli
     storageClient = GcsStorageClient(storageEmulator.storage, BUCKET)
   }
 
-  override suspend fun getGeneration(blobKey: String): Long =
-    storageEmulator.storage.get(BUCKET, blobKey).generation
-
   @After
   fun deleteBucket() {
     storageEmulator.deleteBucketRecursive(BUCKET)

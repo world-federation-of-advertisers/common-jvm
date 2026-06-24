@@ -70,15 +70,27 @@ class AeadStorageClient(
     return storageClient.listBlobs(prefix)
   }
 
-  override suspend fun writeBlobIfGeneration(
+  override suspend fun getFreshnessToken(blobKey: String): String? =
+    storageClient.getFreshnessToken(blobKey)
+
+  override suspend fun writeBlobIfUnchanged(
     blobKey: String,
-    expectedGeneration: Long,
+    freshnessToken: String,
     content: Flow<ByteString>,
   ): StorageClient.Blob {
-    require(expectedGeneration >= 0) { "expectedGeneration must be >= 0, got $expectedGeneration" }
     val wrappedBlob: StorageClient.Blob =
-      storageClient.writeBlobIfGeneration(blobKey, expectedGeneration, encrypt(blobKey, content))
-    logger.fine { "Wrote encrypted content via writeBlobIfGeneration: $blobKey" }
+      storageClient.writeBlobIfUnchanged(blobKey, freshnessToken, encrypt(blobKey, content))
+    logger.fine { "Wrote encrypted content via writeBlobIfUnchanged(token): $blobKey" }
+    return EncryptedBlob(wrappedBlob, blobKey)
+  }
+
+  override suspend fun writeBlobIfNotFound(
+    blobKey: String,
+    content: Flow<ByteString>,
+  ): StorageClient.Blob {
+    val wrappedBlob: StorageClient.Blob =
+      storageClient.writeBlobIfNotFound(blobKey, encrypt(blobKey, content))
+    logger.fine { "Wrote encrypted content via writeBlobIfNotFound: $blobKey" }
     return EncryptedBlob(wrappedBlob, blobKey)
   }
 

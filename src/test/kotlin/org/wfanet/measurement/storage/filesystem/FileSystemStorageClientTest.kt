@@ -37,9 +37,6 @@ class FileSystemStorageClientTest :
     storageClient = FileSystemStorageClient(tempDirectory.root)
   }
 
-  override suspend fun getGeneration(blobKey: String): Long =
-    java.io.File(tempDirectory.root, blobKey).lastModified()
-
   @Test
   fun `writeBlob writes blob to file in subdirectory`() {
     val content = "Lorem ipsum dolor sit amet".toByteStringUtf8()

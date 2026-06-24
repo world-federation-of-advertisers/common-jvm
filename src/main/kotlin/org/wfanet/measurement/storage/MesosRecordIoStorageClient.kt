@@ -58,34 +58,46 @@ class MesosRecordIoStorageClient(private val storageClient: ConditionalOperation
     return Blob(wrappedBlob, blobKey)
   }
 
+  override suspend fun getFreshnessToken(blobKey: String): String? =
+    storageClient.getFreshnessToken(blobKey)
+
   /**
-   * Conditional [writeBlob] that writes only if the blob's current generation equals
-   * [expectedGeneration] (pass `0` to require that the blob does not exist). Frames each record
-   * with the RecordIO size+delimiter prefix before delegating to the underlying client.
+   * Conditional [writeBlob] that writes only if the wrapped blob's current freshness token matches
+   * [freshnessToken]. Frames each record with the RecordIO size+delimiter prefix before delegating
+   * to the underlying client.
    *
    * @throws BlobChangedException if the precondition fails
-   * @throws IllegalArgumentException if the underlying client does not implement
-   *   [ConditionalOperationStorageClient]
    */
-  override suspend fun writeBlobIfGeneration(
+  override suspend fun writeBlobIfUnchanged(
     blobKey: String,
-    expectedGeneration: Long,
+    freshnessToken: String,
     content: Flow<ByteString>,
   ): StorageClient.Blob {
-    require(expectedGeneration >= 0) { "expectedGeneration must be >= 0, got $expectedGeneration" }
     val wrappedBlob: StorageClient.Blob =
-      storageClient.writeBlobIfGeneration(blobKey, expectedGeneration, recordIoFraming(content))
+      storageClient.writeBlobIfUnchanged(blobKey, freshnessToken, recordIoFraming(content))
+    return Blob(wrappedBlob, blobKey)
+  }
+
+  /**
+   * Write-if-absent variant of [writeBlob] with RecordIO framing.
+   *
+   * @throws BlobChangedException if a blob already exists at [blobKey]
+   */
+  override suspend fun writeBlobIfNotFound(
+    blobKey: String,
+    content: Flow<ByteString>,
+  ): StorageClient.Blob {
+    val wrappedBlob: StorageClient.Blob =
+      storageClient.writeBlobIfNotFound(blobKey, recordIoFraming(content))
     return Blob(wrappedBlob, blobKey)
   }
 
   /**
    * Conditional [writeBlob] that writes only if the wrapped blob has not changed on the backend
-   * (compare-and-swap on generation). Frames each record with the RecordIO size+delimiter prefix
+   * (compare-and-swap on freshness). Frames each record with the RecordIO size+delimiter prefix
    * before delegating to the underlying client.
    *
    * @throws BlobChangedException if the underlying blob has changed since [blob] was read
-   * @throws IllegalArgumentException if the underlying client does not implement
-   *   [ConditionalOperationStorageClient]
    */
   override suspend fun writeBlobIfUnchanged(
     blob: StorageClient.Blob,

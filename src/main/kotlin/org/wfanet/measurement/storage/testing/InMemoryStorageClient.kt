@@ -42,10 +42,6 @@ class InMemoryStorageClient :
   /** Returns the custom create time set on [blobKey] via [updateBlobMetadata], or null if unset. */
   fun getCustomCreateTime(blobKey: String): Instant? = storageMap[blobKey]?.customTime
 
-  /** Returns the storage-backend generation for [blobKey], or throws if it does not exist. */
-  fun getGeneration(blobKey: String): Long =
-    requireNotNull(storageMap[blobKey]) { "Blob not found: $blobKey" }.generation
-
   private fun deleteKey(path: String) {
     storageMap.remove(path)
   }
@@ -85,34 +81,40 @@ class InMemoryStorageClient :
     content: Flow<ByteString>,
   ): StorageClient.Blob {
     require(blob.storageClient === this) { "Blob does not belong to this storage client" }
-    val current =
-      storageMap[blob.blobKey] ?: throw StorageException("Blob not found: ${blob.blobKey}")
-    if (current.generation != (blob as Blob).generation) {
-      throw BlobChangedException("Blob ${blob.blobKey} has changed since it was last read")
-    }
-    return writeBlob(blob.blobKey, content)
+    return writeBlobIfUnchanged(blob.blobKey, (blob as Blob).generation.toString(), content)
   }
 
-  /**
-   * Conditional write that succeeds only if the blob's current generation equals
-   * [expectedGeneration]. Pass `0` to require that the blob does not currently exist.
-   *
-   * Note: the generation check and subsequent write are not atomic. This matches GCS semantics only
-   * when there is no concurrent writer for the same key; production GCS enforces atomicity via the
-   * server-side `IfGenerationMatch` precondition, but the in-memory test double does not. Safe for
-   * single-coroutine-per-key test usage.
-   */
-  override suspend fun writeBlobIfGeneration(
+  override suspend fun getFreshnessToken(blobKey: String): String? =
+    storageMap[blobKey]?.generation?.toString()
+
+  override suspend fun writeBlobIfUnchanged(
     blobKey: String,
-    expectedGeneration: Long,
+    freshnessToken: String,
     content: Flow<ByteString>,
   ): StorageClient.Blob {
-    require(expectedGeneration >= 0) { "expectedGeneration must be >= 0, got $expectedGeneration" }
-    val currentGeneration = storageMap[blobKey]?.generation ?: 0L
-    if (currentGeneration != expectedGeneration) {
+    val expectedGeneration =
+      freshnessToken.toLongOrNull()
+        ?: throw IllegalArgumentException(
+          "Invalid freshness token for InMemory: $freshnessToken (must be numeric)"
+        )
+    require(expectedGeneration > 0) {
+      "freshnessToken must encode a positive generation, got $expectedGeneration"
+    }
+    val current = storageMap[blobKey] ?: throw BlobChangedException("Blob does not exist: $blobKey")
+    if (current.generation != expectedGeneration) {
       throw BlobChangedException(
-        "Blob $blobKey is at generation $currentGeneration, not $expectedGeneration"
+        "Blob $blobKey is at generation ${current.generation}, not $expectedGeneration"
       )
+    }
+    return writeBlob(blobKey, content)
+  }
+
+  override suspend fun writeBlobIfNotFound(
+    blobKey: String,
+    content: Flow<ByteString>,
+  ): StorageClient.Blob {
+    if (storageMap.containsKey(blobKey)) {
+      throw BlobChangedException("Blob already exists: $blobKey")
     }
     return writeBlob(blobKey, content)
   }

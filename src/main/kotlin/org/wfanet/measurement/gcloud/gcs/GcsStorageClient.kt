@@ -83,38 +83,69 @@ class GcsStorageClient(
     content: Flow<ByteString>,
   ): StorageClient.Blob {
     require(blob is ClientBlob) { "Incompatible blob type" }
-    val expectedGeneration = blob.blob.generation
-    return doWrite(
-      blobKey = blob.blobKey,
-      content = content,
-      coroutineName = "writeBlobIfUnchanged",
-      writeOptions = arrayOf(Storage.BlobWriteOption.generationMatch(expectedGeneration)),
-      preconditionMessage = { "Precondition failed when attempting to write ${blob.blobKey}" },
-    )
+    return writeBlobAtGeneration(blob.blobKey, blob.blob.generation, content)
   }
 
-  override suspend fun writeBlobIfGeneration(
+  override suspend fun getFreshnessToken(blobKey: String): String? {
+    val blob: Blob? =
+      withContext(blockingContext + CoroutineName("getFreshnessToken")) {
+        try {
+          storage.get(BlobId.of(bucketName, blobKey))
+        } catch (e: GcsStorageException) {
+          throw StorageException("Error getting freshness token for blob $blobKey", e)
+        }
+      }
+    return blob?.generation?.toString()
+  }
+
+  override suspend fun writeBlobIfUnchanged(
+    blobKey: String,
+    freshnessToken: String,
+    content: Flow<ByteString>,
+  ): StorageClient.Blob {
+    val expectedGeneration =
+      freshnessToken.toLongOrNull()
+        ?: throw IllegalArgumentException(
+          "Invalid freshness token for GCS: $freshnessToken (must be a numeric generation)"
+        )
+    require(expectedGeneration > 0) {
+      "freshnessToken must be a positive generation, got $expectedGeneration"
+    }
+    return writeBlobAtGeneration(blobKey, expectedGeneration, content)
+  }
+
+  override suspend fun writeBlobIfNotFound(
+    blobKey: String,
+    content: Flow<ByteString>,
+  ): StorageClient.Blob = writeBlobAtGeneration(blobKey, 0L, content)
+
+  private suspend fun writeBlobAtGeneration(
     blobKey: String,
     expectedGeneration: Long,
     content: Flow<ByteString>,
   ): StorageClient.Blob {
-    require(expectedGeneration >= 0) { "expectedGeneration must be >= 0, got $expectedGeneration" }
+    val coroutineName =
+      if (expectedGeneration == 0L) "writeBlobIfNotFound" else "writeBlobIfUnchanged"
+    val preconditionMessage: () -> String =
+      if (expectedGeneration == 0L) {
+        { "Precondition failed: blob $blobKey already exists" }
+      } else {
+        { "Precondition failed: blob $blobKey not at expected generation $expectedGeneration" }
+      }
     return doWrite(
       blobKey = blobKey,
       content = content,
-      coroutineName = "writeBlobIfGeneration",
+      coroutineName = coroutineName,
       writeOptions = arrayOf(Storage.BlobWriteOption.generationMatch(expectedGeneration)),
-      preconditionMessage = {
-        "Precondition failed: blob $blobKey not at expected generation $expectedGeneration"
-      },
+      preconditionMessage = preconditionMessage,
     )
   }
 
   /**
-   * Shared body for [writeBlob], [writeBlobIfUnchanged] and [writeBlobIfGeneration]. Single
-   * resumable upload with any [writeOptions] applied; refetches the resulting blob to get its
-   * generation + updateTime. Translates HTTP 412 into [BlobChangedException] iff
-   * [preconditionMessage] is non-null (i.e. the caller actually set a precondition).
+   * Shared body for [writeBlob], [writeBlobIfUnchanged] and [writeBlobIfNotFound]. Single resumable
+   * upload with any [writeOptions] applied; refetches the resulting blob to get its generation +
+   * updateTime. Translates HTTP 412 into [BlobChangedException] iff [preconditionMessage] is
+   * non-null (i.e. the caller actually set a precondition).
    */
   private suspend fun doWrite(
     blobKey: String,

@@ -47,9 +47,6 @@ class AeadStorageClientTest : AbstractConditionalOperationStorageClientTest<Aead
     storageClient = AeadStorageClient(wrappedStorageClient, aead)
   }
 
-  override suspend fun getGeneration(blobKey: String): Long =
-    wrappedStorageClient.getGeneration(blobKey)
-
   @Test
   fun `wrapped blob is encrypted`() = runBlocking {
     val blobKey = "kms-blob"

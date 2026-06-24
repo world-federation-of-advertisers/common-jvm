@@ -32,15 +32,8 @@ abstract class AbstractConditionalOperationStorageClientTest<
   T : ConditionalOperationStorageClient
 > : AbstractStorageClientTest<T>() {
 
-  /**
-   * Returns the storage-backend generation for the blob at [blobKey], or throws if the blob does
-   * not exist. Each backend exposes generation differently, so the conformance suite delegates to
-   * the test subclass.
-   */
-  protected abstract suspend fun getGeneration(blobKey: String): Long
-
   @Test
-  fun `writeBlobIfUnchanged overwrites existing blob`(): Unit = runBlocking {
+  fun `writeBlobIfUnchanged(blob) overwrites existing blob`(): Unit = runBlocking {
     val blobKey = "replacable-blob"
     val blob = storageClient.writeBlob(blobKey, "initial content".toByteStringUtf8())
 
@@ -51,7 +44,7 @@ abstract class AbstractConditionalOperationStorageClientTest<
   }
 
   @Test
-  fun `writeBlobIfUnchanged throws error when blob contents changed`(): Unit = runBlocking {
+  fun `writeBlobIfUnchanged(blob) throws error when blob contents changed`(): Unit = runBlocking {
     val blobKey = "blob"
     val blob = storageClient.writeBlob(blobKey, "initial content".toByteStringUtf8())
     storageClient.writeBlob(blobKey, "other content".toByteStringUtf8())
@@ -62,23 +55,143 @@ abstract class AbstractConditionalOperationStorageClientTest<
   }
 
   @Test
-  fun `writeBlobIfGeneration with expected 0 writes when no blob exists`(): Unit = runBlocking {
-    val blobKey = "fresh-blob"
+  fun `getFreshnessToken returns null for nonexistent blob`(): Unit = runBlocking {
+    assertThat(storageClient.getFreshnessToken("nonexistent")).isNull()
+  }
 
-    val written =
-      storageClient.writeBlobIfGeneration(blobKey, expectedGeneration = 0L, flowOf(testBlobContent))
+  @Test
+  fun `getFreshnessToken returns non-null token for existing blob`(): Unit = runBlocking {
+    val blobKey = "existing"
+    storageClient.writeBlob(blobKey, testBlobContent)
+
+    assertThat(storageClient.getFreshnessToken(blobKey)).isNotNull()
+  }
+
+  @Test
+  fun `getFreshnessToken token changes across writes`(): Unit = runBlocking {
+    val blobKey = "rewritten"
+    storageClient.writeBlob(blobKey, "v1".toByteStringUtf8())
+    val first = checkNotNull(storageClient.getFreshnessToken(blobKey))
+    storageClient.writeBlob(blobKey, "v2".toByteStringUtf8())
+    val second = checkNotNull(storageClient.getFreshnessToken(blobKey))
+
+    assertThat(second).isNotEqualTo(first)
+  }
+
+  @Test
+  fun `writeBlobIfUnchanged(token) overwrites when token matches`(): Unit = runBlocking {
+    val blobKey = "matching-token-cas"
+    storageClient.writeBlob(blobKey, "v1".toByteStringUtf8())
+    val token = checkNotNull(storageClient.getFreshnessToken(blobKey))
+
+    val written = storageClient.writeBlobIfUnchanged(blobKey, token, flowOf(testBlobContent))
+
+    assertThat(written).contentEqualTo(testBlobContent)
+  }
+
+  @Test
+  fun `writeBlobIfUnchanged(token) throws when token stale`(): Unit = runBlocking {
+    val blobKey = "stale-token-cas"
+    storageClient.writeBlob(blobKey, "v1".toByteStringUtf8())
+    val staleToken = checkNotNull(storageClient.getFreshnessToken(blobKey))
+    // Concurrent writer races ahead.
+    storageClient.writeBlob(blobKey, "v1.5".toByteStringUtf8())
+
+    // Sanity check: the two writes must produce distinct tokens or the assertion below would
+    // pass for the wrong reason. Backends with coarse generation resolution (e.g. filesystem
+    // `lastModified` at millisecond precision) must ensure monotonic advancement; this asserts
+    // they do.
+    assertThat(checkNotNull(storageClient.getFreshnessToken(blobKey))).isNotEqualTo(staleToken)
+
+    assertFailsWith<BlobChangedException> {
+      storageClient.writeBlobIfUnchanged(blobKey, staleToken, flowOf(testBlobContent))
+    }
+  }
+
+  @Test
+  fun `writeBlobIfUnchanged(token) throws when blob no longer exists`(): Unit = runBlocking {
+    val blobKey = "vanished-cas"
+    val blob = storageClient.writeBlob(blobKey, "v1".toByteStringUtf8())
+    val token = checkNotNull(storageClient.getFreshnessToken(blobKey))
+    blob.delete()
+
+    assertFailsWith<BlobChangedException> {
+      storageClient.writeBlobIfUnchanged(blobKey, token, flowOf(testBlobContent))
+    }
+  }
+
+  @Test
+  fun `writeBlobIfUnchanged(token) leaves blob untouched when precondition fails`(): Unit =
+    runBlocking {
+      val blobKey = "regression-cas"
+      storageClient.writeBlob(blobKey, "v1".toByteStringUtf8())
+      val staleToken = checkNotNull(storageClient.getFreshnessToken(blobKey))
+      // Concurrent writer races ahead.
+      val winnerContent = "v1.5".toByteStringUtf8()
+      storageClient.writeBlob(blobKey, winnerContent)
+
+      assertFailsWith<BlobChangedException> {
+        storageClient.writeBlobIfUnchanged(blobKey, staleToken, flowOf(testBlobContent))
+      }
+
+      // The contract is "the failed write didn't apply" — the winner's bytes remain, not the
+      // original v1. This catches an impl that mutated before checking the precondition.
+      assertThat(checkNotNull(storageClient.getBlob(blobKey))).contentEqualTo(winnerContent)
+    }
+
+  @Test
+  fun `getFreshnessToken result composes with writeBlobIfUnchanged(token)`(): Unit = runBlocking {
+    // Models the canonical workflow: capture the token at workflow start, then CAS-write
+    // later using only the captured token (no live Blob reference). Proves the conditional
+    // surface composes end-to-end on every backend.
+    val blobKey = "workflow-roundtrip"
+    storageClient.writeBlob(blobKey, "initial".toByteStringUtf8())
+
+    val token = checkNotNull(storageClient.getFreshnessToken(blobKey))
+    // ... time passes; the Blob reference is gone, only the token survives ...
+
+    val written = storageClient.writeBlobIfUnchanged(blobKey, token, flowOf(testBlobContent))
 
     assertThat(written).contentEqualTo(testBlobContent)
     assertThat(checkNotNull(storageClient.getBlob(blobKey))).contentEqualTo(testBlobContent)
   }
 
   @Test
-  fun `writeBlobIfGeneration with expected 0 throws when blob exists`(): Unit = runBlocking {
+  fun `null token path then unchanged-token path composes correctly`(): Unit = runBlocking {
+    // Models the full two-dispatch workflow: first time through, the blob doesn't exist and
+    // the caller writes via writeBlobIfNotFound; second time through, the blob exists and the
+    // caller captures the token and CASes the new content in. This is exactly the if/else the
+    // TEE app uses around getFreshnessToken's null/non-null result.
+    val blobKey = "two-pass-workflow"
+
+    // Pass 1: blob does not exist.
+    assertThat(storageClient.getFreshnessToken(blobKey)).isNull()
+    storageClient.writeBlobIfNotFound(blobKey, flowOf("v1".toByteStringUtf8()))
+
+    // Pass 2: blob exists; capture token, CAS-write.
+    val token = checkNotNull(storageClient.getFreshnessToken(blobKey))
+    storageClient.writeBlobIfUnchanged(blobKey, token, flowOf(testBlobContent))
+
+    assertThat(checkNotNull(storageClient.getBlob(blobKey))).contentEqualTo(testBlobContent)
+  }
+
+  @Test
+  fun `writeBlobIfNotFound writes when no blob exists`(): Unit = runBlocking {
+    val blobKey = "fresh-blob"
+
+    val written = storageClient.writeBlobIfNotFound(blobKey, flowOf(testBlobContent))
+
+    assertThat(written).contentEqualTo(testBlobContent)
+    assertThat(checkNotNull(storageClient.getBlob(blobKey))).contentEqualTo(testBlobContent)
+  }
+
+  @Test
+  fun `writeBlobIfNotFound throws when blob exists`(): Unit = runBlocking {
     val blobKey = "existing-blob"
     storageClient.writeBlob(blobKey, "first writer".toByteStringUtf8())
 
     assertFailsWith<BlobChangedException> {
-      storageClient.writeBlobIfGeneration(blobKey, expectedGeneration = 0L, flowOf(testBlobContent))
+      storageClient.writeBlobIfNotFound(blobKey, flowOf(testBlobContent))
     }
 
     assertThat(checkNotNull(storageClient.getBlob(blobKey)))
@@ -86,13 +199,13 @@ abstract class AbstractConditionalOperationStorageClientTest<
   }
 
   @Test
-  fun `writeBlobIfGeneration leaves blob untouched when precondition fails`(): Unit = runBlocking {
+  fun `writeBlobIfNotFound leaves blob untouched when precondition fails`(): Unit = runBlocking {
     val blobKey = "regression-blob"
     val originalContent = "first writer wins".toByteStringUtf8()
     storageClient.writeBlob(blobKey, originalContent)
 
     assertFailsWith<BlobChangedException> {
-      storageClient.writeBlobIfGeneration(blobKey, expectedGeneration = 0L, flowOf(testBlobContent))
+      storageClient.writeBlobIfNotFound(blobKey, flowOf(testBlobContent))
     }
 
     val after = checkNotNull(storageClient.getBlob(blobKey))
@@ -100,82 +213,23 @@ abstract class AbstractConditionalOperationStorageClientTest<
   }
 
   @Test
-  fun `writeBlobIfGeneration with expected 0 succeeds with empty content`(): Unit = runBlocking {
+  fun `writeBlobIfNotFound succeeds with empty content`(): Unit = runBlocking {
     val blobKey = "empty-blob"
 
-    val written = storageClient.writeBlobIfGeneration(blobKey, expectedGeneration = 0L, emptyFlow())
+    val written = storageClient.writeBlobIfNotFound(blobKey, emptyFlow())
 
     assertThat(written).contentEqualTo("".toByteStringUtf8())
   }
 
   @Test
-  fun `writeBlobIfGeneration does not lock the key against later unconditional writes`(): Unit =
+  fun `writeBlobIfNotFound does not lock the key against later unconditional writes`(): Unit =
     runBlocking {
       val blobKey = "overwritable-blob"
-      storageClient.writeBlobIfGeneration(
-        blobKey,
-        expectedGeneration = 0L,
-        flowOf("first".toByteStringUtf8()),
-      )
+      storageClient.writeBlobIfNotFound(blobKey, flowOf("first".toByteStringUtf8()))
 
       val overwritten = storageClient.writeBlob(blobKey, "second".toByteStringUtf8())
 
       assertThat(overwritten).contentEqualTo("second".toByteStringUtf8())
-    }
-
-  @Test
-  fun `writeBlobIfGeneration with stale generation throws`(): Unit = runBlocking {
-    val blobKey = "stale-gen-cas"
-    storageClient.writeBlob(blobKey, "v1".toByteStringUtf8())
-    val staleGen = getGeneration(blobKey)
-    // Concurrent writer races ahead.
-    storageClient.writeBlob(blobKey, "v1.5".toByteStringUtf8())
-
-    // Sanity check: the two writes must produce distinct generations or the assertion below
-    // would pass for the wrong reason (no precondition violation). Backends with coarse
-    // generation resolution (e.g. filesystem `lastModified` at millisecond precision) must
-    // ensure monotonic advancement; this asserts they do.
-    assertThat(getGeneration(blobKey)).isNotEqualTo(staleGen)
-
-    assertFailsWith<BlobChangedException> {
-      storageClient.writeBlobIfGeneration(blobKey, staleGen, flowOf(testBlobContent))
-    }
-  }
-
-  @Test
-  fun `writeBlobIfGeneration with matching generation overwrites`(): Unit = runBlocking {
-    val blobKey = "matching-gen-cas"
-    storageClient.writeBlob(blobKey, "v1".toByteStringUtf8())
-    val currentGen = getGeneration(blobKey)
-
-    val second = storageClient.writeBlobIfGeneration(blobKey, currentGen, flowOf(testBlobContent))
-
-    assertThat(second).contentEqualTo(testBlobContent)
-  }
-
-  @Test
-  fun `writeBlobIfGeneration rejects negative expectedGeneration`(): Unit = runBlocking {
-    storageClient.writeBlob("k", "v".toByteStringUtf8())
-
-    assertFailsWith<IllegalArgumentException> {
-      storageClient.writeBlobIfGeneration("k", expectedGeneration = -1L, flowOf(testBlobContent))
-    }
-  }
-
-  @Test
-  fun `writeBlobIfGeneration rejects negative expectedGeneration before checking storage`(): Unit =
-    runBlocking {
-      // Distinct from the test above: this one targets a nonexistent key so that any
-      // implementation that did `getBlob`-then-validate (instead of validating first) would
-      // throw `BlobChangedException` or `StorageException` rather than `IllegalArgumentException`.
-      // Verifies the guard is at the call boundary.
-      assertFailsWith<IllegalArgumentException> {
-        storageClient.writeBlobIfGeneration(
-          "nonexistent-key",
-          expectedGeneration = -1L,
-          flowOf(testBlobContent),
-        )
-      }
     }
 
   @Test

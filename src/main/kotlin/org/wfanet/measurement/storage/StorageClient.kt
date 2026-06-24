@@ -178,17 +178,41 @@ interface ConditionalOperationStorageClient : StorageClient {
   suspend fun writeBlobIfUnchanged(blob: Blob, content: Flow<ByteString>): Blob
 
   /**
-   * Writes [content] to [blobKey] only if the blob's current generation equals [expectedGeneration]
-   * (GCS `IfGenerationMatch`). Pass `0` to require the blob not exist. The precondition is checked
-   * atomically on the server.
+   * Returns an opaque freshness token for the blob at [blobKey], or `null` if no blob exists.
    *
-   * @throws BlobChangedException if the precondition fails
+   * Pass the returned token to the [writeBlobIfUnchanged] overload that takes a token to gate a
+   * later write on the blob not having changed since the token was observed. The token's format is
+   * implementation-defined; callers MUST treat it as opaque.
+   *
+   * This entry point exists for workflows that capture the version at one point in time and perform
+   * the conditional write much later (e.g., a TEE app that records the token at workflow start and
+   * writes the result hours later, possibly from a different VM after Pub/Sub redelivery), where
+   * holding a live [Blob] reference across that boundary is not feasible.
    */
-  suspend fun writeBlobIfGeneration(
+  suspend fun getFreshnessToken(blobKey: String): String?
+
+  /**
+   * Writes [content] to [blobKey] only if the blob's current freshness token equals
+   * [freshnessToken]. Use this overload when only the opaque token captured earlier from
+   * [getFreshnessToken] (or persisted across a workflow boundary) is available, not a live [Blob]
+   * reference.
+   *
+   * @throws BlobChangedException if the precondition fails (the blob has changed or no longer
+   *   exists)
+   */
+  suspend fun writeBlobIfUnchanged(
     blobKey: String,
-    expectedGeneration: Long,
+    freshnessToken: String,
     content: Flow<ByteString>,
   ): Blob
+
+  /**
+   * Writes [content] to [blobKey] only if no blob currently exists at that key. First-writer-wins
+   * semantics — concurrent peers race atomically and exactly one succeeds.
+   *
+   * @throws BlobChangedException if a blob already exists at [blobKey]
+   */
+  suspend fun writeBlobIfNotFound(blobKey: String, content: Flow<ByteString>): Blob
 }
 
 /**

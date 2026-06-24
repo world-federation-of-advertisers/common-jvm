@@ -58,9 +58,6 @@ class MesosRecordIoStorageClientTest :
     storageClient = MesosRecordIoStorageClient(wrappedStorageClient)
   }
 
-  override suspend fun getGeneration(blobKey: String): Long =
-    wrappedStorageClient.getGeneration(blobKey)
-
   @Test
   fun `test writing and reading single record`() = runBlocking {
     val testData = "Hello World"
@@ -325,11 +322,17 @@ class MesosRecordIoStorageClientTest :
           content: Flow<ByteString>,
         ) = throw UnsupportedOperationException("not used")
 
-        override suspend fun writeBlobIfGeneration(
+        override suspend fun getFreshnessToken(blobKey: String): String? =
+          throw UnsupportedOperationException("not used")
+
+        override suspend fun writeBlobIfUnchanged(
           blobKey: String,
-          expectedGeneration: Long,
+          freshnessToken: String,
           content: Flow<ByteString>,
         ) = throw UnsupportedOperationException("not used")
+
+        override suspend fun writeBlobIfNotFound(blobKey: String, content: Flow<ByteString>) =
+          throw UnsupportedOperationException("not used")
       }
     )
 
@@ -368,12 +371,12 @@ class MesosRecordIoStorageClientTest :
   }
 
   @Test
-  fun `writeBlobIfGeneration writes RecordIO records when blob does not exist`() = runBlocking {
+  fun `writeBlobIfNotFound writes RecordIO records when blob does not exist`() = runBlocking {
     val blobKey = "writeIfAbsent-fresh"
     val testData = listOf("first", "second", "third")
     val recordFlow = flow { testData.forEach { emit(ByteString.copyFromUtf8(it)) } }
 
-    storageClient.writeBlobIfGeneration(blobKey, expectedGeneration = 0L, recordFlow)
+    storageClient.writeBlobIfNotFound(blobKey, recordFlow)
 
     val blob = requireNotNull(storageClient.getBlob(blobKey))
     val records = blob.read().toList()

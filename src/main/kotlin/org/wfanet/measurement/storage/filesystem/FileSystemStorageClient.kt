@@ -165,55 +165,81 @@ class FileSystemStorageClient(
       .flowOn(coroutineContext)
   }
 
+  override suspend fun getFreshnessToken(blobKey: String): String? {
+    val file: File = resolvePath(blobKey)
+    return withContext(coroutineContext + CoroutineName("getFreshnessToken")) {
+      if (file.exists()) file.lastModified().toString() else null
+    }
+  }
+
   /**
-   * Conditional write that succeeds only if the file's current `lastModified` equals
-   * [expectedGeneration] (`0` for write-if-absent).
+   * Conditional write that succeeds only if the file's current `lastModified` equals the generation
+   * encoded in [freshnessToken].
    *
-   * The write-if-absent case is atomic across processes on the same host via [Files.createFile].
-   * The non-zero case is a non-atomic check-then-act and is only safe when all writers for
-   * [blobKey] are coroutines in the same JVM — see the class-level KDoc for the full caveats. The
-   * replacement itself uses `ATOMIC_MOVE` so partial content is never visible to readers.
+   * The check-then-act sequence is only safe when all writers for [blobKey] are coroutines in the
+   * same JVM — see the class-level KDoc for the full caveats. The replacement itself uses
+   * `ATOMIC_MOVE` so partial content is never visible to readers.
    *
    * @throws BlobChangedException if the precondition fails
-   * @throws IllegalArgumentException if [expectedGeneration] is negative
+   * @throws IllegalArgumentException if [freshnessToken] is not a positive long
    */
-  override suspend fun writeBlobIfGeneration(
+  override suspend fun writeBlobIfUnchanged(
     blobKey: String,
-    expectedGeneration: Long,
+    freshnessToken: String,
     content: Flow<ByteString>,
   ): StorageClient.Blob {
-    require(expectedGeneration >= 0) { "expectedGeneration must be >= 0, got $expectedGeneration" }
+    val expectedGeneration =
+      freshnessToken.toLongOrNull()
+        ?: throw IllegalArgumentException(
+          "Invalid freshness token for FileSystem: $freshnessToken (must be a numeric lastModified)"
+        )
+    require(expectedGeneration > 0) {
+      "freshnessToken must encode a positive lastModified, got $expectedGeneration"
+    }
     val file: File = resolvePath(blobKey)
-    return withContext(coroutineContext + CoroutineName("writeBlobIfGeneration")) {
+    return withContext(coroutineContext + CoroutineName("writeBlobIfUnchanged")) {
       file.parentFile.mkdirs()
-      if (expectedGeneration == 0L) {
-        // Write-if-absent: atomic create via NIO; throws FileAlreadyExistsException if present.
-        try {
-          Files.createFile(file.toPath())
-        } catch (e: FileAlreadyExistsException) {
-          throw BlobChangedException("Blob already exists: $blobKey", e)
-        }
-        writeContentTo(file, content)
-      } else {
-        if (!file.exists()) {
-          throw BlobChangedException("Blob does not exist: $blobKey")
-        }
-        if (file.lastModified() != expectedGeneration) {
-          throw BlobChangedException(
-            "Blob $blobKey is at generation ${file.lastModified()}, not $expectedGeneration"
-          )
-        }
-        // Write to a temp sibling and atomically move into place, so partially-written content
-        // is never visible.
-        val temp = File.createTempFile(file.name, ".tmp", file.parentFile)
-        writeContentTo(temp, content)
-        Files.move(
-          temp.toPath(),
-          file.toPath(),
-          StandardCopyOption.ATOMIC_MOVE,
-          StandardCopyOption.REPLACE_EXISTING,
+      if (!file.exists()) {
+        throw BlobChangedException("Blob does not exist: $blobKey")
+      }
+      if (file.lastModified() != expectedGeneration) {
+        throw BlobChangedException(
+          "Blob $blobKey is at generation ${file.lastModified()}, not $expectedGeneration"
         )
       }
+      // Write to a temp sibling and atomically move into place, so partially-written content
+      // is never visible.
+      val temp = File.createTempFile(file.name, ".tmp", file.parentFile)
+      writeContentTo(temp, content)
+      Files.move(
+        temp.toPath(),
+        file.toPath(),
+        StandardCopyOption.ATOMIC_MOVE,
+        StandardCopyOption.REPLACE_EXISTING,
+      )
+      Blob(file, blobKey)
+    }
+  }
+
+  /**
+   * Write-if-absent: atomic create via NIO; throws [BlobChangedException] if a blob already exists.
+   * The create itself is atomic across processes on the same host via [Files.createFile].
+   *
+   * @throws BlobChangedException if a blob already exists at [blobKey]
+   */
+  override suspend fun writeBlobIfNotFound(
+    blobKey: String,
+    content: Flow<ByteString>,
+  ): StorageClient.Blob {
+    val file: File = resolvePath(blobKey)
+    return withContext(coroutineContext + CoroutineName("writeBlobIfNotFound")) {
+      file.parentFile.mkdirs()
+      try {
+        Files.createFile(file.toPath())
+      } catch (e: FileAlreadyExistsException) {
+        throw BlobChangedException("Blob already exists: $blobKey", e)
+      }
+      writeContentTo(file, content)
       Blob(file, blobKey)
     }
   }
@@ -224,7 +250,7 @@ class FileSystemStorageClient(
   ): StorageClient.Blob {
     require(blob is Blob) { "Incompatible blob type" }
     require(blob.storageClient === this) { "Blob does not belong to this storage client" }
-    return writeBlobIfGeneration(blob.blobKey, blob.generation, content)
+    return writeBlobIfUnchanged(blob.blobKey, blob.generation.toString(), content)
   }
 
   /** Writes [content] to [file] using a buffered channel. Caller manages file creation. */
