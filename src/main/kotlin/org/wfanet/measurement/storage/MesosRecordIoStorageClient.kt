@@ -105,7 +105,11 @@ class MesosRecordIoStorageClient(private val storageClient: ConditionalOperation
   ): StorageClient.Blob {
     require(blob is Blob) { "Incompatible blob type" }
     val wrappedBlob: StorageClient.Blob =
-      storageClient.writeBlobIfUnchanged(blob.underlying, recordIoFraming(content))
+      storageClient.writeBlobIfUnchanged(
+        blob.blobKey,
+        blob.freshnessToken,
+        recordIoFraming(content),
+      )
     return Blob(wrappedBlob, blob.blobKey)
   }
 
@@ -132,8 +136,10 @@ class MesosRecordIoStorageClient(private val storageClient: ConditionalOperation
   }
 
   /** A blob that will read the content in RecordIO format */
-  private inner class Blob(val underlying: StorageClient.Blob, override val blobKey: String) :
-    StorageClient.Blob {
+  private inner class Blob(
+    private val underlying: StorageClient.Blob,
+    override val blobKey: String,
+  ) : ConditionalOperationStorageClient.Blob {
 
     override val storageClient = this@MesosRecordIoStorageClient.storageClient
 
@@ -145,6 +151,9 @@ class MesosRecordIoStorageClient(private val storageClient: ConditionalOperation
 
     override val size: Long
       get() = underlying.size
+
+    override val freshnessToken: String
+      get() = (underlying as ConditionalOperationStorageClient.Blob).freshnessToken
 
     private fun ByteString.indexOf(target: ByteString, position: Int = 0): Int {
       if (position < 0 || position >= this.size()) {

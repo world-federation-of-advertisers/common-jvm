@@ -287,7 +287,7 @@ class FileSystemStorageClient(
   }
 
   internal inner class Blob(private val file: File, override val blobKey: String) :
-    StorageClient.Blob {
+    ConditionalOperationStorageClient.Blob {
     override val storageClient: StorageClient
       get() = this@FileSystemStorageClient
 
@@ -301,6 +301,9 @@ class FileSystemStorageClient(
      * exceed the file's wall-clock modification time by a few milliseconds.
      */
     internal val generation: Long = file.lastModified()
+
+    override val freshnessToken: String
+      get() = generation.toString()
 
     override val size: Long
       get() = file.length()

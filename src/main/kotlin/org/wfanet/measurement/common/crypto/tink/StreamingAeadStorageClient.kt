@@ -109,7 +109,11 @@ class StreamingAeadStorageClient(
   ): StorageClient.Blob {
     require(blob is EncryptedBlob) { "Incompatible blob type" }
     val wrappedBlob: StorageClient.Blob =
-      storageClient.writeBlobIfUnchanged(blob.underlying, encrypt(blob.blobKey, content))
+      storageClient.writeBlobIfUnchanged(
+        blob.blobKey,
+        blob.freshnessToken,
+        encrypt(blob.blobKey, content),
+      )
     logger.fine { "Wrote encrypted content via writeBlobIfUnchanged: ${blob.blobKey}" }
     return EncryptedBlob(wrappedBlob, blob.blobKey)
   }
@@ -125,9 +129,9 @@ class StreamingAeadStorageClient(
 
   /** A blob that will decrypt the content when read */
   private inner class EncryptedBlob(
-    val underlying: StorageClient.Blob,
+    private val underlying: StorageClient.Blob,
     override val blobKey: String,
-  ) : StorageClient.Blob {
+  ) : ConditionalOperationStorageClient.Blob {
 
     override val storageClient = this@StreamingAeadStorageClient.storageClient
 
@@ -139,6 +143,9 @@ class StreamingAeadStorageClient(
 
     override val updateTime: java.time.Instant
       get() = underlying.updateTime
+
+    override val freshnessToken: String
+      get() = (underlying as ConditionalOperationStorageClient.Blob).freshnessToken
 
     /**
      * Reads and decrypts the underlying's content.

@@ -168,14 +168,17 @@ interface StorageClient {
  */
 interface ConditionalOperationStorageClient : StorageClient {
   /**
-   * Writes [content] to the blob specified by the [blobKey][Blob.blobKey] of [blob] if it has not
-   * changed on the backend.
+   * Writes [content] to the blob specified by the [blobKey][StorageClient.Blob.blobKey] of [blob]
+   * if it has not changed on the backend.
    *
-   * @return the updated [Blob]
+   * @return the updated [StorageClient.Blob]
    * @throws BlobChangedException if the blob was changed on the backend
    * @throws StorageException if write failed
    */
-  suspend fun writeBlobIfUnchanged(blob: Blob, content: Flow<ByteString>): Blob
+  suspend fun writeBlobIfUnchanged(
+    blob: StorageClient.Blob,
+    content: Flow<ByteString>,
+  ): StorageClient.Blob
 
   /**
    * Returns an opaque freshness token for the blob at [blobKey], or `null` if no blob exists.
@@ -187,15 +190,15 @@ interface ConditionalOperationStorageClient : StorageClient {
    * This entry point exists for workflows that capture the version at one point in time and perform
    * the conditional write much later (e.g., a TEE app that records the token at workflow start and
    * writes the result hours later, possibly from a different VM after Pub/Sub redelivery), where
-   * holding a live [Blob] reference across that boundary is not feasible.
+   * holding a live [StorageClient.Blob] reference across that boundary is not feasible.
    */
   suspend fun getFreshnessToken(blobKey: String): String?
 
   /**
    * Writes [content] to [blobKey] only if the blob's current freshness token equals
    * [freshnessToken]. Use this overload when only the opaque token captured earlier from
-   * [getFreshnessToken] (or persisted across a workflow boundary) is available, not a live [Blob]
-   * reference.
+   * [getFreshnessToken] (or persisted across a workflow boundary) is available, not a live
+   * [StorageClient.Blob] reference.
    *
    * @throws BlobChangedException if the precondition fails (the blob has changed or no longer
    *   exists)
@@ -204,7 +207,7 @@ interface ConditionalOperationStorageClient : StorageClient {
     blobKey: String,
     freshnessToken: String,
     content: Flow<ByteString>,
-  ): Blob
+  ): StorageClient.Blob
 
   /**
    * Writes [content] to [blobKey] only if no blob currently exists at that key. First-writer-wins
@@ -212,7 +215,17 @@ interface ConditionalOperationStorageClient : StorageClient {
    *
    * @throws BlobChangedException if a blob already exists at [blobKey]
    */
-  suspend fun writeBlobIfNotFound(blobKey: String, content: Flow<ByteString>): Blob
+  suspend fun writeBlobIfNotFound(blobKey: String, content: Flow<ByteString>): StorageClient.Blob
+
+  /**
+   * A [StorageClient.Blob] returned by a [ConditionalOperationStorageClient] that exposes the
+   * opaque freshness token observed at the moment this [Blob] was produced. Equivalent to calling
+   * [getFreshnessToken] for [blobKey][StorageClient.Blob.blobKey] at that moment. The token's
+   * format is implementation-defined; callers MUST treat it as opaque.
+   */
+  interface Blob : StorageClient.Blob {
+    val freshnessToken: String
+  }
 }
 
 /**

@@ -81,7 +81,7 @@ class InMemoryStorageClient :
     content: Flow<ByteString>,
   ): StorageClient.Blob {
     require(blob.storageClient === this) { "Blob does not belong to this storage client" }
-    return writeBlobIfUnchanged(blob.blobKey, (blob as Blob).generation.toString(), content)
+    return writeBlobIfUnchanged(blob.blobKey, (blob as Blob).freshnessToken, content)
   }
 
   override suspend fun getFreshnessToken(blobKey: String): String? =
@@ -113,10 +113,25 @@ class InMemoryStorageClient :
     blobKey: String,
     content: Flow<ByteString>,
   ): StorageClient.Blob {
-    if (storageMap.containsKey(blobKey)) {
+    val now = Instant.now()
+    val newBlob =
+      Blob(
+        blobKey = blobKey,
+        contentBytes = content.flatten(),
+        createTime = now,
+        updateTime = now,
+        generation = 1L,
+        customTime = null,
+        metadata = emptyMap(),
+      )
+    // `putIfAbsent` is atomic on ConcurrentHashMap, so the absent-check and the placement happen
+    // in a single step. This gives first-writer-wins semantics across concurrent callers — closer
+    // to the GCS `ifGenerationMatch=0` precondition than a separate `containsKey` + `writeBlob`.
+    val existing = storageMap.putIfAbsent(blobKey, newBlob)
+    if (existing != null) {
       throw BlobChangedException("Blob already exists: $blobKey")
     }
-    return writeBlob(blobKey, content)
+    return newBlob
   }
 
   override suspend fun getBlob(blobKey: String): StorageClient.Blob? {
@@ -166,13 +181,16 @@ class InMemoryStorageClient :
     val generation: Long,
     val customTime: Instant?,
     override val metadata: Map<String, String>,
-  ) : StorageClient.Blob {
+  ) : ConditionalOperationStorageClient.Blob {
 
     override val size: Long
       get() = contentBytes.size().toLong()
 
     override val storageClient: InMemoryStorageClient
       get() = this@InMemoryStorageClient
+
+    override val freshnessToken: String
+      get() = generation.toString()
 
     override fun read(): Flow<ByteString> = flowOf(contentBytes)
 

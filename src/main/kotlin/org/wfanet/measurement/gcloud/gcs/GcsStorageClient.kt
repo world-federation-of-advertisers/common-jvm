@@ -66,24 +66,20 @@ class GcsStorageClient(
 ) : StorageClient, ConditionalOperationStorageClient, BlobMetadataStorageClient {
 
   override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob =
-    // No precondition: unconditional last-writer-wins. Single resumable upload — the prior
-    // implementation split this into `storage.create()` + `Blob.write(generationMatch)`, which
-    // introduced a small race window where a concurrent writer between the two ops would cause
-    // this `writeBlob` to fail with a precondition error.
-    doWrite(
-      blobKey = blobKey,
-      content = content,
-      coroutineName = "writeBlob",
-      writeOptions = emptyArray(),
-      preconditionMessage = null,
-    )
+    withContext(CoroutineName("writeBlob")) {
+      // No precondition: unconditional last-writer-wins. Single resumable upload — the prior
+      // implementation split this into `storage.create()` + `Blob.write(generationMatch)`, which
+      // introduced a small race window where a concurrent writer between the two ops would cause
+      // this `writeBlob` to fail with a precondition error.
+      doWrite(blobKey = blobKey, content = content, writeOptions = emptyArray())
+    }
 
   override suspend fun writeBlobIfUnchanged(
     blob: StorageClient.Blob,
     content: Flow<ByteString>,
   ): StorageClient.Blob {
     require(blob is ClientBlob) { "Incompatible blob type" }
-    return writeBlobAtGeneration(blob.blobKey, blob.blob.generation, content)
+    return writeBlobIfUnchanged(blob.blobKey, blob.freshnessToken, content)
   }
 
   override suspend fun getFreshnessToken(blobKey: String): String? {
@@ -111,50 +107,45 @@ class GcsStorageClient(
     require(expectedGeneration > 0) {
       "freshnessToken must be a positive generation, got $expectedGeneration"
     }
-    return writeBlobAtGeneration(blobKey, expectedGeneration, content)
+    return withContext(CoroutineName("writeBlobIfUnchanged")) {
+      doWrite(
+        blobKey = blobKey,
+        content = content,
+        writeOptions = arrayOf(Storage.BlobWriteOption.generationMatch(expectedGeneration)),
+        preconditionMessage = {
+          "Precondition failed: blob $blobKey not at expected generation $expectedGeneration"
+        },
+      )
+    }
   }
 
   override suspend fun writeBlobIfNotFound(
     blobKey: String,
     content: Flow<ByteString>,
-  ): StorageClient.Blob = writeBlobAtGeneration(blobKey, 0L, content)
-
-  private suspend fun writeBlobAtGeneration(
-    blobKey: String,
-    expectedGeneration: Long,
-    content: Flow<ByteString>,
-  ): StorageClient.Blob {
-    val coroutineName =
-      if (expectedGeneration == 0L) "writeBlobIfNotFound" else "writeBlobIfUnchanged"
-    val preconditionMessage: () -> String =
-      if (expectedGeneration == 0L) {
-        { "Precondition failed: blob $blobKey already exists" }
-      } else {
-        { "Precondition failed: blob $blobKey not at expected generation $expectedGeneration" }
-      }
-    return doWrite(
-      blobKey = blobKey,
-      content = content,
-      coroutineName = coroutineName,
-      writeOptions = arrayOf(Storage.BlobWriteOption.generationMatch(expectedGeneration)),
-      preconditionMessage = preconditionMessage,
-    )
-  }
+  ): StorageClient.Blob =
+    withContext(CoroutineName("writeBlobIfNotFound")) {
+      doWrite(
+        blobKey = blobKey,
+        content = content,
+        writeOptions = arrayOf(Storage.BlobWriteOption.generationMatch(0L)),
+        preconditionMessage = { "Precondition failed: blob $blobKey already exists" },
+      )
+    }
 
   /**
    * Shared body for [writeBlob], [writeBlobIfUnchanged] and [writeBlobIfNotFound]. Single resumable
    * upload with any [writeOptions] applied; refetches the resulting blob to get its generation +
    * updateTime. Translates HTTP 412 into [BlobChangedException] iff [preconditionMessage] is
-   * non-null (i.e. the caller actually set a precondition).
+   * non-null (i.e. the caller actually set a precondition). The caller is responsible for wrapping
+   * the call in a [CoroutineName] that identifies the public entry point.
    */
   private suspend fun doWrite(
     blobKey: String,
     content: Flow<ByteString>,
-    coroutineName: String,
     writeOptions: Array<Storage.BlobWriteOption>,
-    preconditionMessage: (() -> String)?,
+    preconditionMessage: (() -> String)? = null,
   ): ClientBlob =
-    withContext(blockingContext + CoroutineName(coroutineName)) {
+    withContext(blockingContext) {
       val blobInfo = BlobInfo.newBuilder(bucketName, blobKey).build()
       try {
         storage.writer(blobInfo, *writeOptions).use { byteChannel ->
@@ -162,7 +153,7 @@ class GcsStorageClient(
         }
         val writtenBlob =
           storage.get(BlobId.of(bucketName, blobKey))
-            ?: throw StorageException("Blob $blobKey vanished after successful $coroutineName")
+            ?: throw StorageException("Blob $blobKey vanished after successful write")
         ClientBlob(writtenBlob, blobKey)
       } catch (e: GcsStorageException) {
         if (preconditionMessage != null && e.code == HTTP_PRECONDITION_FAILED) {
@@ -268,8 +259,8 @@ class GcsStorageClient(
   }
 
   /** [StorageClient.Blob] implementation for [GcsStorageClient]. */
-  private inner class ClientBlob(val blob: Blob, override val blobKey: String) :
-    StorageClient.Blob {
+  private inner class ClientBlob(private val blob: Blob, override val blobKey: String) :
+    ConditionalOperationStorageClient.Blob {
     override val storageClient: StorageClient
       get() = this@GcsStorageClient
 
@@ -281,6 +272,9 @@ class GcsStorageClient(
 
     override val updateTime: Instant
       get() = checkNotNull(blob.updateTimeOffsetDateTime).toInstant()
+
+    override val freshnessToken: String
+      get() = blob.generation.toString()
 
     /** Custom user metadata from the underlying GCS object. */
     override val metadata: Map<String, String> by lazy {
