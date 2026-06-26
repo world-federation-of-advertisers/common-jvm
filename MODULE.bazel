@@ -1,6 +1,6 @@
 module(
     name = "common-jvm",
-    bazel_compatibility = [">=7.0.0"],
+    bazel_compatibility = [">=8.0.0"],
     repo_name = "wfa_common_jvm",
 )
 
@@ -29,7 +29,7 @@ CLOUD_SQL_CONNECTOR_VERSION = "1.12.0"
 # See https://github.com/bazelbuild/bazel/discussions/23075.
 bazel_dep(
     name = "rules_kotlin_jvm",
-    version = "0.12.0",
+    version = "0.14.0",
     repo_name = "wfa_rules_kotlin_jvm",
 )
 bazel_dep(
