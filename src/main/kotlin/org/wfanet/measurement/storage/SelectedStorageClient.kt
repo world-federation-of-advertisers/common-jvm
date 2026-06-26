@@ -36,7 +36,7 @@ class SelectedStorageClient(
   private val blobUri: BlobUri,
   private val rootDirectory: File? = null,
   private val projectId: String? = null,
-) : StorageClient {
+) : StorageClient, ConditionalOperationStorageClient {
 
   constructor(
     url: String,
@@ -44,7 +44,7 @@ class SelectedStorageClient(
     projectId: String? = null,
   ) : this(parseBlobUri(url), rootDirectory, projectId)
 
-  val underlyingClient: StorageClient =
+  val underlyingClient: ConditionalOperationStorageClient =
     when (blobUri.scheme) {
       "s3" -> {
         throw IllegalArgumentException("S3 is not currently supported")
@@ -75,6 +75,33 @@ class SelectedStorageClient(
 
   override suspend fun listBlobs(prefix: String?): Flow<StorageClient.Blob> {
     return underlyingClient.listBlobs(prefix)
+  }
+
+  override suspend fun writeBlobIfUnchanged(
+    blob: StorageClient.Blob,
+    content: Flow<ByteString>,
+  ): StorageClient.Blob = underlyingClient.writeBlobIfUnchanged(blob, content)
+
+  override suspend fun getFreshnessToken(blobKey: String): String? {
+    check(blobUri.key == blobKey)
+    return underlyingClient.getFreshnessToken(blobKey)
+  }
+
+  override suspend fun writeBlobIfUnchanged(
+    blobKey: String,
+    freshnessToken: String,
+    content: Flow<ByteString>,
+  ): StorageClient.Blob {
+    check(blobUri.key == blobKey)
+    return underlyingClient.writeBlobIfUnchanged(blobKey, freshnessToken, content)
+  }
+
+  override suspend fun writeBlobIfNotFound(
+    blobKey: String,
+    content: Flow<ByteString>,
+  ): StorageClient.Blob {
+    check(blobUri.key == blobKey)
+    return underlyingClient.writeBlobIfNotFound(blobKey, content)
   }
 
   companion object {

@@ -29,7 +29,6 @@ import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.Dispatchers
 import org.jetbrains.annotations.BlockingExecutor
 import org.wfanet.measurement.storage.ConditionalOperationStorageClient
-import org.wfanet.measurement.storage.StorageClient
 
 /*
  * Wraps this [StorageClient] in one that provides envelope encryption.
@@ -51,7 +50,7 @@ fun ConditionalOperationStorageClient.withEnvelopeEncryption(
   parseEncryptedKeyset:
     (encryptedDek: ByteArray, kekAead: Aead, associatedData: ByteArray?) -> KeysetHandle =
     TinkProtoKeysetFormat::parseEncryptedKeyset,
-): StorageClient {
+): ConditionalOperationStorageClient {
 
   AeadConfig.register()
   StreamingAeadConfig.register()
