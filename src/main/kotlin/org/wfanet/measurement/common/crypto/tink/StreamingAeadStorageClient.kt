@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.Flow
 import org.jetbrains.annotations.BlockingExecutor
 import org.wfanet.measurement.common.BYTES_PER_MIB
 import org.wfanet.measurement.common.CoroutineWritableByteChannel
+import org.wfanet.measurement.storage.ConditionalOperationStorageClient
 import org.wfanet.measurement.storage.StorageClient
 
 /**
@@ -40,10 +41,10 @@ import org.wfanet.measurement.storage.StorageClient
  * @param streamingAeadContext coroutine context for encryption/decryption operations
  */
 class StreamingAeadStorageClient(
-  private val storageClient: StorageClient,
+  private val storageClient: ConditionalOperationStorageClient,
   private val streamingAead: StreamingAead,
   private val streamingAeadContext: @BlockingExecutor CoroutineContext = Dispatchers.IO,
-) : StorageClient {
+) : StorageClient, ConditionalOperationStorageClient {
 
   /**
    * Writes an encrypted flow of data to storage using a specified blob key. This function encrypts
@@ -58,10 +59,8 @@ class StreamingAeadStorageClient(
    * @throws ClosedChannelException if the channel is closed before all data is written.
    */
   override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
-    val associatedData: ByteString = blobKey.toByteStringUtf8()
-    val ciphertext: Flow<ByteString> =
-      streamingAead.encrypt(content, associatedData, streamingAeadContext)
-    val wrappedBlob: StorageClient.Blob = storageClient.writeBlob(blobKey, ciphertext)
+    val wrappedBlob: StorageClient.Blob =
+      storageClient.writeBlob(blobKey, encrypt(blobKey, content))
     logger.fine { "Wrote encrypted content to storage with blobKey: $blobKey" }
     return EncryptedBlob(wrappedBlob, blobKey)
   }
@@ -80,24 +79,76 @@ class StreamingAeadStorageClient(
     return storageClient.listBlobs(prefix)
   }
 
+  override suspend fun getFreshnessToken(blobKey: String): String? =
+    storageClient.getFreshnessToken(blobKey)
+
+  override suspend fun writeBlobIfUnchanged(
+    blobKey: String,
+    freshnessToken: String,
+    content: Flow<ByteString>,
+  ): StorageClient.Blob {
+    val wrappedBlob: StorageClient.Blob =
+      storageClient.writeBlobIfUnchanged(blobKey, freshnessToken, encrypt(blobKey, content))
+    logger.fine { "Wrote encrypted content via writeBlobIfUnchanged(token): $blobKey" }
+    return EncryptedBlob(wrappedBlob, blobKey)
+  }
+
+  override suspend fun writeBlobIfNotFound(
+    blobKey: String,
+    content: Flow<ByteString>,
+  ): StorageClient.Blob {
+    val wrappedBlob: StorageClient.Blob =
+      storageClient.writeBlobIfNotFound(blobKey, encrypt(blobKey, content))
+    logger.fine { "Wrote encrypted content via writeBlobIfNotFound: $blobKey" }
+    return EncryptedBlob(wrappedBlob, blobKey)
+  }
+
+  override suspend fun writeBlobIfUnchanged(
+    blob: StorageClient.Blob,
+    content: Flow<ByteString>,
+  ): StorageClient.Blob {
+    require(blob is EncryptedBlob) { "Incompatible blob type" }
+    val wrappedBlob: StorageClient.Blob =
+      storageClient.writeBlobIfUnchanged(
+        blob.blobKey,
+        blob.freshnessToken,
+        encrypt(blob.blobKey, content),
+      )
+    logger.fine { "Wrote encrypted content via writeBlobIfUnchanged: ${blob.blobKey}" }
+    return EncryptedBlob(wrappedBlob, blob.blobKey)
+  }
+
+  /**
+   * Streaming-encrypts [content] under [blobKey] as associated data. Unlike single-shot AEAD, the
+   * input is consumed as a flow so large content does not need to be buffered up-front.
+   */
+  private fun encrypt(blobKey: String, content: Flow<ByteString>): Flow<ByteString> {
+    val associatedData: ByteString = blobKey.toByteStringUtf8()
+    return streamingAead.encrypt(content, associatedData, streamingAeadContext)
+  }
+
   /** A blob that will decrypt the content when read */
   private inner class EncryptedBlob(
-    private val blob: StorageClient.Blob,
+    private val underlying: StorageClient.Blob,
     override val blobKey: String,
-  ) : StorageClient.Blob {
+  ) : ConditionalOperationStorageClient.Blob {
+
     override val storageClient = this@StreamingAeadStorageClient.storageClient
 
     override val size: Long
-      get() = blob.size
+      get() = underlying.size
 
     override val createTime: java.time.Instant
-      get() = blob.createTime
+      get() = underlying.createTime
 
     override val updateTime: java.time.Instant
-      get() = blob.updateTime
+      get() = underlying.updateTime
+
+    override val freshnessToken: String
+      get() = (underlying as ConditionalOperationStorageClient.Blob).freshnessToken
 
     /**
-     * Reads and decrypts the blob's content.
+     * Reads and decrypts the underlying's content.
      *
      * This method handles the decryption of data by collecting all encrypted data first, then
      * decrypting it as a single operation.
@@ -108,10 +159,10 @@ class StreamingAeadStorageClient(
      */
     override fun read(): Flow<ByteString> {
       val associatedData: ByteString = blobKey.toByteStringUtf8()
-      return streamingAead.decrypt(blob.read(), associatedData, READ_CHUNK_SIZE_BYTES)
+      return streamingAead.decrypt(underlying.read(), associatedData, READ_CHUNK_SIZE_BYTES)
     }
 
-    override suspend fun delete() = blob.delete()
+    override suspend fun delete() = underlying.delete()
   }
 
   companion object {

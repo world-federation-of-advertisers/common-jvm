@@ -38,14 +38,15 @@ import org.wfanet.measurement.common.asFlow
 import org.wfanet.measurement.common.flatten
 import org.wfanet.measurement.common.size
 import org.wfanet.measurement.common.toByteArray
-import org.wfanet.measurement.storage.testing.AbstractStorageClientTest
+import org.wfanet.measurement.storage.testing.AbstractConditionalOperationStorageClientTest
 import org.wfanet.measurement.storage.testing.ComplexMessage
 import org.wfanet.measurement.storage.testing.ComplexMessageKt
 import org.wfanet.measurement.storage.testing.InMemoryStorageClient
 import org.wfanet.measurement.storage.testing.complexMessage
 
 @RunWith(JUnit4::class)
-class StreamingAeadStorageClientTest : AbstractStorageClientTest<StreamingAeadStorageClient>() {
+class StreamingAeadStorageClientTest :
+  AbstractConditionalOperationStorageClientTest<StreamingAeadStorageClient>() {
 
   private val wrappedStorageClient = InMemoryStorageClient()
 

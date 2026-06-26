@@ -33,7 +33,8 @@ import kotlinx.coroutines.flow.flow
  */
 // TODO(@marcopremier): Refactor into MesosRecordIoStore<T : Message> to handle proto message
 // serialization internally and make current StorageClient implementation private.
-class MesosRecordIoStorageClient(private val storageClient: StorageClient) : StorageClient {
+class MesosRecordIoStorageClient(private val storageClient: ConditionalOperationStorageClient) :
+  StorageClient, ConditionalOperationStorageClient {
 
   /**
    * Writes RecordIO rows to storage using the RecordIO format.
@@ -52,18 +53,72 @@ class MesosRecordIoStorageClient(private val storageClient: StorageClient) : Sto
    * @return A Blob object representing the RecordIO data that was written to storage.
    */
   override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
-    var recordsWritten = 0
-    val processedContent: Flow<ByteString> = flow {
-      content.collect { recordData: ByteString ->
-        val recordSize = recordData.size().toString().toByteStringUtf8()
-        recordsWritten++
-        emit(recordSize.concat(RECORD_DELIMITER).concat(recordData))
-      }
-    }
-
-    val wrappedBlob: StorageClient.Blob = storageClient.writeBlob(blobKey, processedContent)
-    logger.fine { "Wrote $recordsWritten records to storage with blobKey: $blobKey" }
+    val wrappedBlob: StorageClient.Blob = storageClient.writeBlob(blobKey, recordIoFraming(content))
+    logger.fine { "Wrote RecordIO content to storage with blobKey: $blobKey" }
     return Blob(wrappedBlob, blobKey)
+  }
+
+  override suspend fun getFreshnessToken(blobKey: String): String? =
+    storageClient.getFreshnessToken(blobKey)
+
+  /**
+   * Conditional [writeBlob] that writes only if the wrapped blob's current freshness token matches
+   * [freshnessToken]. Frames each record with the RecordIO size+delimiter prefix before delegating
+   * to the underlying client.
+   *
+   * @throws BlobChangedException if the precondition fails
+   */
+  override suspend fun writeBlobIfUnchanged(
+    blobKey: String,
+    freshnessToken: String,
+    content: Flow<ByteString>,
+  ): StorageClient.Blob {
+    val wrappedBlob: StorageClient.Blob =
+      storageClient.writeBlobIfUnchanged(blobKey, freshnessToken, recordIoFraming(content))
+    return Blob(wrappedBlob, blobKey)
+  }
+
+  /**
+   * Write-if-absent variant of [writeBlob] with RecordIO framing.
+   *
+   * @throws BlobChangedException if a blob already exists at [blobKey]
+   */
+  override suspend fun writeBlobIfNotFound(
+    blobKey: String,
+    content: Flow<ByteString>,
+  ): StorageClient.Blob {
+    val wrappedBlob: StorageClient.Blob =
+      storageClient.writeBlobIfNotFound(blobKey, recordIoFraming(content))
+    return Blob(wrappedBlob, blobKey)
+  }
+
+  /**
+   * Conditional [writeBlob] that writes only if the wrapped blob has not changed on the backend
+   * (compare-and-swap on freshness). Frames each record with the RecordIO size+delimiter prefix
+   * before delegating to the underlying client.
+   *
+   * @throws BlobChangedException if the underlying blob has changed since [blob] was read
+   */
+  override suspend fun writeBlobIfUnchanged(
+    blob: StorageClient.Blob,
+    content: Flow<ByteString>,
+  ): StorageClient.Blob {
+    require(blob is Blob) { "Incompatible blob type" }
+    val wrappedBlob: StorageClient.Blob =
+      storageClient.writeBlobIfUnchanged(
+        blob.blobKey,
+        blob.freshnessToken,
+        recordIoFraming(content),
+      )
+    return Blob(wrappedBlob, blob.blobKey)
+  }
+
+  /** Frames each emission of [content] with the RecordIO size+delimiter prefix. */
+  private fun recordIoFraming(content: Flow<ByteString>): Flow<ByteString> = flow {
+    content.collect { recordData: ByteString ->
+      val recordSize = recordData.size().toString().toByteStringUtf8()
+      emit(recordSize.concat(RECORD_DELIMITER).concat(recordData))
+    }
   }
 
   /**
@@ -81,18 +136,24 @@ class MesosRecordIoStorageClient(private val storageClient: StorageClient) : Sto
   }
 
   /** A blob that will read the content in RecordIO format */
-  private inner class Blob(private val blob: StorageClient.Blob, override val blobKey: String) :
-    StorageClient.Blob {
+  private inner class Blob(
+    private val underlying: StorageClient.Blob,
+    override val blobKey: String,
+  ) : ConditionalOperationStorageClient.Blob {
+
     override val storageClient = this@MesosRecordIoStorageClient.storageClient
 
     override val createTime: Instant
-      get() = blob.createTime
+      get() = underlying.createTime
 
     override val updateTime: Instant
-      get() = blob.updateTime
+      get() = underlying.updateTime
 
     override val size: Long
-      get() = blob.size
+      get() = underlying.size
+
+    override val freshnessToken: String
+      get() = (underlying as ConditionalOperationStorageClient.Blob).freshnessToken
 
     private fun ByteString.indexOf(target: ByteString, position: Int = 0): Int {
       if (position < 0 || position >= this.size()) {
@@ -127,7 +188,7 @@ class MesosRecordIoStorageClient(private val storageClient: StorageClient) : Sto
       var currentRecordSize = -1
       var recordBuffer = ByteString.newOutput()
 
-      blob.read().collect { chunk: ByteString ->
+      underlying.read().collect { chunk: ByteString ->
         var position = 0
 
         while (position < chunk.size()) {
@@ -170,7 +231,7 @@ class MesosRecordIoStorageClient(private val storageClient: StorageClient) : Sto
       }
     }
 
-    override suspend fun delete() = blob.delete()
+    override suspend fun delete() = underlying.delete()
   }
 
   companion object {

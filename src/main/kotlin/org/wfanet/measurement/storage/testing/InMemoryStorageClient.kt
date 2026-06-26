@@ -81,12 +81,57 @@ class InMemoryStorageClient :
     content: Flow<ByteString>,
   ): StorageClient.Blob {
     require(blob.storageClient === this) { "Blob does not belong to this storage client" }
-    val current =
-      storageMap[blob.blobKey] ?: throw StorageException("Blob not found: ${blob.blobKey}")
-    if (current.generation != (blob as Blob).generation) {
-      throw BlobChangedException("Blob ${blob.blobKey} has changed since it was last read")
+    return writeBlobIfUnchanged(blob.blobKey, (blob as Blob).freshnessToken, content)
+  }
+
+  override suspend fun getFreshnessToken(blobKey: String): String? =
+    storageMap[blobKey]?.generation?.toString()
+
+  override suspend fun writeBlobIfUnchanged(
+    blobKey: String,
+    freshnessToken: String,
+    content: Flow<ByteString>,
+  ): StorageClient.Blob {
+    val expectedGeneration =
+      freshnessToken.toLongOrNull()
+        ?: throw IllegalArgumentException(
+          "Invalid freshness token for InMemory: $freshnessToken (must be numeric)"
+        )
+    require(expectedGeneration > 0) {
+      "freshnessToken must encode a positive generation, got $expectedGeneration"
     }
-    return writeBlob(blob.blobKey, content)
+    val current = storageMap[blobKey] ?: throw BlobChangedException("Blob does not exist: $blobKey")
+    if (current.generation != expectedGeneration) {
+      throw BlobChangedException(
+        "Blob $blobKey is at generation ${current.generation}, not $expectedGeneration"
+      )
+    }
+    return writeBlob(blobKey, content)
+  }
+
+  override suspend fun writeBlobIfNotFound(
+    blobKey: String,
+    content: Flow<ByteString>,
+  ): StorageClient.Blob {
+    val now = Instant.now()
+    val newBlob =
+      Blob(
+        blobKey = blobKey,
+        contentBytes = content.flatten(),
+        createTime = now,
+        updateTime = now,
+        generation = 1L,
+        customTime = null,
+        metadata = emptyMap(),
+      )
+    // `putIfAbsent` is atomic on ConcurrentHashMap, so the absent-check and the placement happen
+    // in a single step. This gives first-writer-wins semantics across concurrent callers — closer
+    // to the GCS `ifGenerationMatch=0` precondition than a separate `containsKey` + `writeBlob`.
+    val existing = storageMap.putIfAbsent(blobKey, newBlob)
+    if (existing != null) {
+      throw BlobChangedException("Blob already exists: $blobKey")
+    }
+    return newBlob
   }
 
   override suspend fun getBlob(blobKey: String): StorageClient.Blob? {
@@ -136,13 +181,16 @@ class InMemoryStorageClient :
     val generation: Long,
     val customTime: Instant?,
     override val metadata: Map<String, String>,
-  ) : StorageClient.Blob {
+  ) : ConditionalOperationStorageClient.Blob {
 
     override val size: Long
       get() = contentBytes.size().toLong()
 
     override val storageClient: InMemoryStorageClient
       get() = this@InMemoryStorageClient
+
+    override val freshnessToken: String
+      get() = generation.toString()
 
     override fun read(): Flow<ByteString> = flowOf(contentBytes)
 

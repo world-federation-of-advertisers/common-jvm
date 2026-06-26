@@ -17,10 +17,12 @@ package org.wfanet.measurement.storage.filesystem
 import com.google.protobuf.ByteString
 import java.io.File
 import java.nio.channels.Channels
+import java.nio.file.FileAlreadyExistsException
 import java.nio.file.FileVisitResult
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.SimpleFileVisitor
+import java.nio.file.StandardCopyOption
 import java.nio.file.attribute.BasicFileAttributes
 import java.time.Instant
 import kotlin.coroutines.CoroutineContext
@@ -36,15 +38,36 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
 import org.jetbrains.annotations.BlockingExecutor
 import org.wfanet.measurement.common.asFlow
+import org.wfanet.measurement.storage.BlobChangedException
+import org.wfanet.measurement.storage.ConditionalOperationStorageClient
 import org.wfanet.measurement.storage.StorageClient
 
 private const val READ_BUFFER_SIZE = 1024 * 4 // 4 KiB
 
-/** [StorageClient] implementation that stores blobs as files under [directory]. */
+/**
+ * [StorageClient] implementation that stores blobs as files under [directory].
+ *
+ * **Same-process, single-host only.** Implements [ConditionalOperationStorageClient] using the
+ * file's last-modified time as the generation, but the conditional methods rely on a check-then-act
+ * sequence that is only correct for callers in the same JVM. This implementation does **not** take
+ * an OS-level file lock (`flock` / `LockFileEx`) around the check-then-act, because file locks do
+ * not propagate across hosts on mounted object stores (NFS, SMB, s3fs, gcsfuse, blobfuse) where the
+ * lie would be most dangerous — adding them would only paper over the in-process race while leaving
+ * cross-host callers with the same silent corruption. As a result, concurrent writers in *different
+ * processes* (even on the same host) or on *different hosts sharing a mounted filesystem* can each
+ * pass the generation check and then silently overwrite one another's writes — no exception is
+ * thrown.
+ *
+ * Intended use cases: in-process tests, single-process CLI tools, and code paths where the only
+ * writer for a given blob key is guaranteed to be a single coroutine in a single JVM. For any
+ * cross-host workload that needs conditional writes (the typical TEE / Pub/Sub redelivery
+ * scenario), use [GcsStorageClient] (or another backend whose underlying storage system enforces
+ * the precondition atomically).
+ */
 class FileSystemStorageClient(
   private val directory: File,
   private val coroutineContext: @BlockingExecutor CoroutineContext = Dispatchers.IO,
-) : StorageClient {
+) : StorageClient, ConditionalOperationStorageClient {
   init {
     require(directory.isDirectory) { "$directory is not a directory" }
   }
@@ -53,17 +76,15 @@ class FileSystemStorageClient(
     val file: File = resolvePath(blobKey)
     withContext(coroutineContext + CoroutineName("writeBlob")) {
       file.parentFile.mkdirs()
-      file
-        .outputStream()
-        .buffered()
-        .let { Channels.newChannel(it) }
-        .use { byteChannel ->
-          content.collect { bytes ->
-            for (buffer in bytes.asReadOnlyByteBufferList()) {
-              byteChannel.write(buffer)
-            }
-          }
-        }
+      val previousLastModified = if (file.exists()) file.lastModified() else 0L
+      writeContentTo(file, content)
+      // Ensure `lastModified` strictly advances. Two writes can land at the same millisecond on
+      // fast hardware (typical filesystem resolution is 1ms or coarser), which would make this
+      // file's generation indistinguishable from the prior one — breaking writeBlobIfUnchanged
+      // for the very next caller.
+      if (file.lastModified() <= previousLastModified) {
+        file.setLastModified(previousLastModified + 1)
+      }
     }
 
     return Blob(file, blobKey)
@@ -144,6 +165,109 @@ class FileSystemStorageClient(
       .flowOn(coroutineContext)
   }
 
+  override suspend fun getFreshnessToken(blobKey: String): String? {
+    val file: File = resolvePath(blobKey)
+    return withContext(coroutineContext + CoroutineName("getFreshnessToken")) {
+      if (file.exists()) file.lastModified().toString() else null
+    }
+  }
+
+  /**
+   * Conditional write that succeeds only if the file's current `lastModified` equals the generation
+   * encoded in [freshnessToken].
+   *
+   * The check-then-act sequence is only safe when all writers for [blobKey] are coroutines in the
+   * same JVM — see the class-level KDoc for the full caveats. The replacement itself uses
+   * `ATOMIC_MOVE` so partial content is never visible to readers.
+   *
+   * @throws BlobChangedException if the precondition fails
+   * @throws IllegalArgumentException if [freshnessToken] is not a positive long
+   */
+  override suspend fun writeBlobIfUnchanged(
+    blobKey: String,
+    freshnessToken: String,
+    content: Flow<ByteString>,
+  ): StorageClient.Blob {
+    val expectedGeneration =
+      freshnessToken.toLongOrNull()
+        ?: throw IllegalArgumentException(
+          "Invalid freshness token for FileSystem: $freshnessToken (must be a numeric lastModified)"
+        )
+    require(expectedGeneration > 0) {
+      "freshnessToken must encode a positive lastModified, got $expectedGeneration"
+    }
+    val file: File = resolvePath(blobKey)
+    return withContext(coroutineContext + CoroutineName("writeBlobIfUnchanged")) {
+      file.parentFile.mkdirs()
+      if (!file.exists()) {
+        throw BlobChangedException("Blob does not exist: $blobKey")
+      }
+      if (file.lastModified() != expectedGeneration) {
+        throw BlobChangedException(
+          "Blob $blobKey is at generation ${file.lastModified()}, not $expectedGeneration"
+        )
+      }
+      // Write to a temp sibling and atomically move into place, so partially-written content
+      // is never visible.
+      val temp = File.createTempFile(file.name, ".tmp", file.parentFile)
+      writeContentTo(temp, content)
+      Files.move(
+        temp.toPath(),
+        file.toPath(),
+        StandardCopyOption.ATOMIC_MOVE,
+        StandardCopyOption.REPLACE_EXISTING,
+      )
+      Blob(file, blobKey)
+    }
+  }
+
+  /**
+   * Write-if-absent: atomic create via NIO; throws [BlobChangedException] if a blob already exists.
+   * The create itself is atomic across processes on the same host via [Files.createFile].
+   *
+   * @throws BlobChangedException if a blob already exists at [blobKey]
+   */
+  override suspend fun writeBlobIfNotFound(
+    blobKey: String,
+    content: Flow<ByteString>,
+  ): StorageClient.Blob {
+    val file: File = resolvePath(blobKey)
+    return withContext(coroutineContext + CoroutineName("writeBlobIfNotFound")) {
+      file.parentFile.mkdirs()
+      try {
+        Files.createFile(file.toPath())
+      } catch (e: FileAlreadyExistsException) {
+        throw BlobChangedException("Blob already exists: $blobKey", e)
+      }
+      writeContentTo(file, content)
+      Blob(file, blobKey)
+    }
+  }
+
+  override suspend fun writeBlobIfUnchanged(
+    blob: StorageClient.Blob,
+    content: Flow<ByteString>,
+  ): StorageClient.Blob {
+    require(blob is Blob) { "Incompatible blob type" }
+    require(blob.storageClient === this) { "Blob does not belong to this storage client" }
+    return writeBlobIfUnchanged(blob.blobKey, blob.generation.toString(), content)
+  }
+
+  /** Writes [content] to [file] using a buffered channel. Caller manages file creation. */
+  private suspend fun writeContentTo(file: File, content: Flow<ByteString>) {
+    file
+      .outputStream()
+      .buffered()
+      .let { Channels.newChannel(it) }
+      .use { byteChannel ->
+        content.collect { bytes ->
+          for (buffer in bytes.asReadOnlyByteBufferList()) {
+            byteChannel.write(buffer)
+          }
+        }
+      }
+  }
+
   private fun resolvePath(blobKey: String): File {
     val relativePath =
       if (File.separatorChar == '/') {
@@ -162,10 +286,24 @@ class FileSystemStorageClient(
     }
   }
 
-  private inner class Blob(private val file: File, override val blobKey: String) :
-    StorageClient.Blob {
+  internal inner class Blob(private val file: File, override val blobKey: String) :
+    ConditionalOperationStorageClient.Blob {
     override val storageClient: StorageClient
       get() = this@FileSystemStorageClient
+
+    /**
+     * Filesystem generation = file's `lastModified` snapshotted at this [Blob]'s construction.
+     *
+     * Snapshotted (not a computed property) so that mutations to the underlying file after this
+     * [Blob] was observed produce a stale generation, which is what [writeBlobIfUnchanged] needs to
+     * detect concurrent change. [FileSystemStorageClient.writeBlob] strictly advances
+     * `lastModified` across writes to defeat millisecond-resolution aliasing, so this value may
+     * exceed the file's wall-clock modification time by a few milliseconds.
+     */
+    internal val generation: Long = file.lastModified()
+
+    override val freshnessToken: String
+      get() = generation.toString()
 
     override val size: Long
       get() = file.length()
