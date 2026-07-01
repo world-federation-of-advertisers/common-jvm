@@ -146,6 +146,30 @@ class ParquetStorageClientTest {
   }
 
   @Test
+  fun `writeBlob embeds keyValueMetadata into the footer`(): Unit = runBlocking {
+    val client = newClient()
+
+    client.writeBlob(
+      "meta.parquet",
+      flowOf(encRow()),
+      mapOf("edpa.kek_uri" to "fake-kms://kek", "shard" to "3"),
+    )
+
+    assertThat(client.getBlob("meta.parquet")!!.readKeyValueMetadata())
+      .containsAtLeast("edpa.kek_uri", "fake-kms://kek", "shard", "3")
+  }
+
+  @Test
+  fun `writeBlob embeds keyValueMetadata on an empty zero-row blob`(): Unit = runBlocking {
+    val client = newClient()
+
+    client.writeBlob("empty-meta.parquet", emptyFlow(), mapOf("foo" to "bar"))
+
+    assertThat(client.getBlob("empty-meta.parquet")!!.readKeyValueMetadata())
+      .containsAtLeast("foo", "bar")
+  }
+
+  @Test
   fun `getBlob returns null for missing key`(): Unit = runBlocking {
     assertThat(newClient().getBlob("nothing-here.parquet")).isNull()
   }
