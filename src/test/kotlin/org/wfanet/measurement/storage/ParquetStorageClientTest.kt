@@ -694,6 +694,30 @@ class ParquetStorageClientTest {
   }
 
   @Test
+  fun `writeBlob keyValueMetadata round-trips through a plaintext-footer encrypted blob`(): Unit =
+    runBlocking {
+      val kekUri = "fake-kms://uniform-kek"
+      // PLAINTEXT_FOOTER keeps the footer (and its key-value metadata) readable
+      // without keys, so the writeBlob(keyValueMetadata) overload composes with
+      // encryption: an encrypting client embeds the metadata and a fresh
+      // plaintext client reads the exact entries back with no crypto config.
+      val conf =
+        Configuration().apply {
+          set("parquet.encryption.uniform.key", kekUri)
+          setBoolean("parquet.encryption.plaintext.footer", true)
+        }
+      newEncryptingClient(conf, fakeKms(kekUri))
+        .writeBlob(
+          "enc-meta.parquet",
+          flowOf(encRow()),
+          mapOf("edpa.kek_uri" to "fake-kms://kek", "shard" to "3"),
+        )
+
+      assertThat(newClient().getBlob("enc-meta.parquet")!!.readKeyValueMetadata())
+        .containsAtLeast("edpa.kek_uri", "fake-kms://kek", "shard", "3")
+    }
+
+  @Test
   fun `keyMapping resolves a short master-key name to a Tink URI`(): Unit = runBlocking {
     val kekUri = "fake-kms://uniform-kek"
     // The file references the short name "uniform-key" (parquet's column.keys

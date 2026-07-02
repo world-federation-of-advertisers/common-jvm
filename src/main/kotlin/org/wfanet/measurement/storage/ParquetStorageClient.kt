@@ -237,10 +237,9 @@ class ParquetStorageClient(
 
   /**
    * Encodes [content] (a flow of serialized [ParquetRow]) into a parquet file at [blobKey],
-   * optionally embedding [keyValueMetadata] into the file's footer key-value metadata (empty by
-   * default). The schema is derived from the first row; see the class KDoc for the first-row
-   * constraint. An empty flow writes a valid, zero-row parquet file, which still carries
-   * [keyValueMetadata].
+   * embedding [keyValueMetadata] into the file's footer key-value metadata. The schema is derived
+   * from the first row; see the class KDoc for the first-row constraint. An empty flow writes a
+   * valid, zero-row parquet file, which still carries [keyValueMetadata].
    *
    * The written entries are the inverse of [ParquetBlob.readKeyValueMetadata], which reads them
    * back. When PME is configured in `ENCRYPTED_FOOTER` mode the footer (and therefore this
@@ -251,7 +250,7 @@ class ParquetStorageClient(
   suspend fun writeBlob(
     blobKey: String,
     content: Flow<ByteString>,
-    keyValueMetadata: Map<String, String> = emptyMap(),
+    keyValueMetadata: Map<String, String>,
   ): StorageClient.Blob {
     val path = resolvePath(blobKey)
     withContext(parquetContext) {
