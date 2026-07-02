@@ -225,6 +225,15 @@ class ParquetStorageClient(
      * Throws [IllegalStateException] if the file is a PME `ENCRYPTED_FOOTER` blob (not supported).
      */
     suspend fun readKeyValueMetadata(): Map<String, String>
+
+    /**
+     * The file's parquet schema as a map of column name to the [ParquetValue.KindCase] that
+     * [readRows] yields for that column (same parquet-type -> kind mapping documented on
+     * [readRows]). Reads only the schema, not row values; returns an empty map for a zero-row file.
+     * Lets a caller validate up front that a config's referenced columns exist with the expected
+     * types, instead of discovering a missing/renamed column silently at row time.
+     */
+    suspend fun readSchema(): Map<String, ParquetValue.KindCase>
   }
 
   // === StorageClient ===
@@ -373,6 +382,15 @@ class ParquetStorageClient(
     override suspend fun readKeyValueMetadata(): Map<String, String> =
       withContext(parquetContext) { readFooterKeyValueMetadata(path) }
 
+    override suspend fun readSchema(): Map<String, ParquetValue.KindCase> =
+      withContext(parquetContext) {
+        val inputFile: InputFile = HadoopInputFile.fromPath(path, conf)
+        GroupParquetReaderBuilder(inputFile).withConf(conf).build().use { reader ->
+          val first = reader.read() ?: return@use emptyMap<String, ParquetValue.KindCase>()
+          first.type.fields.associate { field -> field.name to kindOf(field) }
+        }
+      }
+
     override suspend fun delete() {
       withContext(parquetContext) { fileSystem.delete(path, /* recursive= */ false) }
     }
@@ -498,6 +516,53 @@ class ParquetStorageClient(
           ByteString.copyFrom(g.getBinary(name, 0).toByteBuffer())
         }
       PrimitiveTypeName.INT96 -> { g -> ByteString.copyFrom(g.getInt96(name, 0).bytes) }
+    }
+  }
+
+  /**
+   * The [ParquetValue.KindCase] that [ParquetBlob.readRows] produces for [field], per the mapping
+   * documented on [ParquetBlob.readRows]. Mirrors the primitive/logical-type dispatch in
+   * [buildPrimitiveExtractor] (schema-only; no [Group] needed), so [ParquetBlob.readSchema]
+   * declares exactly the kinds a row read would yield.
+   */
+  private fun kindOf(field: Type): ParquetValue.KindCase {
+    check(field.isPrimitive) {
+      "Nested message field '${field.name}' is not supported by ParquetStorageClient"
+    }
+    val prim = field.asPrimitiveType()
+    val annotation = prim.logicalTypeAnnotation
+    return when (prim.primitiveTypeName) {
+      PrimitiveTypeName.INT32 ->
+        when {
+          annotation is LogicalTypeAnnotation.DateLogicalTypeAnnotation ->
+            ParquetValue.KindCase.DATE_VALUE
+          annotation is LogicalTypeAnnotation.IntLogicalTypeAnnotation && !annotation.isSigned ->
+            ParquetValue.KindCase.UINT32_VALUE
+          else -> ParquetValue.KindCase.INT32_VALUE
+        }
+      PrimitiveTypeName.INT64 ->
+        when {
+          annotation is LogicalTypeAnnotation.TimestampLogicalTypeAnnotation ->
+            ParquetValue.KindCase.TIMESTAMP_VALUE
+          annotation is LogicalTypeAnnotation.IntLogicalTypeAnnotation && !annotation.isSigned ->
+            ParquetValue.KindCase.UINT64_VALUE
+          else -> ParquetValue.KindCase.INT64_VALUE
+        }
+      PrimitiveTypeName.FLOAT -> ParquetValue.KindCase.FLOAT_VALUE
+      PrimitiveTypeName.DOUBLE -> ParquetValue.KindCase.DOUBLE_VALUE
+      PrimitiveTypeName.BOOLEAN -> ParquetValue.KindCase.BOOL_VALUE
+      PrimitiveTypeName.BINARY ->
+        if (
+          annotation is LogicalTypeAnnotation.StringLogicalTypeAnnotation ||
+            annotation is LogicalTypeAnnotation.EnumLogicalTypeAnnotation ||
+            annotation is LogicalTypeAnnotation.JsonLogicalTypeAnnotation
+        ) {
+          ParquetValue.KindCase.STRING_VALUE
+        } else {
+          ParquetValue.KindCase.BYTES_VALUE
+        }
+      PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY -> ParquetValue.KindCase.BYTES_VALUE
+      PrimitiveTypeName.INT96 -> ParquetValue.KindCase.BYTES_VALUE
     }
   }
 

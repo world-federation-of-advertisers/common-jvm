@@ -139,6 +139,30 @@ class ParquetStorageClientTest {
     }
 
   @Test
+  fun `readSchema returns column name to value kind`(): Unit = runBlocking {
+    val key = plaintextSample("data.parquet")
+
+    val schema = newClient().getBlob(key)!!.readSchema()
+
+    assertThat(schema)
+      .containsExactly(
+        "id",
+        ParquetValue.KindCase.INT64_VALUE,
+        "name",
+        ParquetValue.KindCase.STRING_VALUE,
+        "data",
+        ParquetValue.KindCase.BYTES_VALUE,
+      )
+  }
+
+  @Test
+  fun `readSchema returns empty for a zero-row file`(): Unit = runBlocking {
+    val key = writeParquetBlob("empty.parquet", SAMPLE_SCHEMA, emptyList(), null, emptyMap(), null)
+
+    assertThat(newClient().getBlob(key)!!.readSchema()).isEmpty()
+  }
+
+  @Test
   fun `readKeyValueMetadata returns plaintext footer entries`(): Unit = runBlocking {
     val key = plaintextSample("data.parquet", metadata = mapOf("foo" to "bar"))
 
