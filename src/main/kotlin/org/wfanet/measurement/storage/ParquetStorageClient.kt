@@ -116,7 +116,9 @@ data class ParquetEncryptionConfig(
  * in the flow is one serialized [ParquetRow]. This makes the [StorageClient] contract parquet-aware
  * on both ends — `writeBlob` encodes rows into a parquet file, `read` decodes them back — but note
  * it is NOT the opaque byte pass-through that the other [StorageClient] implementations provide;
- * the unit of content here is a row, not a file.
+ * the unit of content here is a row, not a file. The [writeBlob] overload taking `keyValueMetadata`
+ * additionally embeds footer key-value metadata that [ParquetBlob.readKeyValueMetadata] reads back
+ * (see that overload for the PME footer caveat).
  *
  * ## Type mapping
  *
@@ -238,12 +240,27 @@ class ParquetStorageClient(
 
   // === StorageClient ===
 
+  /** Delegates to [writeBlob] with no footer key-value metadata. */
+  override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob =
+    writeBlob(blobKey, content, emptyMap())
+
   /**
-   * Encodes [content] (a flow of serialized [ParquetRow]) into a parquet file at [blobKey]. The
-   * schema is derived from the first row; see the class KDoc for the first-row constraint. An empty
-   * flow writes a valid, zero-row parquet file.
+   * Encodes [content] (a flow of serialized [ParquetRow]) into a parquet file at [blobKey],
+   * embedding [keyValueMetadata] into the file's footer key-value metadata. The schema is derived
+   * from the first row; see the class KDoc for the first-row constraint. An empty flow writes a
+   * valid, zero-row parquet file, which still carries [keyValueMetadata].
+   *
+   * The written entries are the inverse of [ParquetBlob.readKeyValueMetadata], which reads them
+   * back. When PME is configured in `ENCRYPTED_FOOTER` mode the footer (and therefore this
+   * metadata) is encrypted on disk and [ParquetBlob.readKeyValueMetadata] cannot read it; write
+   * with `PLAINTEXT_FOOTER` (`parquet.encryption.plaintext.footer = true`) if the metadata must
+   * stay readable without the footer key.
    */
-  override suspend fun writeBlob(blobKey: String, content: Flow<ByteString>): StorageClient.Blob {
+  suspend fun writeBlob(
+    blobKey: String,
+    content: Flow<ByteString>,
+    keyValueMetadata: Map<String, String>,
+  ): StorageClient.Blob {
     val path = resolvePath(blobKey)
     withContext(parquetContext) {
       val outputFile: OutputFile = HadoopOutputFile.fromPath(path, conf)
@@ -258,7 +275,7 @@ class ParquetStorageClient(
             schema = deriveSchema(row)
             expectedKinds = row.columnsMap.mapValues { it.value.kindCase }
             factory = SimpleGroupFactory(schema)
-            writer = newWriter(outputFile, schema!!)
+            writer = newWriter(outputFile, schema!!, keyValueMetadata)
             logger.fine { "Writing '$blobKey' with ${schema!!.fields.size} columns" }
           }
           validateRow(row, expectedKinds!!)
@@ -268,7 +285,7 @@ class ParquetStorageClient(
           // Parquet rejects an empty (zero-column) schema, so empty input
           // writes a single placeholder column with zero rows; reads then
           // yield no rows.
-          writer = newWriter(outputFile, EMPTY_SCHEMA)
+          writer = newWriter(outputFile, EMPTY_SCHEMA, keyValueMetadata)
         }
       } catch (t: Throwable) {
         // Release the open writer without masking the original failure, then
@@ -587,15 +604,21 @@ class ParquetStorageClient(
 
   // === Write: schema derivation + Group construction ===
 
-  private fun newWriter(outputFile: OutputFile, schema: MessageType): ParquetWriter<Group> =
+  private fun newWriter(
+    outputFile: OutputFile,
+    schema: MessageType,
+    keyValueMetadata: Map<String, String>,
+  ): ParquetWriter<Group> =
     // ExampleParquetWriter installs a GroupWriteSupport bound to this schema.
     // When a PME crypto factory is configured on `conf`, the writer encrypts
-    // automatically; otherwise it writes plaintext.
+    // automatically; otherwise it writes plaintext. `withExtraMetaData` writes
+    // the entries into the footer key-value metadata (an empty map adds none).
     ExampleParquetWriter.builder(outputFile)
       .withConf(conf)
       .withType(schema)
       .withWriteMode(ParquetFileWriter.Mode.OVERWRITE)
       .withCompressionCodec(compressionCodec)
+      .withExtraMetaData(keyValueMetadata)
       .build()
 
   /**

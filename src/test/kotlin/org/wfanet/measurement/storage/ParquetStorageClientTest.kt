@@ -170,6 +170,30 @@ class ParquetStorageClientTest {
   }
 
   @Test
+  fun `writeBlob embeds keyValueMetadata into the footer`(): Unit = runBlocking {
+    val client = newClient()
+
+    client.writeBlob(
+      "meta.parquet",
+      flowOf(encRow()),
+      mapOf("edpa.kek_uri" to "fake-kms://kek", "shard" to "3"),
+    )
+
+    assertThat(client.getBlob("meta.parquet")!!.readKeyValueMetadata())
+      .containsAtLeast("edpa.kek_uri", "fake-kms://kek", "shard", "3")
+  }
+
+  @Test
+  fun `writeBlob embeds keyValueMetadata on an empty zero-row blob`(): Unit = runBlocking {
+    val client = newClient()
+
+    client.writeBlob("empty-meta.parquet", emptyFlow(), mapOf("foo" to "bar"))
+
+    assertThat(client.getBlob("empty-meta.parquet")!!.readKeyValueMetadata())
+      .containsAtLeast("foo", "bar")
+  }
+
+  @Test
   fun `getBlob returns null for missing key`(): Unit = runBlocking {
     assertThat(newClient().getBlob("nothing-here.parquet")).isNull()
   }
@@ -692,6 +716,30 @@ class ParquetStorageClientTest {
     // Plaintext footer stays readable without keys.
     assertThat(newClient().getBlob("enc.parquet")!!.readKeyValueMetadata()).isNotNull()
   }
+
+  @Test
+  fun `writeBlob keyValueMetadata round-trips through a plaintext-footer encrypted blob`(): Unit =
+    runBlocking {
+      val kekUri = "fake-kms://uniform-kek"
+      // PLAINTEXT_FOOTER keeps the footer (and its key-value metadata) readable
+      // without keys, so the writeBlob(keyValueMetadata) overload composes with
+      // encryption: an encrypting client embeds the metadata and a fresh
+      // plaintext client reads the exact entries back with no crypto config.
+      val conf =
+        Configuration().apply {
+          set("parquet.encryption.uniform.key", kekUri)
+          setBoolean("parquet.encryption.plaintext.footer", true)
+        }
+      newEncryptingClient(conf, fakeKms(kekUri))
+        .writeBlob(
+          "enc-meta.parquet",
+          flowOf(encRow()),
+          mapOf("edpa.kek_uri" to "fake-kms://kek", "shard" to "3"),
+        )
+
+      assertThat(newClient().getBlob("enc-meta.parquet")!!.readKeyValueMetadata())
+        .containsAtLeast("edpa.kek_uri", "fake-kms://kek", "shard", "3")
+    }
 
   @Test
   fun `keyMapping resolves a short master-key name to a Tink URI`(): Unit = runBlocking {
