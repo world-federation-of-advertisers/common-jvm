@@ -44,6 +44,7 @@ import org.apache.hadoop.fs.Path
 import org.apache.parquet.example.data.Group
 import org.apache.parquet.example.data.simple.SimpleGroupFactory
 import org.apache.parquet.format.Util
+import org.apache.parquet.format.converter.ParquetMetadataConverter
 import org.apache.parquet.hadoop.ParquetFileWriter
 import org.apache.parquet.hadoop.ParquetReader
 import org.apache.parquet.hadoop.ParquetWriter
@@ -231,9 +232,11 @@ class ParquetStorageClient(
     /**
      * The file's parquet schema as a map of column name to the [ParquetValue.KindCase] that
      * [readRows] yields for that column (same parquet-type -> kind mapping documented on
-     * [readRows]). Reads only the schema, not row values; returns an empty map for a zero-row file.
-     * Lets a caller validate up front that a config's referenced columns exist with the expected
-     * types, instead of discovering a missing/renamed column silently at row time.
+     * [readRows]). Read directly from the footer's schema — no row values are decoded — so it
+     * reflects the declared schema even for a zero-row file (every valid parquet file stores its
+     * schema in the footer regardless of row count). Lets a caller validate up front that a
+     * config's referenced columns exist with the expected types, instead of discovering a
+     * missing/renamed column silently at row time.
      */
     suspend fun readSchema(): Map<String, ParquetValue.KindCase>
   }
@@ -400,13 +403,7 @@ class ParquetStorageClient(
       withContext(parquetContext) { readFooterKeyValueMetadata(path) }
 
     override suspend fun readSchema(): Map<String, ParquetValue.KindCase> =
-      withContext(parquetContext) {
-        val inputFile: InputFile = HadoopInputFile.fromPath(path, conf)
-        GroupParquetReaderBuilder(inputFile).withConf(conf).build().use { reader ->
-          val first = reader.read() ?: return@use emptyMap<String, ParquetValue.KindCase>()
-          first.type.fields.associate { field -> field.name to kindOf(field) }
-        }
-      }
+      withContext(parquetContext) { readFooterSchema(path) }
 
     override suspend fun delete() {
       withContext(parquetContext) { fileSystem.delete(path, /* recursive= */ false) }
@@ -741,8 +738,8 @@ class ParquetStorageClient(
   // === Direct thrift footer parse (bypasses ParquetFileReader) ===
 
   /**
-   * Reads the parquet file's footer key-value metadata directly from the thrift `FileMetaData`
-   * struct, bypassing parquet-mr's high-level `ParquetFileReader`.
+   * Reads the parquet file's footer `FileMetaData` thrift struct directly (schema + key-value
+   * metadata), bypassing parquet-mr's high-level `ParquetFileReader` and skipping the row groups.
    *
    * Why bypass: under PME `PLAINTEXT_FOOTER` mode the footer body (schema, key-value metadata) IS
    * plaintext on disk, but per-column metadata is still encrypted with the footer key.
@@ -751,20 +748,21 @@ class ParquetStorageClient(
    *
    * Solution: read the raw FileMetaData thrift struct via `Util.readFileMetaData(in, skipRowGroups
    * = true)`. Skipping row groups means the encrypted per-column-metadata blobs are never touched;
-   * only file-level fields, including the always-plaintext `key_value_metadata`, are returned.
+   * only file-level fields, including the always-plaintext `schema` and `key_value_metadata`, are
+   * returned.
    *
    * Parquet footer trailer layout (last 8 bytes): `[int32 footer length LE][4-byte magic]`. Magic
    * is `"PAR1"` for plaintext-footer files (including PME `PLAINTEXT_FOOTER`). `"PARE"` indicates
    * PME `ENCRYPTED_FOOTER`, which we explicitly REJECT: that mode stores a `FileCryptoMetaData`
    * thrift followed by the encrypted `FileMetaData`, so the parse would hit ciphertext.
    */
-  private fun readFooterKeyValueMetadata(path: Path): Map<String, String> {
+  private fun readFooterFileMetaData(path: Path): org.apache.parquet.format.FileMetaData {
     val inputFile = HadoopInputFile.fromPath(path, conf)
     val fileLen = inputFile.length
     require(fileLen >= MIN_PARQUET_FILE_SIZE) {
       "File too small to be parquet: $path (size=$fileLen)"
     }
-    inputFile.newStream().use { stream ->
+    return inputFile.newStream().use { stream ->
       // Read the 8-byte trailer: [footer length: int32 LE][magic: 4 bytes].
       val tail = ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN)
       stream.seek(fileLen - 8)
@@ -777,8 +775,8 @@ class ParquetStorageClient(
         throw IllegalStateException(
           "Parquet file '$path' uses PME ENCRYPTED_FOOTER mode, which is not supported by " +
             "ParquetStorageClient. Re-write the file with PLAINTEXT_FOOTER mode " +
-            "(FileEncryptionProperties.Builder.withPlaintextFooter()) so the footer key-value " +
-            "metadata can be read without the footer key."
+            "(FileEncryptionProperties.Builder.withPlaintextFooter()) so the footer schema and " +
+            "key-value metadata can be read without the footer key."
         )
       }
       require(magic == PARQUET_MAGIC_PLAINTEXT) { "Not a parquet file: $path (bad magic '$magic')" }
@@ -791,10 +789,28 @@ class ParquetStorageClient(
       stream.readFully(footerBuf)
       footerBuf.flip()
       val footerBytes = ByteArray(footerLen).also { footerBuf.get(it) }
-      val md = Util.readFileMetaData(ByteArrayInputStream(footerBytes), /* skipRowGroups= */ true)
-      val kv = md.key_value_metadata ?: return emptyMap()
-      return kv.associate { it.key to (it.value ?: "") }
+      Util.readFileMetaData(ByteArrayInputStream(footerBytes), /* skipRowGroups= */ true)
     }
+  }
+
+  /**
+   * The footer's key-value metadata (the inverse of [writeBlob]'s `keyValueMetadata`). Empty when
+   * the file carries none.
+   */
+  private fun readFooterKeyValueMetadata(path: Path): Map<String, String> {
+    val kv = readFooterFileMetaData(path).key_value_metadata ?: return emptyMap()
+    return kv.associate { it.key to (it.value ?: "") }
+  }
+
+  /**
+   * The footer's declared schema as a column-name -> [ParquetValue.KindCase] map (via [kindOf], the
+   * same mapping [readRows] uses). Available for a zero-row file, since the schema is stored in the
+   * footer independent of row count.
+   */
+  private fun readFooterSchema(path: Path): Map<String, ParquetValue.KindCase> {
+    val md = readFooterFileMetaData(path)
+    val schema = ParquetMetadataConverter().fromParquetMetadata(md).fileMetaData.schema
+    return schema.fields.associate { it.name to kindOf(it) }
   }
 
   private companion object {

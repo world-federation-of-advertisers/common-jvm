@@ -156,10 +156,18 @@ class ParquetStorageClientTest {
   }
 
   @Test
-  fun `readSchema returns empty for a zero-row file`(): Unit = runBlocking {
+  fun `readSchema returns declared schema for a zero-row file`(): Unit = runBlocking {
     val key = writeParquetBlob("empty.parquet", SAMPLE_SCHEMA, emptyList(), null, emptyMap(), null)
 
-    assertThat(newClient().getBlob(key)!!.readSchema()).isEmpty()
+    assertThat(newClient().getBlob(key)!!.readSchema())
+      .containsExactly(
+        "id",
+        ParquetValue.KindCase.INT64_VALUE,
+        "name",
+        ParquetValue.KindCase.STRING_VALUE,
+        "data",
+        ParquetValue.KindCase.BYTES_VALUE,
+      )
   }
 
   @Test
