@@ -155,6 +155,7 @@ maven.artifact(
     group = "org.testcontainers",
 )
 maven.artifact(
+    testonly = True,    
     artifact = "grpc-testing",
     group = "io.grpc",
 )
