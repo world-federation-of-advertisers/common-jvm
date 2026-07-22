@@ -6,7 +6,7 @@ module(
 
 KOTLINX_COROUTINES_VERSION = "1.10.2"  # Compatible with rules_kotlin_jvm version.
 
-PROTOBUF_JAVA_VERSION = "4.33.1"  # Compatible with rules_kotlin_jvm version.
+PROTOBUF_JAVA_VERSION = "4.33.6"  # Compatible with rules_kotlin_jvm version.
 
 GRPC_JAVA_VERSION = "1.77.0"  # Compatible with rules_kotlin_jvm version.
 
@@ -31,6 +31,12 @@ bazel_dep(
     name = "rules_kotlin_jvm",
     version = "0.14.0",
     repo_name = "wfa_rules_kotlin_jvm",
+)
+# DO_NOT_SUBMIT: use release version
+git_override(
+    module_name = "rules_kotlin_jvm",
+    commit = "7acc3aa0d3233fbae4bcbc83af462c020ced8ab8",
+    remote = "https://github.com/world-federation-of-advertisers/rules_kotlin_jvm.git",
 )
 bazel_dep(
     name = "cloud-spanner-emulator-bin",
@@ -70,7 +76,7 @@ bazel_dep(
 )
 bazel_dep(
     name = "protobuf",
-    version = "33.1",
+    version = "33.6",
     repo_name = "com_google_protobuf",
 )
 bazel_dep(
