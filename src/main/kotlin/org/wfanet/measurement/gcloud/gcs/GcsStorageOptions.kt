@@ -39,13 +39,22 @@ import java.time.Duration
  *   ([com.google.cloud.storage.ApiaryUnbufferedReadableByteChannel], which tracks `position` and
  *   re-opens with `withNewBeginOffset`).
  *
- * ## What bounds a stalled read on the HTTP/Apiary transport
- * The knob that aborts a stalled socket read is the transport read timeout
- * ([HttpTransportOptions.Builder.setReadTimeout] -> `HttpRequest.setReadTimeout` ->
- * `HttpURLConnection` `SO_TIMEOUT`), applied via [StorageOptions.Builder.setTransportOptions]. This
- * is distinct from [RetrySettings] RPC timeouts (`initialRpcTimeout`/`maxRpcTimeout`), which are
- * not enforced on the blocking Apiary HTTP read. [RetrySettings] here governs the retry budget
- * (`totalTimeout`, `maxAttempts`) and the jittered exponential backoff between attempts.
+ * ## What bounds an attempt (HTTP vs gRPC)
+ * The two transports bound a single attempt differently:
+ * * On the HTTP/Apiary transport, [readTimeout] is the transport socket read timeout
+ *   ([HttpTransportOptions.Builder.setReadTimeout] -> `HttpRequest.setReadTimeout` ->
+ *   `HttpURLConnection` `SO_TIMEOUT`), applied via [StorageOptions.Builder.setTransportOptions]. It
+ *   is an idle-gap bound: it aborts a read that stalls with no bytes for that long. The
+ *   [RetrySettings] RPC timeouts are inert here (they are not enforced on the blocking Apiary
+ *   read).
+ * * On the gRPC transport, there is no socket read timeout; the per-attempt bound is the
+ *   [RetrySettings] RPC timeout ([rpcTimeout]), which is a whole-attempt wall-clock deadline (not
+ *   an idle gap). The gRPC read channel also resumes at the current offset across attempts
+ *   ([com.google.cloud.storage.GapicUnbufferedReadableByteChannel] re-opens with `read_offset`), so
+ *   a large read completes in chunks within [totalTimeout].
+ *
+ * In both cases [RetrySettings] governs the retry budget (`totalTimeout`, `maxAttempts`) and the
+ * jittered exponential backoff between attempts.
  *
  * ## Scope
  * These [RetrySettings] and transport timeouts apply to ALL Storage operations (reads, writes, and
@@ -57,9 +66,12 @@ import java.time.Duration
  * The defaults are deliberately generous so that legitimate slow reads are not broken, while still
  * bounding each attempt so a stalled socket is aborted promptly and several bounded attempts fit in
  * the budget:
- * * [readTimeout] = 30s: a healthy Cloud Storage stream delivers data continuously, so 30s of
- *   silence indicates a real stall.
+ * * [readTimeout] = 30s (HTTP idle-read bound): a healthy Cloud Storage stream delivers data
+ *   continuously, so 30s of silence indicates a real stall.
  * * [connectTimeout] = 15s.
+ * * [rpcTimeout] = 60s (gRPC per-attempt whole-attempt deadline): the gax/storage `readObject`
+ *   default; generous enough for a chunk of a large read, which resumes at offset on the next
+ *   attempt.
  * * [totalTimeout] = 180s: room for several bounded attempts (each resuming at the current offset).
  * * [maxAttempts] = 6 with exponential backoff ([initialRetryDelay] 1s, [maxRetryDelay] 32s,
  *   [retryDelayMultiplier] 2.0). gax applies jitter to this backoff by default.
@@ -72,10 +84,17 @@ data class GcsStorageRetryConfig(
    */
   val connectTimeout: Duration = Duration.ofSeconds(15),
   /**
-   * Per-attempt socket read timeout. Maps to [HttpTransportOptions.Builder.setReadTimeout]; this is
-   * the knob that aborts a stalled socket read on the HTTP/Apiary transport.
+   * HTTP/Apiary per-attempt socket read timeout (an idle-gap bound). Maps to
+   * [HttpTransportOptions.Builder.setReadTimeout]; this is the knob that aborts a stalled socket
+   * read on the HTTP transport. Inert on the gRPC transport (see [rpcTimeout]).
    */
   val readTimeout: Duration = Duration.ofSeconds(30),
+  /**
+   * gRPC per-attempt RPC timeout (a whole-attempt wall-clock deadline, not an idle gap). Maps to
+   * [RetrySettings.Builder.setInitialRpcTimeout]/[RetrySettings.Builder.setMaxRpcTimeout]. Defaults
+   * to 60s, the gax/storage `readObject` default. Inert on the HTTP transport (see [readTimeout]).
+   */
+  val rpcTimeout: Duration = Duration.ofSeconds(60),
   /** Total retry budget across all attempts. Maps to [RetrySettings.Builder.setTotalTimeout]. */
   val totalTimeout: Duration = Duration.ofSeconds(180),
   /** Maximum number of attempts. Maps to [RetrySettings.Builder.setMaxAttempts]. */
@@ -94,6 +113,9 @@ data class GcsStorageRetryConfig(
     require(!readTimeout.isNegative && !readTimeout.isZero) {
       "readTimeout must be positive, got $readTimeout"
     }
+    require(!rpcTimeout.isNegative && !rpcTimeout.isZero) {
+      "rpcTimeout must be positive, got $rpcTimeout"
+    }
     require(!initialRetryDelay.isNegative && !initialRetryDelay.isZero) {
       "initialRetryDelay must be positive, got $initialRetryDelay"
     }
@@ -106,7 +128,11 @@ data class GcsStorageRetryConfig(
     }
     require(totalTimeout >= connectTimeout.plus(readTimeout)) {
       "totalTimeout ($totalTimeout) must be >= connectTimeout + readTimeout " +
-        "(${connectTimeout.plus(readTimeout)}) so at least one full attempt fits in the budget"
+        "(${connectTimeout.plus(readTimeout)}) so at least one full HTTP attempt fits in the budget"
+    }
+    require(totalTimeout >= rpcTimeout) {
+      "totalTimeout ($totalTimeout) must be >= rpcTimeout ($rpcTimeout) so at least one full gRPC " +
+        "attempt fits in the budget"
     }
   }
 
@@ -118,11 +144,11 @@ data class GcsStorageRetryConfig(
       .setMaxRetryDelayDuration(maxRetryDelay)
       .setMaxAttempts(maxAttempts)
       .setTotalTimeoutDuration(totalTimeout)
-      // The Apiary HTTP read is bounded by the socket read timeout, not the RPC timeout; keep the
-      // RPC timeout aligned with the read timeout so the gRPC transport (if used) bounds each
-      // attempt consistently.
-      .setInitialRpcTimeoutDuration(readTimeout)
-      .setMaxRpcTimeoutDuration(readTimeout)
+      // readTimeout is the HTTP socket idle-read bound (applied via HttpTransportOptions); the RPC
+      // timeout is the gRPC per-attempt whole-attempt deadline, so it maps to rpcTimeout, not
+      // readTimeout. The RPC timeout is inert on the HTTP/Apiary transport.
+      .setInitialRpcTimeoutDuration(rpcTimeout)
+      .setMaxRpcTimeoutDuration(rpcTimeout)
       .setRpcTimeoutMultiplier(1.0)
       .build()
 

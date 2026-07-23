@@ -51,6 +51,7 @@ class GcsStorageOptionsTest {
     val config = GcsStorageRetryConfig.DEFAULT
     assertThat(config.connectTimeout).isEqualTo(Duration.ofSeconds(15))
     assertThat(config.readTimeout).isEqualTo(Duration.ofSeconds(30))
+    assertThat(config.rpcTimeout).isEqualTo(Duration.ofSeconds(60))
     assertThat(config.totalTimeout).isEqualTo(Duration.ofSeconds(180))
     assertThat(config.maxAttempts).isEqualTo(6)
     assertThat(config.initialRetryDelay).isEqualTo(Duration.ofSeconds(1))
@@ -66,6 +67,10 @@ class GcsStorageOptionsTest {
     assertThat(retrySettings.initialRetryDelayDuration).isEqualTo(Duration.ofSeconds(1))
     assertThat(retrySettings.maxRetryDelayDuration).isEqualTo(Duration.ofSeconds(32))
     assertThat(retrySettings.retryDelayMultiplier).isEqualTo(2.0)
+    // The RPC timeouts (the gRPC per-attempt deadline) come from rpcTimeout (60s), NOT from the
+    // HTTP readTimeout (30s).
+    assertThat(retrySettings.initialRpcTimeoutDuration).isEqualTo(Duration.ofSeconds(60))
+    assertThat(retrySettings.maxRpcTimeoutDuration).isEqualTo(Duration.ofSeconds(60))
   }
 
   @Test
@@ -101,6 +106,22 @@ class GcsStorageOptionsTest {
   fun `config rejects a non-positive read timeout`() {
     assertThrows(IllegalArgumentException::class.java) {
       GcsStorageRetryConfig(readTimeout = Duration.ZERO)
+    }
+  }
+
+  @Test
+  fun `config rejects a non-positive rpc timeout`() {
+    assertThrows(IllegalArgumentException::class.java) {
+      GcsStorageRetryConfig(rpcTimeout = Duration.ZERO)
+    }
+  }
+
+  @Test
+  fun `config rejects a total timeout smaller than the rpc timeout`() {
+    // connect + read (15s + 30s = 45s) fits within total (50s), but the 60s default rpcTimeout does
+    // not, so a full gRPC attempt would not fit and the config must be rejected.
+    assertThrows(IllegalArgumentException::class.java) {
+      GcsStorageRetryConfig(totalTimeout = Duration.ofSeconds(50))
     }
   }
 
