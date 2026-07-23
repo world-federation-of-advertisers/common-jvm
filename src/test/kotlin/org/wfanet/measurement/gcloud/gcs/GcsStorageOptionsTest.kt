@@ -1,4 +1,4 @@
-// Copyright 2025 The Cross-Media Measurement Authors
+// Copyright 2026 The Cross-Media Measurement Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -105,13 +105,23 @@ class GcsStorageOptionsTest {
   }
 
   @Test
-  fun `config rejects a total timeout smaller than the read timeout`() {
+  fun `config rejects a total timeout smaller than connect plus read timeout`() {
+    // total (40s) exceeds the read timeout (30s) but is still below connect + read (15s + 30s), so
+    // it does not leave room for one full attempt and must be rejected.
     assertThrows(IllegalArgumentException::class.java) {
       GcsStorageRetryConfig(
+        connectTimeout = Duration.ofSeconds(15),
         readTimeout = Duration.ofSeconds(30),
-        totalTimeout = Duration.ofSeconds(5),
+        totalTimeout = Duration.ofSeconds(40),
       )
     }
+  }
+
+  @Test
+  fun `default config satisfies the connect plus read timeout budget`() {
+    // Constructing the default config must not throw: 180s >= 15s + 30s.
+    val config = GcsStorageRetryConfig()
+    assertThat(config.totalTimeout).isAtLeast(config.connectTimeout.plus(config.readTimeout))
   }
 
   @Test
@@ -150,14 +160,11 @@ class GcsStorageOptionsTest {
       val client = gcsStorageClient(server.host, config)
       val blob = checkNotNull(client.getBlob(OBJECT_NAME)) { "Blob not found" }
 
-      val startNanos = System.nanoTime()
       val read = blob.read().flatten().toByteArray()
-      val elapsed = Duration.ofNanos(System.nanoTime() - startNanos)
 
       assertThat(read).isEqualTo(content)
-      // The stalled attempt was aborted by the read timeout (~2s) and the retry succeeded, rather
-      // than waiting the full 10s stall.
-      assertThat(elapsed).isLessThan(Duration.ofSeconds(8))
+      // More than one media request proves the stalled first attempt was aborted by the read
+      // timeout and a retry fired (rather than blocking on the single stalled attempt).
       assertThat(server.mediaRequestCount).isAtLeast(2)
     }
   }

@@ -1,4 +1,4 @@
-// Copyright 2025 The Cross-Media Measurement Authors
+// Copyright 2026 The Cross-Media Measurement Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -46,6 +46,12 @@ import java.time.Duration
  * is distinct from [RetrySettings] RPC timeouts (`initialRpcTimeout`/`maxRpcTimeout`), which are
  * not enforced on the blocking Apiary HTTP read. [RetrySettings] here governs the retry budget
  * (`totalTimeout`, `maxAttempts`) and the jittered exponential backoff between attempts.
+ *
+ * ## Scope
+ * These [RetrySettings] and transport timeouts apply to ALL Storage operations (reads, writes, and
+ * metadata); the mid-stream resume-at-offset described above is the read-specific part, and the
+ * library's default retry strategy only retries idempotent writes, so widening the retry budget
+ * introduces no new double-write risk.
  *
  * ## Defaults
  * The defaults are deliberately generous so that legitimate slow reads are not broken, while still
@@ -98,9 +104,9 @@ data class GcsStorageRetryConfig(
     require(retryDelayMultiplier >= 1.0) {
       "retryDelayMultiplier must be >= 1.0, got $retryDelayMultiplier"
     }
-    require(totalTimeout >= readTimeout) {
-      "totalTimeout ($totalTimeout) must be >= readTimeout ($readTimeout) so at least one attempt " +
-        "fits in the budget"
+    require(totalTimeout >= connectTimeout.plus(readTimeout)) {
+      "totalTimeout ($totalTimeout) must be >= connectTimeout + readTimeout " +
+        "(${connectTimeout.plus(readTimeout)}) so at least one full attempt fits in the budget"
     }
   }
 
