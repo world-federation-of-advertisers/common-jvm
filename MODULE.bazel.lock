@@ -1049,7 +1049,7 @@
     "@@rules_oci+//oci:extensions.bzl%oci": {
       "general": {
         "bzlTransitiveDigest": "P7Nk7KDMqHCtWtp39/6x3peomAkhWNHbdPL9Z5tKhws=",
-        "usagesDigest": "XFnQKKWh3w+NPxQeR+mcR6NjyshlQdVs+z5S2iIYDTg=",
+        "usagesDigest": "akimyAXOXDOAWNUvydCYOMy3IyCUHMD2QzEnrx/4/fU=",
         "recordedFileInputs": {},
         "recordedDirentsInputs": {},
         "envVariables": {},
