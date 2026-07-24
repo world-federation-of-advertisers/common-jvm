@@ -15,6 +15,7 @@
 package org.wfanet.measurement.aws.kms
 
 import com.google.crypto.tink.KmsClient
+import com.google.crypto.tink.integration.awskms.AwsKmsClient
 import java.nio.file.Paths
 import java.security.GeneralSecurityException
 import org.wfanet.measurement.common.crypto.tink.AwsWebIdentityCredentials
@@ -63,6 +64,6 @@ class AwsKmsClientFactory : KmsClientFactory<AwsWebIdentityCredentials> {
         }
         .build()
 
-    return AwsKmsClient(credentialsProvider)
+    return AwsKmsClient().withCredentialsProvider(credentialsProvider)
   }
 }

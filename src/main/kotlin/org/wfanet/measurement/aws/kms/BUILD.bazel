@@ -4,14 +4,11 @@ package(default_visibility = ["//visibility:public"])
 
 kt_jvm_library(
     name = "aws_kms_client_factory",
-    srcs = [
-        "AwsKmsClient.kt",
-        "AwsKmsClientFactory.kt",
-    ],
+    srcs = ["AwsKmsClientFactory.kt"],
     deps = [
         "//imports/java/com/google/crypto/tink",
+        "//imports/java/com/google/crypto/tink:awskms",
         "//imports/java/software/amazon/awssdk/auth",
-        "//imports/java/software/amazon/awssdk/services/kms",
         "//imports/java/software/amazon/awssdk/services/regions",
         "//imports/java/software/amazon/awssdk/services/sts",
         "//src/main/kotlin/org/wfanet/measurement/common/crypto/tink",
