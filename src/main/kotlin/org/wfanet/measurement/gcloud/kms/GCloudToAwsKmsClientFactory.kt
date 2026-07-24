@@ -18,6 +18,7 @@ import com.google.auth.oauth2.GoogleCredentials
 import com.google.auth.oauth2.IdTokenCredentials
 import com.google.auth.oauth2.ImpersonatedCredentials
 import com.google.crypto.tink.KmsClient
+import com.google.crypto.tink.integration.awskms.AwsKmsClient
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import java.security.GeneralSecurityException
@@ -26,7 +27,6 @@ import java.time.Duration
 import java.util.logging.Logger
 import org.wfanet.measurement.aws.RefreshableAwsCredentialsProvider
 import org.wfanet.measurement.aws.TimeBoundCredentials
-import org.wfanet.measurement.aws.kms.AwsKmsClient
 import org.wfanet.measurement.common.crypto.tink.GCloudToAwsWifCredentials
 import org.wfanet.measurement.common.crypto.tink.KmsClientFactory
 import software.amazon.awssdk.auth.credentials.AnonymousCredentialsProvider
@@ -67,7 +67,7 @@ class GCloudToAwsKmsClientFactory(
       RefreshableAwsCredentialsProvider(refreshMargin = refreshMargin, clock = clock) {
         obtainAwsCredentials(config)
       }
-    return AwsKmsClient(credentialsProvider)
+    return AwsKmsClient().withCredentialsProvider(credentialsProvider)
   }
 
   companion object {
