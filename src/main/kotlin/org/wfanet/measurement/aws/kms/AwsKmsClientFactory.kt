@@ -12,6 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+@file:Suppress(
+  "DEPRECATION"
+) // Transitional: AwsKmsClient is deprecated in favor of upstream tink-awskms.
+
 package org.wfanet.measurement.aws.kms
 
 import com.google.crypto.tink.KmsClient
