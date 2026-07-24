@@ -6,7 +6,7 @@ module(
 
 KOTLINX_COROUTINES_VERSION = "1.10.2"  # Compatible with rules_kotlin_jvm version.
 
-PROTOBUF_JAVA_VERSION = "4.33.1"  # Compatible with rules_kotlin_jvm version.
+PROTOBUF_JAVA_VERSION = "4.33.6"  # Compatible with rules_kotlin_jvm version.
 
 GRPC_JAVA_VERSION = "1.77.0"  # Compatible with rules_kotlin_jvm version.
 
@@ -70,7 +70,7 @@ bazel_dep(
 )
 bazel_dep(
     name = "protobuf",
-    version = "33.1",
+    version = "33.6",
     repo_name = "com_google_protobuf",
 )
 bazel_dep(
@@ -200,6 +200,9 @@ maven.install(
         "info.picocli:picocli:4.7.6",
         "io.netty:netty-handler:4.1.124.Final",
         "com.google.crypto.tink:tink:" + TINK_VERSION,
+        "com.google.protobuf:protobuf-java:" + PROTOBUF_JAVA_VERSION,
+        "com.google.protobuf:protobuf-java-util:" + PROTOBUF_JAVA_VERSION,
+        "com.google.protobuf:protobuf-kotlin:" + PROTOBUF_JAVA_VERSION,
         "com.github.ben-manes.caffeine:caffeine:3.1.8",
         # TODO(bazelbuild/bazel-worker-api/issues#14): Remove versions when fixed.
         "com.google.guava:guava:33.4.0-jre",
