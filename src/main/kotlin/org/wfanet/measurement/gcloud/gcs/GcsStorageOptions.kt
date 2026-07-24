@@ -21,62 +21,9 @@ import io.opentelemetry.api.OpenTelemetry
 import java.time.Duration
 
 /**
- * Resilience configuration applied to every [StorageOptions] built by [buildGcsStorageOptions].
- *
- * ## Why this exists
- * The `google-cloud-storage` library defaults leave a Cloud Storage read vulnerable to transient
- * connection glitches (observed in production as `Broken pipe` and `Remote host terminated the
- * handshake` thrown from `BaseStorageReadChannel.read`):
- * * The default retry budget is `totalTimeout = 50s` / `maxAttempts = 6`
- *   (`com.google.cloud.ServiceOptions.getDefaultRetrySettingsBuilder`).
- * * The default HTTP transport
- *   ([com.google.cloud.storage.HttpStorageOptions.HttpStorageDefaults.getDefaultTransportOptions])
- *   sets no explicit socket read timeout, so each socket read falls back to the google-http-client
- *   `HttpRequest` default. That default bounds the idle gap between successive reads, not the total
- *   download time, so a slow-but-progressing read can consume the entire 50s retry budget before a
- *   second attempt can start. The read then fails after a single attempt even though the library's
- *   read channel would otherwise resume mid-stream at the current offset via a `Range` request
- *   ([com.google.cloud.storage.ApiaryUnbufferedReadableByteChannel], which tracks `position` and
- *   re-opens with `withNewBeginOffset`).
- *
- * ## What bounds an attempt (HTTP vs gRPC)
- * The two transports bound a single attempt differently:
- * * On the HTTP/Apiary transport, [readTimeout] is the transport socket read timeout
- *   ([HttpTransportOptions.Builder.setReadTimeout] -> `HttpRequest.setReadTimeout` ->
- *   `HttpURLConnection` `SO_TIMEOUT`), applied via [StorageOptions.Builder.setTransportOptions]. It
- *   is an idle-gap bound: it aborts a read that stalls with no bytes for that long. The
- *   [RetrySettings] RPC timeouts are inert here (they are not enforced on the blocking Apiary
- *   read).
- * * On the gRPC transport, there is no socket read timeout; the per-attempt bound is the
- *   [RetrySettings] RPC timeout ([rpcTimeout]), which is a whole-attempt wall-clock deadline (not
- *   an idle gap). The gRPC read channel also resumes at the current offset across attempts
- *   ([com.google.cloud.storage.GapicUnbufferedReadableByteChannel] re-opens with `read_offset`), so
- *   a large read completes in chunks within [totalTimeout].
- *
- * In both cases [RetrySettings] governs the retry budget (`totalTimeout`, `maxAttempts`) and the
- * jittered exponential backoff between attempts.
- *
- * ## Scope
- * These [RetrySettings] and transport timeouts apply to ALL Storage operations (reads, writes, and
- * metadata); the mid-stream resume-at-offset described above is the read-specific part, and the
- * library's default retry strategy only retries idempotent writes, so widening the retry budget
- * introduces no new double-write risk.
- *
- * ## Defaults
- * The defaults are deliberately generous so that legitimate slow reads are not broken, while still
- * bounding each attempt so a stalled socket is aborted promptly and several bounded attempts fit in
- * the budget:
- * * [readTimeout] = 30s (HTTP idle-read bound): a healthy Cloud Storage stream delivers data
- *   continuously, so 30s of silence indicates a real stall.
- * * [connectTimeout] = 15s.
- * * [rpcTimeout] = 60s (gRPC per-attempt whole-attempt deadline): the gax/storage `readObject`
- *   default; generous enough for a chunk of a large read, which resumes at offset on the next
- *   attempt.
- * * [totalTimeout] = 180s: room for several bounded attempts (each resuming at the current offset).
- * * [maxAttempts] = 6 with exponential backoff ([initialRetryDelay] 1s, [maxRetryDelay] 32s,
- *   [retryDelayMultiplier] 2.0). gax applies jitter to this backoff by default.
- *
- * All values are overridable so a caller (e.g. the Results-Fulfiller) can tune tighter later.
+ * Resilience configuration -- retry budget and per-attempt timeouts -- applied to every
+ * [StorageOptions] built by [buildStorageOptions]. Defaults are generous so legitimate slow reads
+ * are not broken, and are overridable.
  */
 data class GcsStorageRetryConfig(
   /**
@@ -84,15 +31,14 @@ data class GcsStorageRetryConfig(
    */
   val connectTimeout: Duration = Duration.ofSeconds(15),
   /**
-   * HTTP/Apiary per-attempt socket read timeout (an idle-gap bound). Maps to
-   * [HttpTransportOptions.Builder.setReadTimeout]; this is the knob that aborts a stalled socket
-   * read on the HTTP transport. Inert on the gRPC transport (see [rpcTimeout]).
+   * HTTP socket idle-read bound (max time with no bytes); inert on the gRPC transport. Maps to
+   * [HttpTransportOptions.Builder.setReadTimeout].
    */
   val readTimeout: Duration = Duration.ofSeconds(30),
   /**
-   * gRPC per-attempt RPC timeout (a whole-attempt wall-clock deadline, not an idle gap). Maps to
-   * [RetrySettings.Builder.setInitialRpcTimeout]/[RetrySettings.Builder.setMaxRpcTimeout]. Defaults
-   * to 60s, the gax/storage `readObject` default. Inert on the HTTP transport (see [readTimeout]).
+   * gRPC per-attempt (whole-attempt) deadline; inert on the HTTP transport. Defaults to the
+   * gax/storage `readObject` default of 60s. Maps to [RetrySettings.Builder.setInitialRpcTimeout] /
+   * [RetrySettings.Builder.setMaxRpcTimeout].
    */
   val rpcTimeout: Duration = Duration.ofSeconds(60),
   /** Total retry budget across all attempts. Maps to [RetrySettings.Builder.setTotalTimeout]. */
@@ -159,40 +105,36 @@ data class GcsStorageRetryConfig(
       .setReadTimeout(readTimeout.toMillis().toInt())
       .build()
 
+  /**
+   * Builds [StorageOptions] for Google Cloud Storage with this config's retry/timeout settings.
+   *
+   * @param projectId GCS project id, or `null` to let the library resolve it from the environment.
+   * @param useGrpc whether to use the gRPC transport instead of HTTP.
+   * @param openTelemetry [OpenTelemetry] instance for client metrics/traces, or `null`.
+   */
+  fun buildStorageOptions(
+    projectId: String? = null,
+    useGrpc: Boolean = false,
+    openTelemetry: OpenTelemetry? = null,
+  ): StorageOptions {
+    val builder: StorageOptions.Builder =
+      if (useGrpc) {
+        StorageOptions.grpc().setEnableGrpcClientMetrics(true)
+      } else {
+        StorageOptions.http().setTransportOptions(toHttpTransportOptions())
+      }
+    builder.setRetrySettings(toRetrySettings())
+    if (projectId != null) {
+      builder.setProjectId(projectId)
+    }
+    if (openTelemetry != null) {
+      builder.setOpenTelemetry(openTelemetry)
+    }
+    return builder.build()
+  }
+
   companion object {
     /** The resilient default configuration used for all callers unless overridden. */
     val DEFAULT = GcsStorageRetryConfig()
   }
-}
-
-/**
- * Builds [StorageOptions] for Google Cloud Storage with resilient retry/timeout settings applied by
- * default (see [GcsStorageRetryConfig]).
- *
- * @param projectId GCS project id, or `null` to let the library resolve it from the environment.
- * @param useGrpc whether to use the gRPC transport instead of HTTP. The HTTP transport read/connect
- *   timeouts only apply to the HTTP transport; on gRPC the per-attempt bound is the RPC timeout.
- * @param openTelemetry [OpenTelemetry] instance for client metrics/traces, or `null`.
- * @param retryConfig resilience configuration; defaults to [GcsStorageRetryConfig.DEFAULT].
- */
-fun buildGcsStorageOptions(
-  projectId: String? = null,
-  useGrpc: Boolean = false,
-  openTelemetry: OpenTelemetry? = null,
-  retryConfig: GcsStorageRetryConfig = GcsStorageRetryConfig.DEFAULT,
-): StorageOptions {
-  val builder: StorageOptions.Builder =
-    if (useGrpc) {
-      StorageOptions.grpc().setEnableGrpcClientMetrics(true)
-    } else {
-      StorageOptions.http().setTransportOptions(retryConfig.toHttpTransportOptions())
-    }
-  builder.setRetrySettings(retryConfig.toRetrySettings())
-  if (projectId != null) {
-    builder.setProjectId(projectId)
-  }
-  if (openTelemetry != null) {
-    builder.setOpenTelemetry(openTelemetry)
-  }
-  return builder.build()
 }

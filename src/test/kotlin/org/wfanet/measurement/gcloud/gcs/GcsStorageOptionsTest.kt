@@ -36,7 +36,7 @@ import org.junit.runners.JUnit4
 import org.wfanet.measurement.common.flatten
 
 /**
- * Tests for [GcsStorageRetryConfig] / [buildGcsStorageOptions].
+ * Tests for [GcsStorageRetryConfig] and [GcsStorageRetryConfig.buildStorageOptions].
  *
  * The read-path tests reproduce the production glitch (a Cloud Storage read that fails on a
  * transient connection reset) against an in-process HTTP server ([FakeGcsServer]) that speaks just
@@ -81,8 +81,8 @@ class GcsStorageOptionsTest {
   }
 
   @Test
-  fun `buildGcsStorageOptions applies resilient settings by default`() {
-    val options = buildGcsStorageOptions(projectId = "some-project")
+  fun `buildStorageOptions applies resilient settings by default`() {
+    val options = GcsStorageRetryConfig.DEFAULT.buildStorageOptions(projectId = "some-project")
 
     assertThat(options.retrySettings.totalTimeoutDuration).isEqualTo(Duration.ofSeconds(180))
     assertThat(options.retrySettings.maxAttempts).isEqualTo(6)
@@ -92,11 +92,11 @@ class GcsStorageOptionsTest {
   }
 
   @Test
-  fun `buildGcsStorageOptions honors an overridden config`() {
+  fun `buildStorageOptions honors an overridden config`() {
     val config =
       GcsStorageRetryConfig.DEFAULT.copy(readTimeout = Duration.ofSeconds(5), maxAttempts = 3)
 
-    val options = buildGcsStorageOptions(projectId = "some-project", retryConfig = config)
+    val options = config.buildStorageOptions(projectId = "some-project")
 
     assertThat(options.retrySettings.maxAttempts).isEqualTo(3)
     assertThat((options.transportOptions as HttpTransportOptions).readTimeout).isEqualTo(5_000)

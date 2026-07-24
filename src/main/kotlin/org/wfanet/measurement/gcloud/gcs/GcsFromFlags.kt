@@ -32,11 +32,10 @@ class GcsFromFlags(
 ) {
 
   private val storageOptions: StorageOptions by lazy {
-    buildGcsStorageOptions(
+    retryConfig.buildStorageOptions(
       projectId = flags.projectName,
       useGrpc = flags.useGrpc,
       openTelemetry = Instrumentation.openTelemetry,
-      retryConfig = retryConfig,
     )
   }
 

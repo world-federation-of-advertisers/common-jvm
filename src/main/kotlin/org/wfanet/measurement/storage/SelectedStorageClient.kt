@@ -20,7 +20,6 @@ import java.net.URI
 import kotlinx.coroutines.flow.Flow
 import org.wfanet.measurement.gcloud.gcs.GcsStorageClient
 import org.wfanet.measurement.gcloud.gcs.GcsStorageRetryConfig
-import org.wfanet.measurement.gcloud.gcs.buildGcsStorageOptions
 import org.wfanet.measurement.storage.filesystem.FileSystemStorageClient
 
 // Data class to store parsed information
@@ -55,8 +54,7 @@ class SelectedStorageClient(
         throw IllegalArgumentException("S3 is not currently supported")
       }
       "gs" -> {
-        val storageOptions =
-          buildGcsStorageOptions(projectId = projectId, retryConfig = retryConfig)
+        val storageOptions = retryConfig.buildStorageOptions(projectId = projectId)
         GcsStorageClient(storageOptions.service, requireNotNull(blobUri.bucket))
       }
       "file" -> {
