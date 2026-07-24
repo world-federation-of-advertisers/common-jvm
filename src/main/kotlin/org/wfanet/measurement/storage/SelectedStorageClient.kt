@@ -14,12 +14,12 @@
 
 package org.wfanet.measurement.storage
 
-import com.google.cloud.storage.StorageOptions
 import com.google.protobuf.ByteString
 import java.io.File
 import java.net.URI
 import kotlinx.coroutines.flow.Flow
 import org.wfanet.measurement.gcloud.gcs.GcsStorageClient
+import org.wfanet.measurement.gcloud.gcs.GcsStorageRetryConfig
 import org.wfanet.measurement.storage.filesystem.FileSystemStorageClient
 
 // Data class to store parsed information
@@ -31,18 +31,22 @@ data class BlobUri(val scheme: String, val bucket: String, val key: String)
  * @param blobUri - the [BlobUri] from which a StorageClient can be built
  * @param rootDirectory - only needed for file system storage clients
  * @param projectId - optional if google cloud storage client needs require project id
+ * @param retryConfig - resilient retry/timeout configuration for Google Cloud Storage reads;
+ *   defaults to [GcsStorageRetryConfig.DEFAULT]
  */
 class SelectedStorageClient(
   private val blobUri: BlobUri,
   private val rootDirectory: File? = null,
   private val projectId: String? = null,
+  private val retryConfig: GcsStorageRetryConfig = GcsStorageRetryConfig.DEFAULT,
 ) : StorageClient, ConditionalOperationStorageClient {
 
   constructor(
     url: String,
     rootDirectory: File? = null,
     projectId: String? = null,
-  ) : this(parseBlobUri(url), rootDirectory, projectId)
+    retryConfig: GcsStorageRetryConfig = GcsStorageRetryConfig.DEFAULT,
+  ) : this(parseBlobUri(url), rootDirectory, projectId, retryConfig)
 
   val underlyingClient: ConditionalOperationStorageClient =
     when (blobUri.scheme) {
@@ -50,9 +54,7 @@ class SelectedStorageClient(
         throw IllegalArgumentException("S3 is not currently supported")
       }
       "gs" -> {
-        val storageOptions =
-          if (projectId != null) StorageOptions.newBuilder().setProjectId(projectId).build()
-          else StorageOptions.getDefaultInstance()
+        val storageOptions = retryConfig.buildStorageOptions(projectId = projectId)
         GcsStorageClient(storageOptions.service, requireNotNull(blobUri.bucket))
       }
       "file" -> {
