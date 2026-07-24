@@ -7,10 +7,10 @@ kt_jvm_library(
     srcs = ["AwsKmsClientFactory.kt"],
     deps = [
         "//imports/java/com/google/crypto/tink",
+        "//imports/java/com/google/crypto/tink:awskms",
         "//imports/java/software/amazon/awssdk/auth",
         "//imports/java/software/amazon/awssdk/services/regions",
         "//imports/java/software/amazon/awssdk/services/sts",
         "//src/main/kotlin/org/wfanet/measurement/common/crypto/tink",
-        "@maven//:com_google_crypto_tink_tink_awskms",
     ],
 )

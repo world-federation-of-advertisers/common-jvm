@@ -18,6 +18,7 @@ kt_jvm_library(
     srcs = ["GCloudToAwsKmsClientFactory.kt"],
     deps = [
         "//imports/java/com/google/crypto/tink",
+        "//imports/java/com/google/crypto/tink:awskms",
         "//imports/java/com/google/gson",
         "//imports/java/software/amazon/awssdk/auth",
         "//imports/java/software/amazon/awssdk/services/regions",
@@ -26,6 +27,5 @@ kt_jvm_library(
         "//src/main/kotlin/org/wfanet/measurement/common/crypto/tink",
         "@maven//:com_google_auth_google_auth_library_credentials",
         "@maven//:com_google_auth_google_auth_library_oauth2_http",
-        "@maven//:com_google_crypto_tink_tink_awskms",
     ],
 )
