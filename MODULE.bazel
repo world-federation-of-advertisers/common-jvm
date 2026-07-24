@@ -200,6 +200,10 @@ maven.install(
         "info.picocli:picocli:4.7.6",
         "io.netty:netty-handler:4.1.124.Final",
         "com.google.crypto.tink:tink:" + TINK_VERSION,
+        # Tink (see TINK_VERSION) bundles protobuf gencode 4.33.6, which requires a
+        # protobuf runtime >= 4.33.6. These direct artifacts force that version: the
+        # protobuf-bom below does NOT override protobuf-java pinned transitively via
+        # rules_kotlin_jvm (4.33.1), so explicit pins are required. Do not remove.
         "com.google.protobuf:protobuf-java:" + PROTOBUF_JAVA_VERSION,
         "com.google.protobuf:protobuf-java-util:" + PROTOBUF_JAVA_VERSION,
         "com.google.protobuf:protobuf-kotlin:" + PROTOBUF_JAVA_VERSION,
