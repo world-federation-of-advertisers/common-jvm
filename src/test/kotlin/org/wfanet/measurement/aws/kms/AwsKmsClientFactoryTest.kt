@@ -26,7 +26,9 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
-import org.mockito.Mockito
+import org.mockito.kotlin.any
+import org.mockito.kotlin.doAnswer
+import org.mockito.kotlin.mock
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider
 import software.amazon.awssdk.core.SdkBytes
@@ -145,29 +147,35 @@ class AwsKmsClientFactoryTest {
    * A fake AWS KMS [SdkKmsClient] that authenticates the encryption context like real AWS KMS: the
    * context supplied at decrypt must exactly match the context supplied at encrypt.
    */
-  private fun contextEnforcingFakeKms(): SdkKmsClient {
-    val kms = Mockito.mock(SdkKmsClient::class.java)
-    Mockito.`when`(kms.encrypt(Mockito.any(EncryptRequest::class.java))).thenAnswer { invocation ->
-      val request = invocation.getArgument(0, EncryptRequest::class.java)
-      val context = request.encryptionContext()["associatedData"] ?: ""
-      val plaintext = request.plaintext().asByteArray()
-      val blob = context + "|" + Base64.getEncoder().encodeToString(plaintext)
-      EncryptResponse.builder().keyId(KEY_ARN).ciphertextBlob(SdkBytes.fromUtf8String(blob)).build()
+  private fun contextEnforcingFakeKms(): SdkKmsClient =
+    mock<SdkKmsClient> {
+      on { encrypt(any<EncryptRequest>()) } doAnswer
+        {
+          val request = it.getArgument<EncryptRequest>(0)
+          val context = request.encryptionContext()["associatedData"] ?: ""
+          val plaintext = request.plaintext().asByteArray()
+          val blob = context + "|" + Base64.getEncoder().encodeToString(plaintext)
+          EncryptResponse.builder()
+            .keyId(KEY_ARN)
+            .ciphertextBlob(SdkBytes.fromUtf8String(blob))
+            .build()
+        }
+      on { decrypt(any<DecryptRequest>()) } doAnswer
+        {
+          val request = it.getArgument<DecryptRequest>(0)
+          val context = request.encryptionContext()["associatedData"] ?: ""
+          val parts = request.ciphertextBlob().asUtf8String().split("|", limit = 2)
+          if (parts.size != 2 || parts[0] != context) {
+            throw InvalidCiphertextException.builder()
+              .message("encryption context mismatch")
+              .build()
+          }
+          DecryptResponse.builder()
+            .keyId(KEY_ARN)
+            .plaintext(SdkBytes.fromByteArray(Base64.getDecoder().decode(parts[1])))
+            .build()
+        }
     }
-    Mockito.`when`(kms.decrypt(Mockito.any(DecryptRequest::class.java))).thenAnswer { invocation ->
-      val request = invocation.getArgument(0, DecryptRequest::class.java)
-      val context = request.encryptionContext()["associatedData"] ?: ""
-      val parts = request.ciphertextBlob().asUtf8String().split("|", limit = 2)
-      if (parts.size != 2 || parts[0] != context) {
-        throw InvalidCiphertextException.builder().message("encryption context mismatch").build()
-      }
-      DecryptResponse.builder()
-        .keyId(KEY_ARN)
-        .plaintext(SdkBytes.fromByteArray(Base64.getDecoder().decode(parts[1])))
-        .build()
-    }
-    return kms
-  }
 
   /** Builds an upstream Tink [Aead] backed by [fakeKms] (injected via the package-private hook). */
   private fun upstreamAeadWith(fakeKms: SdkKmsClient, keyUri: String): Aead {
