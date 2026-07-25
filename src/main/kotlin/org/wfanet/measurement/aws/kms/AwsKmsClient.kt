@@ -51,7 +51,7 @@ enum class AssociatedDataEncoding {
 }
 
 /** Encodes [associatedData] for the KMS encryption context using [encoding]. */
-internal fun encodeAssociatedData(
+private fun encodeAssociatedData(
   associatedData: ByteArray,
   encoding: AssociatedDataEncoding,
 ): String =
@@ -147,7 +147,7 @@ class AwsKmsClient(
  * the key `associatedData`, encoded per [associatedDataEncoding]. With [AssociatedDataEncoding.HEX]
  * this matches upstream Tink's `AwsKmsAead`.
  */
-internal class AwsKmsAead(
+private class AwsKmsAead(
   private val kmsClient: SdkKmsClient,
   private val keyArn: String,
   private val associatedDataEncoding: AssociatedDataEncoding,

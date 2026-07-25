@@ -3,7 +3,6 @@ load("@wfa_rules_kotlin_jvm//kotlin:defs.bzl", "kt_jvm_test")
 kt_jvm_test(
     name = "AwsKmsClientFactoryTest",
     srcs = ["AwsKmsClientFactoryTest.kt"],
-    associates = ["//src/main/kotlin/org/wfanet/measurement/aws/kms:aws_kms_client_factory"],
     test_class = "org.wfanet.measurement.aws.kms.AwsKmsClientFactoryTest",
     deps = [
         "//imports/java/com/google/common/truth",
@@ -14,5 +13,6 @@ kt_jvm_test(
         "//imports/java/software/amazon/awssdk/auth",
         "//imports/java/software/amazon/awssdk/services/kms",
         "//imports/kotlin/kotlin/test",
+        "//src/main/kotlin/org/wfanet/measurement/aws/kms:aws_kms_client_factory",
     ],
 )
