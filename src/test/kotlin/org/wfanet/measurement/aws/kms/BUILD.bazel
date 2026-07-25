@@ -8,9 +8,9 @@ kt_jvm_test(
     deps = [
         "//imports/java/com/google/common/truth",
         "//imports/java/org/junit",
-        "//imports/java/org/mockito",
         "//imports/java/software/amazon/awssdk/auth",
         "//imports/java/software/amazon/awssdk/services/kms",
         "//imports/kotlin/kotlin/test",
+        "//imports/kotlin/org/mockito/kotlin",
     ],
 )
