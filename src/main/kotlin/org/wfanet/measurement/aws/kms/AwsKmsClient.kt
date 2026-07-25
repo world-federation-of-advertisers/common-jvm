@@ -106,7 +106,7 @@ class AwsKmsClient(private val credentialsProvider: AwsCredentialsProvider) : Km
  * upstream Tink's `com.google.crypto.tink.integration.awskms.AwsKmsAead`, so ciphertexts are
  * interoperable with it.
  */
-internal class AwsKmsAead(private val kmsClient: SdkKmsClient, private val keyArn: String) : Aead {
+private class AwsKmsAead(private val kmsClient: SdkKmsClient, private val keyArn: String) : Aead {
 
   override fun encrypt(plaintext: ByteArray, associatedData: ByteArray?): ByteArray {
     try {
