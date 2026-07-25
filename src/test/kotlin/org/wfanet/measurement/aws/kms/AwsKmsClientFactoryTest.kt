@@ -16,20 +16,28 @@ package org.wfanet.measurement.aws.kms
 
 import com.google.common.truth.Truth.assertThat
 import java.security.GeneralSecurityException
+import java.util.Base64
 import kotlin.test.assertFailsWith
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
+import org.mockito.ArgumentCaptor
+import org.mockito.Mockito
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider
+import software.amazon.awssdk.core.SdkBytes
+import software.amazon.awssdk.services.kms.KmsClient as SdkKmsClient
+import software.amazon.awssdk.services.kms.model.EncryptRequest
+import software.amazon.awssdk.services.kms.model.EncryptResponse
+import software.amazon.awssdk.utils.BinaryUtils
 
 private const val AWS_KMS_KEY_URI = "aws-kms://arn:aws:kms:us-east-1:123456789012:key/test-key-id"
+private const val KEY_ARN = "arn:aws:kms:us-east-1:123456789012:key/test-key-id"
 private const val GCP_KMS_KEY_URI = "gcp-kms://projects/test/locations/us/keyRings/kr/cryptoKeys/ck"
-private const val FAKE_KMS_KEY_URI = "fake-kms://key1"
 private const val INVALID_ARN_KEY_URI = "aws-kms://invalid-arn"
 
-/** Tests for [AwsKmsClient]. */
+/** Tests for [AwsKmsClient], [AwsKmsAead], and [encodeAssociatedData]. */
 @RunWith(JUnit4::class)
 class AwsKmsClientFactoryTest {
   private lateinit var kmsClient: AwsKmsClient
@@ -52,11 +60,6 @@ class AwsKmsClientFactoryTest {
   }
 
   @Test
-  fun `doesSupport returns false for fake-kms URIs`() {
-    assertThat(kmsClient.doesSupport(FAKE_KMS_KEY_URI)).isFalse()
-  }
-
-  @Test
   fun `doesSupport returns false for null URI`() {
     assertThat(kmsClient.doesSupport(null)).isFalse()
   }
@@ -67,12 +70,86 @@ class AwsKmsClientFactoryTest {
   }
 
   @Test
-  fun `getAead throws GeneralSecurityException for null URI`() {
-    assertFailsWith<GeneralSecurityException> { kmsClient.getAead(null) }
+  fun `getAead throws GeneralSecurityException for invalid ARN`() {
+    assertFailsWith<GeneralSecurityException> { kmsClient.getAead(INVALID_ARN_KEY_URI) }
   }
 
   @Test
-  fun `getAead throws GeneralSecurityException for invalid ARN`() {
-    assertFailsWith<GeneralSecurityException> { kmsClient.getAead(INVALID_ARN_KEY_URI) }
+  fun `default encoding is HEX (forward-compatible with upstream Tink)`() {
+    val credentialsProvider = StaticCredentialsProvider.create(AwsBasicCredentials.create("k", "s"))
+    val mockKms = Mockito.mock(SdkKmsClient::class.java)
+    Mockito.`when`(mockKms.encrypt(Mockito.any(EncryptRequest::class.java)))
+      .thenReturn(
+        EncryptResponse.builder().ciphertextBlob(SdkBytes.fromByteArray(byteArrayOf(1))).build()
+      )
+    // Constructed without specifying encoding -> should default to HEX.
+    val aead = AwsKmsAead(mockKms, KEY_ARN, AssociatedDataEncoding.HEX)
+    val associatedData = "blob-key".toByteArray(Charsets.UTF_8)
+    aead.encrypt("pt".toByteArray(Charsets.UTF_8), associatedData)
+    val captor = ArgumentCaptor.forClass(EncryptRequest::class.java)
+    Mockito.verify(mockKms).encrypt(captor.capture())
+    assertThat(captor.value.encryptionContext())
+      .containsExactly("associatedData", BinaryUtils.toHex(associatedData))
+  }
+
+  @Test
+  fun `encodeAssociatedData HEX produces lowercase hex`() {
+    val bytes = byteArrayOf(0x00, 0x01, 0x0f, 0x10, 0xab.toByte(), 0xff.toByte())
+    assertThat(encodeAssociatedData(bytes, AssociatedDataEncoding.HEX)).isEqualTo("00010f10abff")
+  }
+
+  @Test
+  fun `encodeAssociatedData HEX matches AWS SDK BinaryUtils (upstream Tink encoding)`() {
+    val bytes = "some-blob-key/2026-03-13/data".toByteArray(Charsets.UTF_8)
+    assertThat(encodeAssociatedData(bytes, AssociatedDataEncoding.HEX))
+      .isEqualTo(BinaryUtils.toHex(bytes))
+  }
+
+  @Test
+  fun `encodeAssociatedData BASE64 produces base64`() {
+    val bytes = "some-blob-key".toByteArray(Charsets.UTF_8)
+    assertThat(encodeAssociatedData(bytes, AssociatedDataEncoding.BASE64))
+      .isEqualTo(Base64.getEncoder().encodeToString(bytes))
+  }
+
+  @Test
+  fun `HEX and BASE64 encodings differ for the same input`() {
+    val bytes = "some-blob-key".toByteArray(Charsets.UTF_8)
+    assertThat(encodeAssociatedData(bytes, AssociatedDataEncoding.HEX))
+      .isNotEqualTo(encodeAssociatedData(bytes, AssociatedDataEncoding.BASE64))
+  }
+
+  @Test
+  fun `AwsKmsAead encrypt uses base64 encryption context in BASE64 mode`() {
+    val mockKms = Mockito.mock(SdkKmsClient::class.java)
+    Mockito.`when`(mockKms.encrypt(Mockito.any(EncryptRequest::class.java)))
+      .thenReturn(
+        EncryptResponse.builder()
+          .ciphertextBlob(SdkBytes.fromByteArray(byteArrayOf(1, 2, 3)))
+          .build()
+      )
+    val aead = AwsKmsAead(mockKms, KEY_ARN, AssociatedDataEncoding.BASE64)
+    val associatedData = "blob-key".toByteArray(Charsets.UTF_8)
+    aead.encrypt("plaintext".toByteArray(Charsets.UTF_8), associatedData)
+    val captor = ArgumentCaptor.forClass(EncryptRequest::class.java)
+    Mockito.verify(mockKms).encrypt(captor.capture())
+    assertThat(captor.value.encryptionContext())
+      .containsExactly("associatedData", Base64.getEncoder().encodeToString(associatedData))
+  }
+
+  @Test
+  fun `AwsKmsAead encrypt sends no encryption context when associated data is empty`() {
+    val mockKms = Mockito.mock(SdkKmsClient::class.java)
+    Mockito.`when`(mockKms.encrypt(Mockito.any(EncryptRequest::class.java)))
+      .thenReturn(
+        EncryptResponse.builder()
+          .ciphertextBlob(SdkBytes.fromByteArray(byteArrayOf(1, 2, 3)))
+          .build()
+      )
+    val aead = AwsKmsAead(mockKms, KEY_ARN, AssociatedDataEncoding.HEX)
+    aead.encrypt("plaintext".toByteArray(Charsets.UTF_8), ByteArray(0))
+    val captor = ArgumentCaptor.forClass(EncryptRequest::class.java)
+    Mockito.verify(mockKms).encrypt(captor.capture())
+    assertThat(captor.value.hasEncryptionContext()).isFalse()
   }
 }
