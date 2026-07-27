@@ -22,8 +22,9 @@ import java.time.Duration
 
 /**
  * Resilience configuration -- retry budget and per-attempt timeouts -- applied to every
- * [StorageOptions] built by [buildStorageOptions]. Defaults are generous so legitimate slow reads
- * are not broken, and are overridable.
+ * [StorageOptions] built by [buildStorageOptions].
+ *
+ * Defaults are generous so legitimate slow reads are not broken, and are overridable.
  */
 data class GcsStorageRetryConfig(
   /**
