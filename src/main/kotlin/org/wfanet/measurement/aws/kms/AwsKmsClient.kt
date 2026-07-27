@@ -26,16 +26,59 @@ import software.amazon.awssdk.services.kms.KmsClient as SdkKmsClient
 import software.amazon.awssdk.services.kms.model.DecryptRequest
 import software.amazon.awssdk.services.kms.model.EncryptRequest
 import software.amazon.awssdk.services.kms.model.KmsException
+import software.amazon.awssdk.utils.BinaryUtils
+
+/**
+ * How associated data is encoded into the AWS KMS encryption context value.
+ *
+ * The encryption context is authenticated by AWS KMS, so the encoding used at encrypt time must
+ * match the encoding used at decrypt time, including across different client implementations.
+ */
+enum class AssociatedDataEncoding {
+  /**
+   * Lowercase hex, byte-for-byte identical to upstream Tink's
+   * `com.google.crypto.tink.integration.awskms.AwsKmsAead` (which uses
+   * `software.amazon.awssdk.utils.BinaryUtils.toHex`). Use this for interoperability with the
+   * upstream `tink-awskms` client.
+   */
+  HEX,
+
+  /**
+   * Base64. This was the original encoding used by this class; it is NOT interoperable with
+   * upstream Tink. Retained only to read data written by earlier versions of this client.
+   */
+  BASE64,
+}
+
+/** Encodes [associatedData] for the KMS encryption context using [encoding]. */
+private fun encodeAssociatedData(
+  associatedData: ByteArray,
+  encoding: AssociatedDataEncoding,
+): String =
+  when (encoding) {
+    AssociatedDataEncoding.HEX -> BinaryUtils.toHex(associatedData)
+    AssociatedDataEncoding.BASE64 -> Base64.getEncoder().encodeToString(associatedData)
+  }
 
 /**
  * A Tink [KmsClient] implementation for AWS KMS using AWS SDK v2.
  *
- * This avoids the `tink-awskms` library which depends on AWS SDK v1, allowing usage in projects
- * that standardize on AWS SDK v2.
- *
  * @param credentialsProvider The [AwsCredentialsProvider] to use for authenticating with AWS KMS.
+ * @param associatedDataEncoding How associated data is encoded into the KMS encryption context.
+ *   Defaults to [AssociatedDataEncoding.HEX] to match upstream Tink.
+ * @deprecated Superseded by the upstream `com.google.crypto.tink.integration.awskms.AwsKmsClient`
+ *   (`tink-awskms` >= 2.0.0), which also targets AWS SDK v2. This class remains temporarily until
+ *   the Tink version upgrade that pulls in `tink-awskms` lands; construct it with
+ *   [AssociatedDataEncoding.HEX] (the default) so its output is interoperable with that client.
  */
-class AwsKmsClient(private val credentialsProvider: AwsCredentialsProvider) : KmsClient {
+@Deprecated(
+  "Superseded by upstream com.google.crypto.tink.integration.awskms.AwsKmsClient (tink-awskms). " +
+    "Temporary until the Tink upgrade lands; use AssociatedDataEncoding.HEX for interoperability."
+)
+class AwsKmsClient(
+  private val credentialsProvider: AwsCredentialsProvider,
+  private val associatedDataEncoding: AssociatedDataEncoding = AssociatedDataEncoding.HEX,
+) : KmsClient {
 
   override fun doesSupport(keyUri: String?): Boolean {
     return keyUri != null && keyUri.lowercase(Locale.US).startsWith(KEY_URI_PREFIX)
@@ -80,7 +123,7 @@ class AwsKmsClient(private val credentialsProvider: AwsCredentialsProvider) : Km
         throw GeneralSecurityException("Cannot initialize AWS KMS client", e)
       }
 
-    return AwsKmsAead(kmsClient, keyArn)
+    return AwsKmsAead(kmsClient, keyArn, associatedDataEncoding)
   }
 
   companion object {
@@ -100,10 +143,15 @@ class AwsKmsClient(private val credentialsProvider: AwsCredentialsProvider) : Km
 /**
  * An [Aead] implementation backed by AWS KMS using AWS SDK v2.
  *
- * Encryption context with `associatedData` (Base64-encoded) is included when [associatedData] is
- * non-null and non-empty, matching the behavior of Tink's `AwsKmsAead`.
+ * When [associatedData] is non-null and non-empty, it is added to the KMS encryption context under
+ * the key `associatedData`, encoded per [associatedDataEncoding]. With [AssociatedDataEncoding.HEX]
+ * this matches upstream Tink's `AwsKmsAead`.
  */
-private class AwsKmsAead(private val kmsClient: SdkKmsClient, private val keyArn: String) : Aead {
+private class AwsKmsAead(
+  private val kmsClient: SdkKmsClient,
+  private val keyArn: String,
+  private val associatedDataEncoding: AssociatedDataEncoding,
+) : Aead {
 
   override fun encrypt(plaintext: ByteArray, associatedData: ByteArray?): ByteArray {
     try {
@@ -114,7 +162,10 @@ private class AwsKmsAead(private val kmsClient: SdkKmsClient, private val keyArn
             plaintext(SdkBytes.fromByteArray(plaintext))
             if (associatedData != null && associatedData.isNotEmpty()) {
               encryptionContext(
-                mapOf(ASSOCIATED_DATA_KEY to Base64.getEncoder().encodeToString(associatedData))
+                mapOf(
+                  ASSOCIATED_DATA_KEY to
+                    encodeAssociatedData(associatedData, associatedDataEncoding)
+                )
               )
             }
           }
@@ -134,7 +185,10 @@ private class AwsKmsAead(private val kmsClient: SdkKmsClient, private val keyArn
             ciphertextBlob(SdkBytes.fromByteArray(ciphertext))
             if (associatedData != null && associatedData.isNotEmpty()) {
               encryptionContext(
-                mapOf(ASSOCIATED_DATA_KEY to Base64.getEncoder().encodeToString(associatedData))
+                mapOf(
+                  ASSOCIATED_DATA_KEY to
+                    encodeAssociatedData(associatedData, associatedDataEncoding)
+                )
               )
             }
           }

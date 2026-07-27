@@ -6,7 +6,7 @@ module(
 
 KOTLINX_COROUTINES_VERSION = "1.10.2"  # Compatible with rules_kotlin_jvm version.
 
-PROTOBUF_JAVA_VERSION = "4.33.1"  # Compatible with rules_kotlin_jvm version.
+PROTOBUF_JAVA_VERSION = "4.33.6"  # Compatible with rules_kotlin_jvm version.
 
 GRPC_JAVA_VERSION = "1.77.0"  # Compatible with rules_kotlin_jvm version.
 
@@ -19,7 +19,7 @@ AWS_JAVA_SDK_VERSION = "2.23.18"
 
 TRUTH_VERSION = "1.4.4"
 
-TINK_VERSION = "1.12.0"
+TINK_VERSION = "1.23.0"
 
 CLOUD_SQL_CONNECTOR_VERSION = "1.12.0"
 
@@ -32,6 +32,15 @@ bazel_dep(
     version = "0.14.0",
     repo_name = "wfa_rules_kotlin_jvm",
 )
+
+# DO_NOT_SUBMIT(world-federation-of-advertisers/rules_kotlin_jvm#27): temporary until
+# rules_kotlin_jvm releases protobuf 4.33.6 (required by Tink 1.23).
+git_override(
+    module_name = "rules_kotlin_jvm",
+    commit = "7acc3aa0d3233fbae4bcbc83af462c020ced8ab8",
+    remote = "https://github.com/world-federation-of-advertisers/rules_kotlin_jvm.git",
+)
+
 bazel_dep(
     name = "cloud-spanner-emulator-bin",
     version = "1.5.52",
@@ -70,7 +79,7 @@ bazel_dep(
 )
 bazel_dep(
     name = "protobuf",
-    version = "33.1",
+    version = "33.6",
     repo_name = "com_google_protobuf",
 )
 bazel_dep(
@@ -254,7 +263,8 @@ maven.install(
         "com.google.cloud:google-cloudevent-types:0.16.0",
         "com.google.auth:google-auth-library-oauth2-http",
         "com.google.auth:google-auth-library-credentials",
-        "com.google.crypto.tink:tink-gcpkms:1.9.0",
+        "com.google.crypto.tink:tink-gcpkms:1.11.0",
+        "com.google.crypto.tink:tink-awskms:2.0.0",
 
         # Cloud Functions
         "io.cloudevents:cloudevents-core",
