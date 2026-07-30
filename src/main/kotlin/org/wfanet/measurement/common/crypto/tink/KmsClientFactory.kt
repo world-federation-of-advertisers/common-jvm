@@ -87,6 +87,32 @@ data class GCloudToAwsWifCredentials(
 ) : WifCredentials
 
 /**
+ * Configuration for accessing AWS KMS directly from a Google Cloud Confidential Space workload,
+ * with no intermediary Google Cloud Workload Identity pool or service account.
+ *
+ * The workload requests an `AWS_PRINCIPALTAGS` attestation token directly from the Confidential
+ * Space launcher and exchanges it with AWS STS `AssumeRoleWithWebIdentity` for temporary AWS
+ * credentials. The token carries the workload's attestation claims (e.g. `swname`,
+ * `container.image_digest`, `gce.project_id`) as AWS session tags, so the IAM role's trust policy
+ * gates access on them directly. Use this when the data provider cannot host a Google Cloud project
+ * for the two-hop [GCloudToAwsWifCredentials] flow: the data provider registers Google Cloud
+ * Attestation directly as an OIDC provider in AWS IAM.
+ */
+data class ConfidentialSpaceToAwsWifCredentials(
+  /** The ARN of the AWS IAM role to assume. */
+  val roleArn: String,
+  /** An identifier for the assumed AWS role session. */
+  val roleSessionName: String,
+  /** The AWS region for the STS endpoint. */
+  val region: String,
+  /**
+   * The custom audience baked into the requested attestation token. Must match the audience
+   * registered on the AWS OIDC provider and the `...:aud` condition in the IAM role's trust policy.
+   */
+  val audience: String,
+) : WifCredentials
+
+/**
  * Factory for creating [KmsClient] instances.
  *
  * @param T The specific type of [WifCredentials] this factory supports.
