@@ -33,7 +33,8 @@ import org.newsclub.net.unix.AFUNIXSocketAddress
  * Tests for [ConfidentialSpaceTokenClient].
  *
  * A real in-process Unix domain socket server (junixsocket, Linux abstract namespace to avoid
- * socket-path length limits) stands in for the Confidential Space launcher.
+ * socket-path length limits) stands in for the Confidential Space launcher, exercising the HTTP
+ * response framing the real launcher uses (chunked and Content-Length).
  */
 @RunWith(JUnit4::class)
 class ConfidentialSpaceTokenClientTest {
@@ -82,19 +83,18 @@ class ConfidentialSpaceTokenClientTest {
       socketFactory = { AFUNIXSocket.connectTo(serverAddress) },
     )
 
+  private fun awsPrincipalTagsRequest() =
+    AttestationTokenRequest(
+      audience = "https://example.com",
+      tokenType = ConfidentialSpaceTokenType.AWS_PRINCIPAL_TAGS,
+    )
+
   @Test
-  fun `getToken returns the token body from a 200 response`() {
+  fun `getToken returns the token body from an unframed 200 response`() {
     val token = "header.payload.signature"
     startServer("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\n$token")
 
-    val result =
-      clientForServer()
-        .getToken(
-          AttestationTokenRequest(
-            audience = "https://example.com",
-            tokenType = ConfidentialSpaceTokenType.AWS_PRINCIPAL_TAGS,
-          )
-        )
+    val result = clientForServer().getToken(awsPrincipalTagsRequest())
 
     assertThat(result).isEqualTo(token)
     assertThat(capturedRequest).contains("POST /v1/token HTTP/1.1")
@@ -103,17 +103,53 @@ class ConfidentialSpaceTokenClientTest {
   }
 
   @Test
-  fun `getToken throws on a non-200 response`() {
+  fun `getToken de-chunks a Transfer-Encoding chunked response`() {
+    // The launcher sets no Content-Length, so real (large) tokens arrive chunked. Split the token
+    // across two chunks (sizes 7 and 0x11) to exercise reassembly.
+    val response =
+      "HTTP/1.1 200 OK\r\n" +
+        "Content-Type: text/plain\r\n" +
+        "Transfer-Encoding: chunked\r\n" +
+        "Connection: close\r\n" +
+        "\r\n" +
+        "7\r\nheader.\r\n" +
+        "11\r\npayload.signature\r\n" +
+        "0\r\n\r\n"
+    startServer(response)
+
+    val result = clientForServer().getToken(awsPrincipalTagsRequest())
+
+    assertThat(result).isEqualTo("header.payload.signature")
+  }
+
+  @Test
+  fun `getToken honors Content-Length and ignores trailing bytes`() {
+    val token = "header.payload.signature"
+    startServer(
+      "HTTP/1.1 200 OK\r\nContent-Length: ${token.length}\r\nConnection: close\r\n\r\n${token}EXTRA"
+    )
+
+    val result = clientForServer().getToken(awsPrincipalTagsRequest())
+
+    assertThat(result).isEqualTo(token)
+  }
+
+  @Test
+  fun `getToken accepts a 2xx status other than 200`() {
+    val token = "header.payload.signature"
+    startServer(
+      "HTTP/1.1 202 Accepted\r\nContent-Length: ${token.length}\r\nConnection: close\r\n\r\n$token"
+    )
+
+    val result = clientForServer().getToken(awsPrincipalTagsRequest())
+
+    assertThat(result).isEqualTo(token)
+  }
+
+  @Test
+  fun `getToken throws on a non-2xx response`() {
     startServer("HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\ninvalid audience")
 
-    assertFailsWith<IOException> {
-      clientForServer()
-        .getToken(
-          AttestationTokenRequest(
-            audience = "https://sts.google.com",
-            tokenType = ConfidentialSpaceTokenType.AWS_PRINCIPAL_TAGS,
-          )
-        )
-    }
+    assertFailsWith<IOException> { clientForServer().getToken(awsPrincipalTagsRequest()) }
   }
 }

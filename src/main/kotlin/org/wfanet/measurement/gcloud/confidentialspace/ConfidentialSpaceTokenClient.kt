@@ -16,6 +16,7 @@ package org.wfanet.measurement.gcloud.confidentialspace
 
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
+import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.net.Socket
 import java.nio.charset.StandardCharsets
@@ -60,7 +61,7 @@ fun interface AttestationTokenProvider {
  * The launcher exposes an HTTP endpoint over a Unix domain socket at [socketPath] (default
  * [DEFAULT_SOCKET_PATH]). Because the JVM baseline is Java 11 — which has no built-in `AF_UNIX`
  * support — the connection is made via junixsocket. One request/response is exchanged per call with
- * `Connection: close`, so the response body is read to end-of-stream.
+ * `Connection: close`.
  *
  * @param socketPath Filesystem path of the launcher token socket.
  * @param readTimeout Socket read timeout for a token request.
@@ -114,23 +115,89 @@ class ConfidentialSpaceTokenClient(
     const val TOKEN_PATH = "/v1/token"
 
     private val DEFAULT_READ_TIMEOUT: Duration = Duration.ofSeconds(30)
-    private const val HEADER_BODY_SEPARATOR = "\r\n\r\n"
+    private val CRLF = byteArrayOf('\r'.code.toByte(), '\n'.code.toByte())
+    private val HEADER_BODY_SEPARATOR = CRLF + CRLF
 
     private fun connectUnixDomainSocket(path: Path): Socket =
       AFUNIXSocket.connectTo(AFUNIXSocketAddress.of(path.toFile()))
 
+    /**
+     * Parses an HTTP/1.1 response from the launcher and returns the token body.
+     *
+     * Honors `Transfer-Encoding: chunked` and `Content-Length`, falling back to the bytes read
+     * until end-of-stream otherwise. The launcher sets no `Content-Length`, and tokens larger than
+     * the server's write buffer are sent chunked, so de-chunking is required for real tokens.
+     */
     private fun parseTokenResponse(responseBytes: ByteArray): String {
-      val response = String(responseBytes, StandardCharsets.UTF_8)
-      val separatorIndex = response.indexOf(HEADER_BODY_SEPARATOR)
-      require(separatorIndex >= 0) { "Malformed HTTP response from launcher token socket" }
-      val statusLine = response.substringBefore("\r\n")
+      val headerEnd = indexOf(responseBytes, HEADER_BODY_SEPARATOR, 0)
+      require(headerEnd >= 0) { "Malformed HTTP response from launcher token socket" }
+
+      val headerLines = String(responseBytes, 0, headerEnd, StandardCharsets.US_ASCII).split("\r\n")
+      val statusLine = headerLines.first()
       val statusCode = statusLine.split(" ").getOrNull(1)?.toIntOrNull()
-      val tokenBody = response.substring(separatorIndex + HEADER_BODY_SEPARATOR.length).trim()
-      if (statusCode != 200) {
-        throw IOException("Launcher token request failed: $statusLine; body=$tokenBody")
+      val headers: Map<String, String> =
+        headerLines
+          .drop(1)
+          .mapNotNull { line ->
+            val colon = line.indexOf(':')
+            if (colon < 0) null
+            else line.substring(0, colon).trim().lowercase() to line.substring(colon + 1).trim()
+          }
+          .toMap()
+
+      val rawBody =
+        responseBytes.copyOfRange(headerEnd + HEADER_BODY_SEPARATOR.size, responseBytes.size)
+      val bodyBytes: ByteArray =
+        if (headers["transfer-encoding"]?.contains("chunked", ignoreCase = true) == true) {
+          decodeChunkedBody(rawBody)
+        } else {
+          val contentLength = headers["content-length"]?.toIntOrNull()
+          if (contentLength != null) rawBody.copyOfRange(0, minOf(contentLength, rawBody.size))
+          else rawBody
+        }
+
+      val token = String(bodyBytes, StandardCharsets.UTF_8).trim()
+      if (statusCode == null || statusCode !in 200..299) {
+        throw IOException("Launcher token request failed: $statusLine; body=$token")
       }
-      check(tokenBody.isNotEmpty()) { "Launcher returned an empty attestation token" }
-      return tokenBody
+      check(token.isNotEmpty()) { "Launcher returned an empty attestation token" }
+      return token
+    }
+
+    /** Decodes an HTTP `Transfer-Encoding: chunked` message body. */
+    private fun decodeChunkedBody(body: ByteArray): ByteArray {
+      val decoded = ByteArrayOutputStream()
+      var position = 0
+      while (position < body.size) {
+        val lineEnd = indexOf(body, CRLF, position)
+        if (lineEnd < 0) break
+        val sizeToken =
+          String(body, position, lineEnd - position, StandardCharsets.US_ASCII)
+            .substringBefore(';')
+            .trim()
+        val chunkSize = sizeToken.toIntOrNull(16) ?: break
+        position = lineEnd + CRLF.size
+        if (chunkSize == 0) break
+        val chunkEnd = minOf(position + chunkSize, body.size)
+        decoded.write(body, position, chunkEnd - position)
+        position = chunkEnd + CRLF.size
+      }
+      return decoded.toByteArray()
+    }
+
+    /** Returns the index of [needle] in [haystack] at or after [from], or -1 if absent. */
+    private fun indexOf(haystack: ByteArray, needle: ByteArray, from: Int): Int {
+      if (needle.isEmpty()) return from
+      var i = from
+      while (i <= haystack.size - needle.size) {
+        var j = 0
+        while (j < needle.size && haystack[i + j] == needle[j]) {
+          j++
+        }
+        if (j == needle.size) return i
+        i++
+      }
+      return -1
     }
   }
 }
