@@ -23,7 +23,6 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.time.Duration
-import java.util.logging.Logger
 import org.newsclub.net.unix.AFUNIXSocket
 import org.newsclub.net.unix.AFUNIXSocketAddress
 
@@ -83,6 +82,30 @@ class ConfidentialSpaceTokenClient(
           if (request.nonces.isNotEmpty()) {
             add("nonces", JsonArray().apply { request.nonces.forEach { add(it) } })
           }
+          if (request.tokenType == ConfidentialSpaceTokenType.AWS_PRINCIPAL_TAGS) {
+            // For AWS_PRINCIPALTAGS the launcher reads aws_principal_tag_options unconditionally.
+            // Launcher builds predating the nil guard in go-tpm-tools convertToCSOpts panic (nil
+            // pointer dereference) when it is absent and write a zero-byte body, which surfaces
+            // here
+            // as a malformed/empty response. Sending the full structure keeps
+            // TokenOptions.token_type_options non-nil on every launcher version. key_ids is
+            // intentionally empty: the AWS role trust policy gates on standard attestation tags
+            // (swname, image_digest, gce.project_id), not container-image signatures.
+            add(
+              "aws_principal_tag_options",
+              JsonObject().apply {
+                add(
+                  "allowed_principal_tags",
+                  JsonObject().apply {
+                    add(
+                      "container_image_signatures",
+                      JsonObject().apply { add("key_ids", JsonArray()) },
+                    )
+                  },
+                )
+              },
+            )
+          }
         }
         .toString()
 
@@ -106,32 +129,7 @@ class ConfidentialSpaceTokenClient(
         socket.getInputStream().readBytes()
       }
 
-    // DO_NOT_SUBMIT(halo): verbose diagnostic logging of the raw launcher response, to pin down the
-    // exact framing that breaks parseTokenResponse. Logged BEFORE parsing so we capture it even
-    // when
-    // parsing throws. Remove once the token-fetch bug is understood and fixed.
-    logRawResponseForDebug(request, body, responseBytes)
-
     return parseTokenResponse(responseBytes)
-  }
-
-  /**
-   * DO_NOT_SUBMIT(halo): diagnostic only — dumps the raw launcher reply so we can see its framing.
-   */
-  private fun logRawResponseForDebug(
-    request: AttestationTokenRequest,
-    requestBody: String,
-    responseBytes: ByteArray,
-  ) {
-    val text = String(responseBytes, StandardCharsets.UTF_8)
-    val escaped = text.take(2000).replace("\r", "<CR>").replace("\n", "<LF>")
-    val hexPrefix = responseBytes.take(96).joinToString(" ") { "%02x".format(it.toInt() and 0xff) }
-    logger.warning(
-      "CS-TOKEN-DEBUG: tokenType=${request.tokenType.wireValue} audience=${request.audience} " +
-        "socket=$socketPath requestBody=$requestBody | responseByteCount=${responseBytes.size} " +
-        "hasCRLFCRLF=${indexOf(responseBytes, HEADER_BODY_SEPARATOR, 0) >= 0} " +
-        "hasLFLF=${text.contains("\n\n")} | rawEscaped=[$escaped] | hex96=[$hexPrefix]"
-    )
   }
 
   companion object {
@@ -141,7 +139,6 @@ class ConfidentialSpaceTokenClient(
     const val TOKEN_PATH = "/v1/token"
 
     private val DEFAULT_READ_TIMEOUT: Duration = Duration.ofSeconds(30)
-    private val logger: Logger = Logger.getLogger(ConfidentialSpaceTokenClient::class.java.name)
     private val CRLF = byteArrayOf('\r'.code.toByte(), '\n'.code.toByte())
     private val HEADER_BODY_SEPARATOR = CRLF + CRLF
 
@@ -156,6 +153,11 @@ class ConfidentialSpaceTokenClient(
      * the server's write buffer are sent chunked, so de-chunking is required for real tokens.
      */
     private fun parseTokenResponse(responseBytes: ByteArray): String {
+      require(responseBytes.isNotEmpty()) {
+        "Empty response from launcher token socket (the launcher likely panicked serving the " +
+          "token request; check the launcher/teeserver logs)"
+      }
+
       val headerEnd = indexOf(responseBytes, HEADER_BODY_SEPARATOR, 0)
       require(headerEnd >= 0) { "Malformed HTTP response from launcher token socket" }
 

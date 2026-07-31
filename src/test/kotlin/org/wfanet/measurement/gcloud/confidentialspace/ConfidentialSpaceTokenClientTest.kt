@@ -152,4 +152,42 @@ class ConfidentialSpaceTokenClientTest {
 
     assertFailsWith<IOException> { clientForServer().getToken(awsPrincipalTagsRequest()) }
   }
+
+  @Test
+  fun `getToken sends aws_principal_tag_options for an AWS_PRINCIPALTAGS request`() {
+    startServer("HTTP/1.1 200 OK\r\nConnection: close\r\n\r\nheader.payload.signature")
+
+    clientForServer().getToken(awsPrincipalTagsRequest())
+
+    assertThat(capturedRequest).contains("aws_principal_tag_options")
+    assertThat(capturedRequest).contains("allowed_principal_tags")
+    assertThat(capturedRequest).contains("container_image_signatures")
+  }
+
+  @Test
+  fun `getToken omits aws_principal_tag_options for non-AWS token types`() {
+    startServer("HTTP/1.1 200 OK\r\nConnection: close\r\n\r\nheader.payload.signature")
+
+    clientForServer()
+      .getToken(
+        AttestationTokenRequest(
+          audience = "https://example.com",
+          tokenType = ConfidentialSpaceTokenType.OIDC,
+        )
+      )
+
+    assertThat(capturedRequest).contains("\"token_type\":\"OIDC\"")
+    assertThat(capturedRequest).doesNotContain("aws_principal_tag_options")
+  }
+
+  @Test
+  fun `getToken throws a clear error on an empty response`() {
+    startServer("")
+
+    val exception =
+      assertFailsWith<IllegalArgumentException> {
+        clientForServer().getToken(awsPrincipalTagsRequest())
+      }
+    assertThat(exception).hasMessageThat().contains("Empty response")
+  }
 }
