@@ -23,6 +23,7 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.time.Duration
+import java.util.logging.Logger
 import org.newsclub.net.unix.AFUNIXSocket
 import org.newsclub.net.unix.AFUNIXSocketAddress
 
@@ -105,7 +106,32 @@ class ConfidentialSpaceTokenClient(
         socket.getInputStream().readBytes()
       }
 
+    // DO_NOT_SUBMIT(halo): verbose diagnostic logging of the raw launcher response, to pin down the
+    // exact framing that breaks parseTokenResponse. Logged BEFORE parsing so we capture it even
+    // when
+    // parsing throws. Remove once the token-fetch bug is understood and fixed.
+    logRawResponseForDebug(request, body, responseBytes)
+
     return parseTokenResponse(responseBytes)
+  }
+
+  /**
+   * DO_NOT_SUBMIT(halo): diagnostic only — dumps the raw launcher reply so we can see its framing.
+   */
+  private fun logRawResponseForDebug(
+    request: AttestationTokenRequest,
+    requestBody: String,
+    responseBytes: ByteArray,
+  ) {
+    val text = String(responseBytes, StandardCharsets.UTF_8)
+    val escaped = text.take(2000).replace("\r", "<CR>").replace("\n", "<LF>")
+    val hexPrefix = responseBytes.take(96).joinToString(" ") { "%02x".format(it.toInt() and 0xff) }
+    logger.warning(
+      "CS-TOKEN-DEBUG: tokenType=${request.tokenType.wireValue} audience=${request.audience} " +
+        "socket=$socketPath requestBody=$requestBody | responseByteCount=${responseBytes.size} " +
+        "hasCRLFCRLF=${indexOf(responseBytes, HEADER_BODY_SEPARATOR, 0) >= 0} " +
+        "hasLFLF=${text.contains("\n\n")} | rawEscaped=[$escaped] | hex96=[$hexPrefix]"
+    )
   }
 
   companion object {
@@ -115,6 +141,7 @@ class ConfidentialSpaceTokenClient(
     const val TOKEN_PATH = "/v1/token"
 
     private val DEFAULT_READ_TIMEOUT: Duration = Duration.ofSeconds(30)
+    private val logger: Logger = Logger.getLogger(ConfidentialSpaceTokenClient::class.java.name)
     private val CRLF = byteArrayOf('\r'.code.toByte(), '\n'.code.toByte())
     private val HEADER_BODY_SEPARATOR = CRLF + CRLF
 
