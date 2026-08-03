@@ -190,4 +190,23 @@ class ConfidentialSpaceTokenClientTest {
       }
     assertThat(exception).hasMessageThat().contains("Empty response")
   }
+
+  @Test
+  fun `getToken includes requested container image signature key ids`() {
+    startServer("HTTP/1.1 200 OK\r\nConnection: close\r\n\r\nheader.payload.signature")
+
+    clientForServer()
+      .getToken(
+        AttestationTokenRequest(
+          audience = "https://example.com",
+          tokenType = ConfidentialSpaceTokenType.AWS_PRINCIPAL_TAGS,
+          containerImageSignatureKeyIds = listOf("keyA", "keyB"),
+        )
+      )
+
+    assertThat(capturedRequest).contains("container_image_signatures")
+    assertThat(capturedRequest).contains("key_ids")
+    assertThat(capturedRequest).contains("keyA")
+    assertThat(capturedRequest).contains("keyB")
+  }
 }

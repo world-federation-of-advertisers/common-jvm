@@ -110,6 +110,11 @@ data class ConfidentialSpaceToAwsWifCredentials(
    * registered on the AWS OIDC provider and the `...:aud` condition in the IAM role's trust policy.
    */
   val audience: String,
+  /**
+   * Container image signature key IDs to request as the `container.signatures.key_id` AWS principal
+   * tag. Empty falls back to `container.image_digest` gating.
+   */
+  val containerImageSignatureKeyIds: List<String> = emptyList(),
 ) : WifCredentials
 
 /**

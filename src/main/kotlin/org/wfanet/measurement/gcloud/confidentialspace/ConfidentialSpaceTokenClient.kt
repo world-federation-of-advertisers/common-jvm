@@ -47,6 +47,12 @@ data class AttestationTokenRequest(
   val audience: String,
   val tokenType: ConfidentialSpaceTokenType,
   val nonces: List<String> = emptyList(),
+  /**
+   * Container image signature key IDs to surface as the `container.signatures.key_id` AWS principal
+   * tag (used by AWS_PRINCIPALTAGS tokens). Empty means no signature tag is requested, in which
+   * case the token instead carries `container.image_digest`.
+   */
+  val containerImageSignatureKeyIds: List<String> = emptyList(),
 )
 
 /** Obtains Confidential Space attestation tokens. */
@@ -88,9 +94,9 @@ class ConfidentialSpaceTokenClient(
             // pointer dereference) when it is absent and write a zero-byte body, which surfaces
             // here
             // as a malformed/empty response. Sending the full structure keeps
-            // TokenOptions.token_type_options non-nil on every launcher version. key_ids is
-            // intentionally empty: the AWS role trust policy gates on standard attestation tags
-            // (swname, image_digest, gce.project_id), not container-image signatures.
+            // TokenOptions.token_type_options non-nil on every launcher version. key_ids carries
+            // the container image signature key IDs to surface as the container.signatures.key_id
+            // principal tag; when empty the token instead carries container.image_digest.
             add(
               "aws_principal_tag_options",
               JsonObject().apply {
@@ -99,7 +105,14 @@ class ConfidentialSpaceTokenClient(
                   JsonObject().apply {
                     add(
                       "container_image_signatures",
-                      JsonObject().apply { add("key_ids", JsonArray()) },
+                      JsonObject().apply {
+                        add(
+                          "key_ids",
+                          JsonArray().apply {
+                            request.containerImageSignatureKeyIds.forEach { add(it) }
+                          },
+                        )
+                      },
                     )
                   },
                 )

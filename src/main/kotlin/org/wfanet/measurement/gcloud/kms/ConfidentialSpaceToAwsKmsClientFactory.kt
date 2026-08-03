@@ -80,6 +80,7 @@ class ConfidentialSpaceToAwsKmsClientFactory(
           AttestationTokenRequest(
             audience = config.audience,
             tokenType = ConfidentialSpaceTokenType.AWS_PRINCIPAL_TAGS,
+            containerImageSignatureKeyIds = config.containerImageSignatureKeyIds,
           )
         )
       } catch (e: Exception) {
