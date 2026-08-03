@@ -18,7 +18,6 @@ import com.google.crypto.tink.KmsClient
 import java.security.GeneralSecurityException
 import java.time.Clock
 import java.time.Duration
-import java.util.logging.Logger
 import org.wfanet.measurement.aws.RefreshableAwsCredentialsProvider
 import org.wfanet.measurement.aws.TimeBoundCredentials
 import org.wfanet.measurement.aws.kms.AwsKmsClient
@@ -121,12 +120,6 @@ class ConfidentialSpaceToAwsKmsClientFactory(
       }
 
     val awsCredentials = stsResponse.credentials()
-    // DO_NOT_SUBMIT(halo): confirm STS success + the assumed-role identity to check against the KMS
-    // key policy. Remove once the AWS KMS flow works.
-    logger.warning(
-      "CS-STS-DEBUG: assumedRole=${stsResponse.assumedRoleUser().arn()} " +
-        "expiration=${awsCredentials.expiration()}"
-    )
     return TimeBoundCredentials(
       credentials =
         AwsSessionCredentials.create(
@@ -156,17 +149,10 @@ class ConfidentialSpaceToAwsKmsClientFactory(
         )
       }
     val keyIds = ConfidentialSpaceTokenClient.parseContainerImageSignatureKeyIds(oidcToken)
-    // DO_NOT_SUBMIT(halo): temporary logging of self-discovered signature key IDs. Remove once the
-    // signature-based AWS trust flow is confirmed working end-to-end.
-    logger.warning(
-      "CS-SIGDISCOVERY-DEBUG: audience=$audience selfDiscoveredKeyIds=$keyIds count=${keyIds.size}"
-    )
     return keyIds
   }
 
   companion object {
     private val DEFAULT_REFRESH_MARGIN: Duration = Duration.ofMinutes(15)
-    private val logger: Logger =
-      Logger.getLogger(ConfidentialSpaceToAwsKmsClientFactory::class.java.name)
   }
 }

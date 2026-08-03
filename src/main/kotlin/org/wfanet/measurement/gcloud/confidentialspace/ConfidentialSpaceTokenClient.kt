@@ -25,7 +25,6 @@ import java.nio.file.Path
 import java.nio.file.Paths
 import java.time.Duration
 import java.util.Base64
-import java.util.logging.Logger
 import org.newsclub.net.unix.AFUNIXSocket
 import org.newsclub.net.unix.AFUNIXSocketAddress
 
@@ -145,11 +144,7 @@ class ConfidentialSpaceTokenClient(
         socket.getInputStream().readBytes()
       }
 
-    val token = parseTokenResponse(responseBytes)
-    if (request.tokenType == ConfidentialSpaceTokenType.AWS_PRINCIPAL_TAGS) {
-      logAwsPrincipalTagsForDebug(token)
-    }
-    return token
+    return parseTokenResponse(responseBytes)
   }
 
   companion object {
@@ -159,7 +154,6 @@ class ConfidentialSpaceTokenClient(
     const val TOKEN_PATH = "/v1/token"
 
     private val DEFAULT_READ_TIMEOUT: Duration = Duration.ofSeconds(30)
-    private val logger: Logger = Logger.getLogger(ConfidentialSpaceTokenClient::class.java.name)
     private val CRLF = byteArrayOf('\r'.code.toByte(), '\n'.code.toByte())
     private val HEADER_BODY_SEPARATOR = CRLF + CRLF
 
@@ -186,41 +180,12 @@ class ConfidentialSpaceTokenClient(
       val keyIds =
         signatures?.mapNotNull { it.asJsonObject.get("key_id")?.asString }?.distinct()
           ?: emptyList()
-      // DO_NOT_SUBMIT(halo): temporary logging of the raw signature claim + parsed key IDs. Remove
-      // once signature self-discovery is confirmed working end-to-end.
-      logger.warning(
-        "CS-SIGDISCOVERY-DEBUG: image_signatures=${signatures ?: "<none>"} parsedKeyIds=$keyIds"
-      )
       return keyIds
     }
 
     private fun padBase64(value: String): String {
       val remainder = value.length % 4
       return if (remainder == 0) value else value + "=".repeat(4 - remainder)
-    }
-
-    /**
-     * DO_NOT_SUBMIT(halo): decodes and logs the AWS principal tags carried by a minted
-     * AWS_PRINCIPALTAGS token, so we can see the exact tag keys/values AWS STS evaluates. Remove
-     * once the AWS trust flow is confirmed working.
-     */
-    private fun logAwsPrincipalTagsForDebug(token: String) {
-      try {
-        val parts = token.split(".")
-        if (parts.size < 2) return
-        val obj =
-          JsonParser.parseString(
-              String(Base64.getUrlDecoder().decode(padBase64(parts[1])), StandardCharsets.UTF_8)
-            )
-            .asJsonObject
-        logger.warning(
-          "CS-AWSTAGS-DEBUG: topLevelClaims=${obj.keySet()} awsTags=${obj.get("https://aws.amazon.com/tags")} " +
-            "swname=${obj.get("swname")} " +
-            "submodsGce=${obj.getAsJsonObject("submods")?.getAsJsonObject("gce")}"
-        )
-      } catch (e: Exception) {
-        logger.warning("CS-AWSTAGS-DEBUG: decode failed: ${e.message}")
-      }
     }
 
     /**
@@ -231,10 +196,7 @@ class ConfidentialSpaceTokenClient(
      * the server's write buffer are sent chunked, so de-chunking is required for real tokens.
      */
     private fun parseTokenResponse(responseBytes: ByteArray): String {
-      require(responseBytes.isNotEmpty()) {
-        "Empty response from launcher token socket (the launcher likely panicked serving the " +
-          "token request; check the launcher/teeserver logs)"
-      }
+      require(responseBytes.isNotEmpty()) { "Empty response from launcher token socket" }
 
       val headerEnd = indexOf(responseBytes, HEADER_BODY_SEPARATOR, 0)
       require(headerEnd >= 0) { "Malformed HTTP response from launcher token socket" }
