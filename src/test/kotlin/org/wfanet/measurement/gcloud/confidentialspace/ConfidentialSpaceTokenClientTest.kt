@@ -209,4 +209,19 @@ class ConfidentialSpaceTokenClientTest {
     assertThat(capturedRequest).contains("keyA")
     assertThat(capturedRequest).contains("keyB")
   }
+
+  @Test
+  fun `parseContainerImageSignatureKeyIds extracts key ids from the signatures claim`() {
+    val payload =
+      "{\"submods\":{\"container\":{\"image_signatures\":" +
+        "[{\"key_id\":\"keyA\",\"signature_algorithm\":\"ECDSA_P256_SHA256\"}," +
+        "{\"key_id\":\"keyB\"}]}}}"
+    val encoded =
+      java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(payload.toByteArray())
+    val token = "header.$encoded.signature"
+
+    val keyIds = ConfidentialSpaceTokenClient.parseContainerImageSignatureKeyIds(token)
+
+    assertThat(keyIds).containsExactly("keyA", "keyB").inOrder()
+  }
 }

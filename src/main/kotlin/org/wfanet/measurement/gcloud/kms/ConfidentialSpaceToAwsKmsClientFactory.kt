@@ -18,6 +18,7 @@ import com.google.crypto.tink.KmsClient
 import java.security.GeneralSecurityException
 import java.time.Clock
 import java.time.Duration
+import java.util.logging.Logger
 import org.wfanet.measurement.aws.RefreshableAwsCredentialsProvider
 import org.wfanet.measurement.aws.TimeBoundCredentials
 import org.wfanet.measurement.aws.kms.AwsKmsClient
@@ -74,13 +75,16 @@ class ConfidentialSpaceToAwsKmsClientFactory(
   private fun obtainAwsCredentials(
     config: ConfidentialSpaceToAwsWifCredentials
   ): TimeBoundCredentials {
+    val signatureKeyIds: List<String> =
+      config.containerImageSignatureKeyIds.ifEmpty { discoverSignatureKeyIds(config.audience) }
+
     val attestationToken: String =
       try {
         tokenProvider.getToken(
           AttestationTokenRequest(
             audience = config.audience,
             tokenType = ConfidentialSpaceTokenType.AWS_PRINCIPAL_TAGS,
-            containerImageSignatureKeyIds = config.containerImageSignatureKeyIds,
+            containerImageSignatureKeyIds = signatureKeyIds,
           )
         )
       } catch (e: Exception) {
@@ -128,7 +132,35 @@ class ConfidentialSpaceToAwsKmsClientFactory(
     )
   }
 
+  /**
+   * Self-discovers the workload own container image signature key IDs by fetching an OIDC
+   * attestation token and reading its `submods.container.image_signatures` claim, so no signature
+   * key IDs need to be configured or hardcoded anywhere.
+   */
+  private fun discoverSignatureKeyIds(audience: String): List<String> {
+    val oidcToken: String =
+      try {
+        tokenProvider.getToken(
+          AttestationTokenRequest(audience = audience, tokenType = ConfidentialSpaceTokenType.OIDC)
+        )
+      } catch (e: Exception) {
+        throw GeneralSecurityException(
+          "Failed to obtain Confidential Space OIDC token for signature discovery",
+          e,
+        )
+      }
+    val keyIds = ConfidentialSpaceTokenClient.parseContainerImageSignatureKeyIds(oidcToken)
+    // DO_NOT_SUBMIT(halo): temporary logging of self-discovered signature key IDs. Remove once the
+    // signature-based AWS trust flow is confirmed working end-to-end.
+    logger.warning(
+      "CS-SIGDISCOVERY-DEBUG: audience=$audience selfDiscoveredKeyIds=$keyIds count=${keyIds.size}"
+    )
+    return keyIds
+  }
+
   companion object {
     private val DEFAULT_REFRESH_MARGIN: Duration = Duration.ofMinutes(15)
+    private val logger: Logger =
+      Logger.getLogger(ConfidentialSpaceToAwsKmsClientFactory::class.java.name)
   }
 }

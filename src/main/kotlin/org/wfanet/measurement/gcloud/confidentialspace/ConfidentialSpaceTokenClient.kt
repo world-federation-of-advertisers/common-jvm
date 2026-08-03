@@ -16,6 +16,7 @@ package org.wfanet.measurement.gcloud.confidentialspace
 
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
+import com.google.gson.JsonParser
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.net.Socket
@@ -23,6 +24,8 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.time.Duration
+import java.util.Base64
+import java.util.logging.Logger
 import org.newsclub.net.unix.AFUNIXSocket
 import org.newsclub.net.unix.AFUNIXSocketAddress
 
@@ -152,11 +155,45 @@ class ConfidentialSpaceTokenClient(
     const val TOKEN_PATH = "/v1/token"
 
     private val DEFAULT_READ_TIMEOUT: Duration = Duration.ofSeconds(30)
+    private val logger: Logger = Logger.getLogger(ConfidentialSpaceTokenClient::class.java.name)
     private val CRLF = byteArrayOf('\r'.code.toByte(), '\n'.code.toByte())
     private val HEADER_BODY_SEPARATOR = CRLF + CRLF
 
     private fun connectUnixDomainSocket(path: Path): Socket =
       AFUNIXSocket.connectTo(AFUNIXSocketAddress.of(path.toFile()))
+
+    /**
+     * Extracts container image signature key IDs from a Confidential Space attestation [token] by
+     * reading its `submods.container.image_signatures[].key_id` claims. Lets callers self-discover
+     * which signature key IDs to surface as AWS principal tags, so no key IDs need to be hardcoded.
+     * The AWS role trust policy remains the authority on which signers are acceptable.
+     */
+    fun parseContainerImageSignatureKeyIds(token: String): List<String> {
+      val parts = token.split(".")
+      require(parts.size >= 2) { "Malformed JWT attestation token" }
+      val payload =
+        String(Base64.getUrlDecoder().decode(padBase64(parts[1])), StandardCharsets.UTF_8)
+      val signatures =
+        JsonParser.parseString(payload)
+          .asJsonObject
+          .getAsJsonObject("submods")
+          ?.getAsJsonObject("container")
+          ?.getAsJsonArray("image_signatures")
+      val keyIds =
+        signatures?.mapNotNull { it.asJsonObject.get("key_id")?.asString }?.distinct()
+          ?: emptyList()
+      // DO_NOT_SUBMIT(halo): temporary logging of the raw signature claim + parsed key IDs. Remove
+      // once signature self-discovery is confirmed working end-to-end.
+      logger.warning(
+        "CS-SIGDISCOVERY-DEBUG: image_signatures=${signatures ?: "<none>"} parsedKeyIds=$keyIds"
+      )
+      return keyIds
+    }
+
+    private fun padBase64(value: String): String {
+      val remainder = value.length % 4
+      return if (remainder == 0) value else value + "=".repeat(4 - remainder)
+    }
 
     /**
      * Parses an HTTP/1.1 response from the launcher and returns the token body.
