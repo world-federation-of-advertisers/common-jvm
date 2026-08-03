@@ -214,7 +214,7 @@ class ConfidentialSpaceTokenClient(
             )
             .asJsonObject
         logger.warning(
-          "CS-AWSTAGS-DEBUG: awsTags=${obj.get("https://aws.amazon.com/tags")} " +
+          "CS-AWSTAGS-DEBUG: topLevelClaims=${obj.keySet()} awsTags=${obj.get("https://aws.amazon.com/tags")} " +
             "swname=${obj.get("swname")} " +
             "submodsGce=${obj.getAsJsonObject("submods")?.getAsJsonObject("gce")}"
         )

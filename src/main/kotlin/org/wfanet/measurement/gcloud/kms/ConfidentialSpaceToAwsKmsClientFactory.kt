@@ -121,6 +121,12 @@ class ConfidentialSpaceToAwsKmsClientFactory(
       }
 
     val awsCredentials = stsResponse.credentials()
+    // DO_NOT_SUBMIT(halo): confirm STS success + the assumed-role identity to check against the KMS
+    // key policy. Remove once the AWS KMS flow works.
+    logger.warning(
+      "CS-STS-DEBUG: assumedRole=${stsResponse.assumedRoleUser().arn()} " +
+        "expiration=${awsCredentials.expiration()}"
+    )
     return TimeBoundCredentials(
       credentials =
         AwsSessionCredentials.create(

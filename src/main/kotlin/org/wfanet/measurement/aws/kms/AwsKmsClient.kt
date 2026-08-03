@@ -19,6 +19,7 @@ import com.google.crypto.tink.KmsClient
 import java.security.GeneralSecurityException
 import java.util.Base64
 import java.util.Locale
+import java.util.logging.Logger
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider
 import software.amazon.awssdk.core.SdkBytes
 import software.amazon.awssdk.regions.Region
@@ -26,6 +27,9 @@ import software.amazon.awssdk.services.kms.KmsClient as SdkKmsClient
 import software.amazon.awssdk.services.kms.model.DecryptRequest
 import software.amazon.awssdk.services.kms.model.EncryptRequest
 import software.amazon.awssdk.services.kms.model.KmsException
+
+// DO_NOT_SUBMIT(halo): temporary AWS KMS debug logging (kek/region + decrypt errors). Remove later.
+private val kmsDebugLogger = Logger.getLogger("org.wfanet.measurement.aws.kms.AwsKmsClient")
 
 /**
  * A Tink [KmsClient] implementation for AWS KMS using AWS SDK v2.
@@ -67,6 +71,7 @@ class AwsKmsClient(private val credentialsProvider: AwsCredentialsProvider) : Km
     }
     val keyArn = keyUri.substring(KEY_URI_PREFIX.length)
     val region = extractRegionFromArn(keyArn)
+    kmsDebugLogger.warning("CS-KMS-DEBUG: getAead keyArn=$keyArn region=$region")
 
     val kmsClient =
       try {
@@ -145,6 +150,7 @@ private class AwsKmsAead(private val kmsClient: SdkKmsClient, private val keyArn
       }
       return response.plaintext().asByteArray()
     } catch (e: KmsException) {
+      kmsDebugLogger.warning("CS-KMS-DEBUG: decrypt failed keyArn=$keyArn: ${e.message}")
       throw GeneralSecurityException("Decryption failed", e)
     }
   }
