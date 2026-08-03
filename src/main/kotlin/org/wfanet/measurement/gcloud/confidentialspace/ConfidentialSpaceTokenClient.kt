@@ -145,7 +145,11 @@ class ConfidentialSpaceTokenClient(
         socket.getInputStream().readBytes()
       }
 
-    return parseTokenResponse(responseBytes)
+    val token = parseTokenResponse(responseBytes)
+    if (request.tokenType == ConfidentialSpaceTokenType.AWS_PRINCIPAL_TAGS) {
+      logAwsPrincipalTagsForDebug(token)
+    }
+    return token
   }
 
   companion object {
@@ -193,6 +197,30 @@ class ConfidentialSpaceTokenClient(
     private fun padBase64(value: String): String {
       val remainder = value.length % 4
       return if (remainder == 0) value else value + "=".repeat(4 - remainder)
+    }
+
+    /**
+     * DO_NOT_SUBMIT(halo): decodes and logs the AWS principal tags carried by a minted
+     * AWS_PRINCIPALTAGS token, so we can see the exact tag keys/values AWS STS evaluates. Remove
+     * once the AWS trust flow is confirmed working.
+     */
+    private fun logAwsPrincipalTagsForDebug(token: String) {
+      try {
+        val parts = token.split(".")
+        if (parts.size < 2) return
+        val obj =
+          JsonParser.parseString(
+              String(Base64.getUrlDecoder().decode(padBase64(parts[1])), StandardCharsets.UTF_8)
+            )
+            .asJsonObject
+        logger.warning(
+          "CS-AWSTAGS-DEBUG: awsTags=${obj.get("https://aws.amazon.com/tags")} " +
+            "swname=${obj.get("swname")} " +
+            "submodsGce=${obj.getAsJsonObject("submods")?.getAsJsonObject("gce")}"
+        )
+      } catch (e: Exception) {
+        logger.warning("CS-AWSTAGS-DEBUG: decode failed: ${e.message}")
+      }
     }
 
     /**
