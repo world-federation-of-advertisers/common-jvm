@@ -19,8 +19,6 @@ AWS_JAVA_SDK_VERSION = "2.23.18"
 
 TRUTH_VERSION = "1.4.4"
 
-TINK_VERSION = "1.12.0"
-
 CLOUD_SQL_CONNECTOR_VERSION = "1.12.0"
 
 # WFA registry deps.
@@ -201,7 +199,7 @@ maven.install(
         "org.jetbrains:annotations:23.0.0",
         "info.picocli:picocli:4.7.6",
         "io.netty:netty-handler:4.1.124.Final",
-        "com.google.crypto.tink:tink:" + TINK_VERSION,
+        "com.google.crypto.tink:tink:1.21.0",
         "com.github.ben-manes.caffeine:caffeine:3.1.8",
         # TODO(bazelbuild/bazel-worker-api/issues#14): Remove versions when fixed.
         "com.google.guava:guava:33.4.0-jre",
@@ -254,7 +252,7 @@ maven.install(
         "com.google.cloud:google-cloudevent-types:0.16.0",
         "com.google.auth:google-auth-library-oauth2-http",
         "com.google.auth:google-auth-library-credentials",
-        "com.google.crypto.tink:tink-gcpkms:1.9.0",
+        "com.google.crypto.tink:tink-gcpkms:1.10.0",
 
         # Cloud Functions
         "io.cloudevents:cloudevents-core",
