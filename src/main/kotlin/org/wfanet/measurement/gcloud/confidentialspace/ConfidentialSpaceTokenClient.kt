@@ -126,7 +126,7 @@ class ConfidentialSpaceTokenClient(
 
     val responseBytes: ByteArray =
       socketFactory(socketPath).use { socket ->
-        socket.soTimeout = readTimeout.toMillis().toInt()
+        socket.soTimeout = readTimeout.toMillis().coerceIn(0L, Int.MAX_VALUE.toLong()).toInt()
         val bodyBytes = body.toByteArray(StandardCharsets.UTF_8)
         val httpRequest = buildString {
           append("POST ").append(TOKEN_PATH).append(" HTTP/1.1\r\n")
@@ -189,6 +189,20 @@ class ConfidentialSpaceTokenClient(
     }
 
     /**
+     * Redacts [value] if it looks like a JWT (three non-empty base64url segments), so a bearer
+     * token is never written to logs; other bodies are returned unchanged for debugging.
+     */
+    private fun redactIfJwt(value: String): String {
+      val parts = value.split(".")
+      val looksLikeJwt =
+        parts.size == 3 &&
+          parts.all { part ->
+            part.isNotEmpty() && part.all { it.isLetterOrDigit() || it == '_' || it == '-' }
+          }
+      return if (looksLikeJwt) "[redacted possible JWT]" else value
+    }
+
+    /**
      * Parses an HTTP/1.1 response from the launcher and returns the token body.
      *
      * Honors `Transfer-Encoding: chunked` and `Content-Length`, falling back to the bytes read
@@ -227,28 +241,38 @@ class ConfidentialSpaceTokenClient(
 
       val token = String(bodyBytes, StandardCharsets.UTF_8).trim()
       if (statusCode == null || statusCode !in 200..299) {
-        throw IOException("Launcher token request failed: $statusLine; body=$token")
+        throw IOException("Launcher token request failed: $statusLine; body=${redactIfJwt(token)}")
       }
       check(token.isNotEmpty()) { "Launcher returned an empty attestation token" }
       return token
     }
 
-    /** Decodes an HTTP `Transfer-Encoding: chunked` message body. */
+    /**
+     * Decodes an HTTP `Transfer-Encoding: chunked` message body. Fails fast with an [IOException]
+     * on malformed framing rather than returning a silently truncated token.
+     */
     private fun decodeChunkedBody(body: ByteArray): ByteArray {
       val decoded = ByteArrayOutputStream()
       var position = 0
       while (position < body.size) {
         val lineEnd = indexOf(body, CRLF, position)
-        if (lineEnd < 0) break
+        if (lineEnd < 0) {
+          throw IOException("Malformed chunked response: missing CRLF after chunk size")
+        }
         val sizeToken =
           String(body, position, lineEnd - position, StandardCharsets.US_ASCII)
             .substringBefore(';')
             .trim()
-        val chunkSize = sizeToken.toIntOrNull(16) ?: break
+        val chunkSize =
+          sizeToken.toIntOrNull(16)
+            ?: throw IOException("Malformed chunked response: invalid chunk size \"$sizeToken\"")
         position = lineEnd + CRLF.size
         if (chunkSize == 0) break
-        val chunkEnd = minOf(position + chunkSize, body.size)
-        decoded.write(body, position, chunkEnd - position)
+        val chunkEnd = position + chunkSize
+        if (chunkEnd > body.size) {
+          throw IOException("Malformed chunked response: truncated chunk")
+        }
+        decoded.write(body, position, chunkSize)
         position = chunkEnd + CRLF.size
       }
       return decoded.toByteArray()

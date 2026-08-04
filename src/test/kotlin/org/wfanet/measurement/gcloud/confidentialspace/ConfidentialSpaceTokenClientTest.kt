@@ -154,6 +154,51 @@ class ConfidentialSpaceTokenClientTest {
   }
 
   @Test
+  fun `getToken redacts a JWT-looking body from the error message`() {
+    val jwt = "header.payload.signature"
+    startServer("HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n$jwt")
+
+    val exception =
+      assertFailsWith<IOException> { clientForServer().getToken(awsPrincipalTagsRequest()) }
+
+    assertThat(exception).hasMessageThat().contains("[redacted possible JWT]")
+    assertThat(exception).hasMessageThat().doesNotContain(jwt)
+  }
+
+  @Test
+  fun `getToken fails fast on a truncated chunk`() {
+    // Chunk header claims 0x20 (32) bytes but far fewer follow.
+    startServer(
+      "HTTP/1.1 200 OK\r\n" +
+        "Transfer-Encoding: chunked\r\n" +
+        "Connection: close\r\n" +
+        "\r\n" +
+        "20\r\nonly-a-few-bytes\r\n"
+    )
+
+    val exception =
+      assertFailsWith<IOException> { clientForServer().getToken(awsPrincipalTagsRequest()) }
+
+    assertThat(exception).hasMessageThat().contains("Malformed chunked response")
+  }
+
+  @Test
+  fun `getToken fails fast on an invalid chunk size`() {
+    startServer(
+      "HTTP/1.1 200 OK\r\n" +
+        "Transfer-Encoding: chunked\r\n" +
+        "Connection: close\r\n" +
+        "\r\n" +
+        "zz\r\nsome-bytes\r\n0\r\n\r\n"
+    )
+
+    val exception =
+      assertFailsWith<IOException> { clientForServer().getToken(awsPrincipalTagsRequest()) }
+
+    assertThat(exception).hasMessageThat().contains("Malformed chunked response")
+  }
+
+  @Test
   fun `getToken sends aws_principal_tag_options for an AWS_PRINCIPALTAGS request`() {
     startServer("HTTP/1.1 200 OK\r\nConnection: close\r\n\r\nheader.payload.signature")
 
