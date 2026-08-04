@@ -267,6 +267,10 @@ maven.install(
         "software.amazon.awssdk:kms",
         "software.amazon.awssdk:sts",
 
+        # Confidential Space launcher token socket. Java 11 has no built-in AF_UNIX
+        # support, so junixsocket is used to reach /run/container_launcher/teeserver.sock.
+        "com.kohlschutter.junixsocket:junixsocket-core:2.10.1",
+
         # OpenTelemetry.
         "io.opentelemetry:opentelemetry-api",
         "io.opentelemetry:opentelemetry-context",
