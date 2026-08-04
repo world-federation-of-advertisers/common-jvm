@@ -17,7 +17,6 @@ package org.wfanet.measurement.aws.kms
 import com.google.crypto.tink.Aead
 import com.google.crypto.tink.KmsClient
 import java.security.GeneralSecurityException
-import java.util.Base64
 import java.util.Locale
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider
 import software.amazon.awssdk.core.SdkBytes
@@ -26,12 +25,14 @@ import software.amazon.awssdk.services.kms.KmsClient as SdkKmsClient
 import software.amazon.awssdk.services.kms.model.DecryptRequest
 import software.amazon.awssdk.services.kms.model.EncryptRequest
 import software.amazon.awssdk.services.kms.model.KmsException
+import software.amazon.awssdk.utils.BinaryUtils
 
 /**
  * A Tink [KmsClient] implementation for AWS KMS using AWS SDK v2.
  *
- * This avoids the `tink-awskms` library which depends on AWS SDK v1, allowing usage in projects
- * that standardize on AWS SDK v2.
+ * This avoids the `tink-awskms` library, allowing usage in projects that standardize on AWS SDK v2,
+ * while remaining wire-compatible with it: associated data is encoded into the KMS encryption
+ * context exactly as upstream Tink's `AwsKmsAead` does.
  *
  * @param credentialsProvider The [AwsCredentialsProvider] to use for authenticating with AWS KMS.
  */
@@ -100,8 +101,10 @@ class AwsKmsClient(private val credentialsProvider: AwsCredentialsProvider) : Km
 /**
  * An [Aead] implementation backed by AWS KMS using AWS SDK v2.
  *
- * Encryption context with `associatedData` (Base64-encoded) is included when [associatedData] is
- * non-null and non-empty, matching the behavior of Tink's `AwsKmsAead`.
+ * When [associatedData] is non-null and non-empty, it is added to the KMS encryption context under
+ * the key `associatedData`, hex-encoded via [BinaryUtils.toHex] — byte-for-byte identical to
+ * upstream Tink's `com.google.crypto.tink.integration.awskms.AwsKmsAead`, so ciphertexts are
+ * interoperable with it.
  */
 private class AwsKmsAead(private val kmsClient: SdkKmsClient, private val keyArn: String) : Aead {
 
@@ -113,9 +116,7 @@ private class AwsKmsAead(private val kmsClient: SdkKmsClient, private val keyArn
             keyId(keyArn)
             plaintext(SdkBytes.fromByteArray(plaintext))
             if (associatedData != null && associatedData.isNotEmpty()) {
-              encryptionContext(
-                mapOf(ASSOCIATED_DATA_KEY to Base64.getEncoder().encodeToString(associatedData))
-              )
+              encryptionContext(mapOf(ASSOCIATED_DATA_KEY to BinaryUtils.toHex(associatedData)))
             }
           }
           .build()
@@ -133,9 +134,7 @@ private class AwsKmsAead(private val kmsClient: SdkKmsClient, private val keyArn
           .apply {
             ciphertextBlob(SdkBytes.fromByteArray(ciphertext))
             if (associatedData != null && associatedData.isNotEmpty()) {
-              encryptionContext(
-                mapOf(ASSOCIATED_DATA_KEY to Base64.getEncoder().encodeToString(associatedData))
-              )
+              encryptionContext(mapOf(ASSOCIATED_DATA_KEY to BinaryUtils.toHex(associatedData)))
             }
           }
           .build()
