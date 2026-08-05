@@ -1,6 +1,0 @@
-package(default_visibility = ["//visibility:public"])
-
-alias(
-    name = "junixsocket",
-    actual = "@maven//:com_kohlschutter_junixsocket_junixsocket_core",
-)

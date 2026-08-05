@@ -5,8 +5,13 @@ package(default_visibility = ["//visibility:public"])
 kt_jvm_library(
     name = "confidential_space_token_client",
     srcs = ["ConfidentialSpaceTokenClient.kt"],
+    runtime_deps = ["//imports/java/io/netty:transport_native_epoll"],
     deps = [
         "//imports/java/com/google/gson",
-        "//imports/java/com/kohlschutter/junixsocket",
+        "//imports/java/io/netty:buffer",
+        "//imports/java/io/netty:codec_http",
+        "//imports/java/io/netty:transport",
+        "//imports/java/io/netty:transport_classes_epoll",
+        "//imports/java/io/netty:transport_native_unix_common",
     ],
 )

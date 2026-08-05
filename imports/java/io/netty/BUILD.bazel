@@ -1,0 +1,32 @@
+package(default_visibility = ["//visibility:public"])
+
+alias(
+    name = "buffer",
+    actual = "@maven//:io_netty_netty_buffer",
+)
+
+alias(
+    name = "codec_http",
+    actual = "@maven//:io_netty_netty_codec_http",
+)
+
+alias(
+    name = "transport",
+    actual = "@maven//:io_netty_netty_transport",
+)
+
+alias(
+    name = "transport_classes_epoll",
+    actual = "@maven//:io_netty_netty_transport_classes_epoll",
+)
+
+alias(
+    name = "transport_native_unix_common",
+    actual = "@maven//:io_netty_netty_transport_native_unix_common",
+)
+
+# Native epoll library, required at runtime for domain-socket channels.
+alias(
+    name = "transport_native_epoll",
+    actual = "@maven//:io_netty_netty_transport_native_epoll_linux_x86_64",
+)

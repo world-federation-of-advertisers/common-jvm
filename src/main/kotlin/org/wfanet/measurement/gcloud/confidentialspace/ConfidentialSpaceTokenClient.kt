@@ -17,16 +17,36 @@ package org.wfanet.measurement.gcloud.confidentialspace
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
-import java.io.ByteArrayOutputStream
+import io.netty.bootstrap.Bootstrap
+import io.netty.buffer.Unpooled
+import io.netty.channel.Channel
+import io.netty.channel.ChannelHandlerContext
+import io.netty.channel.ChannelInitializer
+import io.netty.channel.ChannelOption
+import io.netty.channel.SimpleChannelInboundHandler
+import io.netty.channel.epoll.Epoll
+import io.netty.channel.epoll.EpollDomainSocketChannel
+import io.netty.channel.epoll.EpollEventLoopGroup
+import io.netty.channel.unix.DomainSocketAddress
+import io.netty.handler.codec.http.DefaultFullHttpRequest
+import io.netty.handler.codec.http.FullHttpRequest
+import io.netty.handler.codec.http.FullHttpResponse
+import io.netty.handler.codec.http.HttpClientCodec
+import io.netty.handler.codec.http.HttpHeaderNames
+import io.netty.handler.codec.http.HttpHeaderValues
+import io.netty.handler.codec.http.HttpMethod
+import io.netty.handler.codec.http.HttpObjectAggregator
+import io.netty.handler.codec.http.HttpVersion
 import java.io.IOException
-import java.net.Socket
 import java.nio.charset.StandardCharsets
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.time.Duration
 import java.util.Base64
-import org.newsclub.net.unix.AFUNIXSocket
-import org.newsclub.net.unix.AFUNIXSocketAddress
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ExecutionException
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
 
 /** Attestation-token type understood by the Confidential Space launcher token endpoint. */
 enum class ConfidentialSpaceTokenType(val wireValue: String) {
@@ -67,84 +87,189 @@ fun interface AttestationTokenProvider {
  * Client for the Confidential Space launcher's local attestation-token service.
  *
  * The launcher exposes an HTTP endpoint over a Unix domain socket at [socketPath] (default
- * [DEFAULT_SOCKET_PATH]). Because the JVM baseline is Java 11 — which has no built-in `AF_UNIX`
- * support — the connection is made via junixsocket. One request/response is exchanged per call with
+ * [DEFAULT_SOCKET_PATH]). The connection uses Netty's epoll domain-socket transport, and Netty's
+ * HTTP codec frames the exchange, so `Transfer-Encoding: chunked` and `Content-Length` responses
+ * are handled by the codec rather than by hand. One request/response is exchanged per call with
  * `Connection: close`.
  *
+ * Domain sockets require the native epoll transport, so this client only runs on Linux. That is
+ * where Confidential Space workloads run; [getToken] fails fast elsewhere.
+ *
  * @param socketPath Filesystem path of the launcher token socket.
- * @param readTimeout Socket read timeout for a token request.
- * @param socketFactory Opens a connected socket to [socketPath]; overridable for testing.
+ * @param readTimeout Bound on how long a single token request may take.
  */
 class ConfidentialSpaceTokenClient(
   private val socketPath: Path = Paths.get(DEFAULT_SOCKET_PATH),
   private val readTimeout: Duration = DEFAULT_READ_TIMEOUT,
-  private val socketFactory: (Path) -> Socket = ::connectUnixDomainSocket,
 ) : AttestationTokenProvider {
 
   override fun getToken(request: AttestationTokenRequest): String {
-    val body: String =
-      JsonObject()
-        .apply {
-          addProperty("audience", request.audience)
-          addProperty("token_type", request.tokenType.wireValue)
-          if (request.nonces.isNotEmpty()) {
-            add("nonces", JsonArray().apply { request.nonces.forEach { add(it) } })
-          }
-          if (request.tokenType == ConfidentialSpaceTokenType.AWS_PRINCIPAL_TAGS) {
-            // For AWS_PRINCIPALTAGS the launcher reads aws_principal_tag_options unconditionally.
-            // Launcher builds predating the nil guard in go-tpm-tools convertToCSOpts panic (nil
-            // pointer dereference) when it is absent and write a zero-byte body, which surfaces
-            // here
-            // as a malformed/empty response. Sending the full structure keeps
-            // TokenOptions.token_type_options non-nil on every launcher version. key_ids carries
-            // the container image signature key IDs to surface as the container.signatures.key_id
-            // principal tag; when empty the token instead carries container.image_digest.
-            add(
-              "aws_principal_tag_options",
-              JsonObject().apply {
-                add(
-                  "allowed_principal_tags",
-                  JsonObject().apply {
-                    add(
-                      "container_image_signatures",
-                      JsonObject().apply {
-                        add(
-                          "key_ids",
-                          JsonArray().apply {
-                            request.containerImageSignatureKeyIds.forEach { add(it) }
-                          },
-                        )
-                      },
-                    )
-                  },
-                )
-              },
-            )
-          }
-        }
-        .toString()
+    check(Epoll.isAvailable()) {
+      "Netty epoll transport is unavailable, so the launcher token socket cannot be reached. " +
+        "Confidential Space workloads run on Linux, where it is supported."
+    }
 
-    val responseBytes: ByteArray =
-      socketFactory(socketPath).use { socket ->
-        socket.soTimeout = readTimeout.toMillis().coerceIn(0L, Int.MAX_VALUE.toLong()).toInt()
-        val bodyBytes = body.toByteArray(StandardCharsets.UTF_8)
-        val httpRequest = buildString {
-          append("POST ").append(TOKEN_PATH).append(" HTTP/1.1\r\n")
-          append("Host: localhost\r\n")
-          append("Content-Type: application/json\r\n")
-          append("Content-Length: ").append(bodyBytes.size).append("\r\n")
-          append("Connection: close\r\n")
-          append("\r\n")
+    val timeoutMillis: Long = readTimeout.toMillis().coerceIn(1L, Int.MAX_VALUE.toLong())
+    val responseFuture = CompletableFuture<LauncherResponse>()
+    // One event loop per call: tokens are fetched rarely (on credential refresh), so a shared
+    // group would outlive its usefulness and need a close() on this client's public API.
+    val eventLoopGroup = EpollEventLoopGroup(1)
+    try {
+      val bootstrap =
+        Bootstrap()
+          .group(eventLoopGroup)
+          .channel(EpollDomainSocketChannel::class.java)
+          .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, timeoutMillis.toInt())
+          .handler(
+            object : ChannelInitializer<Channel>() {
+              override fun initChannel(channel: Channel) {
+                channel
+                  .pipeline()
+                  .addLast(
+                    HttpClientCodec(),
+                    HttpObjectAggregator(MAX_RESPONSE_SIZE_BYTES),
+                    ResponseHandler(responseFuture),
+                  )
+              }
+            }
+          )
+
+      val channel: Channel =
+        try {
+          bootstrap.connect(DomainSocketAddress(socketPath.toFile())).sync().channel()
+        } catch (e: Exception) {
+          throw IOException("Failed to connect to launcher token socket at $socketPath", e)
         }
-        socket.getOutputStream().apply {
-          write(httpRequest.toByteArray(StandardCharsets.US_ASCII))
-          write(bodyBytes)
-          flush()
+      channel.writeAndFlush(buildHttpRequest(buildRequestBody(request)))
+
+      val response: LauncherResponse =
+        try {
+          responseFuture.get(timeoutMillis, TimeUnit.MILLISECONDS)
+        } catch (e: TimeoutException) {
+          throw IOException("Timed out awaiting a response from the launcher token socket", e)
+        } catch (e: ExecutionException) {
+          throw IOException("Failed to read from the launcher token socket", e.cause ?: e)
         }
-        socket.getInputStream().readBytes()
+
+      val token = response.body.trim()
+      if (response.statusCode !in 200..299) {
+        throw IOException(
+          "Launcher token request failed: ${response.statusCode} ${response.reasonPhrase}; " +
+            "body=${redactIfJwt(token)}"
+        )
       }
+      check(token.isNotEmpty()) { "Launcher returned an empty attestation token" }
+      return token
+    } finally {
+      // Zero quiet period: nothing else shares this group, so there is no work to drain.
+      eventLoopGroup.shutdownGracefully(0, timeoutMillis, TimeUnit.MILLISECONDS)
+    }
+  }
 
-    return parseTokenResponse(responseBytes)
+  private fun buildRequestBody(request: AttestationTokenRequest): String =
+    JsonObject()
+      .apply {
+        addProperty("audience", request.audience)
+        addProperty("token_type", request.tokenType.wireValue)
+        if (request.nonces.isNotEmpty()) {
+          add("nonces", JsonArray().apply { request.nonces.forEach { add(it) } })
+        }
+        if (request.tokenType == ConfidentialSpaceTokenType.AWS_PRINCIPAL_TAGS) {
+          // For AWS_PRINCIPALTAGS the launcher reads aws_principal_tag_options unconditionally.
+          // Launcher builds predating the nil guard in go-tpm-tools convertToCSOpts panic (nil
+          // pointer dereference) when it is absent and write a zero-byte body, which surfaces here
+          // as a malformed/empty response. Sending the full structure keeps
+          // TokenOptions.token_type_options non-nil on every launcher version. key_ids carries the
+          // container image signature key IDs to surface as the container.signatures.key_id
+          // principal tag; when empty the token instead carries container.image_digest.
+          add(
+            "aws_principal_tag_options",
+            JsonObject().apply {
+              add(
+                "allowed_principal_tags",
+                JsonObject().apply {
+                  add(
+                    "container_image_signatures",
+                    JsonObject().apply {
+                      add(
+                        "key_ids",
+                        JsonArray().apply {
+                          request.containerImageSignatureKeyIds.forEach { add(it) }
+                        },
+                      )
+                    },
+                  )
+                },
+              )
+            },
+          )
+        }
+      }
+      .toString()
+
+  private fun buildHttpRequest(body: String): FullHttpRequest {
+    val content = Unpooled.copiedBuffer(body, StandardCharsets.UTF_8)
+    val httpRequest =
+      DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, TOKEN_PATH, content)
+    httpRequest.headers().apply {
+      set(HttpHeaderNames.HOST, "localhost")
+      set(HttpHeaderNames.CONTENT_TYPE, HttpHeaderValues.APPLICATION_JSON)
+      setInt(HttpHeaderNames.CONTENT_LENGTH, content.readableBytes())
+      set(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE)
+    }
+    return httpRequest
+  }
+
+  /** Status and body of the launcher's HTTP response, copied off the event loop. */
+  private data class LauncherResponse(
+    val statusCode: Int,
+    val reasonPhrase: String,
+    val body: String,
+  )
+
+  /**
+   * Completes [future] with the aggregated response. The body is copied into a [String] here
+   * because Netty releases the underlying buffer once this handler returns.
+   */
+  private class ResponseHandler(private val future: CompletableFuture<LauncherResponse>) :
+    SimpleChannelInboundHandler<FullHttpResponse>() {
+
+    override fun channelRead0(context: ChannelHandlerContext, message: FullHttpResponse) {
+      // A malformed response (e.g. bad chunk framing) surfaces as a failed decoder result rather
+      // than an exception, and would otherwise look like an empty body.
+      val decoderResult = message.decoderResult()
+      if (decoderResult.isFailure) {
+        future.completeExceptionally(
+          IOException(
+            "Malformed HTTP response from the launcher token socket",
+            decoderResult.cause(),
+          )
+        )
+        context.close()
+        return
+      }
+      future.complete(
+        LauncherResponse(
+          message.status().code(),
+          message.status().reasonPhrase(),
+          message.content().toString(StandardCharsets.UTF_8),
+        )
+      )
+      context.close()
+    }
+
+    override fun channelInactive(context: ChannelHandlerContext) {
+      // A no-op once the future is already complete, which is the normal close after a response.
+      future.completeExceptionally(
+        IOException("Launcher token socket closed before a complete response was received")
+      )
+      super.channelInactive(context)
+    }
+
+    override fun exceptionCaught(context: ChannelHandlerContext, cause: Throwable) {
+      future.completeExceptionally(cause)
+      context.close()
+    }
   }
 
   companion object {
@@ -154,11 +279,8 @@ class ConfidentialSpaceTokenClient(
     const val TOKEN_PATH = "/v1/token"
 
     private val DEFAULT_READ_TIMEOUT: Duration = Duration.ofSeconds(30)
-    private val CRLF = byteArrayOf('\r'.code.toByte(), '\n'.code.toByte())
-    private val HEADER_BODY_SEPARATOR = CRLF + CRLF
-
-    private fun connectUnixDomainSocket(path: Path): Socket =
-      AFUNIXSocket.connectTo(AFUNIXSocketAddress.of(path.toFile()))
+    /** Upper bound on the aggregated response; attestation tokens are a few KiB. */
+    private const val MAX_RESPONSE_SIZE_BYTES = 1 shl 20
 
     /**
      * Extracts container image signature key IDs from a Confidential Space attestation [token] by
@@ -200,97 +322,6 @@ class ConfidentialSpaceTokenClient(
             part.isNotEmpty() && part.all { it.isLetterOrDigit() || it == '_' || it == '-' }
           }
       return if (looksLikeJwt) "[redacted possible JWT]" else value
-    }
-
-    /**
-     * Parses an HTTP/1.1 response from the launcher and returns the token body.
-     *
-     * Honors `Transfer-Encoding: chunked` and `Content-Length`, falling back to the bytes read
-     * until end-of-stream otherwise. The launcher sets no `Content-Length`, and tokens larger than
-     * the server's write buffer are sent chunked, so de-chunking is required for real tokens.
-     */
-    private fun parseTokenResponse(responseBytes: ByteArray): String {
-      require(responseBytes.isNotEmpty()) { "Empty response from launcher token socket" }
-
-      val headerEnd = indexOf(responseBytes, HEADER_BODY_SEPARATOR, 0)
-      require(headerEnd >= 0) { "Malformed HTTP response from launcher token socket" }
-
-      val headerLines = String(responseBytes, 0, headerEnd, StandardCharsets.US_ASCII).split("\r\n")
-      val statusLine = headerLines.first()
-      val statusCode = statusLine.split(" ").getOrNull(1)?.toIntOrNull()
-      val headers: Map<String, String> =
-        headerLines
-          .drop(1)
-          .mapNotNull { line ->
-            val colon = line.indexOf(':')
-            if (colon < 0) null
-            else line.substring(0, colon).trim().lowercase() to line.substring(colon + 1).trim()
-          }
-          .toMap()
-
-      val rawBody =
-        responseBytes.copyOfRange(headerEnd + HEADER_BODY_SEPARATOR.size, responseBytes.size)
-      val bodyBytes: ByteArray =
-        if (headers["transfer-encoding"]?.contains("chunked", ignoreCase = true) == true) {
-          decodeChunkedBody(rawBody)
-        } else {
-          val contentLength = headers["content-length"]?.toIntOrNull()
-          if (contentLength != null) rawBody.copyOfRange(0, minOf(contentLength, rawBody.size))
-          else rawBody
-        }
-
-      val token = String(bodyBytes, StandardCharsets.UTF_8).trim()
-      if (statusCode == null || statusCode !in 200..299) {
-        throw IOException("Launcher token request failed: $statusLine; body=${redactIfJwt(token)}")
-      }
-      check(token.isNotEmpty()) { "Launcher returned an empty attestation token" }
-      return token
-    }
-
-    /**
-     * Decodes an HTTP `Transfer-Encoding: chunked` message body. Fails fast with an [IOException]
-     * on malformed framing rather than returning a silently truncated token.
-     */
-    private fun decodeChunkedBody(body: ByteArray): ByteArray {
-      val decoded = ByteArrayOutputStream()
-      var position = 0
-      while (position < body.size) {
-        val lineEnd = indexOf(body, CRLF, position)
-        if (lineEnd < 0) {
-          throw IOException("Malformed chunked response: missing CRLF after chunk size")
-        }
-        val sizeToken =
-          String(body, position, lineEnd - position, StandardCharsets.US_ASCII)
-            .substringBefore(';')
-            .trim()
-        val chunkSize =
-          sizeToken.toIntOrNull(16)
-            ?: throw IOException("Malformed chunked response: invalid chunk size \"$sizeToken\"")
-        position = lineEnd + CRLF.size
-        if (chunkSize == 0) break
-        val chunkEnd = position + chunkSize
-        if (chunkEnd > body.size) {
-          throw IOException("Malformed chunked response: truncated chunk")
-        }
-        decoded.write(body, position, chunkSize)
-        position = chunkEnd + CRLF.size
-      }
-      return decoded.toByteArray()
-    }
-
-    /** Returns the index of [needle] in [haystack] at or after [from], or -1 if absent. */
-    private fun indexOf(haystack: ByteArray, needle: ByteArray, from: Int): Int {
-      if (needle.isEmpty()) return from
-      var i = from
-      while (i <= haystack.size - needle.size) {
-        var j = 0
-        while (j < needle.size && haystack[i + j] == needle[j]) {
-          j++
-        }
-        if (j == needle.size) return i
-        i++
-      }
-      return -1
     }
   }
 }
