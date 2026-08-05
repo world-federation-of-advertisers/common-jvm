@@ -27,15 +27,16 @@ import io.netty.channel.epoll.Epoll
 import io.netty.channel.epoll.EpollEventLoopGroup
 import io.netty.channel.epoll.EpollServerDomainSocketChannel
 import io.netty.channel.unix.DomainSocketAddress
+import io.netty.handler.codec.PrematureChannelClosureException
 import java.io.IOException
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.time.Duration
+import java.util.concurrent.TimeUnit
 import kotlin.test.assertFailsWith
 import org.junit.After
-import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -54,9 +55,10 @@ class ConfidentialSpaceTokenClientTest {
   @Volatile private var capturedRequest: String = ""
 
   @Before
-  fun assumeEpollAvailable() {
-    // Domain sockets need the native epoll transport, which is Linux-only.
-    assumeTrue(Epoll.isAvailable())
+  fun assertEpollAvailable() {
+    // Domain sockets need the native epoll transport. It is required in production and present on
+    // CI, so assert rather than skip: a missing runtime dependency should fail, not pass silently.
+    assertThat(Epoll.isAvailable()).isTrue()
   }
 
   /** Binds a domain socket that replies with [response] verbatim, then closes. */
@@ -106,7 +108,7 @@ class ConfidentialSpaceTokenClientTest {
   @After
   fun stopServer() {
     serverChannel?.close()?.sync()
-    serverGroup?.shutdownGracefully(0, 5, java.util.concurrent.TimeUnit.SECONDS)
+    serverGroup?.shutdownGracefully(0, 5, TimeUnit.SECONDS)
     if (this::socketPath.isInitialized) {
       Files.deleteIfExists(socketPath)
     }
@@ -216,7 +218,10 @@ class ConfidentialSpaceTokenClientTest {
         "20\r\nonly-a-few-bytes\r\n"
     )
 
-    assertFailsWith<IOException> { clientForServer().getToken(awsPrincipalTagsRequest()) }
+    val exception =
+      assertFailsWith<IOException> { clientForServer().getToken(awsPrincipalTagsRequest()) }
+
+    assertThat(exception).hasCauseThat().isInstanceOf(PrematureChannelClosureException::class.java)
   }
 
   @Test
@@ -229,7 +234,10 @@ class ConfidentialSpaceTokenClientTest {
         "zz\r\nsome-bytes\r\n0\r\n\r\n"
     )
 
-    assertFailsWith<IOException> { clientForServer().getToken(awsPrincipalTagsRequest()) }
+    val exception =
+      assertFailsWith<IOException> { clientForServer().getToken(awsPrincipalTagsRequest()) }
+
+    assertThat(exception).hasCauseThat().hasMessageThat().contains("Malformed HTTP response")
   }
 
   @Test

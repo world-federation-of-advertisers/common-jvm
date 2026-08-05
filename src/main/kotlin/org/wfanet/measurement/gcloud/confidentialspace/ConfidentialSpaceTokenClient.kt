@@ -105,9 +105,13 @@ class ConfidentialSpaceTokenClient(
 ) : AttestationTokenProvider {
 
   override fun getToken(request: AttestationTokenRequest): String {
-    check(Epoll.isAvailable()) {
-      "Netty epoll transport is unavailable, so the launcher token socket cannot be reached. " +
-        "Confidential Space workloads run on Linux, where it is supported."
+    if (!Epoll.isAvailable()) {
+      // An environment condition rather than a programming error, so it joins the IOException
+      // surface that the rest of this method reports.
+      throw IOException(
+        "Netty epoll transport is unavailable, so the launcher token socket cannot be reached. " +
+          "Confidential Space workloads run on Linux, where it is supported."
+      )
     }
 
     // Netty takes the connect timeout as an Int, and a Duration can exceed that range.
@@ -186,7 +190,9 @@ class ConfidentialSpaceTokenClient(
             "body=${redactIfJwt(token)}"
         )
       }
-      check(token.isNotEmpty()) { "Launcher returned an empty attestation token" }
+      if (token.isEmpty()) {
+        throw IOException("Launcher returned an empty attestation token")
+      }
       return token
     } finally {
       // Zero quiet period: nothing else shares this group, so there is no work to drain.
