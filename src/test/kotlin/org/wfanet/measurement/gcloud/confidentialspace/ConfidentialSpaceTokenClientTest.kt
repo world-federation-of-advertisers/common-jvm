@@ -113,7 +113,7 @@ class ConfidentialSpaceTokenClientTest {
   }
 
   private fun clientForServer() =
-    ConfidentialSpaceTokenClient(socketPath = socketPath, readTimeout = Duration.ofSeconds(10))
+    ConfidentialSpaceTokenClient(socketPath = socketPath, requestTimeout = Duration.ofSeconds(10))
 
   private fun awsPrincipalTagsRequest() =
     AttestationTokenRequest(

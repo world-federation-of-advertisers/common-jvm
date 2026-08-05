@@ -96,11 +96,12 @@ fun interface AttestationTokenProvider {
  * where Confidential Space workloads run; [getToken] fails fast elsewhere.
  *
  * @param socketPath Filesystem path of the launcher token socket.
- * @param readTimeout Bound on how long a single token request may take.
+ * @param requestTimeout Overall bound on a token request, covering both connecting to the socket
+ *   and awaiting the response.
  */
 class ConfidentialSpaceTokenClient(
   private val socketPath: Path = Paths.get(DEFAULT_SOCKET_PATH),
-  private val readTimeout: Duration = DEFAULT_READ_TIMEOUT,
+  private val requestTimeout: Duration = DEFAULT_REQUEST_TIMEOUT,
 ) : AttestationTokenProvider {
 
   override fun getToken(request: AttestationTokenRequest): String {
@@ -109,7 +110,11 @@ class ConfidentialSpaceTokenClient(
         "Confidential Space workloads run on Linux, where it is supported."
     }
 
-    val timeoutMillis: Long = readTimeout.toMillis().coerceIn(1L, Int.MAX_VALUE.toLong())
+    // Netty takes the connect timeout as an Int, and a Duration can exceed that range.
+    val timeoutMillis: Long = requestTimeout.toMillis().coerceIn(1L, Int.MAX_VALUE.toLong())
+    // Connecting and awaiting the response share one budget, so a caller's timeout is the bound on
+    // the whole call rather than on each step.
+    val deadlineNanos: Long = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis)
     val responseFuture = CompletableFuture<LauncherResponse>()
     // One event loop per call: tokens are fetched rarely (on credential refresh), so a shared
     // group would outlive its usefulness and need a close() on this client's public API.
@@ -137,14 +142,37 @@ class ConfidentialSpaceTokenClient(
       val channel: Channel =
         try {
           bootstrap.connect(DomainSocketAddress(socketPath.toFile())).sync().channel()
+        } catch (e: InterruptedException) {
+          Thread.currentThread().interrupt()
+          throw IOException("Interrupted while connecting to launcher token socket", e)
         } catch (e: Exception) {
           throw IOException("Failed to connect to launcher token socket at $socketPath", e)
         }
-      channel.writeAndFlush(buildHttpRequest(buildRequestBody(request)))
 
+      // Report a failed write instead of leaving the caller to wait out the timeout.
+      channel.writeAndFlush(buildHttpRequest(buildRequestBody(request))).addListener { writeFuture
+        ->
+        if (!writeFuture.isSuccess) {
+          responseFuture.completeExceptionally(
+            IOException(
+              "Failed to send the token request to the launcher socket",
+              writeFuture.cause(),
+            )
+          )
+        }
+      }
+
+      val remainingMillis: Long =
+        TimeUnit.NANOSECONDS.toMillis(deadlineNanos - System.nanoTime()).coerceAtLeast(1L)
       val response: LauncherResponse =
         try {
-          responseFuture.get(timeoutMillis, TimeUnit.MILLISECONDS)
+          responseFuture.get(remainingMillis, TimeUnit.MILLISECONDS)
+        } catch (e: InterruptedException) {
+          Thread.currentThread().interrupt()
+          throw IOException(
+            "Interrupted while awaiting a response from the launcher token socket",
+            e,
+          )
         } catch (e: TimeoutException) {
           throw IOException("Timed out awaiting a response from the launcher token socket", e)
         } catch (e: ExecutionException) {
@@ -182,27 +210,14 @@ class ConfidentialSpaceTokenClient(
           // TokenOptions.token_type_options non-nil on every launcher version. key_ids carries the
           // container image signature key IDs to surface as the container.signatures.key_id
           // principal tag; when empty the token instead carries container.image_digest.
-          add(
-            "aws_principal_tag_options",
-            JsonObject().apply {
-              add(
-                "allowed_principal_tags",
-                JsonObject().apply {
-                  add(
-                    "container_image_signatures",
-                    JsonObject().apply {
-                      add(
-                        "key_ids",
-                        JsonArray().apply {
-                          request.containerImageSignatureKeyIds.forEach { add(it) }
-                        },
-                      )
-                    },
-                  )
-                },
-              )
-            },
-          )
+          val keyIds =
+            JsonArray().apply { request.containerImageSignatureKeyIds.forEach { add(it) } }
+          val containerImageSignatures = JsonObject().apply { add("key_ids", keyIds) }
+          val allowedPrincipalTags =
+            JsonObject().apply { add("container_image_signatures", containerImageSignatures) }
+          val awsPrincipalTagOptions =
+            JsonObject().apply { add("allowed_principal_tags", allowedPrincipalTags) }
+          add("aws_principal_tag_options", awsPrincipalTagOptions)
         }
       }
       .toString()
@@ -259,10 +274,12 @@ class ConfidentialSpaceTokenClient(
     }
 
     override fun channelInactive(context: ChannelHandlerContext) {
-      // A no-op once the future is already complete, which is the normal close after a response.
-      future.completeExceptionally(
-        IOException("Launcher token socket closed before a complete response was received")
-      )
+      // Already complete on the normal close that follows a response.
+      if (!future.isDone) {
+        future.completeExceptionally(
+          IOException("Launcher token socket closed before a complete response was received")
+        )
+      }
       super.channelInactive(context)
     }
 
@@ -278,7 +295,7 @@ class ConfidentialSpaceTokenClient(
     /** Path of the launcher token endpoint. */
     const val TOKEN_PATH = "/v1/token"
 
-    private val DEFAULT_READ_TIMEOUT: Duration = Duration.ofSeconds(30)
+    private val DEFAULT_REQUEST_TIMEOUT: Duration = Duration.ofSeconds(30)
     /** Upper bound on the aggregated response; attestation tokens are a few KiB. */
     private const val MAX_RESPONSE_SIZE_BYTES = 1 shl 20
 

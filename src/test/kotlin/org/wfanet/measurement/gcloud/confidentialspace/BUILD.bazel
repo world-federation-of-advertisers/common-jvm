@@ -7,10 +7,7 @@ kt_jvm_test(
     runtime_deps = ["//imports/java/io/netty:transport_native_epoll"],
     deps = [
         "//imports/java/com/google/common/truth",
-        "//imports/java/io/netty:buffer",
-        "//imports/java/io/netty:transport",
         "//imports/java/io/netty:transport_classes_epoll",
-        "//imports/java/io/netty:transport_native_unix_common",
         "//imports/java/org/junit",
         "//imports/kotlin/kotlin/test",
         "//src/main/kotlin/org/wfanet/measurement/gcloud/confidentialspace:confidential_space_token_client",
