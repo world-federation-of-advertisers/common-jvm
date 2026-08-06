@@ -45,12 +45,13 @@ class UnixDomainSocketTest {
   /**
    * Binds a socket whose accepted connection is handled by [handler].
    *
-   * Bound under /tmp rather than the test tmpdir because a Unix socket path is limited to about 108
-   * bytes, which Bazel's much longer tmpdir exceeds. That makes this test non-hermetic: it writes
-   * outside the sandbox and would need a short writable path under a remote executor.
+   * The socket path is relative, so it is created in the test's working directory and stays inside
+   * the sandbox. A Unix socket path is limited to about 108 bytes and an absolute path under
+   * Bazel's tmpdir exceeds that; the kernel resolves a relative path against the working directory,
+   * so only the short name has to fit.
    */
   private fun startServer(handler: (SocketChannel) -> Unit) {
-    socketPath = Paths.get("/tmp", "uds-test-${System.nanoTime()}.sock")
+    socketPath = Paths.get("uds-test-${System.nanoTime()}.sock")
     val channel = ServerSocketChannel.open(StandardProtocolFamily.UNIX)
     channel.bind(UnixDomainSocketAddress.of(socketPath))
     serverChannel = channel

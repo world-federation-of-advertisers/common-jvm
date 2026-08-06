@@ -50,9 +50,11 @@ class ConfidentialSpaceTokenClientTest {
 
   /** Binds a domain socket that replies with [responses] in order, one per connection. */
   private fun startServer(vararg responses: String) {
-    // Bind under /tmp: the sun_path limit for a Unix socket is ~108 bytes, which Bazel's much
-    // longer test tmpdir would exceed. The path must not exist yet for bind() to succeed.
-    socketPath = Paths.get("/tmp", "cs-token-test-${System.nanoTime()}.sock")
+    // A relative path keeps the socket in the test's working directory, inside the sandbox. The
+    // sun_path limit is ~108 bytes and an absolute path under Bazel's tmpdir exceeds it, but the
+    // kernel resolves a relative path against the working directory. It must not exist yet for
+    // bind() to succeed.
+    socketPath = Paths.get("cs-token-test-${System.nanoTime()}.sock")
     val channel = ServerSocketChannel.open(StandardProtocolFamily.UNIX)
     channel.bind(UnixDomainSocketAddress.of(socketPath))
     serverChannel = channel
