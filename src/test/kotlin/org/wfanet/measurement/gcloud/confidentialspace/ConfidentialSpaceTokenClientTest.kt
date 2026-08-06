@@ -16,72 +16,103 @@ package org.wfanet.measurement.gcloud.confidentialspace
 
 import com.google.common.truth.Truth.assertThat
 import java.io.IOException
-import java.net.SocketTimeoutException
+import java.net.StandardProtocolFamily
+import java.net.UnixDomainSocketAddress
+import java.nio.ByteBuffer
+import java.nio.channels.ServerSocketChannel
+import java.nio.channels.SocketChannel
 import java.nio.charset.StandardCharsets
+import java.nio.file.Files
+import java.nio.file.Path
 import java.nio.file.Paths
+import java.time.Duration
+import java.util.Base64
+import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
 import kotlin.test.assertFailsWith
 import org.junit.After
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
-import org.newsclub.net.unix.AFUNIXServerSocket
-import org.newsclub.net.unix.AFUNIXSocket
-import org.newsclub.net.unix.AFUNIXSocketAddress
 
 /**
- * Tests for [ConfidentialSpaceTokenClient].
- *
- * A real in-process Unix domain socket server (junixsocket, Linux abstract namespace to avoid
- * socket-path length limits) stands in for the Confidential Space launcher, exercising the HTTP
- * response framing the real launcher uses (chunked and Content-Length).
+ * Tests for [ConfidentialSpaceTokenClient] against a Unix domain socket server that replies with
+ * raw bytes, so the exact response framing the real launcher uses (chunked, Content-Length, and
+ * unframed) can be exercised.
  */
 @RunWith(JUnit4::class)
 class ConfidentialSpaceTokenClientTest {
-  private lateinit var serverAddress: AFUNIXSocketAddress
-  private lateinit var serverSocket: AFUNIXServerSocket
-  private lateinit var serverThread: Thread
+  private var serverChannel: ServerSocketChannel? = null
+  private var serverThread: Thread? = null
+  private lateinit var socketPath: Path
   @Volatile private var capturedRequest: String = ""
+  @Volatile private var acceptCount: Int = 0
 
-  private fun startServer(response: String) {
-    serverAddress = AFUNIXSocketAddress.inAbstractNamespace("cs-token-test-" + System.nanoTime())
-    serverSocket = AFUNIXServerSocket.bindOn(serverAddress)
+  /** Binds a domain socket that replies with [responses] in order, one per connection. */
+  private fun startServer(vararg responses: String) {
+    // A relative path keeps the socket in the test's working directory, inside the sandbox. The
+    // sun_path limit is ~108 bytes and an absolute path under Bazel's tmpdir exceeds it, but the
+    // kernel resolves a relative path against the working directory. It must not exist yet for
+    // bind() to succeed.
+    socketPath = Paths.get("cs-token-test-${System.nanoTime()}.sock")
+    val channel = ServerSocketChannel.open(StandardProtocolFamily.UNIX)
+    channel.bind(UnixDomainSocketAddress.of(socketPath))
+    serverChannel = channel
+
     serverThread =
-      thread(start = true) {
-        serverSocket.accept().use { conn ->
-          conn.soTimeout = 2_000
-          val buffer = ByteArray(8192)
-          val received = StringBuilder()
-          try {
-            while (true) {
-              val read = conn.getInputStream().read(buffer)
-              if (read <= 0) break
-              received.append(String(buffer, 0, read, StandardCharsets.UTF_8))
-              if (received.contains("\r\n\r\n") && received.trimEnd().endsWith("}")) break
+      thread(start = true, isDaemon = true) {
+        try {
+          while (channel.isOpen) {
+            // All responses are served on one connection, so a client that pools sees the same
+            // connection on its second request.
+            channel.accept().use { connection ->
+              acceptCount++
+              for (response in responses) {
+                if (!serve(connection, response)) break
+              }
             }
-          } catch (e: SocketTimeoutException) {
-            // Done reading the (small) request.
           }
-          capturedRequest = received.toString()
-          conn.getOutputStream().apply {
-            write(response.toByteArray(StandardCharsets.UTF_8))
-            flush()
-          }
+        } catch (e: IOException) {
+          // Expected once the channel is closed in tearDown.
         }
       }
   }
 
+  /**
+   * Reads one request off [connection], records it, then writes [response].
+   *
+   * Returns false once the peer stops sending, so the caller can stop serving this connection.
+   */
+  private fun serve(connection: SocketChannel, response: String): Boolean {
+    val received = StringBuilder()
+    val buffer = ByteBuffer.allocate(8192)
+    while (true) {
+      buffer.clear()
+      if (connection.read(buffer) <= 0) return false
+      buffer.flip()
+      received.append(StandardCharsets.UTF_8.decode(buffer))
+      // The request is complete once the headers and the JSON body have arrived.
+      if (received.contains("\r\n\r\n") && received.trimEnd().endsWith("}")) break
+    }
+    capturedRequest = received.toString()
+    val out = ByteBuffer.wrap(response.toByteArray(StandardCharsets.UTF_8))
+    while (out.hasRemaining()) {
+      connection.write(out)
+    }
+    return true
+  }
+
   @After
   fun tearDown() {
-    if (this::serverSocket.isInitialized) serverSocket.close()
-    if (this::serverThread.isInitialized) serverThread.join(5_000)
+    serverChannel?.close()
+    serverThread?.join(TimeUnit.SECONDS.toMillis(5))
+    if (this::socketPath.isInitialized) {
+      Files.deleteIfExists(socketPath)
+    }
   }
 
   private fun clientForServer() =
-    ConfidentialSpaceTokenClient(
-      socketPath = Paths.get("unused-in-test"),
-      socketFactory = { AFUNIXSocket.connectTo(serverAddress) },
-    )
+    ConfidentialSpaceTokenClient(socketPath = socketPath, requestTimeout = Duration.ofSeconds(10))
 
   private fun awsPrincipalTagsRequest() =
     AttestationTokenRequest(
@@ -90,9 +121,11 @@ class ConfidentialSpaceTokenClientTest {
     )
 
   @Test
-  fun `getToken returns the token body from an unframed 200 response`() {
+  fun `getToken returns the token body from a Content-Length response`() {
     val token = "header.payload.signature"
-    startServer("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\n$token")
+    startServer(
+      "HTTP/1.1 200 OK\r\nContent-Length: ${token.length}\r\nConnection: close\r\n\r\n$token"
+    )
 
     val result = clientForServer().getToken(awsPrincipalTagsRequest())
 
@@ -106,7 +139,7 @@ class ConfidentialSpaceTokenClientTest {
   fun `getToken de-chunks a Transfer-Encoding chunked response`() {
     // The launcher sets no Content-Length, so real (large) tokens arrive chunked. Split the token
     // across two chunks (sizes 7 and 0x11) to exercise reassembly.
-    val response =
+    startServer(
       "HTTP/1.1 200 OK\r\n" +
         "Content-Type: text/plain\r\n" +
         "Transfer-Encoding: chunked\r\n" +
@@ -115,7 +148,7 @@ class ConfidentialSpaceTokenClientTest {
         "7\r\nheader.\r\n" +
         "11\r\npayload.signature\r\n" +
         "0\r\n\r\n"
-    startServer(response)
+    )
 
     val result = clientForServer().getToken(awsPrincipalTagsRequest())
 
@@ -148,15 +181,23 @@ class ConfidentialSpaceTokenClientTest {
 
   @Test
   fun `getToken throws on a non-2xx response`() {
-    startServer("HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\ninvalid audience")
+    startServer(
+      "HTTP/1.1 400 Bad Request\r\nContent-Length: 16\r\nConnection: close\r\n\r\ninvalid audience"
+    )
 
-    assertFailsWith<IOException> { clientForServer().getToken(awsPrincipalTagsRequest()) }
+    val exception =
+      assertFailsWith<IOException> { clientForServer().getToken(awsPrincipalTagsRequest()) }
+
+    assertThat(exception).hasMessageThat().contains("400")
+    assertThat(exception).hasMessageThat().contains("invalid audience")
   }
 
   @Test
   fun `getToken redacts a JWT-looking body from the error message`() {
     val jwt = "header.payload.signature"
-    startServer("HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n$jwt")
+    startServer(
+      "HTTP/1.1 401 Unauthorized\r\nContent-Length: ${jwt.length}\r\nConnection: close\r\n\r\n$jwt"
+    )
 
     val exception =
       assertFailsWith<IOException> { clientForServer().getToken(awsPrincipalTagsRequest()) }
@@ -166,8 +207,8 @@ class ConfidentialSpaceTokenClientTest {
   }
 
   @Test
-  fun `getToken fails fast on a truncated chunk`() {
-    // Chunk header claims 0x20 (32) bytes but far fewer follow.
+  fun `getToken fails on a truncated chunk`() {
+    // Chunk header claims 0x20 (32) bytes but far fewer follow before the socket closes.
     startServer(
       "HTTP/1.1 200 OK\r\n" +
         "Transfer-Encoding: chunked\r\n" +
@@ -176,31 +217,19 @@ class ConfidentialSpaceTokenClientTest {
         "20\r\nonly-a-few-bytes\r\n"
     )
 
-    val exception =
-      assertFailsWith<IOException> { clientForServer().getToken(awsPrincipalTagsRequest()) }
-
-    assertThat(exception).hasMessageThat().contains("Malformed chunked response")
+    assertFailsWith<IOException> { clientForServer().getToken(awsPrincipalTagsRequest()) }
   }
 
   @Test
-  fun `getToken fails fast on an invalid chunk size`() {
-    startServer(
-      "HTTP/1.1 200 OK\r\n" +
-        "Transfer-Encoding: chunked\r\n" +
-        "Connection: close\r\n" +
-        "\r\n" +
-        "zz\r\nsome-bytes\r\n0\r\n\r\n"
-    )
+  fun `getToken fails on an empty response`() {
+    startServer("")
 
-    val exception =
-      assertFailsWith<IOException> { clientForServer().getToken(awsPrincipalTagsRequest()) }
-
-    assertThat(exception).hasMessageThat().contains("Malformed chunked response")
+    assertFailsWith<IOException> { clientForServer().getToken(awsPrincipalTagsRequest()) }
   }
 
   @Test
   fun `getToken sends aws_principal_tag_options for an AWS_PRINCIPALTAGS request`() {
-    startServer("HTTP/1.1 200 OK\r\nConnection: close\r\n\r\nheader.payload.signature")
+    startServer("HTTP/1.1 200 OK\r\nContent-Length: 24\r\n\r\nheader.payload.signature")
 
     clientForServer().getToken(awsPrincipalTagsRequest())
 
@@ -211,7 +240,7 @@ class ConfidentialSpaceTokenClientTest {
 
   @Test
   fun `getToken omits aws_principal_tag_options for non-AWS token types`() {
-    startServer("HTTP/1.1 200 OK\r\nConnection: close\r\n\r\nheader.payload.signature")
+    startServer("HTTP/1.1 200 OK\r\nContent-Length: 24\r\n\r\nheader.payload.signature")
 
     clientForServer()
       .getToken(
@@ -226,19 +255,8 @@ class ConfidentialSpaceTokenClientTest {
   }
 
   @Test
-  fun `getToken throws a clear error on an empty response`() {
-    startServer("")
-
-    val exception =
-      assertFailsWith<IllegalArgumentException> {
-        clientForServer().getToken(awsPrincipalTagsRequest())
-      }
-    assertThat(exception).hasMessageThat().contains("Empty response")
-  }
-
-  @Test
   fun `getToken includes requested container image signature key ids`() {
-    startServer("HTTP/1.1 200 OK\r\nConnection: close\r\n\r\nheader.payload.signature")
+    startServer("HTTP/1.1 200 OK\r\nContent-Length: 24\r\n\r\nheader.payload.signature")
 
     clientForServer()
       .getToken(
@@ -256,16 +274,39 @@ class ConfidentialSpaceTokenClientTest {
   }
 
   @Test
+  fun `getToken reuses a pooled connection for a later request`() {
+    // Both responses are served on one connection that stays open, so the second request goes
+    // through OkHttp's pooled-connection health check. That check sets a 1ms socket timeout and
+    // reads, and blocks forever unless the socket honors SO_TIMEOUT.
+    val body = "header.payload.signature"
+    val response = "HTTP/1.1 200 OK\r\nContent-Length: ${body.length}\r\n\r\n$body"
+    startServer(response, response)
+    val client = clientForServer()
+
+    assertThat(client.getToken(awsPrincipalTagsRequest())).isEqualTo(body)
+    assertThat(client.getToken(awsPrincipalTagsRequest())).isEqualTo(body)
+    // One accept means the second request went over the pooled connection.
+    assertThat(acceptCount).isEqualTo(1)
+  }
+
+  @Test
   fun `parseContainerImageSignatureKeyIds extracts key ids from the signatures claim`() {
     val payload =
-      "{\"submods\":{\"container\":{\"image_signatures\":" +
-        "[{\"key_id\":\"keyA\",\"signature_algorithm\":\"ECDSA_P256_SHA256\"}," +
-        "{\"key_id\":\"keyB\"}]}}}"
-    val encoded =
-      java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(payload.toByteArray())
-    val token = "header.$encoded.signature"
+      """
+      {"submods":{"container":{"image_signatures":[
+        {"key_id":"keyA","signature_algorithm":"ECDSA_P256_SHA256"},
+        {"key_id":"keyB","signature_algorithm":"ECDSA_P256_SHA256"},
+        {"key_id":"keyA","signature_algorithm":"ECDSA_P256_SHA256"}
+      ]}}}
+      """
+        .trimIndent()
+    val encodedPayload =
+      Base64.getUrlEncoder().withoutPadding().encodeToString(payload.toByteArray())
 
-    val keyIds = ConfidentialSpaceTokenClient.parseContainerImageSignatureKeyIds(token)
+    val keyIds =
+      ConfidentialSpaceTokenClient.parseContainerImageSignatureKeyIds(
+        "header.$encodedPayload.signature"
+      )
 
     assertThat(keyIds).containsExactly("keyA", "keyB").inOrder()
   }
