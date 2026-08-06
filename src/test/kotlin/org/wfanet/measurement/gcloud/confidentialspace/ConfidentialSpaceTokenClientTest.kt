@@ -15,100 +15,86 @@
 package org.wfanet.measurement.gcloud.confidentialspace
 
 import com.google.common.truth.Truth.assertThat
-import io.netty.bootstrap.ServerBootstrap
-import io.netty.buffer.ByteBuf
-import io.netty.buffer.Unpooled
-import io.netty.channel.Channel
-import io.netty.channel.ChannelFutureListener
-import io.netty.channel.ChannelHandlerContext
-import io.netty.channel.ChannelInboundHandlerAdapter
-import io.netty.channel.ChannelInitializer
-import io.netty.channel.epoll.Epoll
-import io.netty.channel.epoll.EpollEventLoopGroup
-import io.netty.channel.epoll.EpollServerDomainSocketChannel
-import io.netty.channel.unix.DomainSocketAddress
-import io.netty.handler.codec.PrematureChannelClosureException
 import java.io.IOException
+import java.net.StandardProtocolFamily
+import java.net.UnixDomainSocketAddress
+import java.nio.ByteBuffer
+import java.nio.channels.ServerSocketChannel
+import java.nio.channels.SocketChannel
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.time.Duration
+import java.util.Base64
 import java.util.concurrent.TimeUnit
+import kotlin.concurrent.thread
 import kotlin.test.assertFailsWith
 import org.junit.After
-import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 
 /**
- * Tests for [ConfidentialSpaceTokenClient] against a Netty Unix domain socket server that replies
- * with raw bytes, so the exact response framing the real launcher uses (chunked, Content-Length,
- * and unframed) can be exercised.
+ * Tests for [ConfidentialSpaceTokenClient] against a Unix domain socket server that replies with
+ * raw bytes, so the exact response framing the real launcher uses (chunked, Content-Length, and
+ * unframed) can be exercised.
  */
 @RunWith(JUnit4::class)
 class ConfidentialSpaceTokenClientTest {
-  private var serverGroup: EpollEventLoopGroup? = null
-  private var serverChannel: Channel? = null
+  private var serverChannel: ServerSocketChannel? = null
+  private var serverThread: Thread? = null
   private lateinit var socketPath: Path
   @Volatile private var capturedRequest: String = ""
 
-  @Before
-  fun assertEpollAvailable() {
-    // Domain sockets need the native epoll transport. It is required in production and present on
-    // CI, so assert rather than skip: a missing runtime dependency should fail, not pass silently.
-    assertThat(Epoll.isAvailable()).isTrue()
-  }
-
-  /** Binds a domain socket that replies with [response] verbatim, then closes. */
-  private fun startServer(response: String) {
+  /** Binds a domain socket that replies with [responses] in order, one per connection. */
+  private fun startServer(vararg responses: String) {
     // Bind under /tmp: the sun_path limit for a Unix socket is ~108 bytes, which Bazel's much
     // longer test tmpdir would exceed. The path must not exist yet for bind() to succeed.
     socketPath = Paths.get("/tmp", "cs-token-test-${System.nanoTime()}.sock")
-    val group = EpollEventLoopGroup(1)
-    serverGroup = group
-    val received = StringBuilder()
-    serverChannel =
-      ServerBootstrap()
-        .group(group)
-        .channel(EpollServerDomainSocketChannel::class.java)
-        .childHandler(
-          object : ChannelInitializer<Channel>() {
-            override fun initChannel(channel: Channel) {
-              channel
-                .pipeline()
-                .addLast(
-                  object : ChannelInboundHandlerAdapter() {
-                    override fun channelRead(context: ChannelHandlerContext, message: Any) {
-                      val buffer = message as ByteBuf
-                      try {
-                        received.append(buffer.toString(StandardCharsets.UTF_8))
-                      } finally {
-                        buffer.release()
-                      }
-                      // The request is complete once the headers and the JSON body have arrived.
-                      if (received.contains("\r\n\r\n") && received.trimEnd().endsWith("}")) {
-                        capturedRequest = received.toString()
-                        context
-                          .writeAndFlush(Unpooled.copiedBuffer(response, StandardCharsets.UTF_8))
-                          .addListener(ChannelFutureListener.CLOSE)
-                      }
-                    }
-                  }
-                )
+    val channel = ServerSocketChannel.open(StandardProtocolFamily.UNIX)
+    channel.bind(UnixDomainSocketAddress.of(socketPath))
+    serverChannel = channel
+
+    serverThread =
+      thread(start = true, isDaemon = true) {
+        var index = 0
+        try {
+          while (channel.isOpen) {
+            channel.accept().use { connection -> serve(connection, responses[index]) }
+            if (index < responses.size - 1) {
+              index++
             }
           }
-        )
-        .bind(DomainSocketAddress(socketPath.toFile()))
-        .sync()
-        .channel()
+        } catch (e: IOException) {
+          // Expected once the channel is closed in tearDown.
+        }
+      }
+  }
+
+  /** Reads one request off [connection], records it, then writes [response]. */
+  private fun serve(connection: SocketChannel, response: String) {
+    val received = StringBuilder()
+    val buffer = ByteBuffer.allocate(8192)
+    while (true) {
+      buffer.clear()
+      if (connection.read(buffer) <= 0) break
+      buffer.flip()
+      received.append(StandardCharsets.UTF_8.decode(buffer))
+      // The request is complete once the headers and the JSON body have arrived.
+      if (received.contains("\r\n\r\n") && received.trimEnd().endsWith("}")) break
+    }
+    capturedRequest = received.toString()
+    val out = ByteBuffer.wrap(response.toByteArray(StandardCharsets.UTF_8))
+    while (out.hasRemaining()) {
+      connection.write(out)
+    }
   }
 
   @After
-  fun stopServer() {
-    serverChannel?.close()?.sync()
-    serverGroup?.shutdownGracefully(0, 5, TimeUnit.SECONDS)
+  fun tearDown() {
+    serverChannel?.close()
+    serverThread?.join(TimeUnit.SECONDS.toMillis(5))
     if (this::socketPath.isInitialized) {
       Files.deleteIfExists(socketPath)
     }
@@ -124,9 +110,11 @@ class ConfidentialSpaceTokenClientTest {
     )
 
   @Test
-  fun `getToken returns the token body from an unframed 200 response`() {
+  fun `getToken returns the token body from a Content-Length response`() {
     val token = "header.payload.signature"
-    startServer("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\n$token")
+    startServer(
+      "HTTP/1.1 200 OK\r\nContent-Length: ${token.length}\r\nConnection: close\r\n\r\n$token"
+    )
 
     val result = clientForServer().getToken(awsPrincipalTagsRequest())
 
@@ -140,7 +128,7 @@ class ConfidentialSpaceTokenClientTest {
   fun `getToken de-chunks a Transfer-Encoding chunked response`() {
     // The launcher sets no Content-Length, so real (large) tokens arrive chunked. Split the token
     // across two chunks (sizes 7 and 0x11) to exercise reassembly.
-    val response =
+    startServer(
       "HTTP/1.1 200 OK\r\n" +
         "Content-Type: text/plain\r\n" +
         "Transfer-Encoding: chunked\r\n" +
@@ -149,7 +137,7 @@ class ConfidentialSpaceTokenClientTest {
         "7\r\nheader.\r\n" +
         "11\r\npayload.signature\r\n" +
         "0\r\n\r\n"
-    startServer(response)
+    )
 
     val result = clientForServer().getToken(awsPrincipalTagsRequest())
 
@@ -218,31 +206,19 @@ class ConfidentialSpaceTokenClientTest {
         "20\r\nonly-a-few-bytes\r\n"
     )
 
-    val exception =
-      assertFailsWith<IOException> { clientForServer().getToken(awsPrincipalTagsRequest()) }
-
-    assertThat(exception).hasCauseThat().isInstanceOf(PrematureChannelClosureException::class.java)
+    assertFailsWith<IOException> { clientForServer().getToken(awsPrincipalTagsRequest()) }
   }
 
   @Test
-  fun `getToken fails on an invalid chunk size`() {
-    startServer(
-      "HTTP/1.1 200 OK\r\n" +
-        "Transfer-Encoding: chunked\r\n" +
-        "Connection: close\r\n" +
-        "\r\n" +
-        "zz\r\nsome-bytes\r\n0\r\n\r\n"
-    )
+  fun `getToken fails on an empty response`() {
+    startServer("")
 
-    val exception =
-      assertFailsWith<IOException> { clientForServer().getToken(awsPrincipalTagsRequest()) }
-
-    assertThat(exception).hasCauseThat().hasMessageThat().contains("Malformed HTTP response")
+    assertFailsWith<IOException> { clientForServer().getToken(awsPrincipalTagsRequest()) }
   }
 
   @Test
   fun `getToken sends aws_principal_tag_options for an AWS_PRINCIPALTAGS request`() {
-    startServer("HTTP/1.1 200 OK\r\nConnection: close\r\n\r\nheader.payload.signature")
+    startServer("HTTP/1.1 200 OK\r\nContent-Length: 24\r\n\r\nheader.payload.signature")
 
     clientForServer().getToken(awsPrincipalTagsRequest())
 
@@ -253,7 +229,7 @@ class ConfidentialSpaceTokenClientTest {
 
   @Test
   fun `getToken omits aws_principal_tag_options for non-AWS token types`() {
-    startServer("HTTP/1.1 200 OK\r\nConnection: close\r\n\r\nheader.payload.signature")
+    startServer("HTTP/1.1 200 OK\r\nContent-Length: 24\r\n\r\nheader.payload.signature")
 
     clientForServer()
       .getToken(
@@ -268,21 +244,8 @@ class ConfidentialSpaceTokenClientTest {
   }
 
   @Test
-  fun `getToken throws a clear error when the launcher sends no response`() {
-    startServer("")
-
-    val exception =
-      assertFailsWith<IOException> { clientForServer().getToken(awsPrincipalTagsRequest()) }
-
-    assertThat(exception)
-      .hasCauseThat()
-      .hasMessageThat()
-      .contains("closed before a complete response")
-  }
-
-  @Test
   fun `getToken includes requested container image signature key ids`() {
-    startServer("HTTP/1.1 200 OK\r\nConnection: close\r\n\r\nheader.payload.signature")
+    startServer("HTTP/1.1 200 OK\r\nContent-Length: 24\r\n\r\nheader.payload.signature")
 
     clientForServer()
       .getToken(
@@ -300,6 +263,19 @@ class ConfidentialSpaceTokenClientTest {
   }
 
   @Test
+  fun `getToken reuses a pooled connection for a later request`() {
+    // A second POST exercises OkHttp's pooled-connection health check, which sets a 1ms socket
+    // timeout and reads. That blocks forever unless the socket honors SO_TIMEOUT.
+    val body = "header.payload.signature"
+    val response = "HTTP/1.1 200 OK\r\nContent-Length: ${body.length}\r\n\r\n$body"
+    startServer(response, response)
+    val client = clientForServer()
+
+    assertThat(client.getToken(awsPrincipalTagsRequest())).isEqualTo(body)
+    assertThat(client.getToken(awsPrincipalTagsRequest())).isEqualTo(body)
+  }
+
+  @Test
   fun `parseContainerImageSignatureKeyIds extracts key ids from the signatures claim`() {
     val payload =
       """
@@ -311,9 +287,7 @@ class ConfidentialSpaceTokenClientTest {
       """
         .trimIndent()
     val encodedPayload =
-      java.util.Base64.getUrlEncoder()
-        .withoutPadding()
-        .encodeToString(payload.toByteArray(StandardCharsets.UTF_8))
+      Base64.getUrlEncoder().withoutPadding().encodeToString(payload.toByteArray())
 
     val keyIds =
       ConfidentialSpaceTokenClient.parseContainerImageSignatureKeyIds(

@@ -22,6 +22,8 @@ TRUTH_VERSION = "1.4.4"
 # Netty publishes many artifacts that must share a version; the BOM below pins the set.
 NETTY_VERSION = "4.1.127.Final"
 
+OKHTTP_VERSION = "4.12.0"
+
 TINK_VERSION = "1.12.0"
 
 CLOUD_SQL_CONNECTOR_VERSION = "1.12.0"
@@ -34,6 +36,15 @@ bazel_dep(
     name = "rules_kotlin_jvm",
     version = "0.15.0",
     repo_name = "wfa_rules_kotlin_jvm",
+)
+
+# DO_NOT_SUBMIT: temporarily build against the unmerged rules_kotlin_jvm branch that raises the
+# Kotlin jvm_target to 17. Remove this override and bump the version above once that PR is merged
+# and released.
+git_override(
+    module_name = "rules_kotlin_jvm",
+    commit = "f1c65949a717e4d78923449c8f518f4bfef107d7",
+    remote = "https://github.com/world-federation-of-advertisers/rules_kotlin_jvm.git",
 )
 bazel_dep(
     name = "cloud-spanner-emulator-bin",
@@ -195,14 +206,6 @@ maven.artifact(
     version = "hadoop3-2.2.26",
 )
 
-# The BOM cannot supply a version for a classifier-qualified artifact, so pin it to the same
-# constant to keep it in step with the rest of the Netty set.
-maven.artifact(
-    artifact = "netty-transport-native-epoll",
-    classifier = "linux-x86_64",
-    group = "io.netty",
-    version = NETTY_VERSION,
-)
 maven.install(
 
     name = "maven",
@@ -212,13 +215,9 @@ maven.install(
         "org.jetbrains:annotations:23.0.0",
         "info.picocli:picocli:4.7.6",
         "io.netty:netty-handler",
-        # Netty domain-socket transport and HTTP codec, used to reach the Confidential
-        # Space launcher token socket at /run/container_launcher/teeserver.sock.
-        "io.netty:netty-buffer",
-        "io.netty:netty-codec-http",
-        "io.netty:netty-transport",
-        "io.netty:netty-transport-classes-epoll",
-        "io.netty:netty-transport-native-unix-common",
+        # HTTP over the Confidential Space launcher's Unix domain socket.
+        "com.squareup.okhttp3:okhttp",
+        "com.squareup.okhttp3:okhttp-tls",
         "com.google.crypto.tink:tink:" + TINK_VERSION,
         "com.github.ben-manes.caffeine:caffeine:3.1.8",
         # TODO(bazelbuild/bazel-worker-api/issues#14): Remove versions when fixed.
@@ -316,6 +315,7 @@ maven.install(
     boms = [
         # TODO(bazelbuild/rules_jvm_external#1227): Drop BOMs that are included by other modules once fixed.
         "io.netty:netty-bom:" + NETTY_VERSION,
+        "com.squareup.okhttp3:okhttp-bom:" + OKHTTP_VERSION,
         "org.jetbrains.kotlinx:kotlinx-coroutines-bom:" + KOTLINX_COROUTINES_VERSION,
         "com.google.protobuf:protobuf-bom:" + PROTOBUF_JAVA_VERSION,
         "io.grpc:grpc-bom:" + GRPC_JAVA_VERSION,

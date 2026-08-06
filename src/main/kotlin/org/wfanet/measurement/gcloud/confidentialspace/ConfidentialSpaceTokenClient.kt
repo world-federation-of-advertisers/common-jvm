@@ -17,36 +17,19 @@ package org.wfanet.measurement.gcloud.confidentialspace
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
-import io.netty.bootstrap.Bootstrap
-import io.netty.buffer.Unpooled
-import io.netty.channel.Channel
-import io.netty.channel.ChannelHandlerContext
-import io.netty.channel.ChannelInitializer
-import io.netty.channel.ChannelOption
-import io.netty.channel.SimpleChannelInboundHandler
-import io.netty.channel.epoll.Epoll
-import io.netty.channel.epoll.EpollDomainSocketChannel
-import io.netty.channel.epoll.EpollEventLoopGroup
-import io.netty.channel.unix.DomainSocketAddress
-import io.netty.handler.codec.http.DefaultFullHttpRequest
-import io.netty.handler.codec.http.FullHttpRequest
-import io.netty.handler.codec.http.FullHttpResponse
-import io.netty.handler.codec.http.HttpClientCodec
-import io.netty.handler.codec.http.HttpHeaderNames
-import io.netty.handler.codec.http.HttpHeaderValues
-import io.netty.handler.codec.http.HttpMethod
-import io.netty.handler.codec.http.HttpObjectAggregator
-import io.netty.handler.codec.http.HttpVersion
 import java.io.IOException
+import java.net.InetAddress
 import java.nio.charset.StandardCharsets
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.time.Duration
 import java.util.Base64
-import java.util.concurrent.CompletableFuture
-import java.util.concurrent.ExecutionException
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.TimeoutException
+import okhttp3.Dns
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.wfanet.measurement.common.net.UnixDomainSocketFactory
 
 /** Attestation-token type understood by the Confidential Space launcher token endpoint. */
 enum class ConfidentialSpaceTokenType(val wireValue: String) {
@@ -87,13 +70,11 @@ fun interface AttestationTokenProvider {
  * Client for the Confidential Space launcher's local attestation-token service.
  *
  * The launcher exposes an HTTP endpoint over a Unix domain socket at [socketPath] (default
- * [DEFAULT_SOCKET_PATH]). The connection uses Netty's epoll domain-socket transport, and Netty's
- * HTTP codec frames the exchange, so `Transfer-Encoding: chunked` and `Content-Length` responses
- * are handled by the codec rather than by hand. One request/response is exchanged per call with
- * `Connection: close`.
+ * [DEFAULT_SOCKET_PATH]). Requests go through OkHttp over a [UnixDomainSocketFactory], so response
+ * framing (`Transfer-Encoding: chunked`, `Content-Length`) is handled by the HTTP client rather
+ * than by hand.
  *
- * Domain sockets require the native epoll transport, so this client only runs on Linux. That is
- * where Confidential Space workloads run; [getToken] fails fast elsewhere.
+ * Unix domain sockets require Java 16 or later.
  *
  * @param socketPath Filesystem path of the launcher token socket.
  * @param requestTimeout Overall bound on a token request, covering both connecting to the socket
@@ -104,89 +85,29 @@ class ConfidentialSpaceTokenClient(
   private val requestTimeout: Duration = DEFAULT_REQUEST_TIMEOUT,
 ) : AttestationTokenProvider {
 
+  private val httpClient: OkHttpClient by lazy {
+    OkHttpClient.Builder()
+      .socketFactory(UnixDomainSocketFactory(socketPath))
+      // The URL host is a placeholder for a socket path, so resolving it must not hit DNS.
+      .dns(LOOPBACK_DNS)
+      .connectTimeout(requestTimeout)
+      .readTimeout(requestTimeout)
+      .writeTimeout(requestTimeout)
+      .build()
+  }
+
   override fun getToken(request: AttestationTokenRequest): String {
-    if (!Epoll.isAvailable()) {
-      // An environment condition rather than a programming error, so it joins the IOException
-      // surface that the rest of this method reports.
-      throw IOException(
-        "Netty epoll transport is unavailable, so the launcher token socket cannot be reached. " +
-          "Confidential Space workloads run on Linux, where it is supported."
-      )
-    }
+    val httpRequest =
+      Request.Builder()
+        .url(TOKEN_URL)
+        .post(buildRequestBody(request).toRequestBody(JSON_MEDIA_TYPE))
+        .build()
 
-    // Netty takes the connect timeout as an Int, and a Duration can exceed that range.
-    val timeoutMillis: Long = requestTimeout.toMillis().coerceIn(1L, Int.MAX_VALUE.toLong())
-    // Connecting and awaiting the response share one budget, so a caller's timeout is the bound on
-    // the whole call rather than on each step.
-    val deadlineNanos: Long = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis)
-    val responseFuture = CompletableFuture<LauncherResponse>()
-    // One event loop per call: tokens are fetched rarely (on credential refresh), so a shared
-    // group would outlive its usefulness and need a close() on this client's public API.
-    val eventLoopGroup = EpollEventLoopGroup(1)
-    try {
-      val bootstrap =
-        Bootstrap()
-          .group(eventLoopGroup)
-          .channel(EpollDomainSocketChannel::class.java)
-          .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, timeoutMillis.toInt())
-          .handler(
-            object : ChannelInitializer<Channel>() {
-              override fun initChannel(channel: Channel) {
-                channel
-                  .pipeline()
-                  .addLast(
-                    HttpClientCodec(),
-                    HttpObjectAggregator(MAX_RESPONSE_SIZE_BYTES),
-                    ResponseHandler(responseFuture),
-                  )
-              }
-            }
-          )
-
-      val channel: Channel =
-        try {
-          bootstrap.connect(DomainSocketAddress(socketPath.toFile())).sync().channel()
-        } catch (e: InterruptedException) {
-          Thread.currentThread().interrupt()
-          throw IOException("Interrupted while connecting to launcher token socket", e)
-        } catch (e: Exception) {
-          throw IOException("Failed to connect to launcher token socket at $socketPath", e)
-        }
-
-      // Report a failed write instead of leaving the caller to wait out the timeout.
-      channel.writeAndFlush(buildHttpRequest(buildRequestBody(request))).addListener { writeFuture
-        ->
-        if (!writeFuture.isSuccess) {
-          responseFuture.completeExceptionally(
-            IOException(
-              "Failed to send the token request to the launcher socket",
-              writeFuture.cause(),
-            )
-          )
-        }
-      }
-
-      val remainingMillis: Long =
-        TimeUnit.NANOSECONDS.toMillis(deadlineNanos - System.nanoTime()).coerceAtLeast(1L)
-      val response: LauncherResponse =
-        try {
-          responseFuture.get(remainingMillis, TimeUnit.MILLISECONDS)
-        } catch (e: InterruptedException) {
-          Thread.currentThread().interrupt()
-          throw IOException(
-            "Interrupted while awaiting a response from the launcher token socket",
-            e,
-          )
-        } catch (e: TimeoutException) {
-          throw IOException("Timed out awaiting a response from the launcher token socket", e)
-        } catch (e: ExecutionException) {
-          throw IOException("Failed to read from the launcher token socket", e.cause ?: e)
-        }
-
-      val token = response.body.trim()
-      if (response.statusCode !in 200..299) {
+    httpClient.newCall(httpRequest).execute().use { response ->
+      val token = response.body?.string().orEmpty().trim()
+      if (!response.isSuccessful) {
         throw IOException(
-          "Launcher token request failed: ${response.statusCode} ${response.reasonPhrase}; " +
+          "Launcher token request failed: ${response.code} ${response.message}; " +
             "body=${redactIfJwt(token)}"
         )
       }
@@ -194,9 +115,6 @@ class ConfidentialSpaceTokenClient(
         throw IOException("Launcher returned an empty attestation token")
       }
       return token
-    } finally {
-      // Zero quiet period: nothing else shares this group, so there is no work to drain.
-      eventLoopGroup.shutdownGracefully(0, timeoutMillis, TimeUnit.MILLISECONDS)
     }
   }
 
@@ -228,82 +146,22 @@ class ConfidentialSpaceTokenClient(
       }
       .toString()
 
-  private fun buildHttpRequest(body: String): FullHttpRequest {
-    val content = Unpooled.copiedBuffer(body, StandardCharsets.UTF_8)
-    val httpRequest =
-      DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, TOKEN_PATH, content)
-    httpRequest.headers().apply {
-      set(HttpHeaderNames.HOST, "localhost")
-      set(HttpHeaderNames.CONTENT_TYPE, HttpHeaderValues.APPLICATION_JSON)
-      setInt(HttpHeaderNames.CONTENT_LENGTH, content.readableBytes())
-      set(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE)
-    }
-    return httpRequest
-  }
-
-  /** Status and body of the launcher's HTTP response, copied off the event loop. */
-  private data class LauncherResponse(
-    val statusCode: Int,
-    val reasonPhrase: String,
-    val body: String,
-  )
-
-  /**
-   * Completes [future] with the aggregated response. The body is copied into a [String] here
-   * because Netty releases the underlying buffer once this handler returns.
-   */
-  private class ResponseHandler(private val future: CompletableFuture<LauncherResponse>) :
-    SimpleChannelInboundHandler<FullHttpResponse>() {
-
-    override fun channelRead0(context: ChannelHandlerContext, message: FullHttpResponse) {
-      // A malformed response (e.g. bad chunk framing) surfaces as a failed decoder result rather
-      // than an exception, and would otherwise look like an empty body.
-      val decoderResult = message.decoderResult()
-      if (decoderResult.isFailure) {
-        future.completeExceptionally(
-          IOException(
-            "Malformed HTTP response from the launcher token socket",
-            decoderResult.cause(),
-          )
-        )
-        context.close()
-        return
-      }
-      future.complete(
-        LauncherResponse(
-          message.status().code(),
-          message.status().reasonPhrase(),
-          message.content().toString(StandardCharsets.UTF_8),
-        )
-      )
-      context.close()
-    }
-
-    override fun channelInactive(context: ChannelHandlerContext) {
-      // Already complete on the normal close that follows a response.
-      if (!future.isDone) {
-        future.completeExceptionally(
-          IOException("Launcher token socket closed before a complete response was received")
-        )
-      }
-      super.channelInactive(context)
-    }
-
-    override fun exceptionCaught(context: ChannelHandlerContext, cause: Throwable) {
-      future.completeExceptionally(cause)
-      context.close()
-    }
-  }
-
   companion object {
     /** Default Unix domain socket exposed by the Confidential Space launcher. */
     const val DEFAULT_SOCKET_PATH = "/run/container_launcher/teeserver.sock"
     /** Path of the launcher token endpoint. */
     const val TOKEN_PATH = "/v1/token"
 
+    /** The host is ignored; the socket factory determines the destination. */
+    private const val TOKEN_URL = "http://localhost$TOKEN_PATH"
+
     private val DEFAULT_REQUEST_TIMEOUT: Duration = Duration.ofSeconds(30)
-    /** Upper bound on the aggregated response; attestation tokens are a few KiB. */
-    private const val MAX_RESPONSE_SIZE_BYTES = 1 shl 20
+    private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
+    private val LOOPBACK_DNS =
+      object : Dns {
+        override fun lookup(hostname: String): List<InetAddress> =
+          listOf(InetAddress.getLoopbackAddress())
+      }
 
     /**
      * Extracts container image signature key IDs from a Confidential Space attestation [token] by
