@@ -4,8 +4,3 @@ alias(
     name = "okhttp3",
     actual = "@maven//:com_squareup_okhttp3_okhttp",
 )
-
-alias(
-    name = "tls",
-    actual = "@maven//:com_squareup_okhttp3_okhttp_tls",
-)

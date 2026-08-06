@@ -7,7 +7,7 @@ kt_jvm_library(
     srcs = ["ConfidentialSpaceTokenClient.kt"],
     deps = [
         "//imports/java/com/google/gson",
-        "//imports/java/com/squareup/okhttp3",
+        "//imports/java/okhttp3",
         "//src/main/kotlin/org/wfanet/measurement/common/net:unix_domain_socket",
     ],
 )
