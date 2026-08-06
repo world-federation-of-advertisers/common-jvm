@@ -20,32 +20,38 @@ import java.nio.file.Path
 import javax.net.SocketFactory
 
 /**
- * A [SocketFactory] that always produces a [UnixDomainSocket] for [socketPath].
+ * A [SocketFactory] that produces a [UnixDomainSocket] for [socketPath].
  *
- * HTTP clients that accept a [SocketFactory] can be pointed at a Unix domain socket this way. The
- * host and port of the overloads are ignored, since the destination is fixed at construction; the
- * no-argument [createSocket] is the one such clients typically call.
+ * HTTP clients that accept a [SocketFactory] can be pointed at a Unix domain socket this way; they
+ * call the no-argument [createSocket] and then connect it. The destination is fixed at
+ * construction, so the overloads taking a host and port cannot be honored and reject the call
+ * rather than returning a socket bound somewhere the caller did not ask for.
  *
  * @param socketPath Filesystem path of the Unix domain socket to connect to.
  */
 class UnixDomainSocketFactory(private val socketPath: Path) : SocketFactory() {
   override fun createSocket(): Socket = UnixDomainSocket(socketPath)
 
-  override fun createSocket(host: String?, port: Int): Socket = createSocket()
+  override fun createSocket(host: String?, port: Int): Nothing = unsupported()
 
   override fun createSocket(
     host: String?,
     port: Int,
     localHost: InetAddress?,
     localPort: Int,
-  ): Socket = createSocket()
+  ): Nothing = unsupported()
 
-  override fun createSocket(host: InetAddress?, port: Int): Socket = createSocket()
+  override fun createSocket(host: InetAddress?, port: Int): Nothing = unsupported()
 
   override fun createSocket(
     address: InetAddress?,
     port: Int,
     localAddress: InetAddress?,
     localPort: Int,
-  ): Socket = createSocket()
+  ): Nothing = unsupported()
+
+  private fun unsupported(): Nothing =
+    throw UnsupportedOperationException(
+      "Destination is fixed to $socketPath; use the no-argument createSocket()"
+    )
 }

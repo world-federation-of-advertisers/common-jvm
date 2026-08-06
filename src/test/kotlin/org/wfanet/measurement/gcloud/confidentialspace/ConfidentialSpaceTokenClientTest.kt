@@ -46,6 +46,7 @@ class ConfidentialSpaceTokenClientTest {
   private var serverThread: Thread? = null
   private lateinit var socketPath: Path
   @Volatile private var capturedRequest: String = ""
+  @Volatile private var acceptCount: Int = 0
 
   /** Binds a domain socket that replies with [responses] in order, one per connection. */
   private fun startServer(vararg responses: String) {
@@ -58,12 +59,15 @@ class ConfidentialSpaceTokenClientTest {
 
     serverThread =
       thread(start = true, isDaemon = true) {
-        var index = 0
         try {
           while (channel.isOpen) {
-            channel.accept().use { connection -> serve(connection, responses[index]) }
-            if (index < responses.size - 1) {
-              index++
+            // All responses are served on one connection, so a client that pools sees the same
+            // connection on its second request.
+            channel.accept().use { connection ->
+              acceptCount++
+              for (response in responses) {
+                if (!serve(connection, response)) break
+              }
             }
           }
         } catch (e: IOException) {
@@ -72,13 +76,17 @@ class ConfidentialSpaceTokenClientTest {
       }
   }
 
-  /** Reads one request off [connection], records it, then writes [response]. */
-  private fun serve(connection: SocketChannel, response: String) {
+  /**
+   * Reads one request off [connection], records it, then writes [response].
+   *
+   * Returns false once the peer stops sending, so the caller can stop serving this connection.
+   */
+  private fun serve(connection: SocketChannel, response: String): Boolean {
     val received = StringBuilder()
     val buffer = ByteBuffer.allocate(8192)
     while (true) {
       buffer.clear()
-      if (connection.read(buffer) <= 0) break
+      if (connection.read(buffer) <= 0) return false
       buffer.flip()
       received.append(StandardCharsets.UTF_8.decode(buffer))
       // The request is complete once the headers and the JSON body have arrived.
@@ -89,6 +97,7 @@ class ConfidentialSpaceTokenClientTest {
     while (out.hasRemaining()) {
       connection.write(out)
     }
+    return true
   }
 
   @After
@@ -264,8 +273,9 @@ class ConfidentialSpaceTokenClientTest {
 
   @Test
   fun `getToken reuses a pooled connection for a later request`() {
-    // A second POST exercises OkHttp's pooled-connection health check, which sets a 1ms socket
-    // timeout and reads. That blocks forever unless the socket honors SO_TIMEOUT.
+    // Both responses are served on one connection that stays open, so the second request goes
+    // through OkHttp's pooled-connection health check. That check sets a 1ms socket timeout and
+    // reads, and blocks forever unless the socket honors SO_TIMEOUT.
     val body = "header.payload.signature"
     val response = "HTTP/1.1 200 OK\r\nContent-Length: ${body.length}\r\n\r\n$body"
     startServer(response, response)
@@ -273,6 +283,8 @@ class ConfidentialSpaceTokenClientTest {
 
     assertThat(client.getToken(awsPrincipalTagsRequest())).isEqualTo(body)
     assertThat(client.getToken(awsPrincipalTagsRequest())).isEqualTo(body)
+    // One accept means the second request went over the pooled connection.
+    assertThat(acceptCount).isEqualTo(1)
   }
 
   @Test

@@ -36,8 +36,9 @@ import java.nio.file.Path
  * so HTTP clients that accept a `javax.net.SocketFactory` cannot use them directly. This adapts the
  * channel to the [Socket] surface those clients rely on.
  *
- * The instance is constructed without a [SocketImpl], so every member the caller may touch is
- * overridden here rather than delegated to one.
+ * The instance holds no [SocketImpl]. Members that a Unix domain socket cannot support throw
+ * [UnsupportedOperationException] rather than inheriting behavior that would lazily allocate a
+ * platform socket this class would never release.
  *
  * @param socketPath Filesystem path of the Unix domain socket to connect to.
  */
@@ -97,20 +98,35 @@ class UnixDomainSocket(private val socketPath: Path) : Socket(null as SocketImpl
     }
 
   /**
-   * Connects to [socketPath], ignoring [endpoint].
+   * Connects to [socketPath] within [timeout] milliseconds, or without bound when it is `0`.
    *
-   * HTTP clients derive an `InetSocketAddress` from the request URL, which is meaningless for a
-   * Unix domain socket; the destination is the path this socket was created with.
+   * [endpoint] is ignored: HTTP clients derive an `InetSocketAddress` from the request URL, which
+   * is meaningless for a Unix domain socket, so the destination is the path this socket was created
+   * with.
    */
   override fun connect(endpoint: SocketAddress?, timeout: Int) {
-    channel.connect(UnixDomainSocketAddress.of(socketPath))
-    // Non-blocking from here on, so reads and writes can honor SO_TIMEOUT via the selectors.
+    require(timeout >= 0) { "Timeout must not be negative" }
+    // Non-blocking throughout, so both connecting and transfers can be bounded by a selector.
     channel.configureBlocking(false)
+    if (!channel.connect(UnixDomainSocketAddress.of(socketPath))) {
+      awaitConnect(timeout)
+    }
     channel.register(readSelector, SelectionKey.OP_READ)
     channel.register(writeSelector, SelectionKey.OP_WRITE)
   }
 
   override fun connect(endpoint: SocketAddress?) = connect(endpoint, 0)
+
+  private fun awaitConnect(timeoutMillis: Int) {
+    Selector.open().use { selector ->
+      channel.register(selector, SelectionKey.OP_CONNECT)
+      val readyCount =
+        if (timeoutMillis > 0) selector.select(timeoutMillis.toLong()) else selector.select()
+      if (readyCount == 0 || !channel.finishConnect()) {
+        throw SocketTimeoutException("Timed out connecting to $socketPath")
+      }
+    }
+  }
 
   /**
    * Blocks until [selector]'s channel is ready, honoring [soTimeoutMillis].
@@ -149,8 +165,15 @@ class UnixDomainSocket(private val socketPath: Path) : Socket(null as SocketImpl
   override fun getRemoteSocketAddress(): SocketAddress? =
     if (channel.isConnected) UnixDomainSocketAddress.of(socketPath) else null
 
-  override fun getInetAddress(): InetAddress? = null
+  override fun shutdownInput() {
+    channel.shutdownInput()
+  }
 
+  override fun shutdownOutput() {
+    channel.shutdownOutput()
+  }
+
+  /** Closing more than once has no further effect. */
   override fun close() {
     try {
       channel.close()
@@ -159,4 +182,19 @@ class UnixDomainSocket(private val socketPath: Path) : Socket(null as SocketImpl
       writeSelector.close()
     }
   }
+
+  // A Unix domain socket is addressed by path, so it has no internet address or port. These return
+  // the neutral values callers expect rather than reaching for a SocketImpl this instance lacks.
+  override fun getInetAddress(): InetAddress? = null
+
+  override fun getLocalAddress(): InetAddress? = null
+
+  override fun getLocalSocketAddress(): SocketAddress? = null
+
+  override fun getPort(): Int = 0
+
+  override fun getLocalPort(): Int = -1
+
+  override fun bind(bindpoint: SocketAddress?): Nothing =
+    throw UnsupportedOperationException("A Unix domain socket client cannot be bound")
 }
