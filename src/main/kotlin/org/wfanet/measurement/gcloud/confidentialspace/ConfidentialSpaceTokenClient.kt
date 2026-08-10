@@ -26,6 +26,7 @@ import java.nio.file.Path
 import java.nio.file.Paths
 import java.time.Duration
 import java.util.Base64
+import kotlinx.coroutines.reactive.awaitSingle
 import reactor.core.publisher.Mono
 import reactor.netty.ByteBufFlux
 import reactor.netty.http.client.HttpClient
@@ -66,7 +67,7 @@ fun interface AttestationTokenProvider {
    *
    * @throws IOException if the token cannot be obtained.
    */
-  fun getToken(request: AttestationTokenRequest): String
+  suspend fun getToken(request: AttestationTokenRequest): String
 }
 
 /**
@@ -94,10 +95,8 @@ class ConfidentialSpaceTokenClient(
       }
   }
 
-  override fun getToken(request: AttestationTokenRequest): String {
+  override suspend fun getToken(request: AttestationTokenRequest): String {
     val requestBody = buildRequestBody(request)
-    // The transport is non-blocking, but Tink's KmsClient and the AWS SDK credentials provider that
-    // call this are not, so the result is awaited here rather than propagated as a Publisher.
     // Reactor reports every failure, including checked ones, as an unchecked exception.
     val response: TokenResponse =
       try {
@@ -110,10 +109,10 @@ class ConfidentialSpaceTokenClient(
               TokenResponse(httpResponse.status().code(), bodyText)
             }
           }
-          .block(requestTimeout)
+          .awaitSingle()
       } catch (e: RuntimeException) {
         throw IOException("Launcher token request to $socketPath failed", e)
-      } ?: throw IOException("Launcher token request to $socketPath produced no response")
+      }
 
     val token = response.body.trim()
     if (response.statusCode !in SUCCESS_STATUS_CODES) {

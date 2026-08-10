@@ -30,6 +30,7 @@ import java.util.Base64
 import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
 import kotlin.test.assertFailsWith
+import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -145,7 +146,7 @@ class ConfidentialSpaceTokenClientTest {
     )
 
   @Test
-  fun `getToken returns the token body from a Content-Length response`() {
+  fun `getToken returns the token body from a Content-Length response`(): Unit = runBlocking {
     val token = "header.payload.signature"
     startServer(
       "HTTP/1.1 200 OK\r\nContent-Length: ${token.length}\r\nConnection: close\r\n\r\n$token"
@@ -160,7 +161,7 @@ class ConfidentialSpaceTokenClientTest {
   }
 
   @Test
-  fun `getToken de-chunks a Transfer-Encoding chunked response`() {
+  fun `getToken de-chunks a Transfer-Encoding chunked response`(): Unit = runBlocking {
     // The launcher sets no Content-Length, so real (large) tokens arrive chunked. Split the token
     // across two chunks (sizes 7 and 0x11) to exercise reassembly.
     startServer(
@@ -180,7 +181,7 @@ class ConfidentialSpaceTokenClientTest {
   }
 
   @Test
-  fun `getToken honors Content-Length and ignores trailing bytes`() {
+  fun `getToken honors Content-Length and ignores trailing bytes`(): Unit = runBlocking {
     val token = "header.payload.signature"
     startServer(
       "HTTP/1.1 200 OK\r\nContent-Length: ${token.length}\r\nConnection: close\r\n\r\n${token}EXTRA"
@@ -192,7 +193,7 @@ class ConfidentialSpaceTokenClientTest {
   }
 
   @Test
-  fun `getToken accepts a 2xx status other than 200`() {
+  fun `getToken accepts a 2xx status other than 200`(): Unit = runBlocking {
     val token = "header.payload.signature"
     startServer(
       "HTTP/1.1 202 Accepted\r\nContent-Length: ${token.length}\r\nConnection: close\r\n\r\n$token"
@@ -204,7 +205,7 @@ class ConfidentialSpaceTokenClientTest {
   }
 
   @Test
-  fun `getToken throws on a non-2xx response`() {
+  fun `getToken throws on a non-2xx response`(): Unit = runBlocking {
     startServer(
       "HTTP/1.1 400 Bad Request\r\nContent-Length: 16\r\nConnection: close\r\n\r\ninvalid audience"
     )
@@ -217,7 +218,7 @@ class ConfidentialSpaceTokenClientTest {
   }
 
   @Test
-  fun `getToken redacts a JWT-looking body from the error message`() {
+  fun `getToken redacts a JWT-looking body from the error message`(): Unit = runBlocking {
     val jwt = "header.payload.signature"
     startServer(
       "HTTP/1.1 401 Unauthorized\r\nContent-Length: ${jwt.length}\r\nConnection: close\r\n\r\n$jwt"
@@ -231,7 +232,7 @@ class ConfidentialSpaceTokenClientTest {
   }
 
   @Test
-  fun `getToken fails on a truncated chunk`() {
+  fun `getToken fails on a truncated chunk`(): Unit = runBlocking {
     // Chunk header claims 0x20 (32) bytes but far fewer follow before the socket closes.
     startServer(
       "HTTP/1.1 200 OK\r\n" +
@@ -245,25 +246,26 @@ class ConfidentialSpaceTokenClientTest {
   }
 
   @Test
-  fun `getToken fails on an empty response`() {
+  fun `getToken fails on an empty response`(): Unit = runBlocking {
     startServer("")
 
     assertFailsWith<IOException> { clientForServer().getToken(awsPrincipalTagsRequest()) }
   }
 
   @Test
-  fun `getToken sends aws_principal_tag_options for an AWS_PRINCIPALTAGS request`() {
-    startServer("HTTP/1.1 200 OK\r\nContent-Length: 24\r\n\r\nheader.payload.signature")
+  fun `getToken sends aws_principal_tag_options for an AWS_PRINCIPALTAGS request`(): Unit =
+    runBlocking {
+      startServer("HTTP/1.1 200 OK\r\nContent-Length: 24\r\n\r\nheader.payload.signature")
 
-    clientForServer().getToken(awsPrincipalTagsRequest())
+      clientForServer().getToken(awsPrincipalTagsRequest())
 
-    assertThat(capturedRequest).contains("aws_principal_tag_options")
-    assertThat(capturedRequest).contains("allowed_principal_tags")
-    assertThat(capturedRequest).contains("container_image_signatures")
-  }
+      assertThat(capturedRequest).contains("aws_principal_tag_options")
+      assertThat(capturedRequest).contains("allowed_principal_tags")
+      assertThat(capturedRequest).contains("container_image_signatures")
+    }
 
   @Test
-  fun `getToken omits aws_principal_tag_options for non-AWS token types`() {
+  fun `getToken omits aws_principal_tag_options for non-AWS token types`(): Unit = runBlocking {
     startServer("HTTP/1.1 200 OK\r\nContent-Length: 24\r\n\r\nheader.payload.signature")
 
     clientForServer()
@@ -279,7 +281,7 @@ class ConfidentialSpaceTokenClientTest {
   }
 
   @Test
-  fun `getToken includes requested container image signature key ids`() {
+  fun `getToken includes requested container image signature key ids`(): Unit = runBlocking {
     startServer("HTTP/1.1 200 OK\r\nContent-Length: 24\r\n\r\nheader.payload.signature")
 
     clientForServer()
@@ -298,7 +300,7 @@ class ConfidentialSpaceTokenClientTest {
   }
 
   @Test
-  fun `getToken reuses a pooled connection for a later request`() {
+  fun `getToken reuses a pooled connection for a later request`(): Unit = runBlocking {
     // Both responses are served on one connection that stays open, so the second request is
     // expected to reuse the pooled connection rather than dial the socket again.
     val body = "header.payload.signature"

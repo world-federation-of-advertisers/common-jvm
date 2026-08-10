@@ -12,5 +12,6 @@ kt_jvm_library(
         "//imports/java/reactor:core",
         "//imports/java/reactor/netty:core",
         "//imports/java/reactor/netty/http",
+        "//imports/kotlin/kotlinx/coroutines/reactive",
     ],
 )

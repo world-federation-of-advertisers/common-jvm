@@ -18,6 +18,7 @@ import com.google.crypto.tink.KmsClient
 import java.security.GeneralSecurityException
 import java.time.Clock
 import java.time.Duration
+import kotlinx.coroutines.runBlocking
 import org.wfanet.measurement.aws.RefreshableAwsCredentialsProvider
 import org.wfanet.measurement.aws.TimeBoundCredentials
 import org.wfanet.measurement.aws.kms.AwsKmsClient
@@ -66,12 +67,12 @@ class ConfidentialSpaceToAwsKmsClientFactory(
   override fun getKmsClient(config: ConfidentialSpaceToAwsWifCredentials): KmsClient {
     val credentialsProvider =
       RefreshableAwsCredentialsProvider(refreshMargin = refreshMargin, clock = clock) {
-        obtainAwsCredentials(config)
+        runBlocking { obtainAwsCredentials(config) }
       }
     return AwsKmsClient(credentialsProvider)
   }
 
-  private fun obtainAwsCredentials(
+  private suspend fun obtainAwsCredentials(
     config: ConfidentialSpaceToAwsWifCredentials
   ): TimeBoundCredentials {
     val signatureKeyIds: List<String> =
@@ -136,7 +137,7 @@ class ConfidentialSpaceToAwsKmsClientFactory(
    * attestation token and reading its `submods.container.image_signatures` claim, so no signature
    * key IDs need to be configured or hardcoded anywhere.
    */
-  private fun discoverSignatureKeyIds(audience: String): List<String> {
+  private suspend fun discoverSignatureKeyIds(audience: String): List<String> {
     val oidcToken: String =
       try {
         tokenProvider.getToken(
