@@ -28,6 +28,7 @@ import java.nio.file.Paths
 import java.time.Duration
 import java.util.Base64
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.concurrent.thread
 import kotlin.test.assertFailsWith
 import kotlinx.coroutines.runBlocking
@@ -47,7 +48,7 @@ class ConfidentialSpaceTokenClientTest {
   private var serverThread: Thread? = null
   private lateinit var socketPath: Path
   @Volatile private var capturedRequest: String = ""
-  @Volatile private var acceptCount: Int = 0
+  private val acceptCount = AtomicInteger()
 
   /** Binds a domain socket that replies with [responses] in order, one per connection. */
   private fun startServer(vararg responses: String) {
@@ -67,7 +68,7 @@ class ConfidentialSpaceTokenClientTest {
             // All responses are served on one connection, so a client that pools sees the same
             // connection on its second request.
             channel.accept().use { connection ->
-              acceptCount++
+              acceptCount.incrementAndGet()
               for (response in responses) {
                 if (!serve(connection, response)) break
               }
@@ -158,6 +159,9 @@ class ConfidentialSpaceTokenClientTest {
     assertThat(capturedRequest).contains("POST /v1/token HTTP/1.1")
     assertThat(capturedRequest).contains("\"token_type\":\"AWS_PRINCIPALTAGS\"")
     assertThat(capturedRequest).contains("\"audience\":\"https://example.com\"")
+    // The launcher is version-sensitive, so the request body stays length-delimited.
+    assertThat(capturedRequest).contains("content-length:")
+    assertThat(capturedRequest).doesNotContain("chunked")
   }
 
   @Test
@@ -242,14 +246,20 @@ class ConfidentialSpaceTokenClientTest {
         "20\r\nonly-a-few-bytes\r\n"
     )
 
-    assertFailsWith<IOException> { clientForServer().getToken(awsPrincipalTagsRequest()) }
+    val exception =
+      assertFailsWith<IOException> { clientForServer().getToken(awsPrincipalTagsRequest()) }
+
+    assertThat(exception).hasMessageThat().contains(socketPath.toString())
   }
 
   @Test
   fun `getToken fails on an empty response`(): Unit = runBlocking {
     startServer("")
 
-    assertFailsWith<IOException> { clientForServer().getToken(awsPrincipalTagsRequest()) }
+    val exception =
+      assertFailsWith<IOException> { clientForServer().getToken(awsPrincipalTagsRequest()) }
+
+    assertThat(exception).hasMessageThat().contains(socketPath.toString())
   }
 
   @Test
@@ -311,7 +321,7 @@ class ConfidentialSpaceTokenClientTest {
     assertThat(client.getToken(awsPrincipalTagsRequest())).isEqualTo(body)
     assertThat(client.getToken(awsPrincipalTagsRequest())).isEqualTo(body)
     // One accept means the second request went over the pooled connection.
-    assertThat(acceptCount).isEqualTo(1)
+    assertThat(acceptCount.get()).isEqualTo(1)
   }
 
   @Test
@@ -334,6 +344,70 @@ class ConfidentialSpaceTokenClientTest {
       )
 
     assertThat(keyIds).containsExactly("keyA", "keyB").inOrder()
+  }
+
+  @Test
+  fun `getToken returns the token body from an unframed response`(): Unit = runBlocking {
+    val token = "header.payload.signature"
+    startServer("HTTP/1.1 200 OK\r\nConnection: close\r\n\r\n$token")
+
+    val result = clientForServer().getToken(awsPrincipalTagsRequest())
+
+    assertThat(result).isEqualTo(token)
+  }
+
+  @Test
+  fun `getToken sends requested nonces`(): Unit = runBlocking {
+    startServer("HTTP/1.1 200 OK\r\nContent-Length: 24\r\n\r\nheader.payload.signature")
+
+    clientForServer()
+      .getToken(
+        AttestationTokenRequest(
+          audience = "https://example.com",
+          tokenType = ConfidentialSpaceTokenType.OIDC,
+          nonces = listOf("nonceA", "nonceB"),
+        )
+      )
+
+    assertThat(capturedRequest).contains("\"nonces\":[\"nonceA\",\"nonceB\"]")
+  }
+
+  @Test
+  fun `getToken throws when the launcher socket is absent`(): Unit = runBlocking {
+    // Absolute so the failure is a missing socket rather than a relative-path rejection.
+    val absentSocket = Paths.get("/tmp", "cs-token-absent-${System.nanoTime()}.sock")
+    val client = ConfidentialSpaceTokenClient(socketPath = absentSocket)
+
+    val exception = assertFailsWith<IOException> { client.getToken(awsPrincipalTagsRequest()) }
+
+    assertThat(exception).hasMessageThat().contains(absentSocket.toString())
+  }
+
+  @Test
+  fun `parseContainerImageSignatureKeyIds returns empty when the claim is absent`() {
+    val payload =
+      Base64.getUrlEncoder().withoutPadding().encodeToString("{\"iss\":\"x\"}".toByteArray())
+
+    val keyIds =
+      ConfidentialSpaceTokenClient.parseContainerImageSignatureKeyIds("header.$payload.signature")
+
+    assertThat(keyIds).isEmpty()
+  }
+
+  @Test
+  fun `parseContainerImageSignatureKeyIds throws when the token is not a JWT`() {
+    assertFailsWith<IllegalArgumentException> {
+      ConfidentialSpaceTokenClient.parseContainerImageSignatureKeyIds("not-a-jwt")
+    }
+  }
+
+  @Test
+  fun `parseContainerImageSignatureKeyIds throws when the payload is not a JSON object`() {
+    val payload = Base64.getUrlEncoder().withoutPadding().encodeToString("\"zzz\"".toByteArray())
+
+    assertFailsWith<IllegalArgumentException> {
+      ConfidentialSpaceTokenClient.parseContainerImageSignatureKeyIds("header.$payload.signature")
+    }
   }
 
   companion object {

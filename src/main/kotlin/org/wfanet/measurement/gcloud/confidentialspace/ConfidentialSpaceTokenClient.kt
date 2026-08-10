@@ -28,7 +28,7 @@ import java.time.Duration
 import java.util.Base64
 import kotlinx.coroutines.reactive.awaitSingle
 import reactor.core.publisher.Mono
-import reactor.netty.ByteBufFlux
+import reactor.netty.ByteBufMono
 import reactor.netty.http.client.HttpClient
 
 /** Attestation-token type understood by the Confidential Space launcher token endpoint. */
@@ -86,32 +86,32 @@ class ConfidentialSpaceTokenClient(
   private val requestTimeout: Duration = DEFAULT_REQUEST_TIMEOUT,
 ) : AttestationTokenProvider {
 
-  private val httpClient: HttpClient by lazy {
+  private val httpClient: HttpClient =
     HttpClient.create()
       .remoteAddress { DomainSocketAddress(socketPath.toString()) }
       .responseTimeout(requestTimeout)
       .headers { headers ->
         headers.set(HttpHeaderNames.CONTENT_TYPE, HttpHeaderValues.APPLICATION_JSON)
       }
-  }
 
   override suspend fun getToken(request: AttestationTokenRequest): String {
     val requestBody = buildRequestBody(request)
-    // Reactor reports every failure, including checked ones, as an unchecked exception.
+    val contentLength = requestBody.toByteArray(StandardCharsets.UTF_8).size
     val response: TokenResponse =
       try {
         httpClient
+          .headers { headers -> headers.set(HttpHeaderNames.CONTENT_LENGTH, contentLength) }
           .post()
           .uri(TOKEN_PATH)
-          .send(ByteBufFlux.fromString(Mono.just(requestBody)))
+          .send(ByteBufMono.fromString(Mono.just(requestBody)))
           .responseSingle { httpResponse, body ->
             body.asString(StandardCharsets.UTF_8).defaultIfEmpty("").map { bodyText ->
               TokenResponse(httpResponse.status().code(), bodyText)
             }
           }
           .awaitSingle()
-      } catch (e: RuntimeException) {
-        throw IOException("Launcher token request to $socketPath failed", e)
+      } catch (e: Exception) {
+        throw IOException("Launcher token request to $socketPath failed: ${e.message}", e)
       }
 
     val token = response.body.trim()
@@ -181,9 +181,14 @@ class ConfidentialSpaceTokenClient(
       require(parts.size >= 2) { "Malformed JWT attestation token" }
       val payload =
         String(Base64.getUrlDecoder().decode(padBase64(parts[1])), StandardCharsets.UTF_8)
+      val claims =
+        try {
+          JsonParser.parseString(payload).asJsonObject
+        } catch (e: RuntimeException) {
+          throw IllegalArgumentException("Malformed JWT attestation token payload", e)
+        }
       val signatures =
-        JsonParser.parseString(payload)
-          .asJsonObject
+        claims
           .getAsJsonObject("submods")
           ?.getAsJsonObject("container")
           ?.getAsJsonArray("image_signatures")
