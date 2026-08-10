@@ -138,13 +138,9 @@ class ConfidentialSpaceTokenClient(
           add("nonces", JsonArray().apply { request.nonces.forEach { add(it) } })
         }
         if (request.tokenType == ConfidentialSpaceTokenType.AWS_PRINCIPAL_TAGS) {
-          // For AWS_PRINCIPALTAGS the launcher reads aws_principal_tag_options unconditionally.
-          // Launcher builds predating the nil guard in go-tpm-tools convertToCSOpts panic (nil
-          // pointer dereference) when it is absent and write a zero-byte body, which surfaces here
-          // as a malformed/empty response. Sending the full structure keeps
-          // TokenOptions.token_type_options non-nil on every launcher version. key_ids carries the
-          // container image signature key IDs to surface as the container.signatures.key_id
-          // principal tag; when empty the token instead carries container.image_digest.
+          // key_ids surfaces the container image signature key IDs as the
+          // container.signatures.key_id principal tag; an empty list yields
+          // container.image_digest instead.
           val keyIds =
             JsonArray().apply { request.containerImageSignatureKeyIds.forEach { add(it) } }
           val containerImageSignatures = JsonObject().apply { add("key_ids", keyIds) }
@@ -152,6 +148,8 @@ class ConfidentialSpaceTokenClient(
             JsonObject().apply { add("container_image_signatures", containerImageSignatures) }
           val awsPrincipalTagOptions =
             JsonObject().apply { add("allowed_principal_tags", allowedPrincipalTags) }
+          // aws_principal_tag_options is sent even when no key IDs were requested: without it the
+          // launcher returns an empty response (google/go-tpm-tools#770).
           add("aws_principal_tag_options", awsPrincipalTagOptions)
         }
       }
