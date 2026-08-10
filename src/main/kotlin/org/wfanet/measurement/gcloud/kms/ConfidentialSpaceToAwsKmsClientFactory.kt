@@ -18,6 +18,7 @@ import com.google.crypto.tink.KmsClient
 import java.security.GeneralSecurityException
 import java.time.Clock
 import java.time.Duration
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import org.wfanet.measurement.aws.RefreshableAwsCredentialsProvider
 import org.wfanet.measurement.aws.TimeBoundCredentials
@@ -87,6 +88,8 @@ class ConfidentialSpaceToAwsKmsClientFactory(
             containerImageSignatureKeyIds = signatureKeyIds,
           )
         )
+      } catch (e: CancellationException) {
+        throw e
       } catch (e: Exception) {
         throw GeneralSecurityException("Failed to obtain Confidential Space attestation token", e)
       }
@@ -143,6 +146,8 @@ class ConfidentialSpaceToAwsKmsClientFactory(
         tokenProvider.getToken(
           AttestationTokenRequest(audience = audience, tokenType = ConfidentialSpaceTokenType.OIDC)
         )
+      } catch (e: CancellationException) {
+        throw e
       } catch (e: Exception) {
         throw GeneralSecurityException(
           "Failed to obtain Confidential Space OIDC token for signature discovery",

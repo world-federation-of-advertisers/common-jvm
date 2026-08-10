@@ -26,6 +26,7 @@ import java.nio.file.Path
 import java.nio.file.Paths
 import java.time.Duration
 import java.util.Base64
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.reactive.awaitSingle
 import reactor.core.publisher.Mono
 import reactor.netty.ByteBufMono
@@ -110,8 +111,10 @@ class ConfidentialSpaceTokenClient(
             }
           }
           .awaitSingle()
+      } catch (e: CancellationException) {
+        throw e
       } catch (e: Exception) {
-        throw IOException("Launcher token request to $socketPath failed: ${e.message}", e)
+        throw IOException("Launcher token request to $socketPath failed", e)
       }
 
     val token = response.body.trim()

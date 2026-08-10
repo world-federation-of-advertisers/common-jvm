@@ -27,10 +27,14 @@ import java.nio.file.Path
 import java.nio.file.Paths
 import java.time.Duration
 import java.util.Base64
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.concurrent.thread
 import kotlin.test.assertFailsWith
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Test
@@ -49,6 +53,8 @@ class ConfidentialSpaceTokenClientTest {
   private lateinit var socketPath: Path
   @Volatile private var capturedRequest: String = ""
   private val acceptCount = AtomicInteger()
+  private val idle = CountDownLatch(1)
+  private val requestReceived = CompletableDeferred<Unit>()
 
   /** Binds a domain socket that replies with [responses] in order, one per connection. */
   private fun startServer(vararg responses: String) {
@@ -56,10 +62,7 @@ class ConfidentialSpaceTokenClientTest {
     // sun_path limit is ~108 bytes and an absolute path under Bazel's tmpdir exceeds it, but the
     // kernel resolves a relative path against the working directory. It must not exist yet for
     // bind() to succeed.
-    socketPath = Paths.get("cs-token-test-${System.nanoTime()}.sock")
-    val channel = ServerSocketChannel.open(StandardProtocolFamily.UNIX)
-    channel.bind(UnixDomainSocketAddress.of(socketPath))
-    serverChannel = channel
+    val channel = bindSocket()
 
     serverThread =
       thread(start = true, isDaemon = true) {
@@ -73,6 +76,35 @@ class ConfidentialSpaceTokenClientTest {
                 if (!serve(connection, response)) break
               }
             }
+          }
+        } catch (e: IOException) {
+          // Expected once the channel is closed in tearDown.
+        }
+      }
+  }
+
+  private fun bindSocket(): ServerSocketChannel {
+    // A relative path keeps the socket in the test's working directory, inside the sandbox. The
+    // sun_path limit is ~108 bytes and an absolute path under Bazel's tmpdir exceeds it, but the
+    // kernel resolves a relative path against the working directory. It must not exist yet for
+    // bind() to succeed.
+    socketPath = Paths.get("cs-token-test-${System.nanoTime()}.sock")
+    val channel = ServerSocketChannel.open(StandardProtocolFamily.UNIX)
+    channel.bind(UnixDomainSocketAddress.of(socketPath))
+    serverChannel = channel
+    return channel
+  }
+
+  /** Binds a socket that reads one request and then holds the connection open without replying. */
+  private fun startSilentServer() {
+    val channel = bindSocket()
+    serverThread =
+      thread(start = true, isDaemon = true) {
+        try {
+          channel.accept().use {
+            readRequest(it)
+            requestReceived.complete(Unit)
+            idle.await()
           }
         } catch (e: IOException) {
           // Expected once the channel is closed in tearDown.
@@ -130,6 +162,7 @@ class ConfidentialSpaceTokenClientTest {
 
   @After
   fun tearDown() {
+    idle.countDown()
     serverChannel?.close()
     serverThread?.join(TimeUnit.SECONDS.toMillis(5))
     if (this::socketPath.isInitialized) {
@@ -408,6 +441,24 @@ class ConfidentialSpaceTokenClientTest {
     assertFailsWith<IllegalArgumentException> {
       ConfidentialSpaceTokenClient.parseContainerImageSignatureKeyIds("header.$payload.signature")
     }
+  }
+
+  @Test
+  fun `getToken propagates cancellation`(): Unit = runBlocking {
+    startSilentServer()
+    val observed = CompletableDeferred<Throwable>()
+    val job = launch {
+      try {
+        clientForServer().getToken(awsPrincipalTagsRequest())
+      } catch (e: Throwable) {
+        observed.complete(e)
+      }
+    }
+    requestReceived.await()
+
+    job.cancel()
+
+    assertThat(observed.await()).isInstanceOf(CancellationException::class.java)
   }
 
   companion object {

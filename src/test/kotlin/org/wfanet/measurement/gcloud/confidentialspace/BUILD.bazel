@@ -7,8 +7,8 @@ kt_jvm_test(
     deps = [
         "//imports/java/com/google/common/truth",
         "//imports/java/org/junit",
-        "//imports/kotlin/kotlinx/coroutines:core",
         "//imports/kotlin/kotlin/test",
+        "//imports/kotlin/kotlinx/coroutines:core",
         "//src/main/kotlin/org/wfanet/measurement/gcloud/confidentialspace:confidential_space_token_client",
     ],
 )
