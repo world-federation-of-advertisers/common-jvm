@@ -29,6 +29,7 @@ import org.wfanet.measurement.gcloud.confidentialspace.AttestationTokenProvider
 import org.wfanet.measurement.gcloud.confidentialspace.AttestationTokenRequest
 import org.wfanet.measurement.gcloud.confidentialspace.ConfidentialSpaceTokenClient
 import org.wfanet.measurement.gcloud.confidentialspace.ConfidentialSpaceTokenType
+import reactor.core.scheduler.Schedulers
 import software.amazon.awssdk.auth.credentials.AnonymousCredentialsProvider
 import software.amazon.awssdk.auth.credentials.AwsSessionCredentials
 import software.amazon.awssdk.regions.Region
@@ -68,6 +69,11 @@ class ConfidentialSpaceToAwsKmsClientFactory(
   override fun getKmsClient(config: ConfidentialSpaceToAwsWifCredentials): KmsClient {
     val credentialsProvider =
       RefreshableAwsCredentialsProvider(refreshMargin = refreshMargin, clock = clock) {
+        // Blocking an event loop would deadlock: the same loop delivers the response that would
+        // unblock it, and fires the timeout that would otherwise abort it.
+        check(!Schedulers.isInNonBlockingThread()) {
+          "Credentials must not be resolved on a Reactor event-loop thread"
+        }
         runBlocking { obtainAwsCredentials(config) }
       }
     return AwsKmsClient(credentialsProvider)
