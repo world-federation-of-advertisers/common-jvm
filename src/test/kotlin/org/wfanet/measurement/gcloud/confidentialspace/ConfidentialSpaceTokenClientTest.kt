@@ -84,22 +84,46 @@ class ConfidentialSpaceTokenClientTest {
    * Returns false once the peer stops sending, so the caller can stop serving this connection.
    */
   private fun serve(connection: SocketChannel, response: String): Boolean {
-    val received = StringBuilder()
-    val buffer = ByteBuffer.allocate(8192)
-    while (true) {
-      buffer.clear()
-      if (connection.read(buffer) <= 0) return false
-      buffer.flip()
-      received.append(StandardCharsets.UTF_8.decode(buffer))
-      // The request is complete once the headers and the JSON body have arrived.
-      if (received.contains("\r\n\r\n") && received.trimEnd().endsWith("}")) break
-    }
-    capturedRequest = received.toString()
+    capturedRequest = readRequest(connection) ?: return false
     val out = ByteBuffer.wrap(response.toByteArray(StandardCharsets.UTF_8))
     while (out.hasRemaining()) {
       connection.write(out)
     }
     return true
+  }
+
+  /**
+   * Reads one complete HTTP request, or returns null if the peer closes first.
+   *
+   * The client decides whether to frame the body with `Content-Length` or chunked encoding, so both
+   * are honored rather than guessing where the request ends.
+   */
+  private fun readRequest(connection: SocketChannel): String? {
+    val received = StringBuilder()
+    val buffer = ByteBuffer.allocate(8192)
+    while (true) {
+      val headerEnd = received.indexOf(HEADER_TERMINATOR)
+      if (headerEnd >= 0 && isBodyComplete(received, headerEnd)) {
+        return received.toString()
+      }
+      buffer.clear()
+      if (connection.read(buffer) <= 0) {
+        return null
+      }
+      buffer.flip()
+      received.append(StandardCharsets.UTF_8.decode(buffer))
+    }
+  }
+
+  private fun isBodyComplete(received: StringBuilder, headerEnd: Int): Boolean {
+    val headers = received.substring(0, headerEnd)
+    val body = received.substring(headerEnd + HEADER_TERMINATOR.length)
+    val contentLength = CONTENT_LENGTH_REGEX.find(headers)?.groupValues?.get(1)?.toInt()
+    return when {
+      contentLength != null -> body.length >= contentLength
+      CHUNKED_REGEX.containsMatchIn(headers) -> body.endsWith(CHUNKED_TERMINATOR)
+      else -> true
+    }
   }
 
   @After
@@ -275,9 +299,8 @@ class ConfidentialSpaceTokenClientTest {
 
   @Test
   fun `getToken reuses a pooled connection for a later request`() {
-    // Both responses are served on one connection that stays open, so the second request goes
-    // through OkHttp's pooled-connection health check. That check sets a 1ms socket timeout and
-    // reads, and blocks forever unless the socket honors SO_TIMEOUT.
+    // Both responses are served on one connection that stays open, so the second request is
+    // expected to reuse the pooled connection rather than dial the socket again.
     val body = "header.payload.signature"
     val response = "HTTP/1.1 200 OK\r\nContent-Length: ${body.length}\r\n\r\n$body"
     startServer(response, response)
@@ -309,5 +332,12 @@ class ConfidentialSpaceTokenClientTest {
       )
 
     assertThat(keyIds).containsExactly("keyA", "keyB").inOrder()
+  }
+
+  companion object {
+    private const val HEADER_TERMINATOR = "\r\n\r\n"
+    private const val CHUNKED_TERMINATOR = "0\r\n\r\n"
+    private val CONTENT_LENGTH_REGEX = Regex("Content-Length:\\s*(\\d+)", RegexOption.IGNORE_CASE)
+    private val CHUNKED_REGEX = Regex("Transfer-Encoding:\\s*chunked", RegexOption.IGNORE_CASE)
   }
 }

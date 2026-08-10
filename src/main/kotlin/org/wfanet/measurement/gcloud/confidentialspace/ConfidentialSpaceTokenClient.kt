@@ -17,19 +17,18 @@ package org.wfanet.measurement.gcloud.confidentialspace
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
+import io.netty.channel.unix.DomainSocketAddress
+import io.netty.handler.codec.http.HttpHeaderNames
+import io.netty.handler.codec.http.HttpHeaderValues
 import java.io.IOException
-import java.net.InetAddress
 import java.nio.charset.StandardCharsets
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.time.Duration
 import java.util.Base64
-import okhttp3.Dns
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
-import org.wfanet.measurement.common.net.UnixDomainSocketFactory
+import reactor.core.publisher.Mono
+import reactor.netty.ByteBufFlux
+import reactor.netty.http.client.HttpClient
 
 /** Attestation-token type understood by the Confidential Space launcher token endpoint. */
 enum class ConfidentialSpaceTokenType(val wireValue: String) {
@@ -62,60 +61,70 @@ data class AttestationTokenRequest(
 
 /** Obtains Confidential Space attestation tokens. */
 fun interface AttestationTokenProvider {
-  /** Returns a freshly minted attestation token for [request]. */
+  /**
+   * Returns a freshly minted attestation token for [request].
+   *
+   * @throws IOException if the token cannot be obtained.
+   */
   fun getToken(request: AttestationTokenRequest): String
 }
 
 /**
  * Client for the Confidential Space launcher's local attestation-token service.
  *
- * The launcher exposes an HTTP endpoint over a Unix domain socket at [socketPath] (default
- * [DEFAULT_SOCKET_PATH]). Requests go through OkHttp over a [UnixDomainSocketFactory], so response
- * framing (`Transfer-Encoding: chunked`, `Content-Length`) is handled by the HTTP client rather
- * than by hand.
- *
- * Unix domain sockets require Java 16 or later.
+ * The launcher exposes an HTTP endpoint over a Unix domain socket at [socketPath]. Requests are
+ * issued by Reactor Netty over a [DomainSocketAddress], which requires the Netty native transport
+ * for the host platform.
  *
  * @param socketPath Filesystem path of the launcher token socket.
- * @param requestTimeout Overall bound on a token request, covering both connecting to the socket
- *   and awaiting the response.
+ * @param requestTimeout Bound on a token request, covering both connecting to the socket and
+ *   awaiting the response.
  */
 class ConfidentialSpaceTokenClient(
   private val socketPath: Path = Paths.get(DEFAULT_SOCKET_PATH),
   private val requestTimeout: Duration = DEFAULT_REQUEST_TIMEOUT,
 ) : AttestationTokenProvider {
 
-  private val httpClient: OkHttpClient by lazy {
-    OkHttpClient.Builder()
-      .socketFactory(UnixDomainSocketFactory(socketPath))
-      // The URL host is a placeholder for a socket path, so resolving it must not hit DNS.
-      .dns(LOOPBACK_DNS)
-      .connectTimeout(requestTimeout)
-      .readTimeout(requestTimeout)
-      .writeTimeout(requestTimeout)
-      .build()
+  private val httpClient: HttpClient by lazy {
+    HttpClient.create()
+      .remoteAddress { DomainSocketAddress(socketPath.toString()) }
+      .responseTimeout(requestTimeout)
+      .headers { headers ->
+        headers.set(HttpHeaderNames.CONTENT_TYPE, HttpHeaderValues.APPLICATION_JSON)
+      }
   }
 
   override fun getToken(request: AttestationTokenRequest): String {
-    val httpRequest =
-      Request.Builder()
-        .url(TOKEN_URL)
-        .post(buildRequestBody(request).toRequestBody(JSON_MEDIA_TYPE))
-        .build()
+    val requestBody = buildRequestBody(request)
+    // The transport is non-blocking, but Tink's KmsClient and the AWS SDK credentials provider that
+    // call this are not, so the result is awaited here rather than propagated as a Publisher.
+    // Reactor reports every failure, including checked ones, as an unchecked exception.
+    val response: TokenResponse =
+      try {
+        httpClient
+          .post()
+          .uri(TOKEN_PATH)
+          .send(ByteBufFlux.fromString(Mono.just(requestBody)))
+          .responseSingle { httpResponse, body ->
+            body.asString(StandardCharsets.UTF_8).defaultIfEmpty("").map { bodyText ->
+              TokenResponse(httpResponse.status().code(), bodyText)
+            }
+          }
+          .block(requestTimeout)
+      } catch (e: RuntimeException) {
+        throw IOException("Launcher token request to $socketPath failed", e)
+      } ?: throw IOException("Launcher token request to $socketPath produced no response")
 
-    httpClient.newCall(httpRequest).execute().use { response ->
-      val token = response.body?.string().orEmpty().trim()
-      if (!response.isSuccessful) {
-        throw IOException(
-          "Launcher token request failed: ${response.code} ${response.message}; " +
-            "body=${redactIfJwt(token)}"
-        )
-      }
-      if (token.isEmpty()) {
-        throw IOException("Launcher returned an empty attestation token")
-      }
-      return token
+    val token = response.body.trim()
+    if (response.statusCode !in SUCCESS_STATUS_CODES) {
+      throw IOException(
+        "Launcher token request failed with status ${response.statusCode}: ${redactIfJwt(token)}"
+      )
     }
+    if (token.isEmpty()) {
+      throw IOException("Launcher returned an empty attestation token")
+    }
+    return token
   }
 
   private fun buildRequestBody(request: AttestationTokenRequest): String =
@@ -146,28 +155,27 @@ class ConfidentialSpaceTokenClient(
       }
       .toString()
 
+  /** Status code and body of a launcher token response. */
+  private data class TokenResponse(val statusCode: Int, val body: String)
+
   companion object {
     /** Default Unix domain socket exposed by the Confidential Space launcher. */
     const val DEFAULT_SOCKET_PATH = "/run/container_launcher/teeserver.sock"
+
     /** Path of the launcher token endpoint. */
     const val TOKEN_PATH = "/v1/token"
 
-    /** The host is ignored; the socket factory determines the destination. */
-    private const val TOKEN_URL = "http://localhost$TOKEN_PATH"
-
     private val DEFAULT_REQUEST_TIMEOUT: Duration = Duration.ofSeconds(30)
-    private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
-    private val LOOPBACK_DNS =
-      object : Dns {
-        override fun lookup(hostname: String): List<InetAddress> =
-          listOf(InetAddress.getLoopbackAddress())
-      }
+
+    private val SUCCESS_STATUS_CODES = 200..299
 
     /**
      * Extracts container image signature key IDs from a Confidential Space attestation [token] by
      * reading its `submods.container.image_signatures[].key_id` claims. Lets callers self-discover
      * which signature key IDs to surface as AWS principal tags, so no key IDs need to be hardcoded.
      * The AWS role trust policy remains the authority on which signers are acceptable.
+     *
+     * @throws IllegalArgumentException if [token] is not a JWT.
      */
     fun parseContainerImageSignatureKeyIds(token: String): List<String> {
       val parts = token.split(".")
@@ -180,10 +188,8 @@ class ConfidentialSpaceTokenClient(
           .getAsJsonObject("submods")
           ?.getAsJsonObject("container")
           ?.getAsJsonArray("image_signatures")
-      val keyIds =
-        signatures?.mapNotNull { it.asJsonObject.get("key_id")?.asString }?.distinct()
-          ?: emptyList()
-      return keyIds
+      return signatures?.mapNotNull { it.asJsonObject.get("key_id")?.asString }?.distinct()
+        ?: emptyList()
     }
 
     private fun padBase64(value: String): String {

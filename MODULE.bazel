@@ -19,8 +19,6 @@ AWS_JAVA_SDK_VERSION = "2.23.18"
 
 TRUTH_VERSION = "1.4.4"
 
-OKHTTP_VERSION = "4.12.0"
-
 TINK_VERSION = "1.12.0"
 
 CLOUD_SQL_CONNECTOR_VERSION = "1.12.0"
@@ -33,15 +31,6 @@ bazel_dep(
     name = "rules_kotlin_jvm",
     version = "0.15.0",
     repo_name = "wfa_rules_kotlin_jvm",
-)
-
-# DO_NOT_SUBMIT: temporarily build against the unmerged rules_kotlin_jvm branch that raises the
-# Kotlin jvm_target to 17. Remove this override and bump the version above once that PR is merged
-# and released.
-git_override(
-    module_name = "rules_kotlin_jvm",
-    commit = "f1c65949a717e4d78923449c8f518f4bfef107d7",
-    remote = "https://github.com/world-federation-of-advertisers/rules_kotlin_jvm.git",
 )
 bazel_dep(
     name = "cloud-spanner-emulator-bin",
@@ -212,9 +201,8 @@ maven.install(
         "org.jetbrains:annotations:23.0.0",
         "info.picocli:picocli:4.7.6",
         "io.netty:netty-handler:4.1.124.Final",
-        # HTTP over the Confidential Space launcher's Unix domain socket.
-        "com.squareup.okhttp3:okhttp",
-        "com.squareup.okhttp3:okhttp-tls",
+        "io.netty:netty-codec-http:4.1.127.Final",
+        "io.netty:netty-transport-native-unix-common:4.1.124.Final",
         "com.google.crypto.tink:tink:" + TINK_VERSION,
         "com.github.ben-manes.caffeine:caffeine:3.1.8",
         # TODO(bazelbuild/bazel-worker-api/issues#14): Remove versions when fixed.
@@ -296,6 +284,9 @@ maven.install(
         "org.postgresql:postgresql:42.7.7",
         "org.postgresql:r2dbc-postgresql:1.0.7.RELEASE",
         "io.r2dbc:r2dbc-spi:1.0.0.RELEASE",
+        "io.projectreactor:reactor-core",
+        "io.projectreactor.netty:reactor-netty-core",
+        "io.projectreactor.netty:reactor-netty-http",
 
         # Liquibase.
         "org.yaml:snakeyaml:2.2",
@@ -311,7 +302,6 @@ maven.install(
     # Note that order matters here, where earlier BOMs "win".
     boms = [
         # TODO(bazelbuild/rules_jvm_external#1227): Drop BOMs that are included by other modules once fixed.
-        "com.squareup.okhttp3:okhttp-bom:" + OKHTTP_VERSION,
         "org.jetbrains.kotlinx:kotlinx-coroutines-bom:" + KOTLINX_COROUTINES_VERSION,
         "com.google.protobuf:protobuf-bom:" + PROTOBUF_JAVA_VERSION,
         "io.grpc:grpc-bom:" + GRPC_JAVA_VERSION,
