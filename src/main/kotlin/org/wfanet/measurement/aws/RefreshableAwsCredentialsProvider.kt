@@ -49,8 +49,8 @@ data class TimeBoundCredentials(val credentials: AwsSessionCredentials, val expi
  * refresh that fails is not cached, so the next call retries.
  *
  * Thread-safe: callers that arrive while a refresh is in flight share its result rather than
- * starting a second one. [credentialSupplier] is invoked while holding an internal lock but is not
- * awaited under it, so a supplier that returns an incomplete future does not serialize its callers.
+ * starting a second one. [credentialSupplier] is invoked while holding the lock but is not awaited
+ * under it, so a supplier that returns an incomplete future does not serialize its callers.
  *
  * @param refreshMargin How far before expiration to proactively refresh credentials.
  * @param clock Clock used to determine the current time.
@@ -61,11 +61,10 @@ class RefreshableAwsCredentialsProvider(
   private val clock: Clock = Clock.systemUTC(),
   private val credentialSupplier: () -> CompletableFuture<TimeBoundCredentials>,
 ) : IdentityProvider<AwsCredentialsIdentity> {
-  private val lock = Any()
 
   @Volatile private var cachedCredentials: TimeBoundCredentials? = null
 
-  /** Refresh that has been started but has not completed yet. Guarded by [lock]. */
+  /** Refresh that has been started but has not completed yet. Guarded by `this`. */
   private var inFlightRefresh: CompletableFuture<TimeBoundCredentials>? = null
 
   override fun identityType(): Class<AwsCredentialsIdentity> = AwsCredentialsIdentity::class.java
@@ -79,7 +78,7 @@ class RefreshableAwsCredentialsProvider(
     }
 
     val refresh: CompletableFuture<TimeBoundCredentials> =
-      synchronized(lock) {
+      synchronized(this) {
         val currentUnderLock: TimeBoundCredentials? = cachedCredentials
         if (currentUnderLock != null && isCurrent(currentUnderLock)) {
           return CompletableFuture.completedFuture(currentUnderLock.credentials)
@@ -95,7 +94,7 @@ class RefreshableAwsCredentialsProvider(
   /**
    * Starts a refresh and records it as the in-flight one, so that concurrent callers share it.
    *
-   * Must be called while holding [lock].
+   * Must be called while holding `this`.
    */
   private fun startRefresh(): CompletableFuture<TimeBoundCredentials> {
     logger.info("Refreshing AWS credentials")
@@ -107,7 +106,7 @@ class RefreshableAwsCredentialsProvider(
       }
     inFlightRefresh = refresh
     refresh.whenComplete { result, error ->
-      synchronized(lock) {
+      synchronized(this) {
         // Only clear the in-flight refresh if it is still this one, otherwise a later refresh
         // would be dropped and its callers would each start their own.
         if (inFlightRefresh === refresh) {
