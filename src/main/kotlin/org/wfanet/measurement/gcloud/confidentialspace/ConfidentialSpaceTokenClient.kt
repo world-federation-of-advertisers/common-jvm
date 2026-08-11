@@ -17,6 +17,7 @@ package org.wfanet.measurement.gcloud.confidentialspace
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
+import io.netty.buffer.ByteBufAllocator
 import io.netty.channel.unix.DomainSocketAddress
 import io.netty.handler.codec.http.HttpHeaderNames
 import io.netty.handler.codec.http.HttpHeaderValues
@@ -47,16 +48,15 @@ enum class ConfidentialSpaceTokenType(val wireValue: String) {
  * @param audience The audience baked into the token; echoed back in the `aud` claim.
  * @param tokenType The type of token to mint.
  * @param nonces Optional nonces echoed into the token (e.g. for channel binding).
+ * @param containerImageSignatureKeyIds Container image signature key IDs to surface as the
+ *   `container.signatures.key_id` AWS principal tag (used by AWS_PRINCIPALTAGS tokens). Empty means
+ *   no signature tag is requested, in which case the token instead carries
+ *   `container.image_digest`.
  */
 data class AttestationTokenRequest(
   val audience: String,
   val tokenType: ConfidentialSpaceTokenType,
   val nonces: List<String> = emptyList(),
-  /**
-   * Container image signature key IDs to surface as the `container.signatures.key_id` AWS principal
-   * tag (used by AWS_PRINCIPALTAGS tokens). Empty means no signature tag is requested, in which
-   * case the token instead carries `container.image_digest`.
-   */
   val containerImageSignatureKeyIds: List<String> = emptyList(),
 )
 
@@ -66,10 +66,6 @@ fun interface AttestationTokenProvider {
    * Returns a future that completes with a freshly minted attestation token for [request], or
    * completes exceptionally with an [IOException] if the token cannot be obtained. Cancelling the
    * future abandons the request.
-   *
-   * The result is a future rather than a suspend function because the sole consumer is the AWS SDK,
-   * which resolves an identity as a [CompletableFuture]. Callers in a coroutine can suspend on it
-   * with `kotlinx.coroutines.future.await`.
    */
   fun getToken(request: AttestationTokenRequest): CompletableFuture<String>
 }
@@ -100,17 +96,24 @@ class ConfidentialSpaceTokenClient(
 
   override fun getToken(request: AttestationTokenRequest): CompletableFuture<String> {
     val requestBody = buildRequestBody(request)
-    val contentLength = requestBody.toByteArray(StandardCharsets.UTF_8).size
     return httpClient
-      .headers { headers -> headers.set(HttpHeaderNames.CONTENT_LENGTH, contentLength) }
       .post()
       .uri(TOKEN_PATH)
-      .send(ByteBufMono.fromString(Mono.just(requestBody)))
+      .send(
+        ByteBufMono.fromString(
+          Mono.just(requestBody),
+          StandardCharsets.UTF_8,
+          ByteBufAllocator.DEFAULT,
+        )
+      )
       .responseSingle { httpResponse, body ->
         body.asString(StandardCharsets.UTF_8).defaultIfEmpty("").map { bodyText ->
           TokenResponse(httpResponse.status().code(), bodyText)
         }
       }
+      // responseTimeout only bounds the interval between reads, so the overall request is bounded
+      // here to cover connecting as well.
+      .timeout(requestTimeout)
       .onErrorMap { e -> IOException("Launcher token request to $socketPath failed", e) }
       .map { response -> extractToken(response) }
       .toFuture()

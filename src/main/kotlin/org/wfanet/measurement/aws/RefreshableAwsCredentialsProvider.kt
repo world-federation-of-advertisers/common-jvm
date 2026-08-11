@@ -49,8 +49,7 @@ data class TimeBoundCredentials(val credentials: AwsSessionCredentials, val expi
  * refresh that fails is not cached, so the next call retries.
  *
  * Thread-safe: callers that arrive while a refresh is in flight share its result rather than
- * starting a second one. [credentialSupplier] is invoked while holding the lock but is not awaited
- * under it, so a supplier that returns an incomplete future does not serialize its callers.
+ * starting a second one.
  *
  * @param refreshMargin How far before expiration to proactively refresh credentials.
  * @param clock Clock used to determine the current time.

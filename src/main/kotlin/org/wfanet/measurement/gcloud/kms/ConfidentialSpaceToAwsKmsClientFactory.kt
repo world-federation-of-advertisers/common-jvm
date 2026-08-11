@@ -81,6 +81,10 @@ class ConfidentialSpaceToAwsKmsClientFactory(
     resolveSignatureKeyIds(config)
       .flatMap { signatureKeyIds -> attestationToken(config, signatureKeyIds) }
       .flatMap { attestationToken -> exchangeForAwsCredentials(config, attestationToken) }
+      .onErrorMap { e ->
+        if (e is GeneralSecurityException) e
+        else GeneralSecurityException("Failed to obtain AWS credentials", e)
+      }
 
   /**
    * Resolves the container image signature key IDs to request as AWS principal tags.
@@ -161,20 +165,20 @@ class ConfidentialSpaceToAwsKmsClientFactory(
       }
 
     val stsResponse =
-      try {
-        stsClient.assumeRoleWithWebIdentity(
-          AssumeRoleWithWebIdentityRequest.builder()
-            .apply {
-              roleArn(config.roleArn)
-              roleSessionName(config.roleSessionName)
-              webIdentityToken(attestationToken)
-            }
-            .build()
-        )
-      } catch (e: Exception) {
-        throw GeneralSecurityException("AWS STS AssumeRoleWithWebIdentity failed", e)
-      } finally {
-        stsClient.close()
+      stsClient.use {
+        try {
+          it.assumeRoleWithWebIdentity(
+            AssumeRoleWithWebIdentityRequest.builder()
+              .apply {
+                roleArn(config.roleArn)
+                roleSessionName(config.roleSessionName)
+                webIdentityToken(attestationToken)
+              }
+              .build()
+          )
+        } catch (e: Exception) {
+          throw GeneralSecurityException("AWS STS AssumeRoleWithWebIdentity failed", e)
+        }
       }
 
     val awsCredentials = stsResponse.credentials()

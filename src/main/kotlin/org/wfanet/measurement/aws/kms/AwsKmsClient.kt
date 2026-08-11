@@ -108,8 +108,8 @@ class AwsKmsClient(private val credentialsProvider: IdentityProvider<AwsCredenti
  */
 private class AwsKmsAead(private val kmsClient: SdkKmsClient, private val keyArn: String) : Aead {
 
-  override fun encrypt(plaintext: ByteArray, associatedData: ByteArray?): ByteArray {
-    try {
+  override fun encrypt(plaintext: ByteArray, associatedData: ByteArray?): ByteArray =
+    inKmsCall("Encryption") {
       val request =
         EncryptRequest.builder()
           .apply {
@@ -122,20 +122,11 @@ private class AwsKmsAead(private val kmsClient: SdkKmsClient, private val keyArn
             }
           }
           .build()
-      val response = kmsClient.encrypt(request)
-      return response.ciphertextBlob().asByteArray()
-    } catch (e: KmsException) {
-      throw GeneralSecurityException("Encryption failed", e)
-    } catch (e: CompletionException) {
-      // The SDK resolves credentials by joining a future, and rethrows the
-      // CompletionException as-is when its cause is a checked exception. Unwrap it so
-      // that credential failures still surface as GeneralSecurityException.
-      throw GeneralSecurityException("Encryption failed", e.cause ?: e)
+      kmsClient.encrypt(request).ciphertextBlob().asByteArray()
     }
-  }
 
-  override fun decrypt(ciphertext: ByteArray, associatedData: ByteArray?): ByteArray {
-    try {
+  override fun decrypt(ciphertext: ByteArray, associatedData: ByteArray?): ByteArray =
+    inKmsCall("Decryption") {
       val request =
         DecryptRequest.builder()
           .apply {
@@ -151,16 +142,20 @@ private class AwsKmsAead(private val kmsClient: SdkKmsClient, private val keyArn
       if (response.keyId() != keyArn) {
         throw GeneralSecurityException("Decryption failed: wrong key id")
       }
-      return response.plaintext().asByteArray()
-    } catch (e: KmsException) {
-      throw GeneralSecurityException("Decryption failed", e)
-    } catch (e: CompletionException) {
-      // The SDK resolves credentials by joining a future, and rethrows the
-      // CompletionException as-is when its cause is a checked exception. Unwrap it so
-      // that credential failures still surface as GeneralSecurityException.
-      throw GeneralSecurityException("Decryption failed", e.cause ?: e)
+      response.plaintext().asByteArray()
     }
-  }
+
+  /** Runs [block], reporting AWS failures as [GeneralSecurityException] per the [Aead] contract. */
+  private inline fun <T> inKmsCall(operation: String, block: () -> T): T =
+    try {
+      block()
+    } catch (e: KmsException) {
+      throw GeneralSecurityException("$operation failed", e)
+    } catch (e: CompletionException) {
+      // The SDK resolves credentials by joining a future, and rethrows the CompletionException
+      // as-is when its cause is a checked exception.
+      throw GeneralSecurityException("$operation failed", e.cause ?: e)
+    }
 
   companion object {
     private const val ASSOCIATED_DATA_KEY = "associatedData"
