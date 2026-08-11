@@ -17,10 +17,12 @@ package org.wfanet.measurement.aws
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
+import java.util.concurrent.CompletableFuture
 import java.util.logging.Logger
-import software.amazon.awssdk.auth.credentials.AwsCredentials
-import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider
 import software.amazon.awssdk.auth.credentials.AwsSessionCredentials
+import software.amazon.awssdk.identity.spi.AwsCredentialsIdentity
+import software.amazon.awssdk.identity.spi.IdentityProvider
+import software.amazon.awssdk.identity.spi.ResolveIdentityRequest
 
 /**
  * AWS session credentials paired with their expiration time.
@@ -31,8 +33,8 @@ import software.amazon.awssdk.auth.credentials.AwsSessionCredentials
 data class TimeBoundCredentials(val credentials: AwsSessionCredentials, val expiration: Instant)
 
 /**
- * An [AwsCredentialsProvider] that caches temporary AWS session credentials and proactively
- * refreshes them before they expire.
+ * An [IdentityProvider] of [AwsCredentialsIdentity] that caches temporary AWS session credentials
+ * and proactively refreshes them before they expire.
  *
  * Use this when AWS credentials are obtained through a multi-step exchange that the AWS SDK cannot
  * manage natively — for example, federated identity flows where a GCP Confidential Space
@@ -42,48 +44,84 @@ data class TimeBoundCredentials(val credentials: AwsSessionCredentials, val expi
  * be used because the web identity token itself must be re-obtained through a separate provider
  * before each STS call.
  *
- * Credentials are obtained lazily on the first call to [resolveCredentials] and cached until they
- * are within [refreshMargin] of expiration, at which point the [credentialSupplier] is called
- * again. If the supplier throws, the exception propagates to the caller and no credentials are
- * cached, allowing retry on the next call.
+ * Credentials are obtained lazily on the first call to [resolveIdentity] and cached until they are
+ * within [refreshMargin] of expiration, at which point [credentialSupplier] is called again. A
+ * refresh that fails is not cached, so the next call retries.
  *
- * Thread-safe: concurrent calls to [resolveCredentials] are serialized via double-checked locking
- * so that only one thread executes the credential supplier when a refresh is needed.
+ * Thread-safe: callers that arrive while a refresh is in flight share its result rather than
+ * starting a second one. [credentialSupplier] is invoked while holding an internal lock but is not
+ * awaited under it, so a supplier that returns an incomplete future does not serialize its callers.
  *
  * @param refreshMargin How far before expiration to proactively refresh credentials.
  * @param clock Clock used to determine the current time.
- * @param credentialSupplier Function that obtains fresh credentials and their expiration.
+ * @param credentialSupplier Function that starts obtaining fresh credentials and their expiration.
  */
 class RefreshableAwsCredentialsProvider(
   private val refreshMargin: Duration,
   private val clock: Clock = Clock.systemUTC(),
-  private val credentialSupplier: () -> TimeBoundCredentials,
-) : AwsCredentialsProvider {
+  private val credentialSupplier: () -> CompletableFuture<TimeBoundCredentials>,
+) : IdentityProvider<AwsCredentialsIdentity> {
+  private val lock = Any()
 
-  @Volatile private var cachedCredentials: AwsSessionCredentials? = null
-  @Volatile private var expiration: Instant = Instant.EPOCH
+  @Volatile private var cachedCredentials: TimeBoundCredentials? = null
 
-  override fun resolveCredentials(): AwsCredentials {
-    val now = clock.instant()
-    val current = cachedCredentials
-    if (current != null && now.plus(refreshMargin).isBefore(expiration)) {
-      return current
+  /** Refresh that has been started but has not completed yet. Guarded by [lock]. */
+  private var inFlightRefresh: CompletableFuture<TimeBoundCredentials>? = null
+
+  override fun identityType(): Class<AwsCredentialsIdentity> = AwsCredentialsIdentity::class.java
+
+  override fun resolveIdentity(
+    request: ResolveIdentityRequest
+  ): CompletableFuture<AwsCredentialsIdentity> {
+    val current: TimeBoundCredentials? = cachedCredentials
+    if (current != null && isCurrent(current)) {
+      return CompletableFuture.completedFuture(current.credentials)
     }
 
-    synchronized(this) {
-      val nowAfterLock = clock.instant()
-      val currentAfterLock = cachedCredentials
-      if (currentAfterLock != null && nowAfterLock.plus(refreshMargin).isBefore(expiration)) {
-        return currentAfterLock
+    val refresh: CompletableFuture<TimeBoundCredentials> =
+      synchronized(lock) {
+        val currentUnderLock: TimeBoundCredentials? = cachedCredentials
+        if (currentUnderLock != null && isCurrent(currentUnderLock)) {
+          return CompletableFuture.completedFuture(currentUnderLock.credentials)
+        }
+        inFlightRefresh ?: startRefresh()
       }
+    return refresh.thenApply { it.credentials }
+  }
 
-      logger.info("Refreshing AWS credentials")
-      val result = credentialSupplier()
-      cachedCredentials = result.credentials
-      expiration = result.expiration
-      logger.info("AWS credentials refreshed, expiration: ${result.expiration}")
-      return result.credentials
+  private fun isCurrent(credentials: TimeBoundCredentials): Boolean =
+    clock.instant().plus(refreshMargin).isBefore(credentials.expiration)
+
+  /**
+   * Starts a refresh and records it as the in-flight one, so that concurrent callers share it.
+   *
+   * Must be called while holding [lock].
+   */
+  private fun startRefresh(): CompletableFuture<TimeBoundCredentials> {
+    logger.info("Refreshing AWS credentials")
+    val refresh: CompletableFuture<TimeBoundCredentials> =
+      try {
+        credentialSupplier()
+      } catch (e: Exception) {
+        return CompletableFuture.failedFuture(e)
+      }
+    inFlightRefresh = refresh
+    refresh.whenComplete { result, error ->
+      synchronized(lock) {
+        // Only clear the in-flight refresh if it is still this one, otherwise a later refresh
+        // would be dropped and its callers would each start their own.
+        if (inFlightRefresh === refresh) {
+          inFlightRefresh = null
+        }
+        if (error == null) {
+          cachedCredentials = result
+        }
+      }
+      if (error == null) {
+        logger.info("AWS credentials refreshed, expiration: ${result.expiration}")
+      }
     }
+    return refresh
   }
 
   companion object {

@@ -19,8 +19,9 @@ import com.google.crypto.tink.KmsClient
 import java.security.GeneralSecurityException
 import java.util.Base64
 import java.util.Locale
-import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider
 import software.amazon.awssdk.core.SdkBytes
+import software.amazon.awssdk.identity.spi.AwsCredentialsIdentity
+import software.amazon.awssdk.identity.spi.IdentityProvider
 import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.kms.KmsClient as SdkKmsClient
 import software.amazon.awssdk.services.kms.model.DecryptRequest
@@ -33,9 +34,10 @@ import software.amazon.awssdk.services.kms.model.KmsException
  * This avoids the `tink-awskms` library which depends on AWS SDK v1, allowing usage in projects
  * that standardize on AWS SDK v2.
  *
- * @param credentialsProvider The [AwsCredentialsProvider] to use for authenticating with AWS KMS.
+ * @param credentialsProvider Provider of the AWS credentials to authenticate with AWS KMS.
  */
-class AwsKmsClient(private val credentialsProvider: AwsCredentialsProvider) : KmsClient {
+class AwsKmsClient(private val credentialsProvider: IdentityProvider<AwsCredentialsIdentity>) :
+  KmsClient {
 
   override fun doesSupport(keyUri: String?): Boolean {
     return keyUri != null && keyUri.lowercase(Locale.US).startsWith(KEY_URI_PREFIX)

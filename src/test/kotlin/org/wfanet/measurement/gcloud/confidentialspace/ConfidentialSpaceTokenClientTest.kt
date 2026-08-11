@@ -34,6 +34,7 @@ import kotlin.concurrent.thread
 import kotlin.test.assertFailsWith
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.future.await
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -186,7 +187,7 @@ class ConfidentialSpaceTokenClientTest {
       "HTTP/1.1 200 OK\r\nContent-Length: ${token.length}\r\nConnection: close\r\n\r\n$token"
     )
 
-    val result = clientForServer().getToken(awsPrincipalTagsRequest())
+    val result = clientForServer().getToken(awsPrincipalTagsRequest()).await()
 
     assertThat(result).isEqualTo(token)
     assertThat(capturedRequest).contains("POST /v1/token HTTP/1.1")
@@ -212,7 +213,7 @@ class ConfidentialSpaceTokenClientTest {
         "0\r\n\r\n"
     )
 
-    val result = clientForServer().getToken(awsPrincipalTagsRequest())
+    val result = clientForServer().getToken(awsPrincipalTagsRequest()).await()
 
     assertThat(result).isEqualTo("header.payload.signature")
   }
@@ -224,7 +225,7 @@ class ConfidentialSpaceTokenClientTest {
       "HTTP/1.1 200 OK\r\nContent-Length: ${token.length}\r\nConnection: close\r\n\r\n${token}EXTRA"
     )
 
-    val result = clientForServer().getToken(awsPrincipalTagsRequest())
+    val result = clientForServer().getToken(awsPrincipalTagsRequest()).await()
 
     assertThat(result).isEqualTo(token)
   }
@@ -236,7 +237,7 @@ class ConfidentialSpaceTokenClientTest {
       "HTTP/1.1 202 Accepted\r\nContent-Length: ${token.length}\r\nConnection: close\r\n\r\n$token"
     )
 
-    val result = clientForServer().getToken(awsPrincipalTagsRequest())
+    val result = clientForServer().getToken(awsPrincipalTagsRequest()).await()
 
     assertThat(result).isEqualTo(token)
   }
@@ -248,7 +249,7 @@ class ConfidentialSpaceTokenClientTest {
     )
 
     val exception =
-      assertFailsWith<IOException> { clientForServer().getToken(awsPrincipalTagsRequest()) }
+      assertFailsWith<IOException> { clientForServer().getToken(awsPrincipalTagsRequest()).await() }
 
     assertThat(exception).hasMessageThat().contains("400")
     assertThat(exception).hasMessageThat().contains("invalid audience")
@@ -262,7 +263,7 @@ class ConfidentialSpaceTokenClientTest {
     )
 
     val exception =
-      assertFailsWith<IOException> { clientForServer().getToken(awsPrincipalTagsRequest()) }
+      assertFailsWith<IOException> { clientForServer().getToken(awsPrincipalTagsRequest()).await() }
 
     assertThat(exception).hasMessageThat().contains("[redacted possible JWT]")
     assertThat(exception).hasMessageThat().doesNotContain(jwt)
@@ -280,7 +281,7 @@ class ConfidentialSpaceTokenClientTest {
     )
 
     val exception =
-      assertFailsWith<IOException> { clientForServer().getToken(awsPrincipalTagsRequest()) }
+      assertFailsWith<IOException> { clientForServer().getToken(awsPrincipalTagsRequest()).await() }
 
     assertThat(exception).hasMessageThat().contains(socketPath.toString())
   }
@@ -290,7 +291,7 @@ class ConfidentialSpaceTokenClientTest {
     startServer("")
 
     val exception =
-      assertFailsWith<IOException> { clientForServer().getToken(awsPrincipalTagsRequest()) }
+      assertFailsWith<IOException> { clientForServer().getToken(awsPrincipalTagsRequest()).await() }
 
     assertThat(exception).hasMessageThat().contains(socketPath.toString())
   }
@@ -300,7 +301,7 @@ class ConfidentialSpaceTokenClientTest {
     runBlocking {
       startServer("HTTP/1.1 200 OK\r\nContent-Length: 24\r\n\r\nheader.payload.signature")
 
-      clientForServer().getToken(awsPrincipalTagsRequest())
+      clientForServer().getToken(awsPrincipalTagsRequest()).await()
 
       assertThat(capturedRequest).contains("aws_principal_tag_options")
       assertThat(capturedRequest).contains("allowed_principal_tags")
@@ -318,6 +319,7 @@ class ConfidentialSpaceTokenClientTest {
           tokenType = ConfidentialSpaceTokenType.OIDC,
         )
       )
+      .await()
 
     assertThat(capturedRequest).contains("\"token_type\":\"OIDC\"")
     assertThat(capturedRequest).doesNotContain("aws_principal_tag_options")
@@ -335,6 +337,7 @@ class ConfidentialSpaceTokenClientTest {
           containerImageSignatureKeyIds = listOf("keyA", "keyB"),
         )
       )
+      .await()
 
     assertThat(capturedRequest).contains("container_image_signatures")
     assertThat(capturedRequest).contains("key_ids")
@@ -351,8 +354,8 @@ class ConfidentialSpaceTokenClientTest {
     startServer(response, response)
     val client = clientForServer()
 
-    assertThat(client.getToken(awsPrincipalTagsRequest())).isEqualTo(body)
-    assertThat(client.getToken(awsPrincipalTagsRequest())).isEqualTo(body)
+    assertThat(client.getToken(awsPrincipalTagsRequest()).await()).isEqualTo(body)
+    assertThat(client.getToken(awsPrincipalTagsRequest()).await()).isEqualTo(body)
     // One accept means the second request went over the pooled connection.
     assertThat(acceptCount.get()).isEqualTo(1)
   }
@@ -384,7 +387,7 @@ class ConfidentialSpaceTokenClientTest {
     val token = "header.payload.signature"
     startServer("HTTP/1.1 200 OK\r\nConnection: close\r\n\r\n$token")
 
-    val result = clientForServer().getToken(awsPrincipalTagsRequest())
+    val result = clientForServer().getToken(awsPrincipalTagsRequest()).await()
 
     assertThat(result).isEqualTo(token)
   }
@@ -401,6 +404,7 @@ class ConfidentialSpaceTokenClientTest {
           nonces = listOf("nonceA", "nonceB"),
         )
       )
+      .await()
 
     assertThat(capturedRequest).contains("\"nonces\":[\"nonceA\",\"nonceB\"]")
   }
@@ -411,7 +415,8 @@ class ConfidentialSpaceTokenClientTest {
     val absentSocket = Paths.get("/tmp", "cs-token-absent-${System.nanoTime()}.sock")
     val client = ConfidentialSpaceTokenClient(socketPath = absentSocket)
 
-    val exception = assertFailsWith<IOException> { client.getToken(awsPrincipalTagsRequest()) }
+    val exception =
+      assertFailsWith<IOException> { client.getToken(awsPrincipalTagsRequest()).await() }
 
     assertThat(exception).hasMessageThat().contains(absentSocket.toString())
   }
@@ -449,7 +454,7 @@ class ConfidentialSpaceTokenClientTest {
     val observed = CompletableDeferred<Throwable>()
     val job = launch {
       try {
-        clientForServer().getToken(awsPrincipalTagsRequest())
+        clientForServer().getToken(awsPrincipalTagsRequest()).await()
       } catch (e: Throwable) {
         observed.complete(e)
       }

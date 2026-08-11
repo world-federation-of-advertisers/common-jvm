@@ -26,8 +26,7 @@ import java.nio.file.Path
 import java.nio.file.Paths
 import java.time.Duration
 import java.util.Base64
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.reactive.awaitSingle
+import java.util.concurrent.CompletableFuture
 import reactor.core.publisher.Mono
 import reactor.netty.ByteBufMono
 import reactor.netty.http.client.HttpClient
@@ -64,11 +63,15 @@ data class AttestationTokenRequest(
 /** Obtains Confidential Space attestation tokens. */
 fun interface AttestationTokenProvider {
   /**
-   * Returns a freshly minted attestation token for [request].
+   * Returns a future that completes with a freshly minted attestation token for [request], or
+   * completes exceptionally with an [IOException] if the token cannot be obtained. Cancelling the
+   * future abandons the request.
    *
-   * @throws IOException if the token cannot be obtained.
+   * The result is a future rather than a suspend function because the sole consumer is the AWS SDK,
+   * which resolves an identity as a [CompletableFuture]. Callers in a coroutine can suspend on it
+   * with `kotlinx.coroutines.future.await`.
    */
-  suspend fun getToken(request: AttestationTokenRequest): String
+  fun getToken(request: AttestationTokenRequest): CompletableFuture<String>
 }
 
 /**
@@ -95,28 +98,26 @@ class ConfidentialSpaceTokenClient(
         headers.set(HttpHeaderNames.CONTENT_TYPE, HttpHeaderValues.APPLICATION_JSON)
       }
 
-  override suspend fun getToken(request: AttestationTokenRequest): String {
+  override fun getToken(request: AttestationTokenRequest): CompletableFuture<String> {
     val requestBody = buildRequestBody(request)
     val contentLength = requestBody.toByteArray(StandardCharsets.UTF_8).size
-    val response: TokenResponse =
-      try {
-        httpClient
-          .headers { headers -> headers.set(HttpHeaderNames.CONTENT_LENGTH, contentLength) }
-          .post()
-          .uri(TOKEN_PATH)
-          .send(ByteBufMono.fromString(Mono.just(requestBody)))
-          .responseSingle { httpResponse, body ->
-            body.asString(StandardCharsets.UTF_8).defaultIfEmpty("").map { bodyText ->
-              TokenResponse(httpResponse.status().code(), bodyText)
-            }
-          }
-          .awaitSingle()
-      } catch (e: CancellationException) {
-        throw e
-      } catch (e: Exception) {
-        throw IOException("Launcher token request to $socketPath failed", e)
+    return httpClient
+      .headers { headers -> headers.set(HttpHeaderNames.CONTENT_LENGTH, contentLength) }
+      .post()
+      .uri(TOKEN_PATH)
+      .send(ByteBufMono.fromString(Mono.just(requestBody)))
+      .responseSingle { httpResponse, body ->
+        body.asString(StandardCharsets.UTF_8).defaultIfEmpty("").map { bodyText ->
+          TokenResponse(httpResponse.status().code(), bodyText)
+        }
       }
+      .onErrorMap { e -> IOException("Launcher token request to $socketPath failed", e) }
+      .map { response -> extractToken(response) }
+      .toFuture()
+  }
 
+  /** Returns the attestation token carried by [response], which must be a successful one. */
+  private fun extractToken(response: TokenResponse): String {
     val token = response.body.trim()
     if (response.statusCode !in SUCCESS_STATUS_CODES) {
       throw IOException(

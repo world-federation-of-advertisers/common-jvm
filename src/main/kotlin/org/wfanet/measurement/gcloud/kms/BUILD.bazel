@@ -19,6 +19,7 @@ kt_jvm_library(
     deps = [
         "//imports/java/com/google/gson",
         "//imports/java/software/amazon/awssdk/auth",
+        "//imports/java/software/amazon/awssdk/identity/spi",
         "//imports/java/software/amazon/awssdk/services/regions",
         "//imports/java/software/amazon/awssdk/services/sts",
         "//src/main/kotlin/org/wfanet/measurement/aws:refreshable_aws_credentials_provider",
@@ -35,9 +36,9 @@ kt_jvm_library(
     deps = [
         "//imports/java/reactor:core",
         "//imports/java/software/amazon/awssdk/auth",
+        "//imports/java/software/amazon/awssdk/identity/spi",
         "//imports/java/software/amazon/awssdk/services/regions",
         "//imports/java/software/amazon/awssdk/services/sts",
-        "//imports/kotlin/kotlinx/coroutines:core",
         "//src/main/kotlin/org/wfanet/measurement/aws:refreshable_aws_credentials_provider",
         "//src/main/kotlin/org/wfanet/measurement/aws/kms:aws_kms_client_factory",
         "//src/main/kotlin/org/wfanet/measurement/common/crypto/tink",
