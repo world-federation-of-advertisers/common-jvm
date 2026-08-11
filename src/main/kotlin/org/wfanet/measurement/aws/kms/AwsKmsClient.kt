@@ -19,6 +19,7 @@ import com.google.crypto.tink.KmsClient
 import java.security.GeneralSecurityException
 import java.util.Base64
 import java.util.Locale
+import java.util.concurrent.CompletionException
 import software.amazon.awssdk.core.SdkBytes
 import software.amazon.awssdk.identity.spi.AwsCredentialsIdentity
 import software.amazon.awssdk.identity.spi.IdentityProvider
@@ -125,6 +126,11 @@ private class AwsKmsAead(private val kmsClient: SdkKmsClient, private val keyArn
       return response.ciphertextBlob().asByteArray()
     } catch (e: KmsException) {
       throw GeneralSecurityException("Encryption failed", e)
+    } catch (e: CompletionException) {
+      // The SDK resolves credentials by joining a future, and rethrows the
+      // CompletionException as-is when its cause is a checked exception. Unwrap it so
+      // that credential failures still surface as GeneralSecurityException.
+      throw GeneralSecurityException("Encryption failed", e.cause ?: e)
     }
   }
 
@@ -148,6 +154,11 @@ private class AwsKmsAead(private val kmsClient: SdkKmsClient, private val keyArn
       return response.plaintext().asByteArray()
     } catch (e: KmsException) {
       throw GeneralSecurityException("Decryption failed", e)
+    } catch (e: CompletionException) {
+      // The SDK resolves credentials by joining a future, and rethrows the
+      // CompletionException as-is when its cause is a checked exception. Unwrap it so
+      // that credential failures still surface as GeneralSecurityException.
+      throw GeneralSecurityException("Decryption failed", e.cause ?: e)
     }
   }
 
