@@ -42,21 +42,19 @@ enum class ConfidentialSpaceTokenType(val wireValue: String) {
   AWS_PRINCIPAL_TAGS("AWS_PRINCIPALTAGS"),
 }
 
-/**
- * Request for a custom Confidential Space attestation token.
- *
- * @param audience The audience baked into the token; echoed back in the `aud` claim.
- * @param tokenType The type of token to mint.
- * @param nonces Optional nonces echoed into the token (e.g. for channel binding).
- * @param containerImageSignatureKeyIds Container image signature key IDs to surface as the
- *   `container.signatures.key_id` AWS principal tag (used by AWS_PRINCIPALTAGS tokens). Empty means
- *   no signature tag is requested, in which case the token instead carries
- *   `container.image_digest`.
- */
+/** Request for a custom Confidential Space attestation token. */
 data class AttestationTokenRequest(
+  /** The audience baked into the token; echoed back in the `aud` claim. */
   val audience: String,
+  /** The type of token to mint. */
   val tokenType: ConfidentialSpaceTokenType,
+  /** Optional nonces echoed into the token (e.g. for channel binding). */
   val nonces: List<String> = emptyList(),
+  /**
+   * Container image signature key IDs to surface as the `container.signatures.key_id` AWS principal
+   * tag (used by AWS_PRINCIPALTAGS tokens). Empty means no signature tag is requested, in which
+   * case the token instead carries `container.image_digest`.
+   */
   val containerImageSignatureKeyIds: List<String> = emptyList(),
 )
 
