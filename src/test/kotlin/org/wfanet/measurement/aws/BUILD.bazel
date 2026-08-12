@@ -8,8 +8,8 @@ kt_jvm_test(
         "//imports/java/com/google/common/truth",
         "//imports/java/org/junit",
         "//imports/java/software/amazon/awssdk/auth",
+        "//imports/java/software/amazon/awssdk/identity/spi",
         "//imports/kotlin/kotlin/test",
-        "//imports/kotlin/kotlinx/coroutines/test",
         "//src/main/kotlin/org/wfanet/measurement/aws:refreshable_aws_credentials_provider",
     ],
 )

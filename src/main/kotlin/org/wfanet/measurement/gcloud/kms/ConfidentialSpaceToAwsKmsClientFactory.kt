@@ -27,6 +27,8 @@ import org.wfanet.measurement.gcloud.confidentialspace.AttestationTokenProvider
 import org.wfanet.measurement.gcloud.confidentialspace.AttestationTokenRequest
 import org.wfanet.measurement.gcloud.confidentialspace.ConfidentialSpaceTokenClient
 import org.wfanet.measurement.gcloud.confidentialspace.ConfidentialSpaceTokenType
+import reactor.core.publisher.Mono
+import reactor.core.scheduler.Schedulers
 import software.amazon.awssdk.auth.credentials.AnonymousCredentialsProvider
 import software.amazon.awssdk.auth.credentials.AwsSessionCredentials
 import software.amazon.awssdk.regions.Region
@@ -59,26 +61,68 @@ class ConfidentialSpaceToAwsKmsClientFactory(
    * Returns an [AwsKmsClient] using a Confidential Space attestation token to authenticate directly
    * with AWS.
    *
+   * The token fetch and STS exchange are deferred until the AWS SDK resolves credentials, and fail
+   * that resolution with a [GeneralSecurityException] when they cannot be completed.
+   *
    * @param config The Confidential Space-to-AWS configuration.
    * @return An initialized [AwsKmsClient].
-   * @throws GeneralSecurityException if credentials cannot be obtained or exchanged.
    */
   override fun getKmsClient(config: ConfidentialSpaceToAwsWifCredentials): KmsClient {
     val credentialsProvider =
       RefreshableAwsCredentialsProvider(refreshMargin = refreshMargin, clock = clock) {
-        obtainAwsCredentials(config)
+        obtainAwsCredentials(config).toFuture()
       }
     return AwsKmsClient(credentialsProvider)
   }
 
   private fun obtainAwsCredentials(
     config: ConfidentialSpaceToAwsWifCredentials
-  ): TimeBoundCredentials {
-    val signatureKeyIds: List<String> =
-      config.containerImageSignatureKeyIds.ifEmpty { discoverSignatureKeyIds(config.audience) }
+  ): Mono<TimeBoundCredentials> =
+    resolveSignatureKeyIds(config)
+      .flatMap { signatureKeyIds -> attestationToken(config, signatureKeyIds) }
+      .flatMap { attestationToken -> exchangeForAwsCredentials(config, attestationToken) }
+      .onErrorMap { e ->
+        if (e is GeneralSecurityException) e
+        else GeneralSecurityException("Failed to obtain AWS credentials", e)
+      }
 
-    val attestationToken: String =
-      try {
+  /**
+   * Resolves the container image signature key IDs to request as AWS principal tags.
+   *
+   * When none are configured they are discovered from the workload's own OIDC attestation token, by
+   * reading its `submods.container.image_signatures` claim, so no key IDs need to be hardcoded
+   * anywhere. The AWS role trust policy remains the authority on which signers are acceptable.
+   */
+  private fun resolveSignatureKeyIds(
+    config: ConfidentialSpaceToAwsWifCredentials
+  ): Mono<List<String>> {
+    if (config.containerImageSignatureKeyIds.isNotEmpty()) {
+      return Mono.just(config.containerImageSignatureKeyIds)
+    }
+    return Mono.fromFuture {
+        tokenProvider.getToken(
+          AttestationTokenRequest(
+            audience = config.audience,
+            tokenType = ConfidentialSpaceTokenType.OIDC,
+          )
+        )
+      }
+      .onErrorMap { e ->
+        GeneralSecurityException(
+          "Failed to obtain Confidential Space OIDC token for signature discovery",
+          e,
+        )
+      }
+      .map { oidcToken ->
+        ConfidentialSpaceTokenClient.parseContainerImageSignatureKeyIds(oidcToken)
+      }
+  }
+
+  private fun attestationToken(
+    config: ConfidentialSpaceToAwsWifCredentials,
+    signatureKeyIds: List<String>,
+  ): Mono<String> =
+    Mono.fromFuture {
         tokenProvider.getToken(
           AttestationTokenRequest(
             audience = config.audience,
@@ -86,10 +130,28 @@ class ConfidentialSpaceToAwsKmsClientFactory(
             containerImageSignatureKeyIds = signatureKeyIds,
           )
         )
-      } catch (e: Exception) {
-        throw GeneralSecurityException("Failed to obtain Confidential Space attestation token", e)
+      }
+      .onErrorMap { e ->
+        GeneralSecurityException("Failed to obtain Confidential Space attestation token", e)
       }
 
+  /**
+   * Exchanges [attestationToken] with AWS STS for temporary AWS credentials.
+   *
+   * [StsClient] is blocking, so the exchange is scheduled on [Schedulers.boundedElastic] rather
+   * than on the event loop that delivered the attestation token.
+   */
+  private fun exchangeForAwsCredentials(
+    config: ConfidentialSpaceToAwsWifCredentials,
+    attestationToken: String,
+  ): Mono<TimeBoundCredentials> =
+    Mono.fromCallable { assumeRoleWithWebIdentity(config, attestationToken) }
+      .subscribeOn(Schedulers.boundedElastic())
+
+  private fun assumeRoleWithWebIdentity(
+    config: ConfidentialSpaceToAwsWifCredentials,
+    attestationToken: String,
+  ): TimeBoundCredentials {
     val stsClient: StsClient =
       try {
         StsClient.builder()
@@ -103,20 +165,20 @@ class ConfidentialSpaceToAwsKmsClientFactory(
       }
 
     val stsResponse =
-      try {
-        stsClient.assumeRoleWithWebIdentity(
-          AssumeRoleWithWebIdentityRequest.builder()
-            .apply {
-              roleArn(config.roleArn)
-              roleSessionName(config.roleSessionName)
-              webIdentityToken(attestationToken)
-            }
-            .build()
-        )
-      } catch (e: Exception) {
-        throw GeneralSecurityException("AWS STS AssumeRoleWithWebIdentity failed", e)
-      } finally {
-        stsClient.close()
+      stsClient.use {
+        try {
+          it.assumeRoleWithWebIdentity(
+            AssumeRoleWithWebIdentityRequest.builder()
+              .apply {
+                roleArn(config.roleArn)
+                roleSessionName(config.roleSessionName)
+                webIdentityToken(attestationToken)
+              }
+              .build()
+          )
+        } catch (e: Exception) {
+          throw GeneralSecurityException("AWS STS AssumeRoleWithWebIdentity failed", e)
+        }
       }
 
     val awsCredentials = stsResponse.credentials()
@@ -129,27 +191,6 @@ class ConfidentialSpaceToAwsKmsClientFactory(
         ),
       expiration = awsCredentials.expiration(),
     )
-  }
-
-  /**
-   * Self-discovers the workload own container image signature key IDs by fetching an OIDC
-   * attestation token and reading its `submods.container.image_signatures` claim, so no signature
-   * key IDs need to be configured or hardcoded anywhere.
-   */
-  private fun discoverSignatureKeyIds(audience: String): List<String> {
-    val oidcToken: String =
-      try {
-        tokenProvider.getToken(
-          AttestationTokenRequest(audience = audience, tokenType = ConfidentialSpaceTokenType.OIDC)
-        )
-      } catch (e: Exception) {
-        throw GeneralSecurityException(
-          "Failed to obtain Confidential Space OIDC token for signature discovery",
-          e,
-        )
-      }
-    val keyIds = ConfidentialSpaceTokenClient.parseContainerImageSignatureKeyIds(oidcToken)
-    return keyIds
   }
 
   companion object {

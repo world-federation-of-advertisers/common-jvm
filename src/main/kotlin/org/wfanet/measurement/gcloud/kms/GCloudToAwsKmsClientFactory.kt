@@ -23,6 +23,7 @@ import com.google.gson.JsonObject
 import java.security.GeneralSecurityException
 import java.time.Clock
 import java.time.Duration
+import java.util.concurrent.CompletableFuture
 import java.util.logging.Logger
 import org.wfanet.measurement.aws.RefreshableAwsCredentialsProvider
 import org.wfanet.measurement.aws.TimeBoundCredentials
@@ -65,7 +66,9 @@ class GCloudToAwsKmsClientFactory(
   override fun getKmsClient(config: GCloudToAwsWifCredentials): KmsClient {
     val credentialsProvider =
       RefreshableAwsCredentialsProvider(refreshMargin = refreshMargin, clock = clock) {
-        obtainAwsCredentials(config)
+        // The credential chain is blocking, and the AWS SDK resolves credentials from a
+        // thread where blocking is expected, so it runs inline rather than on another thread.
+        CompletableFuture.completedFuture(obtainAwsCredentials(config))
       }
     return AwsKmsClient(credentialsProvider)
   }
