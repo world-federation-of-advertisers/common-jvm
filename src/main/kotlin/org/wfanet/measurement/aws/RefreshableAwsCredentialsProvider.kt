@@ -19,6 +19,8 @@ import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.CompletableFuture
 import java.util.logging.Logger
+import software.amazon.awssdk.auth.credentials.AwsCredentials
+import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider
 import software.amazon.awssdk.auth.credentials.AwsSessionCredentials
 import software.amazon.awssdk.identity.spi.AwsCredentialsIdentity
 import software.amazon.awssdk.identity.spi.IdentityProvider
@@ -33,8 +35,8 @@ import software.amazon.awssdk.identity.spi.ResolveIdentityRequest
 data class TimeBoundCredentials(val credentials: AwsSessionCredentials, val expiration: Instant)
 
 /**
- * An [IdentityProvider] of [AwsCredentialsIdentity] that caches temporary AWS session credentials
- * and proactively refreshes them before they expire.
+ * An [AwsCredentialsProvider] (and, transitively, [IdentityProvider] of [AwsCredentialsIdentity])
+ * that caches temporary AWS session credentials and proactively refreshes them before they expire.
  *
  * Use this when AWS credentials are obtained through a multi-step exchange that the AWS SDK cannot
  * manage natively — for example, federated identity flows where a GCP Confidential Space
@@ -51,6 +53,31 @@ data class TimeBoundCredentials(val credentials: AwsSessionCredentials, val expi
  * Thread-safe: callers that arrive while a refresh is in flight share its result rather than
  * starting a second one.
  *
+ * ## Why this implements both [IdentityProvider] and [AwsCredentialsProvider]
+ *
+ * [credentialSupplier] is inherently asynchronous (it chains a GCP token exchange with an AWS STS
+ * call), so [resolveIdentity] is the natural, non-blocking way to expose it: it returns a
+ * [CompletableFuture] and lets the caller decide how to wait on it. The AWS SDK's own client
+ * builders (e.g. `KmsClient.builder().credentialsProvider(...)`) accept the wider
+ * `IdentityProvider<? extends AwsCredentialsIdentity>` type directly and resolve credentials
+ * through it without blocking application code — this is the preferred, and originally the only,
+ * way this class was consumed.
+ *
+ * However, some third-party libraries built on the AWS SDK — notably upstream `tink-awskms`'s
+ * `com.google.crypto.tink.integration.awskms.AwsKmsClient.withCredentialsProvider` — only expose a
+ * public API typed to the narrower, synchronous [AwsCredentialsProvider], with no
+ * [IdentityProvider]-based overload. To let this class feed those consumers too,
+ * [resolveCredentials] joins the same [CompletableFuture] that [resolveIdentity] returns and blocks
+ * the calling thread until it completes. This mirrors what the AWS SDK itself already does
+ * internally for purely-synchronous callers (its `AwsCredentialsAuthorizationStrategy` joins a
+ * future the same way), so no new category of blocking is introduced by adding this method — it is
+ * only made explicit here instead of happening inside SDK internals.
+ *
+ * Prefer [resolveIdentity] wherever the caller's API allows it. Only use [resolveCredentials] when
+ * a dependency's public API leaves no other option, and be aware it blocks: calling it from a
+ * non-blocking context (e.g. a Reactor Netty event-loop thread) risks thread starvation, the same
+ * way calling any other blocking [AwsCredentialsProvider] from such a context would.
+ *
  * @param refreshMargin How far before expiration to proactively refresh credentials.
  * @param clock Clock used to determine the current time.
  * @param credentialSupplier Function that starts obtaining fresh credentials and their expiration.
@@ -59,7 +86,7 @@ class RefreshableAwsCredentialsProvider(
   private val refreshMargin: Duration,
   private val clock: Clock = Clock.systemUTC(),
   private val credentialSupplier: () -> CompletableFuture<TimeBoundCredentials>,
-) : IdentityProvider<AwsCredentialsIdentity> {
+) : AwsCredentialsProvider {
 
   @Volatile private var cachedCredentials: TimeBoundCredentials? = null
 
@@ -86,6 +113,14 @@ class RefreshableAwsCredentialsProvider(
       }
     return refresh.thenApply { it.credentials }
   }
+
+  /**
+   * Blocking bridge for consumers whose public API requires a synchronous [AwsCredentialsProvider]
+   * rather than an [IdentityProvider]. See the class-level documentation for why this exists and
+   * when to prefer [resolveIdentity] instead.
+   */
+  override fun resolveCredentials(): AwsCredentials =
+    resolveIdentity(ResolveIdentityRequest.builder().build()).join() as AwsCredentials
 
   private fun isCurrent(credentials: TimeBoundCredentials): Boolean =
     clock.instant().plus(refreshMargin).isBefore(credentials.expiration)

@@ -19,11 +19,13 @@
 package org.wfanet.measurement.gcloud.kms
 
 import com.google.crypto.tink.KmsClient
+import com.google.crypto.tink.integration.awskms.AwsKmsClient as TinkAwsKmsClient
 import java.security.GeneralSecurityException
 import java.time.Clock
 import java.time.Duration
 import org.wfanet.measurement.aws.RefreshableAwsCredentialsProvider
 import org.wfanet.measurement.aws.TimeBoundCredentials
+import org.wfanet.measurement.aws.kms.AssociatedDataEncoding
 import org.wfanet.measurement.aws.kms.AwsKmsClient
 import org.wfanet.measurement.common.crypto.tink.ConfidentialSpaceToAwsWifCredentials
 import org.wfanet.measurement.common.crypto.tink.KmsClientFactory
@@ -52,31 +54,54 @@ import software.amazon.awssdk.services.sts.model.AssumeRoleWithWebIdentityReques
  * The returned client uses a credentials provider that automatically refreshes the AWS session
  * credentials before they expire by re-executing the token fetch + STS exchange.
  *
+ * The credentials obtained this way are exposed through [RefreshableAwsCredentialsProvider], which
+ * implements both the AWS SDK's async `IdentityProvider<AwsCredentialsIdentity>` contract and the
+ * older, blocking `AwsCredentialsProvider` contract that upstream `tink-awskms`'s public
+ * `AwsKmsClient.withCredentialsProvider` method requires. See [RefreshableAwsCredentialsProvider]'s
+ * class documentation for why both are implemented and the tradeoffs of each.
+ *
  * @param tokenProvider Source of Confidential Space attestation tokens.
  * @param refreshMargin How far before expiration to proactively refresh credentials.
  * @param clock Clock used to determine the current time.
+ * @param useLegacyBase64Encoding If `true`, returns the deprecated custom
+ *   [org.wfanet.measurement.aws.kms.AwsKmsClient] configured with [AssociatedDataEncoding.BASE64],
+ *   for decrypting ciphertext written by older versions of this client. Defaults to `false`, which
+ *   returns the upstream `tink-awskms` client; do not set this for new usages.
  */
 class ConfidentialSpaceToAwsKmsClientFactory(
   private val tokenProvider: AttestationTokenProvider = ConfidentialSpaceTokenClient(),
   private val refreshMargin: Duration = DEFAULT_REFRESH_MARGIN,
   private val clock: Clock = Clock.systemUTC(),
+  private val useLegacyBase64Encoding: Boolean = false,
 ) : KmsClientFactory<ConfidentialSpaceToAwsWifCredentials> {
   /**
-   * Returns an [AwsKmsClient] using a Confidential Space attestation token to authenticate directly
+   * Returns a [KmsClient] using a Confidential Space attestation token to authenticate directly
    * with AWS.
    *
    * The token fetch and STS exchange are deferred until the AWS SDK resolves credentials, and fail
    * that resolution with a [GeneralSecurityException] when they cannot be completed.
    *
    * @param config The Confidential Space-to-AWS configuration.
-   * @return An initialized [AwsKmsClient].
+   * @return An initialized [KmsClient] — the upstream `tink-awskms` client, or the deprecated
+   *   custom [org.wfanet.measurement.aws.kms.AwsKmsClient] with [AssociatedDataEncoding.BASE64] if
+   *   [useLegacyBase64Encoding] is `true`.
    */
   override fun getKmsClient(config: ConfidentialSpaceToAwsWifCredentials): KmsClient {
     val credentialsProvider =
       RefreshableAwsCredentialsProvider(refreshMargin = refreshMargin, clock = clock) {
         obtainAwsCredentials(config).toFuture()
       }
-    return AwsKmsClient(credentialsProvider)
+    return if (useLegacyBase64Encoding) {
+      @Suppress("DEPRECATION") AwsKmsClient(credentialsProvider, AssociatedDataEncoding.BASE64)
+    } else {
+      // TinkAwsKmsClient.withCredentialsProvider requires the synchronous AwsCredentialsProvider
+      // contract, which RefreshableAwsCredentialsProvider now also implements by blocking on the
+      // same credential chain used by resolveIdentity (see its class doc). The default here
+      // favors the upstream client because HEX-encoded ciphertext from either client is mutually
+      // interoperable, so there is no reason to prefer the deprecated one unless BASE64 decoding
+      // is actually needed.
+      TinkAwsKmsClient().withCredentialsProvider(credentialsProvider)
+    }
   }
 
   private fun obtainAwsCredentials(

@@ -28,12 +28,12 @@ import software.amazon.awssdk.services.sts.auth.StsWebIdentityTokenFileCredentia
 /**
  * A [KmsClientFactory] for creating Tink [KmsClient] instances for AWS KMS.
  *
- * @param useDeprecatedCustomClient Whether to return the deprecated custom [AwsKmsClient] instead
- *   of the upstream `tink-awskms` client. Defaults to `false`. This exists only to support callers
- *   that have not yet migrated off ciphertexts produced with [AssociatedDataEncoding.BASE64]; do
- *   not set it for new usages.
+ * @param useLegacyBase64Encoding If `true`, returns the deprecated custom [AwsKmsClient] configured
+ *   with [AssociatedDataEncoding.BASE64], for decrypting ciphertext written by older versions of
+ *   this client. Defaults to `false`, which returns the upstream `tink-awskms` client; do not set
+ *   this for new usages.
  */
-class AwsKmsClientFactory(private val useDeprecatedCustomClient: Boolean = false) :
+class AwsKmsClientFactory(private val useLegacyBase64Encoding: Boolean = false) :
   KmsClientFactory<AwsWebIdentityCredentials> {
   /**
    * Returns a [KmsClient] configured via STS AssumeRoleWithWebIdentity.
@@ -47,7 +47,8 @@ class AwsKmsClientFactory(private val useDeprecatedCustomClient: Boolean = false
    *
    * @param config The AWS web identity configuration.
    * @return An initialized [KmsClient] — the upstream `tink-awskms` client, or the deprecated
-   *   custom [AwsKmsClient] if [useDeprecatedCustomClient] is `true`.
+   *   custom [AwsKmsClient] with [AssociatedDataEncoding.BASE64] if [useLegacyBase64Encoding] is
+   *   `true`.
    * @throws GeneralSecurityException if the client cannot be initialized.
    */
   override fun getKmsClient(config: AwsWebIdentityCredentials): KmsClient {
@@ -73,8 +74,8 @@ class AwsKmsClientFactory(private val useDeprecatedCustomClient: Boolean = false
         }
         .build()
 
-    return if (useDeprecatedCustomClient) {
-      @Suppress("DEPRECATION") AwsKmsClient(credentialsProvider)
+    return if (useLegacyBase64Encoding) {
+      @Suppress("DEPRECATION") AwsKmsClient(credentialsProvider, AssociatedDataEncoding.BASE64)
     } else {
       TinkAwsKmsClient().withCredentialsProvider(credentialsProvider)
     }

@@ -22,6 +22,7 @@ import com.google.auth.oauth2.GoogleCredentials
 import com.google.auth.oauth2.IdTokenCredentials
 import com.google.auth.oauth2.ImpersonatedCredentials
 import com.google.crypto.tink.KmsClient
+import com.google.crypto.tink.integration.awskms.AwsKmsClient as TinkAwsKmsClient
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import java.security.GeneralSecurityException
@@ -31,6 +32,7 @@ import java.util.concurrent.CompletableFuture
 import java.util.logging.Logger
 import org.wfanet.measurement.aws.RefreshableAwsCredentialsProvider
 import org.wfanet.measurement.aws.TimeBoundCredentials
+import org.wfanet.measurement.aws.kms.AssociatedDataEncoding
 import org.wfanet.measurement.aws.kms.AwsKmsClient
 import org.wfanet.measurement.common.crypto.tink.GCloudToAwsWifCredentials
 import org.wfanet.measurement.common.crypto.tink.KmsClientFactory
@@ -48,29 +50,35 @@ import software.amazon.awssdk.services.sts.model.AssumeRoleWithWebIdentityReques
  * account to obtain an OIDC ID token. That ID token is exchanged with AWS STS
  * `AssumeRoleWithWebIdentity` for temporary AWS credentials.
  *
+ * The credentials obtained this way are exposed through [RefreshableAwsCredentialsProvider], which
+ * implements both the AWS SDK's async `IdentityProvider<AwsCredentialsIdentity>` contract and the
+ * older, blocking `AwsCredentialsProvider` contract that upstream `tink-awskms`'s public
+ * `AwsKmsClient.withCredentialsProvider` method requires. See [RefreshableAwsCredentialsProvider]'s
+ * class documentation for why both are implemented and the tradeoffs of each.
+ *
  * @param refreshMargin How far before expiration to proactively refresh credentials.
  * @param clock Clock used to determine the current time.
+ * @param useLegacyBase64Encoding If `true`, returns the deprecated custom
+ *   [org.wfanet.measurement.aws.kms.AwsKmsClient] configured with [AssociatedDataEncoding.BASE64],
+ *   for decrypting ciphertext written by older versions of this client. Defaults to `false`, which
+ *   returns the upstream `tink-awskms` client; do not set this for new usages.
  */
 class GCloudToAwsKmsClientFactory(
   private val refreshMargin: Duration = DEFAULT_REFRESH_MARGIN,
   private val clock: Clock = Clock.systemUTC(),
+  private val useLegacyBase64Encoding: Boolean = false,
 ) : KmsClientFactory<GCloudToAwsWifCredentials> {
   /**
-   * Returns an [AwsKmsClient] using Google Cloud Confidential Space identity to authenticate with
-   * AWS.
+   * Returns a [KmsClient] using Google Cloud Confidential Space identity to authenticate with AWS.
    *
    * The returned client uses a credentials provider that automatically refreshes the AWS session
    * credentials before they expire by re-executing the full credential chain (GCP attestation ->
    * service account impersonation -> OIDC ID token -> AWS STS AssumeRoleWithWebIdentity).
    *
-   * Uses the deprecated custom [AwsKmsClient] rather than the upstream `tink-awskms` client because
-   * [RefreshableAwsCredentialsProvider] implements the AWS SDK's newer
-   * `IdentityProvider<AwsCredentialsIdentity>`, which upstream's
-   * `AwsKmsClient.withCredentialsProvider` does not accept (it requires the older
-   * `AwsCredentialsProvider`).
-   *
    * @param config The Google Cloud-to-AWS WIF configuration.
-   * @return An initialized [AwsKmsClient].
+   * @return An initialized [KmsClient] — the upstream `tink-awskms` client, or the deprecated
+   *   custom [org.wfanet.measurement.aws.kms.AwsKmsClient] with [AssociatedDataEncoding.BASE64] if
+   *   [useLegacyBase64Encoding] is `true`.
    * @throws GeneralSecurityException if credentials cannot be obtained or exchanged.
    */
   override fun getKmsClient(config: GCloudToAwsWifCredentials): KmsClient {
@@ -80,7 +88,17 @@ class GCloudToAwsKmsClientFactory(
         // thread where blocking is expected, so it runs inline rather than on another thread.
         CompletableFuture.completedFuture(obtainAwsCredentials(config))
       }
-    return AwsKmsClient(credentialsProvider)
+    return if (useLegacyBase64Encoding) {
+      @Suppress("DEPRECATION") AwsKmsClient(credentialsProvider, AssociatedDataEncoding.BASE64)
+    } else {
+      // TinkAwsKmsClient.withCredentialsProvider requires the synchronous AwsCredentialsProvider
+      // contract, which RefreshableAwsCredentialsProvider now also implements by blocking on the
+      // same credential chain used by resolveIdentity (see its class doc). The default here
+      // favors the upstream client because HEX-encoded ciphertext from either client is mutually
+      // interoperable, so there is no reason to prefer the deprecated one unless BASE64 decoding
+      // is actually needed.
+      TinkAwsKmsClient().withCredentialsProvider(credentialsProvider)
+    }
   }
 
   companion object {
