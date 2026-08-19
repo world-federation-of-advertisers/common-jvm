@@ -46,11 +46,11 @@ import software.amazon.awssdk.services.sts.model.AssumeRoleWithWebIdentityReques
  * `AssumeRoleWithWebIdentity` for temporary AWS credentials.
  *
  * The credentials obtained this way are exposed through [RefreshableAwsCredentialsProvider], which
- * implements both the AWS SDK's async `IdentityProvider<AwsCredentialsIdentity>` contract and the
- * older `AwsCredentialsProvider` contract that upstream `tink-awskms`'s public
+ * declares the AWS SDK's `AwsCredentialsProvider` contract (rather than `IdentityProvider`
+ * directly) so it satisfies the type upstream `tink-awskms`'s public
  * `AwsKmsClient.withCredentialsProvider` method requires. See [RefreshableAwsCredentialsProvider]'s
- * class documentation for why both are implemented, and why the latter is intentionally unreachable
- * at runtime.
+ * class documentation for why, and why its `resolveCredentials` is intentionally unreachable at
+ * runtime.
  *
  * @param refreshMargin How far before expiration to proactively refresh credentials.
  * @param clock Clock used to determine the current time.
@@ -89,16 +89,11 @@ class GCloudToAwsKmsClientFactory(
     return if (useLegacyBase64Client) {
       @Suppress("DEPRECATION") org.wfanet.measurement.aws.kms.AwsKmsClient(credentialsProvider)
     } else {
-      // TinkAwsKmsClient.withCredentialsProvider requires the AwsCredentialsProvider type,
-      // which RefreshableAwsCredentialsProvider now also implements (see its class doc for why).
-      // The default here favors the upstream client because HEX-encoded ciphertext from either
-      // client is mutually interoperable, so there is no reason to prefer the deprecated one
-      // unless BASE64 decoding is actually needed.
-      //
-      // Wrapped in ExceptionTranslatingKmsClient because a failed credential refresh here
-      // surfaces as a raw CompletionException that upstream's own exception translation doesn't
-      // recognize (see that class's doc) — without this wrapper, callers expecting
-      // GeneralSecurityException from Aead operations would see an unhandled exception instead.
+      // TinkAwsKmsClient.withCredentialsProvider requires the AwsCredentialsProvider type, which
+      // RefreshableAwsCredentialsProvider declares for exactly this reason (see its class doc). The
+      // default here favors the upstream client because the deprecated one can only produce Base64
+      // ciphertext, which isn't interoperable with anything else — there is no reason to prefer it
+      // unless BASE64 decoding of previously-written data is actually needed.
       ExceptionTranslatingKmsClient(TinkAwsKmsClient().withCredentialsProvider(credentialsProvider))
     }
   }

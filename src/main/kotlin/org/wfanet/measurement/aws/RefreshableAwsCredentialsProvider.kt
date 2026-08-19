@@ -53,25 +53,16 @@ data class TimeBoundCredentials(val credentials: AwsSessionCredentials, val expi
  * Thread-safe: callers that arrive while a refresh is in flight share its result rather than
  * starting a second one.
  *
- * ## Why this implements both [IdentityProvider] and [AwsCredentialsProvider]
- *
- * [credentialSupplier] is inherently asynchronous (it chains a GCP token exchange with an AWS STS
- * call), so [resolveIdentity] is the natural, non-blocking way to expose it: it returns a
- * [CompletableFuture] and lets the caller decide how to wait on it. The AWS SDK's own client
- * builders (e.g. `KmsClient.builder().credentialsProvider(...)`) accept the wider
- * `IdentityProvider<? extends AwsCredentialsIdentity>` type directly and resolve credentials
- * through it without blocking application code — internally they call [resolveIdentity] and join on
- * the result only when a synchronous value is ultimately required (see
- * `software.amazon.awssdk.awscore.internal.authcontext.AwsCredentialsAuthorizationStrategy`). This
- * is the preferred, and originally the only, way this class was consumed.
- *
- * This class also implements [AwsCredentialsProvider] purely to satisfy the *type* some third-party
- * libraries built on the AWS SDK require — notably upstream `tink-awskms`'s
+ * Declares [AwsCredentialsProvider] — which is-a [IdentityProvider] of [AwsCredentialsIdentity] —
+ * rather than [IdentityProvider] directly, solely to satisfy the *type* some third-party libraries
+ * built on the AWS SDK require: notably upstream `tink-awskms`'s
  * `com.google.crypto.tink.integration.awskms.AwsKmsClient.withCredentialsProvider`, whose public
- * API is typed to [AwsCredentialsProvider] with no [IdentityProvider]-based overload. Even for
- * these consumers, credentials are still resolved through [resolveIdentity] at runtime — the SDK's
- * internal auth strategy above calls it directly rather than [resolveCredentials] — so
- * [resolveCredentials] itself is intentionally left unimplemented; see its documentation.
+ * API has no [IdentityProvider]-based overload. This does not change how credentials are actually
+ * resolved. [credentialSupplier] is inherently asynchronous, so [resolveIdentity] remains the real
+ * entry point — including for the AWS SDK's own client builders and its internal auth strategy
+ * (`software.amazon.awssdk.awscore.internal.authcontext.AwsCredentialsAuthorizationStrategy`),
+ * which calls [resolveIdentity] and joins on the result only when a synchronous value is ultimately
+ * required. [resolveCredentials] intentionally throws instead — see its documentation.
  *
  * @param refreshMargin How far before expiration to proactively refresh credentials.
  * @param clock Clock used to determine the current time.
@@ -108,14 +99,10 @@ class RefreshableAwsCredentialsProvider(
   }
 
   /**
-   * Not supported. This class is consumed through [resolveIdentity] — including by the AWS SDK's
-   * own synchronous call path, whose internal auth strategy resolves credentials by joining
-   * [resolveIdentity] rather than calling this method (see the class-level documentation).
-   * [AwsCredentialsProvider] is implemented only to satisfy the type some third-party libraries
-   * require. Throwing here — rather than silently blocking on [resolveIdentity] — turns an
-   * unexpected direct call from a genuinely synchronous-only caller into an immediate failure
-   * instead of a hard-to-diagnose deadlock if that call happened to originate on a non-blocking
-   * thread (e.g. a Reactor Netty event loop).
+   * Always throws: real callers resolve credentials through [resolveIdentity] instead (see the
+   * class-level documentation). Throwing — rather than blocking on [resolveIdentity] — turns an
+   * unexpected direct call into an immediate, obvious failure instead of a silent deadlock if the
+   * caller happens to be on a non-blocking thread (e.g. a Reactor Netty event loop).
    */
   override fun resolveCredentials(): AwsCredentials =
     throw UnsupportedOperationException("Use resolveIdentity to resolve credentials asynchronously")

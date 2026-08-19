@@ -31,8 +31,10 @@ import java.util.concurrent.CompletionException
  * `SdkClientException` and `KmsException` when translating failures into [GeneralSecurityException]
  * — it has no way to know about failure modes introduced by credential sources it didn't author.
  *
- * That gap matters specifically for [RefreshableAwsCredentialsProvider]-backed credentials, used by
- * [GCloudToAwsKmsClientFactory] and `ConfidentialSpaceToAwsKmsClientFactory`: their credential
+ * That gap matters specifically for
+ * [org.wfanet.measurement.aws.RefreshableAwsCredentialsProvider]-backed credentials, used by
+ * [org.wfanet.measurement.gcloud.kms.GCloudToAwsKmsClientFactory] and
+ * [org.wfanet.measurement.gcloud.kms.ConfidentialSpaceToAwsKmsClientFactory]: their credential
  * chains can fail with a checked [GeneralSecurityException], which is NOT a [RuntimeException]. The
  * AWS SDK's internal synchronous credential resolution (`AwsCredentialsAuthorizationStrategy`, via
  * `CompletableFutureUtils.joinLikeSync`) only unwraps a failed future's [CompletionException] down

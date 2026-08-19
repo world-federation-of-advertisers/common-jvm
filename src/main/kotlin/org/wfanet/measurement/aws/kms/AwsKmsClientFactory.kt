@@ -78,8 +78,7 @@ class AwsKmsClientFactory(private val useLegacyBase64Client: Boolean = false) :
     return if (useLegacyBase64Client) {
       @Suppress("DEPRECATION") AwsKmsClient(credentialsProvider)
     } else {
-      // Wrapped so credential-refresh failures surface as GeneralSecurityException, matching the
-      // deprecated client's behavior — see ExceptionTranslatingKmsClient's class doc.
+      // See ExceptionTranslatingKmsClient's class doc for why this wrap is needed.
       ExceptionTranslatingKmsClient(TinkAwsKmsClient().withCredentialsProvider(credentialsProvider))
     }
   }
