@@ -12,21 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+@file:Suppress(
+  "DEPRECATION"
+) // Uses the deprecated custom AwsKmsClient during its transition period.
+
 package org.wfanet.measurement.gcloud.kms
 
 import com.google.auth.oauth2.GoogleCredentials
 import com.google.auth.oauth2.IdTokenCredentials
 import com.google.auth.oauth2.ImpersonatedCredentials
 import com.google.crypto.tink.KmsClient
-import com.google.crypto.tink.integration.awskms.AwsKmsClient as TinkAwsKmsClient
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import java.security.GeneralSecurityException
 import java.time.Clock
 import java.time.Duration
+import java.util.concurrent.CompletableFuture
 import java.util.logging.Logger
 import org.wfanet.measurement.aws.RefreshableAwsCredentialsProvider
 import org.wfanet.measurement.aws.TimeBoundCredentials
+import org.wfanet.measurement.aws.kms.AwsKmsClient
 import org.wfanet.measurement.common.crypto.tink.GCloudToAwsWifCredentials
 import org.wfanet.measurement.common.crypto.tink.KmsClientFactory
 import software.amazon.awssdk.auth.credentials.AnonymousCredentialsProvider
@@ -51,23 +56,31 @@ class GCloudToAwsKmsClientFactory(
   private val clock: Clock = Clock.systemUTC(),
 ) : KmsClientFactory<GCloudToAwsWifCredentials> {
   /**
-   * Returns a [TinkAwsKmsClient] using Google Cloud Confidential Space identity to authenticate
-   * with AWS.
+   * Returns an [AwsKmsClient] using Google Cloud Confidential Space identity to authenticate with
+   * AWS.
    *
    * The returned client uses a credentials provider that automatically refreshes the AWS session
    * credentials before they expire by re-executing the full credential chain (GCP attestation ->
    * service account impersonation -> OIDC ID token -> AWS STS AssumeRoleWithWebIdentity).
    *
+   * Uses the deprecated custom [AwsKmsClient] rather than the upstream `tink-awskms` client because
+   * [RefreshableAwsCredentialsProvider] implements the AWS SDK's newer
+   * `IdentityProvider<AwsCredentialsIdentity>`, which upstream's
+   * `AwsKmsClient.withCredentialsProvider` does not accept (it requires the older
+   * `AwsCredentialsProvider`).
+   *
    * @param config The Google Cloud-to-AWS WIF configuration.
-   * @return An initialized [TinkAwsKmsClient].
+   * @return An initialized [AwsKmsClient].
    * @throws GeneralSecurityException if credentials cannot be obtained or exchanged.
    */
   override fun getKmsClient(config: GCloudToAwsWifCredentials): KmsClient {
     val credentialsProvider =
       RefreshableAwsCredentialsProvider(refreshMargin = refreshMargin, clock = clock) {
-        obtainAwsCredentials(config)
+        // The credential chain is blocking, and the AWS SDK resolves credentials from a
+        // thread where blocking is expected, so it runs inline rather than on another thread.
+        CompletableFuture.completedFuture(obtainAwsCredentials(config))
       }
-    return TinkAwsKmsClient().withCredentialsProvider(credentialsProvider)
+    return AwsKmsClient(credentialsProvider)
   }
 
   companion object {

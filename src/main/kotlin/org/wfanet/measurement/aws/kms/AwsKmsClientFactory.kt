@@ -25,10 +25,18 @@ import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.sts.StsClient
 import software.amazon.awssdk.services.sts.auth.StsWebIdentityTokenFileCredentialsProvider
 
-/** A [KmsClientFactory] for creating Tink [KmsClient] instances for AWS KMS. */
-class AwsKmsClientFactory : KmsClientFactory<AwsWebIdentityCredentials> {
+/**
+ * A [KmsClientFactory] for creating Tink [KmsClient] instances for AWS KMS.
+ *
+ * @param useDeprecatedCustomClient Whether to return the deprecated custom [AwsKmsClient] instead
+ *   of the upstream `tink-awskms` client. Defaults to `false`. This exists only to support callers
+ *   that have not yet migrated off ciphertexts produced with [AssociatedDataEncoding.BASE64]; do
+ *   not set it for new usages.
+ */
+class AwsKmsClientFactory(private val useDeprecatedCustomClient: Boolean = false) :
+  KmsClientFactory<AwsWebIdentityCredentials> {
   /**
-   * Returns an [AwsKmsClient] configured via STS AssumeRoleWithWebIdentity.
+   * Returns a [KmsClient] configured via STS AssumeRoleWithWebIdentity.
    *
    * This method creates an [StsWebIdentityTokenFileCredentialsProvider] that exchanges a web
    * identity token (e.g., an OIDC token from a Kubernetes service account) for temporary AWS
@@ -38,7 +46,8 @@ class AwsKmsClientFactory : KmsClientFactory<AwsWebIdentityCredentials> {
    * environments (e.g., Google Cloud).
    *
    * @param config The AWS web identity configuration.
-   * @return An initialized [AwsKmsClient].
+   * @return An initialized [KmsClient] — the upstream `tink-awskms` client, or the deprecated
+   *   custom [AwsKmsClient] if [useDeprecatedCustomClient] is `true`.
    * @throws GeneralSecurityException if the client cannot be initialized.
    */
   override fun getKmsClient(config: AwsWebIdentityCredentials): KmsClient {
@@ -64,6 +73,10 @@ class AwsKmsClientFactory : KmsClientFactory<AwsWebIdentityCredentials> {
         }
         .build()
 
-    return TinkAwsKmsClient().withCredentialsProvider(credentialsProvider)
+    return if (useDeprecatedCustomClient) {
+      @Suppress("DEPRECATION") AwsKmsClient(credentialsProvider)
+    } else {
+      TinkAwsKmsClient().withCredentialsProvider(credentialsProvider)
+    }
   }
 }

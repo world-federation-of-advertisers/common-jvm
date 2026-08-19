@@ -19,8 +19,10 @@ import com.google.crypto.tink.KmsClient
 import java.security.GeneralSecurityException
 import java.util.Base64
 import java.util.Locale
-import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider
+import java.util.concurrent.CompletionException
 import software.amazon.awssdk.core.SdkBytes
+import software.amazon.awssdk.identity.spi.AwsCredentialsIdentity
+import software.amazon.awssdk.identity.spi.IdentityProvider
 import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.kms.KmsClient as SdkKmsClient
 import software.amazon.awssdk.services.kms.model.DecryptRequest
@@ -63,20 +65,21 @@ private fun encodeAssociatedData(
 /**
  * A Tink [KmsClient] implementation for AWS KMS using AWS SDK v2.
  *
- * @param credentialsProvider The [AwsCredentialsProvider] to use for authenticating with AWS KMS.
+ * @param credentialsProvider Provider of the AWS credentials to authenticate with AWS KMS.
  * @param associatedDataEncoding How associated data is encoded into the KMS encryption context.
  *   Defaults to [AssociatedDataEncoding.HEX] to match upstream Tink.
  * @deprecated Superseded by the upstream `com.google.crypto.tink.integration.awskms.AwsKmsClient`
  *   (`tink-awskms` >= 2.0.0), which also targets AWS SDK v2. This class remains temporarily until
- *   the Tink version upgrade that pulls in `tink-awskms` lands; construct it with
- *   [AssociatedDataEncoding.HEX] (the default) so its output is interoperable with that client.
+ *   all associated data has been migrated to [AssociatedDataEncoding.HEX], the encoding used by
+ *   that upstream client; construct new usages with [AssociatedDataEncoding.HEX] (the default) so
+ *   they are already interoperable.
  */
 @Deprecated(
   "Superseded by upstream com.google.crypto.tink.integration.awskms.AwsKmsClient (tink-awskms). " +
-    "Temporary until the Tink upgrade lands; use AssociatedDataEncoding.HEX for interoperability."
+    "Temporary until all associated data is migrated to AssociatedDataEncoding.HEX; use it for new usages."
 )
 class AwsKmsClient(
-  private val credentialsProvider: AwsCredentialsProvider,
+  private val credentialsProvider: IdentityProvider<AwsCredentialsIdentity>,
   private val associatedDataEncoding: AssociatedDataEncoding = AssociatedDataEncoding.HEX,
 ) : KmsClient {
 
@@ -153,8 +156,8 @@ private class AwsKmsAead(
   private val associatedDataEncoding: AssociatedDataEncoding,
 ) : Aead {
 
-  override fun encrypt(plaintext: ByteArray, associatedData: ByteArray?): ByteArray {
-    try {
+  override fun encrypt(plaintext: ByteArray, associatedData: ByteArray?): ByteArray =
+    inKmsCall("Encryption") {
       val request =
         EncryptRequest.builder()
           .apply {
@@ -170,15 +173,11 @@ private class AwsKmsAead(
             }
           }
           .build()
-      val response = kmsClient.encrypt(request)
-      return response.ciphertextBlob().asByteArray()
-    } catch (e: KmsException) {
-      throw GeneralSecurityException("Encryption failed", e)
+      kmsClient.encrypt(request).ciphertextBlob().asByteArray()
     }
-  }
 
-  override fun decrypt(ciphertext: ByteArray, associatedData: ByteArray?): ByteArray {
-    try {
+  override fun decrypt(ciphertext: ByteArray, associatedData: ByteArray?): ByteArray =
+    inKmsCall("Decryption") {
       val request =
         DecryptRequest.builder()
           .apply {
@@ -197,11 +196,20 @@ private class AwsKmsAead(
       if (response.keyId() != keyArn) {
         throw GeneralSecurityException("Decryption failed: wrong key id")
       }
-      return response.plaintext().asByteArray()
-    } catch (e: KmsException) {
-      throw GeneralSecurityException("Decryption failed", e)
+      response.plaintext().asByteArray()
     }
-  }
+
+  /** Runs [block], reporting AWS failures as [GeneralSecurityException] per the [Aead] contract. */
+  private inline fun <T> inKmsCall(operation: String, block: () -> T): T =
+    try {
+      block()
+    } catch (e: KmsException) {
+      throw GeneralSecurityException("$operation failed", e)
+    } catch (e: CompletionException) {
+      // The SDK resolves credentials by joining a future, and rethrows the CompletionException
+      // as-is when its cause is a checked exception.
+      throw GeneralSecurityException("$operation failed", e.cause ?: e)
+    }
 
   companion object {
     private const val ASSOCIATED_DATA_KEY = "associatedData"
