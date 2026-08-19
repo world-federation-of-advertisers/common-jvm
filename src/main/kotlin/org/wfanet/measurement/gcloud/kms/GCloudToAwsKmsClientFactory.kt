@@ -34,6 +34,7 @@ import org.wfanet.measurement.aws.RefreshableAwsCredentialsProvider
 import org.wfanet.measurement.aws.TimeBoundCredentials
 import org.wfanet.measurement.aws.kms.AssociatedDataEncoding
 import org.wfanet.measurement.aws.kms.AwsKmsClient
+import org.wfanet.measurement.aws.kms.ExceptionTranslatingKmsClient
 import org.wfanet.measurement.common.crypto.tink.GCloudToAwsWifCredentials
 import org.wfanet.measurement.common.crypto.tink.KmsClientFactory
 import software.amazon.awssdk.auth.credentials.AnonymousCredentialsProvider
@@ -76,9 +77,11 @@ class GCloudToAwsKmsClientFactory(
    * service account impersonation -> OIDC ID token -> AWS STS AssumeRoleWithWebIdentity).
    *
    * @param config The Google Cloud-to-AWS WIF configuration.
-   * @return An initialized [KmsClient] — the upstream `tink-awskms` client, or the deprecated
-   *   custom [org.wfanet.measurement.aws.kms.AwsKmsClient] with [AssociatedDataEncoding.BASE64] if
-   *   [useLegacyBase64Encoding] is `true`.
+   * @return An initialized [KmsClient] — the upstream `tink-awskms` client (wrapped in
+   *   [org.wfanet.measurement.aws.kms.ExceptionTranslatingKmsClient] so credential-refresh failures
+   *   surface as [GeneralSecurityException], matching the deprecated client's behavior), or the
+   *   deprecated custom [org.wfanet.measurement.aws.kms.AwsKmsClient] with
+   *   [AssociatedDataEncoding.BASE64] if [useLegacyBase64Encoding] is `true`.
    * @throws GeneralSecurityException if credentials cannot be obtained or exchanged.
    */
   override fun getKmsClient(config: GCloudToAwsWifCredentials): KmsClient {
@@ -91,13 +94,17 @@ class GCloudToAwsKmsClientFactory(
     return if (useLegacyBase64Encoding) {
       @Suppress("DEPRECATION") AwsKmsClient(credentialsProvider, AssociatedDataEncoding.BASE64)
     } else {
-      // TinkAwsKmsClient.withCredentialsProvider requires the synchronous AwsCredentialsProvider
-      // contract, which RefreshableAwsCredentialsProvider now also implements by blocking on the
-      // same credential chain used by resolveIdentity (see its class doc). The default here
-      // favors the upstream client because HEX-encoded ciphertext from either client is mutually
-      // interoperable, so there is no reason to prefer the deprecated one unless BASE64 decoding
-      // is actually needed.
-      TinkAwsKmsClient().withCredentialsProvider(credentialsProvider)
+      // TinkAwsKmsClient.withCredentialsProvider requires the AwsCredentialsProvider type,
+      // which RefreshableAwsCredentialsProvider now also implements (see its class doc for why).
+      // The default here favors the upstream client because HEX-encoded ciphertext from either
+      // client is mutually interoperable, so there is no reason to prefer the deprecated one
+      // unless BASE64 decoding is actually needed.
+      //
+      // Wrapped in ExceptionTranslatingKmsClient because a failed credential refresh here
+      // surfaces as a raw CompletionException that upstream's own exception translation doesn't
+      // recognize (see that class's doc) — without this wrapper, callers expecting
+      // GeneralSecurityException from Aead operations would see an unhandled exception instead.
+      ExceptionTranslatingKmsClient(TinkAwsKmsClient().withCredentialsProvider(credentialsProvider))
     }
   }
 

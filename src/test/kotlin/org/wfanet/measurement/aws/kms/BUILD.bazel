@@ -1,6 +1,20 @@
 load("@wfa_rules_kotlin_jvm//kotlin:defs.bzl", "kt_jvm_test")
 
 kt_jvm_test(
+    name = "ExceptionTranslatingKmsClientTest",
+    srcs = ["ExceptionTranslatingKmsClientTest.kt"],
+    test_class = "org.wfanet.measurement.aws.kms.ExceptionTranslatingKmsClientTest",
+    deps = [
+        "//imports/java/com/google/common/truth",
+        "//imports/java/com/google/crypto/tink",
+        "//imports/java/org/junit",
+        "//imports/kotlin/kotlin/test",
+        "//imports/kotlin/org/mockito/kotlin",
+        "//src/main/kotlin/org/wfanet/measurement/aws/kms:aws_kms_client_factory",
+    ],
+)
+
+kt_jvm_test(
     name = "AwsKmsClientFactoryTest",
     srcs = ["AwsKmsClientFactoryTest.kt"],
     test_class = "org.wfanet.measurement.aws.kms.AwsKmsClientFactoryTest",

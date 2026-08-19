@@ -27,6 +27,7 @@ import org.wfanet.measurement.aws.RefreshableAwsCredentialsProvider
 import org.wfanet.measurement.aws.TimeBoundCredentials
 import org.wfanet.measurement.aws.kms.AssociatedDataEncoding
 import org.wfanet.measurement.aws.kms.AwsKmsClient
+import org.wfanet.measurement.aws.kms.ExceptionTranslatingKmsClient
 import org.wfanet.measurement.common.crypto.tink.ConfidentialSpaceToAwsWifCredentials
 import org.wfanet.measurement.common.crypto.tink.KmsClientFactory
 import org.wfanet.measurement.gcloud.confidentialspace.AttestationTokenProvider
@@ -56,9 +57,10 @@ import software.amazon.awssdk.services.sts.model.AssumeRoleWithWebIdentityReques
  *
  * The credentials obtained this way are exposed through [RefreshableAwsCredentialsProvider], which
  * implements both the AWS SDK's async `IdentityProvider<AwsCredentialsIdentity>` contract and the
- * older, blocking `AwsCredentialsProvider` contract that upstream `tink-awskms`'s public
+ * older `AwsCredentialsProvider` contract that upstream `tink-awskms`'s public
  * `AwsKmsClient.withCredentialsProvider` method requires. See [RefreshableAwsCredentialsProvider]'s
- * class documentation for why both are implemented and the tradeoffs of each.
+ * class documentation for why both are implemented, and why the latter is intentionally unreachable
+ * at runtime.
  *
  * @param tokenProvider Source of Confidential Space attestation tokens.
  * @param refreshMargin How far before expiration to proactively refresh credentials.
@@ -82,7 +84,9 @@ class ConfidentialSpaceToAwsKmsClientFactory(
    * that resolution with a [GeneralSecurityException] when they cannot be completed.
    *
    * @param config The Confidential Space-to-AWS configuration.
-   * @return An initialized [KmsClient] — the upstream `tink-awskms` client, or the deprecated
+   * @return An initialized [KmsClient] — the upstream `tink-awskms` client (wrapped in
+   *   [ExceptionTranslatingKmsClient] so credential-refresh failures surface as
+   *   [GeneralSecurityException], matching the deprecated client's behavior), or the deprecated
    *   custom [org.wfanet.measurement.aws.kms.AwsKmsClient] with [AssociatedDataEncoding.BASE64] if
    *   [useLegacyBase64Encoding] is `true`.
    */
@@ -94,13 +98,17 @@ class ConfidentialSpaceToAwsKmsClientFactory(
     return if (useLegacyBase64Encoding) {
       @Suppress("DEPRECATION") AwsKmsClient(credentialsProvider, AssociatedDataEncoding.BASE64)
     } else {
-      // TinkAwsKmsClient.withCredentialsProvider requires the synchronous AwsCredentialsProvider
-      // contract, which RefreshableAwsCredentialsProvider now also implements by blocking on the
-      // same credential chain used by resolveIdentity (see its class doc). The default here
-      // favors the upstream client because HEX-encoded ciphertext from either client is mutually
-      // interoperable, so there is no reason to prefer the deprecated one unless BASE64 decoding
-      // is actually needed.
-      TinkAwsKmsClient().withCredentialsProvider(credentialsProvider)
+      // TinkAwsKmsClient.withCredentialsProvider requires the AwsCredentialsProvider type,
+      // which RefreshableAwsCredentialsProvider now also implements (see its class doc for why).
+      // The default here favors the upstream client because HEX-encoded ciphertext from either
+      // client is mutually interoperable, so there is no reason to prefer the deprecated one
+      // unless BASE64 decoding is actually needed.
+      //
+      // Wrapped in ExceptionTranslatingKmsClient because a failed credential refresh here
+      // surfaces as a raw CompletionException that upstream's own exception translation doesn't
+      // recognize (see that class's doc) — without this wrapper, callers expecting
+      // GeneralSecurityException from Aead operations would see an unhandled exception instead.
+      ExceptionTranslatingKmsClient(TinkAwsKmsClient().withCredentialsProvider(credentialsProvider))
     }
   }
 

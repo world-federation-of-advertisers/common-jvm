@@ -33,14 +33,6 @@ bazel_dep(
     repo_name = "wfa_rules_kotlin_jvm",
 )
 
-# DO_NOT_SUBMIT(world-federation-of-advertisers/rules_kotlin_jvm#27): temporary until
-# rules_kotlin_jvm releases protobuf 4.33.6 (required by Tink 1.23).
-git_override(
-    module_name = "rules_kotlin_jvm",
-    commit = "7acc3aa0d3233fbae4bcbc83af462c020ced8ab8",
-    remote = "https://github.com/world-federation-of-advertisers/rules_kotlin_jvm.git",
-)
-
 bazel_dep(
     name = "cloud-spanner-emulator-bin",
     version = "1.5.52",

@@ -12,6 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+@file:Suppress(
+  "DEPRECATION"
+) // Every declaration in this file exists solely to implement the deprecated AwsKmsClient.
+
 package org.wfanet.measurement.aws.kms
 
 import com.google.crypto.tink.Aead
@@ -36,6 +40,10 @@ import software.amazon.awssdk.utils.BinaryUtils
  * The encryption context is authenticated by AWS KMS, so the encoding used at encrypt time must
  * match the encoding used at decrypt time, including across different client implementations.
  */
+@Deprecated(
+  "Exists only to parameterize the deprecated AwsKmsClient; will be removed alongside it once " +
+    "all associated data is migrated to AssociatedDataEncoding.HEX."
+)
 enum class AssociatedDataEncoding {
   /**
    * Lowercase hex, byte-for-byte identical to upstream Tink's
@@ -49,18 +57,15 @@ enum class AssociatedDataEncoding {
    * Base64. This was the original encoding used by this class; it is NOT interoperable with
    * upstream Tink. Retained only to read data written by earlier versions of this client.
    */
-  BASE64,
-}
+  BASE64;
 
-/** Encodes [associatedData] for the KMS encryption context using [encoding]. */
-private fun encodeAssociatedData(
-  associatedData: ByteArray,
-  encoding: AssociatedDataEncoding,
-): String =
-  when (encoding) {
-    AssociatedDataEncoding.HEX -> BinaryUtils.toHex(associatedData)
-    AssociatedDataEncoding.BASE64 -> Base64.getEncoder().encodeToString(associatedData)
-  }
+  /** Encodes [associatedData] for the KMS encryption context using this encoding. */
+  fun encode(associatedData: ByteArray): String =
+    when (this) {
+      HEX -> BinaryUtils.toHex(associatedData)
+      BASE64 -> Base64.getEncoder().encodeToString(associatedData)
+    }
+}
 
 /**
  * A Tink [KmsClient] implementation for AWS KMS using AWS SDK v2.
@@ -150,6 +155,7 @@ class AwsKmsClient(
  * the key `associatedData`, encoded per [associatedDataEncoding]. With [AssociatedDataEncoding.HEX]
  * this matches upstream Tink's `AwsKmsAead`.
  */
+@Deprecated("Exists only to back the deprecated AwsKmsClient; will be removed alongside it.")
 private class AwsKmsAead(
   private val kmsClient: SdkKmsClient,
   private val keyArn: String,
@@ -165,10 +171,7 @@ private class AwsKmsAead(
             plaintext(SdkBytes.fromByteArray(plaintext))
             if (associatedData != null && associatedData.isNotEmpty()) {
               encryptionContext(
-                mapOf(
-                  ASSOCIATED_DATA_KEY to
-                    encodeAssociatedData(associatedData, associatedDataEncoding)
-                )
+                mapOf(ASSOCIATED_DATA_KEY to associatedDataEncoding.encode(associatedData))
               )
             }
           }
@@ -184,10 +187,7 @@ private class AwsKmsAead(
             ciphertextBlob(SdkBytes.fromByteArray(ciphertext))
             if (associatedData != null && associatedData.isNotEmpty()) {
               encryptionContext(
-                mapOf(
-                  ASSOCIATED_DATA_KEY to
-                    encodeAssociatedData(associatedData, associatedDataEncoding)
-                )
+                mapOf(ASSOCIATED_DATA_KEY to associatedDataEncoding.encode(associatedData))
               )
             }
           }

@@ -46,7 +46,9 @@ class AwsKmsClientFactory(private val useLegacyBase64Encoding: Boolean = false) 
    * environments (e.g., Google Cloud).
    *
    * @param config The AWS web identity configuration.
-   * @return An initialized [KmsClient] — the upstream `tink-awskms` client, or the deprecated
+   * @return An initialized [KmsClient] — the upstream `tink-awskms` client (wrapped in
+   *   [ExceptionTranslatingKmsClient] so credential-refresh failures surface as
+   *   [GeneralSecurityException], matching the deprecated client's behavior), or the deprecated
    *   custom [AwsKmsClient] with [AssociatedDataEncoding.BASE64] if [useLegacyBase64Encoding] is
    *   `true`.
    * @throws GeneralSecurityException if the client cannot be initialized.
@@ -77,7 +79,9 @@ class AwsKmsClientFactory(private val useLegacyBase64Encoding: Boolean = false) 
     return if (useLegacyBase64Encoding) {
       @Suppress("DEPRECATION") AwsKmsClient(credentialsProvider, AssociatedDataEncoding.BASE64)
     } else {
-      TinkAwsKmsClient().withCredentialsProvider(credentialsProvider)
+      // Wrapped so credential-refresh failures surface as GeneralSecurityException, matching
+      // the deprecated client\s behavior — see ExceptionTranslatingKmsClient\s class doc.
+      ExceptionTranslatingKmsClient(TinkAwsKmsClient().withCredentialsProvider(credentialsProvider))
     }
   }
 }
