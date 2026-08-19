@@ -20,13 +20,9 @@ kt_jvm_test(
     test_class = "org.wfanet.measurement.aws.kms.AwsKmsClientFactoryTest",
     deps = [
         "//imports/java/com/google/common/truth",
-        "//imports/java/com/google/crypto/tink",
-        "//imports/java/com/google/crypto/tink:awskms",
         "//imports/java/org/junit",
         "//imports/java/software/amazon/awssdk/auth",
-        "//imports/java/software/amazon/awssdk/services/kms",
         "//imports/kotlin/kotlin/test",
-        "//imports/kotlin/org/mockito/kotlin",
         "//src/main/kotlin/org/wfanet/measurement/aws/kms:aws_kms_client_factory",
     ],
 )

@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-@file:Suppress(
-  "DEPRECATION"
-) // Uses the deprecated custom AwsKmsClient during its transition period.
-
 package org.wfanet.measurement.gcloud.kms
 
 import com.google.auth.oauth2.GoogleCredentials
@@ -32,8 +28,6 @@ import java.util.concurrent.CompletableFuture
 import java.util.logging.Logger
 import org.wfanet.measurement.aws.RefreshableAwsCredentialsProvider
 import org.wfanet.measurement.aws.TimeBoundCredentials
-import org.wfanet.measurement.aws.kms.AssociatedDataEncoding
-import org.wfanet.measurement.aws.kms.AwsKmsClient
 import org.wfanet.measurement.aws.kms.ExceptionTranslatingKmsClient
 import org.wfanet.measurement.common.crypto.tink.GCloudToAwsWifCredentials
 import org.wfanet.measurement.common.crypto.tink.KmsClientFactory
@@ -53,21 +47,22 @@ import software.amazon.awssdk.services.sts.model.AssumeRoleWithWebIdentityReques
  *
  * The credentials obtained this way are exposed through [RefreshableAwsCredentialsProvider], which
  * implements both the AWS SDK's async `IdentityProvider<AwsCredentialsIdentity>` contract and the
- * older, blocking `AwsCredentialsProvider` contract that upstream `tink-awskms`'s public
+ * older `AwsCredentialsProvider` contract that upstream `tink-awskms`'s public
  * `AwsKmsClient.withCredentialsProvider` method requires. See [RefreshableAwsCredentialsProvider]'s
- * class documentation for why both are implemented and the tradeoffs of each.
+ * class documentation for why both are implemented, and why the latter is intentionally unreachable
+ * at runtime.
  *
  * @param refreshMargin How far before expiration to proactively refresh credentials.
  * @param clock Clock used to determine the current time.
- * @param useLegacyBase64Encoding If `true`, returns the deprecated custom
- *   [org.wfanet.measurement.aws.kms.AwsKmsClient] configured with [AssociatedDataEncoding.BASE64],
- *   for decrypting ciphertext written by older versions of this client. Defaults to `false`, which
+ * @param useLegacyBase64Client If `true`, returns the deprecated custom
+ *   [org.wfanet.measurement.aws.kms.AwsKmsClient], for decrypting ciphertext written by older
+ *   versions of this client with its Base64 associated-data encoding. Defaults to `false`, which
  *   returns the upstream `tink-awskms` client; do not set this for new usages.
  */
 class GCloudToAwsKmsClientFactory(
   private val refreshMargin: Duration = DEFAULT_REFRESH_MARGIN,
   private val clock: Clock = Clock.systemUTC(),
-  private val useLegacyBase64Encoding: Boolean = false,
+  private val useLegacyBase64Client: Boolean = false,
 ) : KmsClientFactory<GCloudToAwsWifCredentials> {
   /**
    * Returns a [KmsClient] using Google Cloud Confidential Space identity to authenticate with AWS.
@@ -80,8 +75,8 @@ class GCloudToAwsKmsClientFactory(
    * @return An initialized [KmsClient] — the upstream `tink-awskms` client (wrapped in
    *   [org.wfanet.measurement.aws.kms.ExceptionTranslatingKmsClient] so credential-refresh failures
    *   surface as [GeneralSecurityException], matching the deprecated client's behavior), or the
-   *   deprecated custom [org.wfanet.measurement.aws.kms.AwsKmsClient] with
-   *   [AssociatedDataEncoding.BASE64] if [useLegacyBase64Encoding] is `true`.
+   *   deprecated custom [org.wfanet.measurement.aws.kms.AwsKmsClient] if [useLegacyBase64Client] is
+   *   `true`.
    * @throws GeneralSecurityException if credentials cannot be obtained or exchanged.
    */
   override fun getKmsClient(config: GCloudToAwsWifCredentials): KmsClient {
@@ -91,8 +86,8 @@ class GCloudToAwsKmsClientFactory(
         // thread where blocking is expected, so it runs inline rather than on another thread.
         CompletableFuture.completedFuture(obtainAwsCredentials(config))
       }
-    return if (useLegacyBase64Encoding) {
-      @Suppress("DEPRECATION") AwsKmsClient(credentialsProvider, AssociatedDataEncoding.BASE64)
+    return if (useLegacyBase64Client) {
+      @Suppress("DEPRECATION") org.wfanet.measurement.aws.kms.AwsKmsClient(credentialsProvider)
     } else {
       // TinkAwsKmsClient.withCredentialsProvider requires the AwsCredentialsProvider type,
       // which RefreshableAwsCredentialsProvider now also implements (see its class doc for why).

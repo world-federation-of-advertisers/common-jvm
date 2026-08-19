@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-@file:Suppress(
-  "DEPRECATION"
-) // Every declaration in this file exists solely to implement the deprecated AwsKmsClient.
-
 package org.wfanet.measurement.aws.kms
 
 import com.google.crypto.tink.Aead
@@ -32,61 +28,25 @@ import software.amazon.awssdk.services.kms.KmsClient as SdkKmsClient
 import software.amazon.awssdk.services.kms.model.DecryptRequest
 import software.amazon.awssdk.services.kms.model.EncryptRequest
 import software.amazon.awssdk.services.kms.model.KmsException
-import software.amazon.awssdk.utils.BinaryUtils
-
-/**
- * How associated data is encoded into the AWS KMS encryption context value.
- *
- * The encryption context is authenticated by AWS KMS, so the encoding used at encrypt time must
- * match the encoding used at decrypt time, including across different client implementations.
- */
-@Deprecated(
-  "Exists only to parameterize the deprecated AwsKmsClient; will be removed alongside it once " +
-    "all associated data is migrated to AssociatedDataEncoding.HEX."
-)
-enum class AssociatedDataEncoding {
-  /**
-   * Lowercase hex, byte-for-byte identical to upstream Tink's
-   * `com.google.crypto.tink.integration.awskms.AwsKmsAead` (which uses
-   * `software.amazon.awssdk.utils.BinaryUtils.toHex`). Use this for interoperability with the
-   * upstream `tink-awskms` client.
-   */
-  HEX,
-
-  /**
-   * Base64. This was the original encoding used by this class; it is NOT interoperable with
-   * upstream Tink. Retained only to read data written by earlier versions of this client.
-   */
-  BASE64;
-
-  /** Encodes [associatedData] for the KMS encryption context using this encoding. */
-  fun encode(associatedData: ByteArray): String =
-    when (this) {
-      HEX -> BinaryUtils.toHex(associatedData)
-      BASE64 -> Base64.getEncoder().encodeToString(associatedData)
-    }
-}
 
 /**
  * A Tink [KmsClient] implementation for AWS KMS using AWS SDK v2.
  *
  * @param credentialsProvider Provider of the AWS credentials to authenticate with AWS KMS.
- * @param associatedDataEncoding How associated data is encoded into the KMS encryption context.
- *   Defaults to [AssociatedDataEncoding.HEX] to match upstream Tink.
  * @deprecated Superseded by the upstream `com.google.crypto.tink.integration.awskms.AwsKmsClient`
- *   (`tink-awskms` >= 2.0.0), which also targets AWS SDK v2. This class remains temporarily until
- *   all associated data has been migrated to [AssociatedDataEncoding.HEX], the encoding used by
- *   that upstream client; construct new usages with [AssociatedDataEncoding.HEX] (the default) so
- *   they are already interoperable.
+ *   (`tink-awskms` >= 2.0.0), which also targets AWS SDK v2. This class encodes associated data as
+ *   Base64, which is NOT compatible with the upstream client's hex encoding — ciphertext produced
+ *   by one cannot be decrypted by the other. It is retained only to decrypt ciphertext previously
+ *   written with it; do not use it for new ciphertext, and there is no way to make it produce
+ *   upstream-compatible output. New usages should use the upstream client instead.
  */
 @Deprecated(
   "Superseded by upstream com.google.crypto.tink.integration.awskms.AwsKmsClient (tink-awskms). " +
-    "Temporary until all associated data is migrated to AssociatedDataEncoding.HEX; use it for new usages."
+    "Its Base64 associated-data encoding is not compatible with the upstream client's hex " +
+    "encoding; it exists only to decrypt ciphertext previously written with it."
 )
-class AwsKmsClient(
-  private val credentialsProvider: IdentityProvider<AwsCredentialsIdentity>,
-  private val associatedDataEncoding: AssociatedDataEncoding = AssociatedDataEncoding.HEX,
-) : KmsClient {
+class AwsKmsClient(private val credentialsProvider: IdentityProvider<AwsCredentialsIdentity>) :
+  KmsClient {
 
   override fun doesSupport(keyUri: String?): Boolean {
     return keyUri != null && keyUri.lowercase(Locale.US).startsWith(KEY_URI_PREFIX)
@@ -131,7 +91,7 @@ class AwsKmsClient(
         throw GeneralSecurityException("Cannot initialize AWS KMS client", e)
       }
 
-    return AwsKmsAead(kmsClient, keyArn, associatedDataEncoding)
+    return AwsKmsAead(kmsClient, keyArn)
   }
 
   companion object {
@@ -152,15 +112,10 @@ class AwsKmsClient(
  * An [Aead] implementation backed by AWS KMS using AWS SDK v2.
  *
  * When [associatedData] is non-null and non-empty, it is added to the KMS encryption context under
- * the key `associatedData`, encoded per [associatedDataEncoding]. With [AssociatedDataEncoding.HEX]
- * this matches upstream Tink's `AwsKmsAead`.
+ * the key `associatedData`, Base64-encoded. This is NOT the same encoding upstream Tink's
+ * `AwsKmsAead` uses (hex), so ciphertext is not portable between the two.
  */
-@Deprecated("Exists only to back the deprecated AwsKmsClient; will be removed alongside it.")
-private class AwsKmsAead(
-  private val kmsClient: SdkKmsClient,
-  private val keyArn: String,
-  private val associatedDataEncoding: AssociatedDataEncoding,
-) : Aead {
+private class AwsKmsAead(private val kmsClient: SdkKmsClient, private val keyArn: String) : Aead {
 
   override fun encrypt(plaintext: ByteArray, associatedData: ByteArray?): ByteArray =
     inKmsCall("Encryption") {
@@ -171,7 +126,7 @@ private class AwsKmsAead(
             plaintext(SdkBytes.fromByteArray(plaintext))
             if (associatedData != null && associatedData.isNotEmpty()) {
               encryptionContext(
-                mapOf(ASSOCIATED_DATA_KEY to associatedDataEncoding.encode(associatedData))
+                mapOf(ASSOCIATED_DATA_KEY to Base64.getEncoder().encodeToString(associatedData))
               )
             }
           }
@@ -187,7 +142,7 @@ private class AwsKmsAead(
             ciphertextBlob(SdkBytes.fromByteArray(ciphertext))
             if (associatedData != null && associatedData.isNotEmpty()) {
               encryptionContext(
-                mapOf(ASSOCIATED_DATA_KEY to associatedDataEncoding.encode(associatedData))
+                mapOf(ASSOCIATED_DATA_KEY to Base64.getEncoder().encodeToString(associatedData))
               )
             }
           }

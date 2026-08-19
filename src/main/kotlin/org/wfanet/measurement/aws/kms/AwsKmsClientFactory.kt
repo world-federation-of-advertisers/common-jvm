@@ -28,12 +28,12 @@ import software.amazon.awssdk.services.sts.auth.StsWebIdentityTokenFileCredentia
 /**
  * A [KmsClientFactory] for creating Tink [KmsClient] instances for AWS KMS.
  *
- * @param useLegacyBase64Encoding If `true`, returns the deprecated custom [AwsKmsClient] configured
- *   with [AssociatedDataEncoding.BASE64], for decrypting ciphertext written by older versions of
- *   this client. Defaults to `false`, which returns the upstream `tink-awskms` client; do not set
- *   this for new usages.
+ * @param useLegacyBase64Client If `true`, returns the deprecated custom [AwsKmsClient], for
+ *   decrypting ciphertext written by older versions of this client with its Base64 associated-data
+ *   encoding. Defaults to `false`, which returns the upstream `tink-awskms` client; do not set this
+ *   for new usages.
  */
-class AwsKmsClientFactory(private val useLegacyBase64Encoding: Boolean = false) :
+class AwsKmsClientFactory(private val useLegacyBase64Client: Boolean = false) :
   KmsClientFactory<AwsWebIdentityCredentials> {
   /**
    * Returns a [KmsClient] configured via STS AssumeRoleWithWebIdentity.
@@ -49,8 +49,7 @@ class AwsKmsClientFactory(private val useLegacyBase64Encoding: Boolean = false) 
    * @return An initialized [KmsClient] — the upstream `tink-awskms` client (wrapped in
    *   [ExceptionTranslatingKmsClient] so credential-refresh failures surface as
    *   [GeneralSecurityException], matching the deprecated client's behavior), or the deprecated
-   *   custom [AwsKmsClient] with [AssociatedDataEncoding.BASE64] if [useLegacyBase64Encoding] is
-   *   `true`.
+   *   custom [AwsKmsClient] if [useLegacyBase64Client] is `true`.
    * @throws GeneralSecurityException if the client cannot be initialized.
    */
   override fun getKmsClient(config: AwsWebIdentityCredentials): KmsClient {
@@ -76,11 +75,11 @@ class AwsKmsClientFactory(private val useLegacyBase64Encoding: Boolean = false) 
         }
         .build()
 
-    return if (useLegacyBase64Encoding) {
-      @Suppress("DEPRECATION") AwsKmsClient(credentialsProvider, AssociatedDataEncoding.BASE64)
+    return if (useLegacyBase64Client) {
+      @Suppress("DEPRECATION") AwsKmsClient(credentialsProvider)
     } else {
-      // Wrapped so credential-refresh failures surface as GeneralSecurityException, matching
-      // the deprecated client\s behavior — see ExceptionTranslatingKmsClient\s class doc.
+      // Wrapped so credential-refresh failures surface as GeneralSecurityException, matching the
+      // deprecated client's behavior — see ExceptionTranslatingKmsClient's class doc.
       ExceptionTranslatingKmsClient(TinkAwsKmsClient().withCredentialsProvider(credentialsProvider))
     }
   }
