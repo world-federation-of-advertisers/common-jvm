@@ -43,6 +43,9 @@ import software.amazon.awssdk.identity.spi.ResolveIdentityRequest
  * https://github.com/tink-crypto/tink-java-awskms/pull/8); once a release including that fix is
  * available, callers can pass [delegate] directly and this adapter can be deleted.
  */
+// TODO(tink-crypto/tink-java-awskms#6): remove this adapter once a release including the fix
+// (tink-crypto/tink-java-awskms#8) is available; callers can then pass an IdentityProvider
+// directly to withCredentialsProvider.
 class TinkAwsCredentialsProviderAdapter(
   private val delegate: IdentityProvider<AwsCredentialsIdentity>
 ) : AwsCredentialsProvider {

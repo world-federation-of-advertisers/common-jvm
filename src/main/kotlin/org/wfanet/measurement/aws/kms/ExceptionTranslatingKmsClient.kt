@@ -88,6 +88,9 @@ class ExceptionTranslatingKmsClient(private val delegate: KmsClient) : KmsClient
         } catch (e: GeneralSecurityException) {
           throw e
         } catch (e: CompletionException) {
+          // TODO(tink-crypto/tink-java-awskms#5): drop this catch once a release including the
+          // fix (tink-crypto/tink-java-awskms#7) is available; the generic Exception catch below
+          // will still be needed for other leak shapes with no tracked upstream fix.
           throw GeneralSecurityException("AWS KMS call failed", e.cause ?: e)
         } catch (e: Exception) {
           throw GeneralSecurityException("AWS KMS call failed", e)
