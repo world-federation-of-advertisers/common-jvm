@@ -80,7 +80,7 @@ class AwsKmsClientFactoryTest {
   }
 
   @Test
-  fun `AwsKmsClientFactory getKmsClient returns an ExceptionTranslatingKmsClient`() {
+  fun `getKmsClient with invalid config fails on first use`() {
     val factory = AwsKmsClientFactory()
     val config =
       AwsWebIdentityCredentials(
@@ -91,7 +91,8 @@ class AwsKmsClientFactoryTest {
       )
 
     val kmsClient = factory.getKmsClient(config)
+    val aead = kmsClient.getAead(AWS_KMS_KEY_URI)
 
-    assertThat(kmsClient).isInstanceOf(ExceptionTranslatingKmsClient::class.java)
+    assertFailsWith<GeneralSecurityException> { aead.encrypt(ByteArray(0), null) }
   }
 }

@@ -51,15 +51,26 @@ class ExceptionTranslatingKmsClient(private val delegate: KmsClient) : KmsClient
         }
 
       /**
-       * Runs [block], translating [CompletionException] into [GeneralSecurityException].
+       * Runs [block], translating any exception other than [GeneralSecurityException] into one.
        *
-       * A failed AWS credential refresh can surface here as a raw [CompletionException] instead of
-       * the [GeneralSecurityException] upstream's own catch clause expects (it only catches
-       * `SdkClientException`/`KmsException`): the AWS SDK's internal synchronous credential
-       * resolution unwraps a failed future's [CompletionException] down to its cause only when that
-       * cause is a [RuntimeException], and a credential chain backed by
-       * [org.wfanet.measurement.aws.RefreshableAwsCredentialsProvider] can fail with a checked
-       * [GeneralSecurityException] instead, which the SDK leaves wrapped.
+       * Credential resolution failures can surface here in shapes upstream's own catch clause
+       * doesn't expect (it only catches `SdkClientException`/`KmsException`), because they
+       * originate below the AWS SDK's own exception mapping:
+       * - A failed async credential refresh (e.g. a credential chain backed by
+       *   [org.wfanet.measurement.aws.RefreshableAwsCredentialsProvider]) surfaces as a raw
+       *   [java.util.concurrent.CompletionException]: the AWS SDK's internal synchronous credential
+       *   resolution unwraps a failed future's `CompletionException` down to its cause only when
+       *   that cause is a [RuntimeException], and such a credential chain can fail with a checked
+       *   [GeneralSecurityException] instead, which the SDK leaves wrapped.
+       * - A synchronous credential provider (e.g. the AWS SDK's own
+       *   `StsWebIdentityTokenFileCredentialsProvider`) can throw directly out of
+       *   `AwsCredentialsProvider`'s default `resolveIdentity`, which calls `resolveCredentials`
+       *   eagerly rather than deferring it into the future it returns -- surfacing, for example, as
+       *   a raw `UncheckedIOException` when a configured token file doesn't exist.
+       *
+       * Rather than enumerate every such shape, this catches any [Exception] not already a
+       * [GeneralSecurityException] and translates it, so [Aead.encrypt]/[Aead.decrypt] honor their
+       * documented contract regardless of how the underlying credential provider fails.
        *
        * Filed upstream as https://github.com/tink-crypto/tink-java-awskms/issues/5 (fix pending as
        * https://github.com/tink-crypto/tink-java-awskms/pull/7); this can go away once a release
@@ -68,8 +79,12 @@ class ExceptionTranslatingKmsClient(private val delegate: KmsClient) : KmsClient
       private inline fun <T> inKmsCall(block: () -> T): T =
         try {
           block()
+        } catch (e: GeneralSecurityException) {
+          throw e
         } catch (e: CompletionException) {
           throw GeneralSecurityException("AWS KMS call failed", e.cause ?: e)
+        } catch (e: Exception) {
+          throw GeneralSecurityException("AWS KMS call failed", e)
         }
     }
   }
