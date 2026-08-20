@@ -14,7 +14,8 @@
 
 package org.wfanet.measurement.gcloud.kms
 
-import kotlin.test.assertFails
+import java.security.GeneralSecurityException
+import kotlin.test.assertFailsWith
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
@@ -49,6 +50,6 @@ class GCloudToAwsKmsClientFactoryTest {
       )
     val kmsClient = factory.getKmsClient(config)
     val aead = kmsClient.getAead("aws-kms://arn:aws:kms:us-east-1:123456789012:key/test-key")
-    assertFails { aead.encrypt(ByteArray(0), null) }
+    assertFailsWith<GeneralSecurityException> { aead.encrypt(ByteArray(0), null) }
   }
 }

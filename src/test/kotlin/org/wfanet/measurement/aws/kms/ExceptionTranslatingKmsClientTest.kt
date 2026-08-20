@@ -125,6 +125,17 @@ class ExceptionTranslatingKmsClientTest {
   }
 
   @Test
+  fun `getAead translates NullPointerException into GeneralSecurityException`() {
+    val delegateKmsClient =
+      mock<KmsClient> { on { getAead(anyOrNull()) } doThrow NullPointerException() }
+    val client = ExceptionTranslatingKmsClient(delegateKmsClient)
+
+    val exception = assertFailsWith<GeneralSecurityException> { client.getAead(null) }
+
+    assertThat(exception).hasCauseThat().isInstanceOf(NullPointerException::class.java)
+  }
+
+  @Test
   fun `withCredentials preserves the exception translation`() {
     val delegateAead =
       mock<Aead> {

@@ -31,12 +31,15 @@ class ExceptionTranslatingKmsClient(private val delegate: KmsClient) : KmsClient
     ExceptionTranslatingKmsClient(delegate.withDefaultCredentials())
 
   override fun getAead(keyUri: String?): Aead {
-    // Upstream's own getAead() throws IllegalArgumentException for a malformed key URI rather
-    // than GeneralSecurityException (its internal catch only covers SdkClientException).
+    // Upstream's own getAead() can throw IllegalArgumentException for a malformed key URI, or
+    // NullPointerException for a null one, rather than GeneralSecurityException (its internal
+    // catch only covers SdkClientException).
     val delegateAead =
       try {
         delegate.getAead(keyUri)
-      } catch (e: IllegalArgumentException) {
+      } catch (e: GeneralSecurityException) {
+        throw e
+      } catch (e: Exception) {
         throw GeneralSecurityException("Invalid AWS KMS key URI: $keyUri", e)
       }
     return object : Aead {
