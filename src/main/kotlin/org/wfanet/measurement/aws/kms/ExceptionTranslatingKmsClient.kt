@@ -75,9 +75,12 @@ class ExceptionTranslatingKmsClient(private val delegate: KmsClient) : KmsClient
        * [GeneralSecurityException] and translates it, so [Aead.encrypt]/[Aead.decrypt] honor their
        * documented contract regardless of how the underlying credential provider fails.
        *
-       * Filed upstream as https://github.com/tink-crypto/tink-java-awskms/issues/5 (fix pending as
-       * https://github.com/tink-crypto/tink-java-awskms/pull/7); this can go away once a release
-       * including that fix is available.
+       * The [CompletionException] catch below specifically works around a bug filed upstream as
+       * https://github.com/tink-crypto/tink-java-awskms/issues/5 (fix pending as
+       * https://github.com/tink-crypto/tink-java-awskms/pull/7) and can be dropped once a release
+       * including that fix is available. The rest of this function's handling -- and [getAead]'s,
+       * above -- addresses failure shapes with no tracked upstream fix, so this wrapper as a whole
+       * will remain necessary regardless.
        */
       private inline fun <T> inKmsCall(block: () -> T): T =
         try {
