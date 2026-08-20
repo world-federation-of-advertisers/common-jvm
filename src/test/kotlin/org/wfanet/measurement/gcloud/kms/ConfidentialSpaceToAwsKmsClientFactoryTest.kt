@@ -14,10 +14,12 @@
 
 package org.wfanet.measurement.gcloud.kms
 
+import com.google.common.truth.Truth.assertThat
 import kotlin.test.assertFails
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
+import org.wfanet.measurement.aws.kms.ExceptionTranslatingKmsClient
 import org.wfanet.measurement.common.crypto.tink.ConfidentialSpaceToAwsWifCredentials
 
 /**
@@ -42,6 +44,23 @@ class ConfidentialSpaceToAwsKmsClientFactoryTest {
         audience = "https://example.com",
       )
     val kmsClient = factory.getKmsClient(config)
-    assertFails { kmsClient.getAead("aws-kms://arn:aws:kms:us-east-1:123456789012:key/test-key") }
+    val aead = kmsClient.getAead("aws-kms://arn:aws:kms:us-east-1:123456789012:key/test-key")
+    assertFails { aead.encrypt(ByteArray(0), null) }
+  }
+
+  @Test
+  fun `getKmsClient returns an ExceptionTranslatingKmsClient`() {
+    val factory = ConfidentialSpaceToAwsKmsClientFactory()
+    val config =
+      ConfidentialSpaceToAwsWifCredentials(
+        roleArn = "arn:aws:iam::123456789012:role/test-role",
+        roleSessionName = "test-session",
+        region = "us-east-1",
+        audience = "https://example.com",
+      )
+
+    val kmsClient = factory.getKmsClient(config)
+
+    assertThat(kmsClient).isInstanceOf(ExceptionTranslatingKmsClient::class.java)
   }
 }

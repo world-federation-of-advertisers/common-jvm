@@ -12,6 +12,7 @@ kt_jvm_library(
     deps = [
         "//imports/java/com/google/crypto/tink",
         "//imports/java/com/google/crypto/tink:awskms",
+        "//imports/java/org/apache/commons/logging",
         "//imports/java/software/amazon/awssdk/auth",
         "//imports/java/software/amazon/awssdk/identity/spi",
         "//imports/java/software/amazon/awssdk/services/kms",

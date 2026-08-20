@@ -25,16 +25,8 @@ import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.sts.StsClient
 import software.amazon.awssdk.services.sts.auth.StsWebIdentityTokenFileCredentialsProvider
 
-/**
- * A [KmsClientFactory] for creating Tink [KmsClient] instances for AWS KMS.
- *
- * @param useLegacyBase64Client If `true`, returns the deprecated custom [AwsKmsClient], for
- *   decrypting ciphertext written by older versions of this client with its Base64 associated-data
- *   encoding. Defaults to `false`, which returns the upstream `tink-awskms` client; do not set this
- *   for new usages.
- */
-class AwsKmsClientFactory(private val useLegacyBase64Client: Boolean = false) :
-  KmsClientFactory<AwsWebIdentityCredentials> {
+/** A [KmsClientFactory] for creating Tink [KmsClient] instances for AWS KMS. */
+class AwsKmsClientFactory : KmsClientFactory<AwsWebIdentityCredentials> {
   /**
    * Returns a [KmsClient] configured via STS AssumeRoleWithWebIdentity.
    *
@@ -46,10 +38,8 @@ class AwsKmsClientFactory(private val useLegacyBase64Client: Boolean = false) :
    * environments (e.g., Google Cloud).
    *
    * @param config The AWS web identity configuration.
-   * @return An initialized [KmsClient] — the upstream `tink-awskms` client (wrapped in
-   *   [ExceptionTranslatingKmsClient] so credential-refresh failures surface as
-   *   [GeneralSecurityException], matching the deprecated client's behavior), or the deprecated
-   *   custom [AwsKmsClient] if [useLegacyBase64Client] is `true`.
+   * @return An initialized [KmsClient] wrapping the upstream `tink-awskms` client — see
+   *   [ExceptionTranslatingKmsClient] for the wrapping's contract.
    * @throws GeneralSecurityException if the client cannot be initialized.
    */
   override fun getKmsClient(config: AwsWebIdentityCredentials): KmsClient {
@@ -75,11 +65,8 @@ class AwsKmsClientFactory(private val useLegacyBase64Client: Boolean = false) :
         }
         .build()
 
-    return if (useLegacyBase64Client) {
-      @Suppress("DEPRECATION") AwsKmsClient(credentialsProvider)
-    } else {
-      // See ExceptionTranslatingKmsClient's class doc for why this wrap is needed.
-      ExceptionTranslatingKmsClient(TinkAwsKmsClient().withCredentialsProvider(credentialsProvider))
-    }
+    return ExceptionTranslatingKmsClient(
+      TinkAwsKmsClient().withCredentialsProvider(credentialsProvider)
+    )
   }
 }

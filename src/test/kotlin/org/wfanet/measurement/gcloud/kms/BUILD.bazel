@@ -5,8 +5,10 @@ kt_jvm_test(
     srcs = ["GCloudToAwsKmsClientFactoryTest.kt"],
     test_class = "org.wfanet.measurement.gcloud.kms.GCloudToAwsKmsClientFactoryTest",
     deps = [
+        "//imports/java/com/google/common/truth",
         "//imports/java/org/junit",
         "//imports/kotlin/kotlin/test",
+        "//src/main/kotlin/org/wfanet/measurement/aws/kms:aws_kms_client_factory",
         "//src/main/kotlin/org/wfanet/measurement/common/crypto/tink",
         "//src/main/kotlin/org/wfanet/measurement/gcloud/kms:gcloud_to_aws_kms_client_factory",
     ],
@@ -17,8 +19,10 @@ kt_jvm_test(
     srcs = ["ConfidentialSpaceToAwsKmsClientFactoryTest.kt"],
     test_class = "org.wfanet.measurement.gcloud.kms.ConfidentialSpaceToAwsKmsClientFactoryTest",
     deps = [
+        "//imports/java/com/google/common/truth",
         "//imports/java/org/junit",
         "//imports/kotlin/kotlin/test",
+        "//src/main/kotlin/org/wfanet/measurement/aws/kms:aws_kms_client_factory",
         "//src/main/kotlin/org/wfanet/measurement/common/crypto/tink",
         "//src/main/kotlin/org/wfanet/measurement/gcloud/kms:confidential_space_to_aws_kms_client_factory",
     ],

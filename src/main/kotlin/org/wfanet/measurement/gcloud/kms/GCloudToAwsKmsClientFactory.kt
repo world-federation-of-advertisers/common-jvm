@@ -54,15 +54,10 @@ import software.amazon.awssdk.services.sts.model.AssumeRoleWithWebIdentityReques
  *
  * @param refreshMargin How far before expiration to proactively refresh credentials.
  * @param clock Clock used to determine the current time.
- * @param useLegacyBase64Client If `true`, returns the deprecated custom
- *   [org.wfanet.measurement.aws.kms.AwsKmsClient], for decrypting ciphertext written by older
- *   versions of this client with its Base64 associated-data encoding. Defaults to `false`, which
- *   returns the upstream `tink-awskms` client; do not set this for new usages.
  */
 class GCloudToAwsKmsClientFactory(
   private val refreshMargin: Duration = DEFAULT_REFRESH_MARGIN,
   private val clock: Clock = Clock.systemUTC(),
-  private val useLegacyBase64Client: Boolean = false,
 ) : KmsClientFactory<GCloudToAwsWifCredentials> {
   /**
    * Returns a [KmsClient] using Google Cloud Confidential Space identity to authenticate with AWS.
@@ -72,11 +67,8 @@ class GCloudToAwsKmsClientFactory(
    * service account impersonation -> OIDC ID token -> AWS STS AssumeRoleWithWebIdentity).
    *
    * @param config The Google Cloud-to-AWS WIF configuration.
-   * @return An initialized [KmsClient] — the upstream `tink-awskms` client (wrapped in
-   *   [org.wfanet.measurement.aws.kms.ExceptionTranslatingKmsClient] so credential-refresh failures
-   *   surface as [GeneralSecurityException], matching the deprecated client's behavior), or the
-   *   deprecated custom [org.wfanet.measurement.aws.kms.AwsKmsClient] if [useLegacyBase64Client] is
-   *   `true`.
+   * @return An initialized [KmsClient] wrapping the upstream `tink-awskms` client — see
+   *   [org.wfanet.measurement.aws.kms.ExceptionTranslatingKmsClient] for the wrapping's contract.
    * @throws GeneralSecurityException if credentials cannot be obtained or exchanged.
    */
   override fun getKmsClient(config: GCloudToAwsWifCredentials): KmsClient {
@@ -86,16 +78,9 @@ class GCloudToAwsKmsClientFactory(
         // thread where blocking is expected, so it runs inline rather than on another thread.
         CompletableFuture.completedFuture(obtainAwsCredentials(config))
       }
-    return if (useLegacyBase64Client) {
-      @Suppress("DEPRECATION") org.wfanet.measurement.aws.kms.AwsKmsClient(credentialsProvider)
-    } else {
-      // TinkAwsKmsClient.withCredentialsProvider requires the AwsCredentialsProvider type, which
-      // RefreshableAwsCredentialsProvider declares for exactly this reason (see its class doc). The
-      // default here favors the upstream client because the deprecated one can only produce Base64
-      // ciphertext, which isn't interoperable with anything else — there is no reason to prefer it
-      // unless BASE64 decoding of previously-written data is actually needed.
-      ExceptionTranslatingKmsClient(TinkAwsKmsClient().withCredentialsProvider(credentialsProvider))
-    }
+    return ExceptionTranslatingKmsClient(
+      TinkAwsKmsClient().withCredentialsProvider(credentialsProvider)
+    )
   }
 
   companion object {

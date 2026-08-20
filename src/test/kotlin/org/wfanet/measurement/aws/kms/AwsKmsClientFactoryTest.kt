@@ -23,6 +23,7 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
+import org.wfanet.measurement.common.crypto.tink.AwsWebIdentityCredentials
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider
 
@@ -76,5 +77,21 @@ class AwsKmsClientFactoryTest {
   @Test
   fun `getAead throws GeneralSecurityException for invalid ARN`() {
     assertFailsWith<GeneralSecurityException> { kmsClient.getAead(INVALID_ARN_KEY_URI) }
+  }
+
+  @Test
+  fun `AwsKmsClientFactory getKmsClient returns an ExceptionTranslatingKmsClient`() {
+    val factory = AwsKmsClientFactory()
+    val config =
+      AwsWebIdentityCredentials(
+        roleArn = "arn:aws:iam::123456789012:role/test-role",
+        webIdentityTokenFilePath = "/var/run/secrets/token",
+        roleSessionName = "test-session",
+        region = "us-east-1",
+      )
+
+    val kmsClient = factory.getKmsClient(config)
+
+    assertThat(kmsClient).isInstanceOf(ExceptionTranslatingKmsClient::class.java)
   }
 }

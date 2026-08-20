@@ -112,6 +112,57 @@ class ExceptionTranslatingKmsClientTest {
   }
 
   @Test
+  fun `getAead translates IllegalArgumentException into GeneralSecurityException`() {
+    val delegateKmsClient =
+      mock<KmsClient> {
+        on { getAead(KEY_URI) } doThrow IllegalArgumentException("invalid key URI")
+      }
+    val client = ExceptionTranslatingKmsClient(delegateKmsClient)
+
+    val exception = assertFailsWith<GeneralSecurityException> { client.getAead(KEY_URI) }
+
+    assertThat(exception).hasCauseThat().isInstanceOf(IllegalArgumentException::class.java)
+  }
+
+  @Test
+  fun `withCredentials preserves the exception translation`() {
+    val delegateAead =
+      mock<Aead> {
+        on { encrypt(any(), anyOrNull()) } doThrow
+          CompletionException(GeneralSecurityException("Failed to obtain AWS credentials"))
+      }
+    val credentialedDelegate = mock<KmsClient> { on { getAead(KEY_URI) } doAnswer { delegateAead } }
+    val delegateKmsClient =
+      mock<KmsClient> { on { withCredentials("/path") } doAnswer { credentialedDelegate } }
+    val client = ExceptionTranslatingKmsClient(delegateKmsClient)
+
+    val credentialedClient = client.withCredentials("/path")
+
+    assertFailsWith<GeneralSecurityException> {
+      credentialedClient.getAead(KEY_URI).encrypt("plaintext".toByteArray(), null)
+    }
+  }
+
+  @Test
+  fun `withDefaultCredentials preserves the exception translation`() {
+    val delegateAead =
+      mock<Aead> {
+        on { encrypt(any(), anyOrNull()) } doThrow
+          CompletionException(GeneralSecurityException("Failed to obtain AWS credentials"))
+      }
+    val credentialedDelegate = mock<KmsClient> { on { getAead(KEY_URI) } doAnswer { delegateAead } }
+    val delegateKmsClient =
+      mock<KmsClient> { on { withDefaultCredentials() } doAnswer { credentialedDelegate } }
+    val client = ExceptionTranslatingKmsClient(delegateKmsClient)
+
+    val credentialedClient = client.withDefaultCredentials()
+
+    assertFailsWith<GeneralSecurityException> {
+      credentialedClient.getAead(KEY_URI).encrypt("plaintext".toByteArray(), null)
+    }
+  }
+
+  @Test
   fun `doesSupport delegates to the wrapped client`() {
     val delegateKmsClient = mock<KmsClient> { on { doesSupport(KEY_URI) } doAnswer { true } }
     val client = ExceptionTranslatingKmsClient(delegateKmsClient)

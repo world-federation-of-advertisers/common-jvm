@@ -59,16 +59,11 @@ import software.amazon.awssdk.services.sts.model.AssumeRoleWithWebIdentityReques
  * @param tokenProvider Source of Confidential Space attestation tokens.
  * @param refreshMargin How far before expiration to proactively refresh credentials.
  * @param clock Clock used to determine the current time.
- * @param useLegacyBase64Client If `true`, returns the deprecated custom
- *   [org.wfanet.measurement.aws.kms.AwsKmsClient], for decrypting ciphertext written by older
- *   versions of this client with its Base64 associated-data encoding. Defaults to `false`, which
- *   returns the upstream `tink-awskms` client; do not set this for new usages.
  */
 class ConfidentialSpaceToAwsKmsClientFactory(
   private val tokenProvider: AttestationTokenProvider = ConfidentialSpaceTokenClient(),
   private val refreshMargin: Duration = DEFAULT_REFRESH_MARGIN,
   private val clock: Clock = Clock.systemUTC(),
-  private val useLegacyBase64Client: Boolean = false,
 ) : KmsClientFactory<ConfidentialSpaceToAwsWifCredentials> {
   /**
    * Returns a [KmsClient] using a Confidential Space attestation token to authenticate directly
@@ -78,26 +73,17 @@ class ConfidentialSpaceToAwsKmsClientFactory(
    * that resolution with a [GeneralSecurityException] when they cannot be completed.
    *
    * @param config The Confidential Space-to-AWS configuration.
-   * @return An initialized [KmsClient] — the upstream `tink-awskms` client (wrapped in
-   *   [ExceptionTranslatingKmsClient] so credential-refresh failures surface as
-   *   [GeneralSecurityException], matching the deprecated client's behavior), or the deprecated
-   *   custom [org.wfanet.measurement.aws.kms.AwsKmsClient] if [useLegacyBase64Client] is `true`.
+   * @return An initialized [KmsClient] wrapping the upstream `tink-awskms` client — see
+   *   [ExceptionTranslatingKmsClient] for the wrapping's contract.
    */
   override fun getKmsClient(config: ConfidentialSpaceToAwsWifCredentials): KmsClient {
     val credentialsProvider =
       RefreshableAwsCredentialsProvider(refreshMargin = refreshMargin, clock = clock) {
         obtainAwsCredentials(config).toFuture()
       }
-    return if (useLegacyBase64Client) {
-      @Suppress("DEPRECATION") org.wfanet.measurement.aws.kms.AwsKmsClient(credentialsProvider)
-    } else {
-      // TinkAwsKmsClient.withCredentialsProvider requires the AwsCredentialsProvider type, which
-      // RefreshableAwsCredentialsProvider declares for exactly this reason (see its class doc). The
-      // default here favors the upstream client because the deprecated one can only produce Base64
-      // ciphertext, which isn't interoperable with anything else — there is no reason to prefer it
-      // unless BASE64 decoding of previously-written data is actually needed.
-      ExceptionTranslatingKmsClient(TinkAwsKmsClient().withCredentialsProvider(credentialsProvider))
-    }
+    return ExceptionTranslatingKmsClient(
+      TinkAwsKmsClient().withCredentialsProvider(credentialsProvider)
+    )
   }
 
   private fun obtainAwsCredentials(
