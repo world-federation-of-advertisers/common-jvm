@@ -13,3 +13,17 @@ kt_jvm_test(
         "//src/main/kotlin/org/wfanet/measurement/aws:refreshable_aws_credentials_provider",
     ],
 )
+
+kt_jvm_test(
+    name = "TinkAwsCredentialsProviderAdapterTest",
+    srcs = ["TinkAwsCredentialsProviderAdapterTest.kt"],
+    test_class = "org.wfanet.measurement.aws.TinkAwsCredentialsProviderAdapterTest",
+    deps = [
+        "//imports/java/com/google/common/truth",
+        "//imports/java/org/junit",
+        "//imports/java/software/amazon/awssdk/auth",
+        "//imports/java/software/amazon/awssdk/identity/spi",
+        "//imports/kotlin/kotlin/test",
+        "//src/main/kotlin/org/wfanet/measurement/aws:refreshable_aws_credentials_provider",
+    ],
+)

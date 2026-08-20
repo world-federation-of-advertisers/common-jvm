@@ -292,17 +292,6 @@ class RefreshableAwsCredentialsProviderTest {
     }
   }
 
-  @Test
-  fun `resolveCredentials throws`() {
-    val clock = Clock.fixed(Instant.parse("2026-06-03T12:00:00Z"), ZoneOffset.UTC)
-    val provider =
-      RefreshableAwsCredentialsProvider(refreshMargin = Duration.ofMinutes(5), clock = clock) {
-        completedRefresh("key-1", Instant.parse("2026-06-03T13:00:00Z"))
-      }
-
-    assertFailsWith<UnsupportedOperationException> { provider.resolveCredentials() }
-  }
-
   private fun timeBoundCredentials(accessKeyId: String, expiration: Instant) =
     TimeBoundCredentials(
       credentials = AwsSessionCredentials.create(accessKeyId, "secret", "token"),

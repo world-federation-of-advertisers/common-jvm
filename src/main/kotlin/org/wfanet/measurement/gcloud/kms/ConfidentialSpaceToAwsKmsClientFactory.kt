@@ -21,6 +21,7 @@ import java.time.Clock
 import java.time.Duration
 import org.wfanet.measurement.aws.RefreshableAwsCredentialsProvider
 import org.wfanet.measurement.aws.TimeBoundCredentials
+import org.wfanet.measurement.aws.TinkAwsCredentialsProviderAdapter
 import org.wfanet.measurement.aws.kms.ExceptionTranslatingKmsClient
 import org.wfanet.measurement.common.crypto.tink.ConfidentialSpaceToAwsWifCredentials
 import org.wfanet.measurement.common.crypto.tink.KmsClientFactory
@@ -49,12 +50,10 @@ import software.amazon.awssdk.services.sts.model.AssumeRoleWithWebIdentityReques
  * The returned client uses a credentials provider that automatically refreshes the AWS session
  * credentials before they expire by re-executing the token fetch + STS exchange.
  *
- * The credentials obtained this way are exposed through [RefreshableAwsCredentialsProvider], which
- * declares the AWS SDK's `AwsCredentialsProvider` contract (rather than `IdentityProvider`
- * directly) so it satisfies the type upstream `tink-awskms`'s public
- * `AwsKmsClient.withCredentialsProvider` method requires. See [RefreshableAwsCredentialsProvider]'s
- * class documentation for why, and why its `resolveCredentials` is intentionally unreachable at
- * runtime.
+ * The credentials obtained this way are exposed through [RefreshableAwsCredentialsProvider],
+ * wrapped in [TinkAwsCredentialsProviderAdapter] to satisfy the `AwsCredentialsProvider` type
+ * upstream `tink-awskms`'s public `AwsKmsClient.withCredentialsProvider` method requires. See
+ * [TinkAwsCredentialsProviderAdapter]'s class documentation for why.
  *
  * @param tokenProvider Source of Confidential Space attestation tokens.
  * @param refreshMargin How far before expiration to proactively refresh credentials.
@@ -82,7 +81,8 @@ class ConfidentialSpaceToAwsKmsClientFactory(
         obtainAwsCredentials(config).toFuture()
       }
     return ExceptionTranslatingKmsClient(
-      TinkAwsKmsClient().withCredentialsProvider(credentialsProvider)
+      TinkAwsKmsClient()
+        .withCredentialsProvider(TinkAwsCredentialsProviderAdapter(credentialsProvider))
     )
   }
 

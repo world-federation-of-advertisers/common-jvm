@@ -19,8 +19,6 @@ import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.CompletableFuture
 import java.util.logging.Logger
-import software.amazon.awssdk.auth.credentials.AwsCredentials
-import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider
 import software.amazon.awssdk.auth.credentials.AwsSessionCredentials
 import software.amazon.awssdk.identity.spi.AwsCredentialsIdentity
 import software.amazon.awssdk.identity.spi.IdentityProvider
@@ -35,8 +33,8 @@ import software.amazon.awssdk.identity.spi.ResolveIdentityRequest
 data class TimeBoundCredentials(val credentials: AwsSessionCredentials, val expiration: Instant)
 
 /**
- * An [AwsCredentialsProvider] (and, transitively, [IdentityProvider] of [AwsCredentialsIdentity])
- * that caches temporary AWS session credentials and proactively refreshes them before they expire.
+ * An [IdentityProvider] of [AwsCredentialsIdentity] that caches temporary AWS session credentials
+ * and proactively refreshes them before they expire.
  *
  * Use this when AWS credentials are obtained through a multi-step exchange that the AWS SDK cannot
  * manage natively — for example, federated identity flows where a GCP Confidential Space
@@ -53,21 +51,11 @@ data class TimeBoundCredentials(val credentials: AwsSessionCredentials, val expi
  * Thread-safe: callers that arrive while a refresh is in flight share its result rather than
  * starting a second one.
  *
- * Declares [AwsCredentialsProvider] — which is-a [IdentityProvider] of [AwsCredentialsIdentity] —
- * rather than [IdentityProvider] directly, solely to satisfy the *type* some third-party libraries
- * built on the AWS SDK require: notably upstream `tink-awskms`'s
- * `com.google.crypto.tink.integration.awskms.AwsKmsClient.withCredentialsProvider`, whose public
- * API has no [IdentityProvider]-based overload. This does not change how credentials are actually
- * resolved. [credentialSupplier] is inherently asynchronous, so [resolveIdentity] remains the real
- * entry point — including for the AWS SDK's own client builders and its internal auth strategy
- * (`software.amazon.awssdk.awscore.internal.authcontext.AwsCredentialsAuthorizationStrategy`),
- * which calls [resolveIdentity] and joins on the result only when a synchronous value is ultimately
- * required. [resolveCredentials] intentionally throws instead — see its documentation.
- *
- * Filed upstream as https://github.com/tink-crypto/tink-java-awskms/issues/6 (fix pending as
- * https://github.com/tink-crypto/tink-java-awskms/pull/8); once a release including that fix is
- * available, this class could drop the [AwsCredentialsProvider] supertype and [resolveCredentials]
- * entirely, implementing [IdentityProvider] directly.
+ * A caller that needs the AWS SDK's synchronous
+ * [software.amazon.awssdk.auth.credentials.AwsCredentialsProvider] type instead — because a
+ * third-party library's API requires it, e.g. upstream `tink-awskms`'s
+ * `AwsKmsClient.withCredentialsProvider` — should wrap an instance in
+ * [TinkAwsCredentialsProviderAdapter] rather than this class implementing that interface itself.
  *
  * @param refreshMargin How far before expiration to proactively refresh credentials.
  * @param clock Clock used to determine the current time.
@@ -77,7 +65,9 @@ class RefreshableAwsCredentialsProvider(
   private val refreshMargin: Duration,
   private val clock: Clock = Clock.systemUTC(),
   private val credentialSupplier: () -> CompletableFuture<TimeBoundCredentials>,
-) : AwsCredentialsProvider {
+) : IdentityProvider<AwsCredentialsIdentity> {
+
+  override fun identityType(): Class<AwsCredentialsIdentity> = AwsCredentialsIdentity::class.java
 
   @Volatile private var cachedCredentials: TimeBoundCredentials? = null
 
@@ -102,15 +92,6 @@ class RefreshableAwsCredentialsProvider(
       }
     return refresh.thenApply { it.credentials }
   }
-
-  /**
-   * Always throws: real callers resolve credentials through [resolveIdentity] instead (see the
-   * class-level documentation). Throwing — rather than blocking on [resolveIdentity] — turns an
-   * unexpected direct call into an immediate, obvious failure instead of a silent deadlock if the
-   * caller happens to be on a non-blocking thread (e.g. a Reactor Netty event loop).
-   */
-  override fun resolveCredentials(): AwsCredentials =
-    throw UnsupportedOperationException("Use resolveIdentity to resolve credentials asynchronously")
 
   private fun isCurrent(credentials: TimeBoundCredentials): Boolean =
     clock.instant().plus(refreshMargin).isBefore(credentials.expiration)

@@ -28,6 +28,7 @@ import java.util.concurrent.CompletableFuture
 import java.util.logging.Logger
 import org.wfanet.measurement.aws.RefreshableAwsCredentialsProvider
 import org.wfanet.measurement.aws.TimeBoundCredentials
+import org.wfanet.measurement.aws.TinkAwsCredentialsProviderAdapter
 import org.wfanet.measurement.aws.kms.ExceptionTranslatingKmsClient
 import org.wfanet.measurement.common.crypto.tink.GCloudToAwsWifCredentials
 import org.wfanet.measurement.common.crypto.tink.KmsClientFactory
@@ -45,12 +46,10 @@ import software.amazon.awssdk.services.sts.model.AssumeRoleWithWebIdentityReques
  * account to obtain an OIDC ID token. That ID token is exchanged with AWS STS
  * `AssumeRoleWithWebIdentity` for temporary AWS credentials.
  *
- * The credentials obtained this way are exposed through [RefreshableAwsCredentialsProvider], which
- * declares the AWS SDK's `AwsCredentialsProvider` contract (rather than `IdentityProvider`
- * directly) so it satisfies the type upstream `tink-awskms`'s public
- * `AwsKmsClient.withCredentialsProvider` method requires. See [RefreshableAwsCredentialsProvider]'s
- * class documentation for why, and why its `resolveCredentials` is intentionally unreachable at
- * runtime.
+ * The credentials obtained this way are exposed through [RefreshableAwsCredentialsProvider],
+ * wrapped in [TinkAwsCredentialsProviderAdapter] to satisfy the `AwsCredentialsProvider` type
+ * upstream `tink-awskms`'s public `AwsKmsClient.withCredentialsProvider` method requires. See
+ * [TinkAwsCredentialsProviderAdapter]'s class documentation for why.
  *
  * @param refreshMargin How far before expiration to proactively refresh credentials.
  * @param clock Clock used to determine the current time.
@@ -79,7 +78,8 @@ class GCloudToAwsKmsClientFactory(
         CompletableFuture.completedFuture(obtainAwsCredentials(config))
       }
     return ExceptionTranslatingKmsClient(
-      TinkAwsKmsClient().withCredentialsProvider(credentialsProvider)
+      TinkAwsKmsClient()
+        .withCredentialsProvider(TinkAwsCredentialsProviderAdapter(credentialsProvider))
     )
   }
 
