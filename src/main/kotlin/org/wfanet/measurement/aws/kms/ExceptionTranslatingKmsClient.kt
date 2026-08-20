@@ -60,6 +60,10 @@ class ExceptionTranslatingKmsClient(private val delegate: KmsClient) : KmsClient
        * cause is a [RuntimeException], and a credential chain backed by
        * [org.wfanet.measurement.aws.RefreshableAwsCredentialsProvider] can fail with a checked
        * [GeneralSecurityException] instead, which the SDK leaves wrapped.
+       *
+       * Filed upstream as https://github.com/tink-crypto/tink-java-awskms/issues/5 (fix pending
+       * as https://github.com/tink-crypto/tink-java-awskms/pull/7); this can go away once a
+       * release including that fix is available.
        */
       private inline fun <T> inKmsCall(block: () -> T): T =
         try {
