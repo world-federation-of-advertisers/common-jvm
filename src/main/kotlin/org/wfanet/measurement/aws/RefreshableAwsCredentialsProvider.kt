@@ -66,8 +66,8 @@ data class TimeBoundCredentials(val credentials: AwsSessionCredentials, val expi
  *
  * Filed upstream as https://github.com/tink-crypto/tink-java-awskms/issues/6 (fix pending as
  * https://github.com/tink-crypto/tink-java-awskms/pull/8); once a release including that fix is
- * available, this class could drop the [AwsCredentialsProvider] supertype and
- * [resolveCredentials] entirely, implementing [IdentityProvider] directly.
+ * available, this class could drop the [AwsCredentialsProvider] supertype and [resolveCredentials]
+ * entirely, implementing [IdentityProvider] directly.
  *
  * @param refreshMargin How far before expiration to proactively refresh credentials.
  * @param clock Clock used to determine the current time.
