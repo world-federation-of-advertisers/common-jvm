@@ -20,15 +20,19 @@ import java.security.GeneralSecurityException
 import java.util.concurrent.CompletionException
 
 /**
- * Wraps [delegate] so the [Aead] returned by [getAead] unwraps a [CompletionException] from
- * `encrypt`/`decrypt` into its cause.
+ * Wraps [delegate] so the [Aead] returned by [getAead] translates the one specific checked-failure
+ * shape AWS credential resolution can leave wrapped in a [CompletionException] from
+ * `encrypt`/`decrypt` into a [GeneralSecurityException].
  *
  * A failed async credential refresh (e.g. a credential chain backed by
  * [org.wfanet.measurement.aws.RefreshableAwsCredentialsProvider]) surfaces here as a raw
  * [CompletionException]: the AWS SDK's internal synchronous credential resolution unwraps a failed
  * future's `CompletionException` down to its cause only when that cause is a [RuntimeException],
  * and such a credential chain can fail with a checked [GeneralSecurityException] instead, which the
- * SDK leaves wrapped.
+ * SDK leaves wrapped. Only a [GeneralSecurityException] cause is translated; anything else --
+ * `null`, a [RuntimeException], an [Error], or some other checked exception type this class has no
+ * specific knowledge of -- is not that documented shape, so the [CompletionException] itself is
+ * rethrown unchanged rather than being unwrapped or otherwise guessed at.
  *
  * TODO(tink-crypto/tink-java-awskms#5): drop this class once a release including the fix is
  *   available.
@@ -58,7 +62,11 @@ class CompletionExceptionTranslatingKmsClient(private val delegate: KmsClient) :
         try {
           block()
         } catch (e: CompletionException) {
-          throw GeneralSecurityException("KMS operation failed", e.cause ?: e)
+          val cause = e.cause
+          if (cause !is GeneralSecurityException) {
+            throw e
+          }
+          throw GeneralSecurityException("KMS operation failed", cause)
         }
     }
   }

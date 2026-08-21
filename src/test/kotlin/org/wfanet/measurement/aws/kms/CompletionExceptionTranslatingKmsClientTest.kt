@@ -127,6 +127,96 @@ class CompletionExceptionTranslatingKmsClientTest {
   }
 
   @Test
+  fun `encrypt does not translate a CompletionException wrapping a RuntimeException`() {
+    val original = CompletionException(IllegalStateException("bug"))
+    val delegateAead = mock<Aead> { on { encrypt(any(), anyOrNull()) } doThrow original }
+    val delegateKmsClient = mock<KmsClient> { on { getAead(KEY_URI) } doAnswer { delegateAead } }
+    val client = CompletionExceptionTranslatingKmsClient(delegateKmsClient)
+
+    val exception =
+      assertFailsWith<CompletionException> {
+        client.getAead(KEY_URI).encrypt("plaintext".toByteArray(), null)
+      }
+
+    assertThat(exception).isSameInstanceAs(original)
+  }
+
+  @Test
+  fun `decrypt does not translate a CompletionException wrapping a RuntimeException`() {
+    val original = CompletionException(IllegalStateException("bug"))
+    val delegateAead = mock<Aead> { on { decrypt(any(), anyOrNull()) } doThrow original }
+    val delegateKmsClient = mock<KmsClient> { on { getAead(KEY_URI) } doAnswer { delegateAead } }
+    val client = CompletionExceptionTranslatingKmsClient(delegateKmsClient)
+
+    val exception =
+      assertFailsWith<CompletionException> {
+        client.getAead(KEY_URI).decrypt("ciphertext".toByteArray(), null)
+      }
+
+    assertThat(exception).isSameInstanceAs(original)
+  }
+
+  @Test
+  fun `encrypt does not translate a CompletionException wrapping an Error`() {
+    val original = CompletionException(OutOfMemoryError("fatal"))
+    val delegateAead = mock<Aead> { on { encrypt(any(), anyOrNull()) } doThrow original }
+    val delegateKmsClient = mock<KmsClient> { on { getAead(KEY_URI) } doAnswer { delegateAead } }
+    val client = CompletionExceptionTranslatingKmsClient(delegateKmsClient)
+
+    val exception =
+      assertFailsWith<CompletionException> {
+        client.getAead(KEY_URI).encrypt("plaintext".toByteArray(), null)
+      }
+
+    assertThat(exception).isSameInstanceAs(original)
+  }
+
+  @Test
+  fun `decrypt does not translate a CompletionException wrapping an Error`() {
+    val original = CompletionException(OutOfMemoryError("fatal"))
+    val delegateAead = mock<Aead> { on { decrypt(any(), anyOrNull()) } doThrow original }
+    val delegateKmsClient = mock<KmsClient> { on { getAead(KEY_URI) } doAnswer { delegateAead } }
+    val client = CompletionExceptionTranslatingKmsClient(delegateKmsClient)
+
+    val exception =
+      assertFailsWith<CompletionException> {
+        client.getAead(KEY_URI).decrypt("ciphertext".toByteArray(), null)
+      }
+
+    assertThat(exception).isSameInstanceAs(original)
+  }
+
+  @Test
+  fun `encrypt does not translate a CompletionException wrapping an unrelated checked exception`() {
+    val original = CompletionException(java.io.IOException("unrelated"))
+    val delegateAead = mock<Aead> { on { encrypt(any(), anyOrNull()) } doThrow original }
+    val delegateKmsClient = mock<KmsClient> { on { getAead(KEY_URI) } doAnswer { delegateAead } }
+    val client = CompletionExceptionTranslatingKmsClient(delegateKmsClient)
+
+    val exception =
+      assertFailsWith<CompletionException> {
+        client.getAead(KEY_URI).encrypt("plaintext".toByteArray(), null)
+      }
+
+    assertThat(exception).isSameInstanceAs(original)
+  }
+
+  @Test
+  fun `encrypt does not translate a causeless CompletionException`() {
+    val original = CompletionException("no cause", null)
+    val delegateAead = mock<Aead> { on { encrypt(any(), anyOrNull()) } doThrow original }
+    val delegateKmsClient = mock<KmsClient> { on { getAead(KEY_URI) } doAnswer { delegateAead } }
+    val client = CompletionExceptionTranslatingKmsClient(delegateKmsClient)
+
+    val exception =
+      assertFailsWith<CompletionException> {
+        client.getAead(KEY_URI).encrypt("plaintext".toByteArray(), null)
+      }
+
+    assertThat(exception).isSameInstanceAs(original)
+  }
+
+  @Test
   fun `getAead propagates a delegate exception unchanged`() {
     val original = IllegalArgumentException("invalid key URI")
     val delegateKmsClient = mock<KmsClient> { on { getAead(any()) } doThrow original }
