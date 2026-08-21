@@ -30,8 +30,8 @@ import java.util.concurrent.CompletionException
  * and such a credential chain can fail with a checked [GeneralSecurityException] instead, which the
  * SDK leaves wrapped.
  *
- * TODO(tink-crypto/tink-java-awskms#5): drop this class once a release including the fix
- *   (tink-crypto/tink-java-awskms#7) is available.
+ * TODO(tink-crypto/tink-java-awskms#5): drop this class once a release including the fix is
+ *   available.
  */
 class CompletionExceptionTranslatingKmsClient(private val delegate: KmsClient) :
   KmsClient by delegate {

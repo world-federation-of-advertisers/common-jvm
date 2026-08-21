@@ -80,9 +80,9 @@ class GCloudToAwsKmsClientFactory(
     return CompletionExceptionTranslatingKmsClient(
       TinkAwsKmsClient()
         .withCredentialsProvider(
-          // TODO(tink-crypto/tink-java-awskms#6): once a release including the fix
-          // (tink-crypto/tink-java-awskms#8) is available, pass credentialsProvider directly
-          // instead of wrapping it in AwsCredentialsProviderAdapter.
+          // TODO(tink-crypto/tink-java-awskms#6): once a release including the fix is
+          // available, pass credentialsProvider directly instead of wrapping it in
+          // AwsCredentialsProviderAdapter.
           AwsCredentialsProviderAdapter(credentialsProvider)
         )
     )
