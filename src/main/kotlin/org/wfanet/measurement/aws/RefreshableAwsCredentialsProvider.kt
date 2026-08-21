@@ -55,7 +55,7 @@ data class TimeBoundCredentials(val credentials: AwsSessionCredentials, val expi
  * [software.amazon.awssdk.auth.credentials.AwsCredentialsProvider] type instead — because a
  * third-party library's API requires it, e.g. upstream `tink-awskms`'s
  * `AwsKmsClient.withCredentialsProvider` — should wrap an instance in
- * [TinkAwsCredentialsProviderAdapter] rather than this class implementing that interface itself.
+ * [AwsCredentialsProviderAdapter] rather than this class implementing that interface itself.
  *
  * @param refreshMargin How far before expiration to proactively refresh credentials.
  * @param clock Clock used to determine the current time.

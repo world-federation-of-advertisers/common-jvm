@@ -19,9 +19,9 @@ import com.google.crypto.tink.integration.awskms.AwsKmsClient as TinkAwsKmsClien
 import java.security.GeneralSecurityException
 import java.time.Clock
 import java.time.Duration
+import org.wfanet.measurement.aws.AwsCredentialsProviderAdapter
 import org.wfanet.measurement.aws.RefreshableAwsCredentialsProvider
 import org.wfanet.measurement.aws.TimeBoundCredentials
-import org.wfanet.measurement.aws.TinkAwsCredentialsProviderAdapter
 import org.wfanet.measurement.aws.kms.ExceptionTranslatingKmsClient
 import org.wfanet.measurement.common.crypto.tink.ConfidentialSpaceToAwsWifCredentials
 import org.wfanet.measurement.common.crypto.tink.KmsClientFactory
@@ -51,9 +51,8 @@ import software.amazon.awssdk.services.sts.model.AssumeRoleWithWebIdentityReques
  * credentials before they expire by re-executing the token fetch + STS exchange.
  *
  * The credentials obtained this way are exposed through [RefreshableAwsCredentialsProvider],
- * wrapped in [TinkAwsCredentialsProviderAdapter] to satisfy the `AwsCredentialsProvider` type
- * upstream `tink-awskms`'s public `AwsKmsClient.withCredentialsProvider` method requires. See
- * [TinkAwsCredentialsProviderAdapter]'s class documentation for why.
+ * wrapped in [AwsCredentialsProviderAdapter] to satisfy the `AwsCredentialsProvider` type upstream
+ * `tink-awskms`'s public `AwsKmsClient.withCredentialsProvider` method currently requires.
  *
  * @param tokenProvider Source of Confidential Space attestation tokens.
  * @param refreshMargin How far before expiration to proactively refresh credentials.
@@ -82,7 +81,12 @@ class ConfidentialSpaceToAwsKmsClientFactory(
       }
     return ExceptionTranslatingKmsClient(
       TinkAwsKmsClient()
-        .withCredentialsProvider(TinkAwsCredentialsProviderAdapter(credentialsProvider))
+        .withCredentialsProvider(
+          // TODO(tink-crypto/tink-java-awskms#6): once a release including the fix
+          // (tink-crypto/tink-java-awskms#8) is available, pass credentialsProvider directly
+          // instead of wrapping it in AwsCredentialsProviderAdapter.
+          AwsCredentialsProviderAdapter(credentialsProvider)
+        )
     )
   }
 

@@ -26,7 +26,7 @@ import software.amazon.awssdk.identity.spi.IdentityProvider
 import software.amazon.awssdk.identity.spi.ResolveIdentityRequest
 
 @RunWith(JUnit4::class)
-class TinkAwsCredentialsProviderAdapterTest {
+class AwsCredentialsProviderAdapterTest {
 
   @Test
   fun `resolveIdentity delegates to the wrapped IdentityProvider`() {
@@ -41,7 +41,7 @@ class TinkAwsCredentialsProviderAdapterTest {
         ): CompletableFuture<AwsCredentialsIdentity> =
           CompletableFuture.completedFuture(credentials)
       }
-    val adapter = TinkAwsCredentialsProviderAdapter(delegate)
+    val adapter = AwsCredentialsProviderAdapter(delegate)
 
     val resolved = adapter.resolveIdentity().get()
 
@@ -62,7 +62,7 @@ class TinkAwsCredentialsProviderAdapterTest {
             AwsSessionCredentials.create("access-key", "secret", "token")
           )
       }
-    val adapter = TinkAwsCredentialsProviderAdapter(delegate)
+    val adapter = AwsCredentialsProviderAdapter(delegate)
 
     assertFailsWith<UnsupportedOperationException> { adapter.resolveCredentials() }
   }

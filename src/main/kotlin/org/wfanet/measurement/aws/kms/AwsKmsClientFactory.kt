@@ -18,6 +18,8 @@ import com.google.crypto.tink.KmsClient
 import com.google.crypto.tink.integration.awskms.AwsKmsClient as TinkAwsKmsClient
 import java.nio.file.Paths
 import java.security.GeneralSecurityException
+import org.wfanet.measurement.aws.AwsCredentialsProviderAdapter
+import org.wfanet.measurement.aws.SafeIdentityProvider
 import org.wfanet.measurement.common.crypto.tink.AwsWebIdentityCredentials
 import org.wfanet.measurement.common.crypto.tink.KmsClientFactory
 import software.amazon.awssdk.auth.credentials.AnonymousCredentialsProvider
@@ -66,7 +68,13 @@ class AwsKmsClientFactory : KmsClientFactory<AwsWebIdentityCredentials> {
         .build()
 
     return ExceptionTranslatingKmsClient(
-      TinkAwsKmsClient().withCredentialsProvider(credentialsProvider)
+      TinkAwsKmsClient()
+        .withCredentialsProvider(
+          // TODO(tink-crypto/tink-java-awskms#6): once a release including the fix
+          // (tink-crypto/tink-java-awskms#8) is available, pass the SafeIdentityProvider
+          // directly instead of wrapping it in AwsCredentialsProviderAdapter.
+          AwsCredentialsProviderAdapter(SafeIdentityProvider(credentialsProvider))
+        )
     )
   }
 }

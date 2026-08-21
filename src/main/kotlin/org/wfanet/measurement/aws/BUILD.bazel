@@ -3,10 +3,12 @@ load("@wfa_rules_kotlin_jvm//kotlin:defs.bzl", "kt_jvm_library")
 kt_jvm_library(
     name = "refreshable_aws_credentials_provider",
     srcs = [
+        "AwsCredentialsProviderAdapter.kt",
         "RefreshableAwsCredentialsProvider.kt",
-        "TinkAwsCredentialsProviderAdapter.kt",
+        "SafeIdentityProvider.kt",
     ],
     visibility = [
+        "//src/main/kotlin/org/wfanet/measurement/aws/kms:__pkg__",
         "//src/main/kotlin/org/wfanet/measurement/gcloud/kms:__pkg__",
         "//src/test/kotlin/org/wfanet/measurement/aws:__pkg__",
     ],

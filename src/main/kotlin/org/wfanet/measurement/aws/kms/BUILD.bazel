@@ -23,6 +23,7 @@ kt_jvm_library(
         "//imports/java/software/amazon/awssdk/services/kms",
         "//imports/java/software/amazon/awssdk/services/regions",
         "//imports/java/software/amazon/awssdk/services/sts",
+        "//src/main/kotlin/org/wfanet/measurement/aws:refreshable_aws_credentials_provider",
         "//src/main/kotlin/org/wfanet/measurement/common/crypto/tink",
     ],
 )
