@@ -150,6 +150,19 @@ class ExceptionTranslatingKmsClientTest {
   }
 
   @Test
+  fun `getAead throws GeneralSecurityException for a URI with too few ARN segments`() {
+    // Mirrors upstream AwsKmsClient's real behavior: doesSupport only checks the prefix and
+    // returns true here, but getAead itself would throw IllegalArgumentException for this URI.
+    val malformedUri = "aws-kms://not-an-arn"
+    val delegateKmsClient = mock<KmsClient> { on { doesSupport(malformedUri) } doReturn true }
+    val client = ExceptionTranslatingKmsClient(delegateKmsClient)
+
+    assertFailsWith<GeneralSecurityException> { client.getAead(malformedUri) }
+
+    verify(delegateKmsClient, never()).getAead(any())
+  }
+
+  @Test
   fun `withCredentials preserves the exception translation`() {
     val delegateAead =
       mock<Aead> {

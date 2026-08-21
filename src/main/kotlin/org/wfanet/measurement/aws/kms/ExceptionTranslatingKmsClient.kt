@@ -38,7 +38,7 @@ class ExceptionTranslatingKmsClient(private val delegate: KmsClient) : KmsClient
     ExceptionTranslatingKmsClient(delegate.withDefaultCredentials())
 
   override fun getAead(keyUri: String?): Aead {
-    if (keyUri == null || !delegate.doesSupport(keyUri)) {
+    if (keyUri == null || !delegate.doesSupport(keyUri) || !hasValidKeyArn(keyUri)) {
       throw GeneralSecurityException("Invalid AWS KMS key URI: $keyUri")
     }
     val delegateAead = delegate.getAead(keyUri)
@@ -75,5 +75,21 @@ class ExceptionTranslatingKmsClient(private val delegate: KmsClient) : KmsClient
           throw GeneralSecurityException("AWS KMS call failed", e.cause ?: e)
         }
     }
+  }
+
+  /**
+   * Returns whether [keyUri] has the ARN structure upstream's `getAead` requires beyond the
+   * `aws-kms://` prefix [KmsClient.doesSupport] already checks: at least 4 colon-separated segments
+   * after the prefix, matching an ARN's `partition:service:region:account-id:resource`.
+   *
+   * Upstream's own `doesSupport` doesn't check this, so it can return true for a URI whose
+   * `getAead` then throws `IllegalArgumentException` instead of [GeneralSecurityException]
+   * (tink-crypto/tink-java-awskms#9).
+   */
+  private fun hasValidKeyArn(keyUri: String): Boolean =
+    keyUri.substring(AWS_KMS_PREFIX.length).split(':').size >= 4
+
+  companion object {
+    private const val AWS_KMS_PREFIX = "aws-kms://"
   }
 }

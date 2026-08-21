@@ -39,8 +39,8 @@ class AwsCredentialsProviderAdapter(
     delegate.resolveIdentity(request).thenApply { it }
 
   /**
-   * Always throws [UnsupportedOperationException]; callers must resolve credentials through
-   * [resolveIdentity] instead.
+   * Throws [UnsupportedOperationException] because credentials must be resolved through
+   * [resolveIdentity].
    */
   override fun resolveCredentials(): AwsCredentials =
     throw UnsupportedOperationException("Use resolveIdentity to resolve credentials asynchronously")
