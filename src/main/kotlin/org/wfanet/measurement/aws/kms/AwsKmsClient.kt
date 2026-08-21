@@ -38,11 +38,10 @@ import software.amazon.awssdk.services.kms.model.KmsException
  *   Base64, which is NOT compatible with the upstream client's hex encoding when the associated
  *   data is non-empty -- ciphertext produced by one with non-empty associated data cannot be
  *   decrypted by the other (both encode empty associated data identically). New usages should use
- *   the upstream client instead.
- *   This class is unreferenced by any factory and kept only as a fallback in case a
- *   currently-undiscovered consumer turns out to still need it to decrypt previously-written
- *   ciphertext; there is no way to make it produce upstream-compatible output. If no such consumer
- *   materializes, it can be deleted outright in a follow-up.
+ *   the upstream client instead. This class is unreferenced by any factory and kept only as a
+ *   fallback in case a currently-undiscovered consumer turns out to still need it to decrypt
+ *   previously-written ciphertext; there is no way to make it produce upstream-compatible output.
+ *   If no such consumer materializes, it can be deleted outright in a follow-up.
  */
 @Deprecated(
   "Superseded by upstream com.google.crypto.tink.integration.awskms.AwsKmsClient (tink-awskms). " +
