@@ -31,8 +31,9 @@ import software.amazon.awssdk.identity.spi.ResolveIdentityRequest
  * identity token file) throws synchronously rather than failing the future [resolveIdentity] is
  * supposed to return.
  */
-class SafeIdentityProvider(private val delegate: IdentityProvider<AwsCredentialsIdentity>) :
-  IdentityProvider<AwsCredentialsIdentity> by delegate {
+class SynchronousExceptionTranslatingIdentityProvider(
+  private val delegate: IdentityProvider<AwsCredentialsIdentity>
+) : IdentityProvider<AwsCredentialsIdentity> by delegate {
 
   override fun resolveIdentity(
     request: ResolveIdentityRequest

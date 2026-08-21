@@ -28,7 +28,7 @@ import software.amazon.awssdk.identity.spi.IdentityProvider
 import software.amazon.awssdk.identity.spi.ResolveIdentityRequest
 
 @RunWith(JUnit4::class)
-class SafeIdentityProviderTest {
+class SynchronousExceptionTranslatingIdentityProviderTest {
 
   @Test
   fun `resolveIdentity returns delegate result on success`() {
@@ -43,7 +43,7 @@ class SafeIdentityProviderTest {
         ): CompletableFuture<AwsCredentialsIdentity> =
           CompletableFuture.completedFuture(credentials)
       }
-    val provider = SafeIdentityProvider(delegate)
+    val provider = SynchronousExceptionTranslatingIdentityProvider(delegate)
 
     val resolved = provider.resolveIdentity(ResolveIdentityRequest.builder().build()).get()
 
@@ -62,7 +62,7 @@ class SafeIdentityProviderTest {
           request: ResolveIdentityRequest
         ): CompletableFuture<AwsCredentialsIdentity> = throw synchronousFailure
       }
-    val provider = SafeIdentityProvider(delegate)
+    val provider = SynchronousExceptionTranslatingIdentityProvider(delegate)
 
     val future = provider.resolveIdentity(ResolveIdentityRequest.builder().build())
 

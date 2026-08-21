@@ -5,7 +5,7 @@ kt_jvm_library(
     srcs = [
         "AwsCredentialsProviderAdapter.kt",
         "RefreshableAwsCredentialsProvider.kt",
-        "SafeIdentityProvider.kt",
+        "SynchronousExceptionTranslatingIdentityProvider.kt",
     ],
     visibility = [
         "//src/main/kotlin/org/wfanet/measurement/aws/kms:__pkg__",

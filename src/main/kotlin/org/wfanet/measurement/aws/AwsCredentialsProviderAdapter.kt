@@ -22,9 +22,10 @@ import software.amazon.awssdk.identity.spi.IdentityProvider
 import software.amazon.awssdk.identity.spi.ResolveIdentityRequest
 
 /**
- * Adapts an [IdentityProvider] of [AwsCredentialsIdentity] to the synchronous
- * [AwsCredentialsProvider] interface some AWS SDK integrations still require in place of the more
- * general [IdentityProvider].
+ * Adapts an [IdentityProvider] of [AwsCredentialsIdentity] to the [AwsCredentialsProvider] type
+ * some AWS SDK integrations require in place of the more general [IdentityProvider] -- for
+ * integrations that only ever call [resolveIdentity]. [resolveCredentials] is not supported; see
+ * its KDoc.
  */
 class AwsCredentialsProviderAdapter(
   private val delegate: IdentityProvider<AwsCredentialsIdentity>

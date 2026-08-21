@@ -29,9 +29,9 @@ kt_jvm_test(
 )
 
 kt_jvm_test(
-    name = "SafeIdentityProviderTest",
-    srcs = ["SafeIdentityProviderTest.kt"],
-    test_class = "org.wfanet.measurement.aws.SafeIdentityProviderTest",
+    name = "SynchronousExceptionTranslatingIdentityProviderTest",
+    srcs = ["SynchronousExceptionTranslatingIdentityProviderTest.kt"],
+    test_class = "org.wfanet.measurement.aws.SynchronousExceptionTranslatingIdentityProviderTest",
     deps = [
         "//imports/java/com/google/common/truth",
         "//imports/java/org/junit",
