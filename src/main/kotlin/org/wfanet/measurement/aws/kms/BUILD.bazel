@@ -7,7 +7,7 @@ kt_jvm_library(
     srcs = [
         "AwsKmsClient.kt",
         "AwsKmsClientFactory.kt",
-        "ExceptionTranslatingKmsClient.kt",
+        "CompletionExceptionTranslatingKmsClient.kt",
     ],
     # commons-logging is an optional dependency of the Apache HTTP client that
     # software.amazon.awssdk:sts uses by default; no source here imports it directly, but

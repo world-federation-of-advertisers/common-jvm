@@ -26,27 +26,20 @@ import org.junit.runners.JUnit4
 import org.mockito.kotlin.any
 import org.mockito.kotlin.anyOrNull
 import org.mockito.kotlin.doAnswer
-import org.mockito.kotlin.doReturn
 import org.mockito.kotlin.doThrow
 import org.mockito.kotlin.mock
-import org.mockito.kotlin.never
-import org.mockito.kotlin.verify
 
 private const val KEY_URI = "aws-kms://arn:aws:kms:us-east-1:123456789012:key/test-key-id"
 
 @RunWith(JUnit4::class)
-class ExceptionTranslatingKmsClientTest {
-
-  private fun supportedDelegate(aead: Aead): KmsClient = mock {
-    on { doesSupport(KEY_URI) } doReturn true
-    on { getAead(KEY_URI) } doAnswer { aead }
-  }
+class CompletionExceptionTranslatingKmsClientTest {
 
   @Test
   fun `encrypt returns delegate result on success`() {
     val delegateAead =
       mock<Aead> { on { encrypt(any(), anyOrNull()) } doAnswer { it.getArgument(0) } }
-    val client = ExceptionTranslatingKmsClient(supportedDelegate(delegateAead))
+    val delegateKmsClient = mock<KmsClient> { on { getAead(KEY_URI) } doAnswer { delegateAead } }
+    val client = CompletionExceptionTranslatingKmsClient(delegateKmsClient)
 
     val plaintext = "plaintext".toByteArray()
     val result = client.getAead(KEY_URI).encrypt(plaintext, null)
@@ -58,7 +51,8 @@ class ExceptionTranslatingKmsClientTest {
   fun `decrypt returns delegate result on success`() {
     val delegateAead =
       mock<Aead> { on { decrypt(any(), anyOrNull()) } doAnswer { it.getArgument(0) } }
-    val client = ExceptionTranslatingKmsClient(supportedDelegate(delegateAead))
+    val delegateKmsClient = mock<KmsClient> { on { getAead(KEY_URI) } doAnswer { delegateAead } }
+    val client = CompletionExceptionTranslatingKmsClient(delegateKmsClient)
 
     val ciphertext = "ciphertext".toByteArray()
     val result = client.getAead(KEY_URI).decrypt(ciphertext, null)
@@ -73,7 +67,8 @@ class ExceptionTranslatingKmsClientTest {
       mock<Aead> {
         on { encrypt(any(), anyOrNull()) } doThrow CompletionException(credentialFailure)
       }
-    val client = ExceptionTranslatingKmsClient(supportedDelegate(delegateAead))
+    val delegateKmsClient = mock<KmsClient> { on { getAead(KEY_URI) } doAnswer { delegateAead } }
+    val client = CompletionExceptionTranslatingKmsClient(delegateKmsClient)
 
     val exception =
       assertFailsWith<GeneralSecurityException> {
@@ -90,7 +85,8 @@ class ExceptionTranslatingKmsClientTest {
       mock<Aead> {
         on { decrypt(any(), anyOrNull()) } doThrow CompletionException(credentialFailure)
       }
-    val client = ExceptionTranslatingKmsClient(supportedDelegate(delegateAead))
+    val delegateKmsClient = mock<KmsClient> { on { getAead(KEY_URI) } doAnswer { delegateAead } }
+    val client = CompletionExceptionTranslatingKmsClient(delegateKmsClient)
 
     val exception =
       assertFailsWith<GeneralSecurityException> {
@@ -104,7 +100,8 @@ class ExceptionTranslatingKmsClientTest {
   fun `encrypt does not double-wrap a GeneralSecurityException`() {
     val original = GeneralSecurityException("encryption failed")
     val delegateAead = mock<Aead> { on { encrypt(any(), anyOrNull()) } doThrow original }
-    val client = ExceptionTranslatingKmsClient(supportedDelegate(delegateAead))
+    val delegateKmsClient = mock<KmsClient> { on { getAead(KEY_URI) } doAnswer { delegateAead } }
+    val client = CompletionExceptionTranslatingKmsClient(delegateKmsClient)
 
     val exception =
       assertFailsWith<GeneralSecurityException> {
@@ -118,7 +115,8 @@ class ExceptionTranslatingKmsClientTest {
   fun `encrypt does not translate a plain RuntimeException`() {
     val original = RuntimeException("unrelated bug")
     val delegateAead = mock<Aead> { on { encrypt(any(), anyOrNull()) } doThrow original }
-    val client = ExceptionTranslatingKmsClient(supportedDelegate(delegateAead))
+    val delegateKmsClient = mock<KmsClient> { on { getAead(KEY_URI) } doAnswer { delegateAead } }
+    val client = CompletionExceptionTranslatingKmsClient(delegateKmsClient)
 
     val exception =
       assertFailsWith<RuntimeException> {
@@ -129,37 +127,14 @@ class ExceptionTranslatingKmsClientTest {
   }
 
   @Test
-  fun `getAead throws GeneralSecurityException for an unsupported URI without calling delegate`() {
-    val delegateKmsClient = mock<KmsClient> { on { doesSupport(KEY_URI) } doReturn false }
-    val client = ExceptionTranslatingKmsClient(delegateKmsClient)
+  fun `getAead propagates a delegate exception unchanged`() {
+    val original = IllegalArgumentException("invalid key URI")
+    val delegateKmsClient = mock<KmsClient> { on { getAead(any()) } doThrow original }
+    val client = CompletionExceptionTranslatingKmsClient(delegateKmsClient)
 
-    assertFailsWith<GeneralSecurityException> { client.getAead(KEY_URI) }
+    val exception = assertFailsWith<IllegalArgumentException> { client.getAead(KEY_URI) }
 
-    verify(delegateKmsClient, never()).getAead(any())
-  }
-
-  @Test
-  fun `getAead throws GeneralSecurityException for a null URI without calling delegate`() {
-    val delegateKmsClient = mock<KmsClient>()
-    val client = ExceptionTranslatingKmsClient(delegateKmsClient)
-
-    assertFailsWith<GeneralSecurityException> { client.getAead(null) }
-
-    verify(delegateKmsClient, never()).doesSupport(anyOrNull())
-    verify(delegateKmsClient, never()).getAead(anyOrNull())
-  }
-
-  @Test
-  fun `getAead throws GeneralSecurityException for a URI with too few ARN segments`() {
-    // Mirrors upstream AwsKmsClient's real behavior: doesSupport only checks the prefix and
-    // returns true here, but getAead itself would throw IllegalArgumentException for this URI.
-    val malformedUri = "aws-kms://not-an-arn"
-    val delegateKmsClient = mock<KmsClient> { on { doesSupport(malformedUri) } doReturn true }
-    val client = ExceptionTranslatingKmsClient(delegateKmsClient)
-
-    assertFailsWith<GeneralSecurityException> { client.getAead(malformedUri) }
-
-    verify(delegateKmsClient, never()).getAead(any())
+    assertThat(exception).isSameInstanceAs(original)
   }
 
   @Test
@@ -169,10 +144,10 @@ class ExceptionTranslatingKmsClientTest {
         on { encrypt(any(), anyOrNull()) } doThrow
           CompletionException(GeneralSecurityException("Failed to obtain AWS credentials"))
       }
-    val credentialedDelegate = supportedDelegate(delegateAead)
+    val credentialedDelegate = mock<KmsClient> { on { getAead(KEY_URI) } doAnswer { delegateAead } }
     val delegateKmsClient =
       mock<KmsClient> { on { withCredentials("/path") } doAnswer { credentialedDelegate } }
-    val client = ExceptionTranslatingKmsClient(delegateKmsClient)
+    val client = CompletionExceptionTranslatingKmsClient(delegateKmsClient)
 
     val credentialedClient = client.withCredentials("/path")
 
@@ -188,10 +163,10 @@ class ExceptionTranslatingKmsClientTest {
         on { encrypt(any(), anyOrNull()) } doThrow
           CompletionException(GeneralSecurityException("Failed to obtain AWS credentials"))
       }
-    val credentialedDelegate = supportedDelegate(delegateAead)
+    val credentialedDelegate = mock<KmsClient> { on { getAead(KEY_URI) } doAnswer { delegateAead } }
     val delegateKmsClient =
       mock<KmsClient> { on { withDefaultCredentials() } doAnswer { credentialedDelegate } }
-    val client = ExceptionTranslatingKmsClient(delegateKmsClient)
+    val client = CompletionExceptionTranslatingKmsClient(delegateKmsClient)
 
     val credentialedClient = client.withDefaultCredentials()
 
@@ -203,7 +178,7 @@ class ExceptionTranslatingKmsClientTest {
   @Test
   fun `doesSupport delegates to the wrapped client`() {
     val delegateKmsClient = mock<KmsClient> { on { doesSupport(KEY_URI) } doAnswer { true } }
-    val client = ExceptionTranslatingKmsClient(delegateKmsClient)
+    val client = CompletionExceptionTranslatingKmsClient(delegateKmsClient)
 
     assertThat(client.doesSupport(KEY_URI)).isTrue()
   }

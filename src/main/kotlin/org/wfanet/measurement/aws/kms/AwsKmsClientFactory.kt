@@ -41,7 +41,7 @@ class AwsKmsClientFactory : KmsClientFactory<AwsWebIdentityCredentials> {
    *
    * @param config The AWS web identity configuration.
    * @return An initialized [KmsClient] wrapping the upstream `tink-awskms` client — see
-   *   [ExceptionTranslatingKmsClient] for the wrapping's contract.
+   *   [CompletionExceptionTranslatingKmsClient] for the wrapping's contract.
    * @throws GeneralSecurityException if the client cannot be initialized.
    */
   override fun getKmsClient(config: AwsWebIdentityCredentials): KmsClient {
@@ -67,7 +67,7 @@ class AwsKmsClientFactory : KmsClientFactory<AwsWebIdentityCredentials> {
         }
         .build()
 
-    return ExceptionTranslatingKmsClient(
+    return CompletionExceptionTranslatingKmsClient(
       TinkAwsKmsClient()
         .withCredentialsProvider(
           // TODO(tink-crypto/tink-java-awskms#6): once a release including the fix

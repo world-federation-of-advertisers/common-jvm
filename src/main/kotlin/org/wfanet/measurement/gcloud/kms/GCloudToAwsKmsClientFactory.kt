@@ -29,7 +29,7 @@ import java.util.logging.Logger
 import org.wfanet.measurement.aws.AwsCredentialsProviderAdapter
 import org.wfanet.measurement.aws.RefreshableAwsCredentialsProvider
 import org.wfanet.measurement.aws.TimeBoundCredentials
-import org.wfanet.measurement.aws.kms.ExceptionTranslatingKmsClient
+import org.wfanet.measurement.aws.kms.CompletionExceptionTranslatingKmsClient
 import org.wfanet.measurement.common.crypto.tink.GCloudToAwsWifCredentials
 import org.wfanet.measurement.common.crypto.tink.KmsClientFactory
 import software.amazon.awssdk.auth.credentials.AnonymousCredentialsProvider
@@ -66,7 +66,8 @@ class GCloudToAwsKmsClientFactory(
    *
    * @param config The Google Cloud-to-AWS WIF configuration.
    * @return An initialized [KmsClient] wrapping the upstream `tink-awskms` client — see
-   *   [org.wfanet.measurement.aws.kms.ExceptionTranslatingKmsClient] for the wrapping's contract.
+   *   [org.wfanet.measurement.aws.kms.CompletionExceptionTranslatingKmsClient] for the wrapping's
+   *   contract.
    * @throws GeneralSecurityException if credentials cannot be obtained or exchanged.
    */
   override fun getKmsClient(config: GCloudToAwsWifCredentials): KmsClient {
@@ -76,7 +77,7 @@ class GCloudToAwsKmsClientFactory(
         // thread where blocking is expected, so it runs inline rather than on another thread.
         CompletableFuture.completedFuture(obtainAwsCredentials(config))
       }
-    return ExceptionTranslatingKmsClient(
+    return CompletionExceptionTranslatingKmsClient(
       TinkAwsKmsClient()
         .withCredentialsProvider(
           // TODO(tink-crypto/tink-java-awskms#6): once a release including the fix

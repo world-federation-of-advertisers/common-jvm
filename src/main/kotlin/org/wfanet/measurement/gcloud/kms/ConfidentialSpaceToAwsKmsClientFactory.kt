@@ -22,7 +22,7 @@ import java.time.Duration
 import org.wfanet.measurement.aws.AwsCredentialsProviderAdapter
 import org.wfanet.measurement.aws.RefreshableAwsCredentialsProvider
 import org.wfanet.measurement.aws.TimeBoundCredentials
-import org.wfanet.measurement.aws.kms.ExceptionTranslatingKmsClient
+import org.wfanet.measurement.aws.kms.CompletionExceptionTranslatingKmsClient
 import org.wfanet.measurement.common.crypto.tink.ConfidentialSpaceToAwsWifCredentials
 import org.wfanet.measurement.common.crypto.tink.KmsClientFactory
 import org.wfanet.measurement.gcloud.confidentialspace.AttestationTokenProvider
@@ -72,14 +72,14 @@ class ConfidentialSpaceToAwsKmsClientFactory(
    *
    * @param config The Confidential Space-to-AWS configuration.
    * @return An initialized [KmsClient] wrapping the upstream `tink-awskms` client — see
-   *   [ExceptionTranslatingKmsClient] for the wrapping's contract.
+   *   [CompletionExceptionTranslatingKmsClient] for the wrapping's contract.
    */
   override fun getKmsClient(config: ConfidentialSpaceToAwsWifCredentials): KmsClient {
     val credentialsProvider =
       RefreshableAwsCredentialsProvider(refreshMargin = refreshMargin, clock = clock) {
         obtainAwsCredentials(config).toFuture()
       }
-    return ExceptionTranslatingKmsClient(
+    return CompletionExceptionTranslatingKmsClient(
       TinkAwsKmsClient()
         .withCredentialsProvider(
           // TODO(tink-crypto/tink-java-awskms#6): once a release including the fix

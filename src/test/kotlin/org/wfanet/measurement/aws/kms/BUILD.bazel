@@ -1,9 +1,9 @@
 load("@wfa_rules_kotlin_jvm//kotlin:defs.bzl", "kt_jvm_test")
 
 kt_jvm_test(
-    name = "ExceptionTranslatingKmsClientTest",
-    srcs = ["ExceptionTranslatingKmsClientTest.kt"],
-    test_class = "org.wfanet.measurement.aws.kms.ExceptionTranslatingKmsClientTest",
+    name = "CompletionExceptionTranslatingKmsClientTest",
+    srcs = ["CompletionExceptionTranslatingKmsClientTest.kt"],
+    test_class = "org.wfanet.measurement.aws.kms.CompletionExceptionTranslatingKmsClientTest",
     deps = [
         "//imports/java/com/google/common/truth",
         "//imports/java/com/google/crypto/tink",
