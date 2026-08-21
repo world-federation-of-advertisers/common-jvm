@@ -35,8 +35,10 @@ import software.amazon.awssdk.services.kms.model.KmsException
  * @param credentialsProvider Provider of the AWS credentials to authenticate with AWS KMS.
  * @deprecated Superseded by the upstream `com.google.crypto.tink.integration.awskms.AwsKmsClient`
  *   (`tink-awskms` >= 2.0.0), which also targets AWS SDK v2. This class encodes associated data as
- *   Base64, which is NOT compatible with the upstream client's hex encoding — ciphertext produced
- *   by one cannot be decrypted by the other. New usages should use the upstream client instead.
+ *   Base64, which is NOT compatible with the upstream client's hex encoding when the associated
+ *   data is non-empty -- ciphertext produced by one with non-empty associated data cannot be
+ *   decrypted by the other (both encode empty associated data identically). New usages should use
+ *   the upstream client instead.
  *   This class is unreferenced by any factory and kept only as a fallback in case a
  *   currently-undiscovered consumer turns out to still need it to decrypt previously-written
  *   ciphertext; there is no way to make it produce upstream-compatible output. If no such consumer
@@ -45,7 +47,8 @@ import software.amazon.awssdk.services.kms.model.KmsException
 @Deprecated(
   "Superseded by upstream com.google.crypto.tink.integration.awskms.AwsKmsClient (tink-awskms). " +
     "Its Base64 associated-data encoding is not compatible with the upstream client's hex " +
-    "encoding; it exists only to decrypt ciphertext previously written with it."
+    "encoding for non-empty associated data; it exists only to decrypt ciphertext previously " +
+    "written with it."
 )
 class AwsKmsClient(private val credentialsProvider: IdentityProvider<AwsCredentialsIdentity>) :
   KmsClient {
