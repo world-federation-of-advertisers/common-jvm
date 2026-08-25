@@ -83,7 +83,7 @@ class CompletionExceptionTranslatingKmsClient(private val delegate: TinkAwsKmsCl
      * [TinkAwsKmsClient.withDefaultCredentials]) ever return.
      */
     fun wrap(kmsClient: KmsClient): CompletionExceptionTranslatingKmsClient {
-      check(kmsClient is TinkAwsKmsClient) {
+      require(kmsClient is TinkAwsKmsClient) {
         "Expected a TinkAwsKmsClient, got ${kmsClient::class}"
       }
       return CompletionExceptionTranslatingKmsClient(kmsClient)

@@ -292,7 +292,7 @@ class CompletionExceptionTranslatingKmsClientTest {
   fun `wrap throws for a KmsClient that is not a TinkAwsKmsClient`() {
     val nonTinkKmsClient = mock<KmsClient>()
 
-    assertFailsWith<IllegalStateException> {
+    assertFailsWith<IllegalArgumentException> {
       CompletionExceptionTranslatingKmsClient.wrap(nonTinkKmsClient)
     }
   }
