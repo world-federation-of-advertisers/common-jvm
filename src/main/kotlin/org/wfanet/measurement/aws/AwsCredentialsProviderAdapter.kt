@@ -40,8 +40,12 @@ class AwsCredentialsProviderAdapter(
     delegate.resolveIdentity(request).thenApply { it }
 
   /**
-   * Throws [UnsupportedOperationException] because credentials must be resolved through
-   * [resolveIdentity].
+   * Returns [AwsCredentials] that can be used to authorize an AWS request.
+   *
+   * Unsupported by this implementation. Use [resolveIdentity] to resolve credentials
+   * asynchronously.
+   *
+   * @throws UnsupportedOperationException unconditionally
    */
   override fun resolveCredentials(): AwsCredentials =
     throw UnsupportedOperationException("Use resolveIdentity to resolve credentials asynchronously")

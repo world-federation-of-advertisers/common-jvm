@@ -51,17 +51,14 @@ data class TimeBoundCredentials(val credentials: AwsSessionCredentials, val expi
  * Thread-safe: callers that arrive while a refresh is in flight share its result rather than
  * starting a second one.
  *
- * A caller that needs the AWS SDK's synchronous
- * [software.amazon.awssdk.auth.credentials.AwsCredentialsProvider] type instead — because a
- * third-party library's API requires it, e.g. upstream `tink-awskms`'s
- * `AwsKmsClient.withCredentialsProvider` — should wrap an instance in
- * [AwsCredentialsProviderAdapter] rather than this class implementing that interface itself.
+ * See [AwsCredentialsProviderAdapter] to adapt this to the AWS SDK's synchronous
+ * [software.amazon.awssdk.auth.credentials.AwsCredentialsProvider] type instead.
  *
  * @param refreshMargin How far before expiration to proactively refresh credentials.
  * @param clock Clock used to determine the current time.
  * @param credentialSupplier Function that starts obtaining fresh credentials and their expiration.
  */
-class RefreshableAwsCredentialsProvider(
+class RefreshableAwsCredentialsIdentityProvider(
   private val refreshMargin: Duration,
   private val clock: Clock = Clock.systemUTC(),
   private val credentialSupplier: () -> CompletableFuture<TimeBoundCredentials>,
@@ -130,6 +127,6 @@ class RefreshableAwsCredentialsProvider(
 
   companion object {
     private val logger: Logger =
-      Logger.getLogger(RefreshableAwsCredentialsProvider::class.java.name)
+      Logger.getLogger(RefreshableAwsCredentialsIdentityProvider::class.java.name)
   }
 }

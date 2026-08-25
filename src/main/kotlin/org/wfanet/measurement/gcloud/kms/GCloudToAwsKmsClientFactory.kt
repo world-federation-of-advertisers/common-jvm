@@ -17,6 +17,7 @@ package org.wfanet.measurement.gcloud.kms
 import com.google.auth.oauth2.GoogleCredentials
 import com.google.auth.oauth2.IdTokenCredentials
 import com.google.auth.oauth2.ImpersonatedCredentials
+import com.google.crypto.tink.Aead
 import com.google.crypto.tink.KmsClient
 import com.google.crypto.tink.integration.awskms.AwsKmsClient as TinkAwsKmsClient
 import com.google.gson.JsonArray
@@ -25,9 +26,10 @@ import java.security.GeneralSecurityException
 import java.time.Clock
 import java.time.Duration
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CompletionException
 import java.util.logging.Logger
 import org.wfanet.measurement.aws.AwsCredentialsProviderAdapter
-import org.wfanet.measurement.aws.RefreshableAwsCredentialsProvider
+import org.wfanet.measurement.aws.RefreshableAwsCredentialsIdentityProvider
 import org.wfanet.measurement.aws.TimeBoundCredentials
 import org.wfanet.measurement.aws.kms.CompletionExceptionTranslatingKmsClient
 import org.wfanet.measurement.common.crypto.tink.GCloudToAwsWifCredentials
@@ -46,10 +48,6 @@ import software.amazon.awssdk.services.sts.model.AssumeRoleWithWebIdentityReques
  * account to obtain an OIDC ID token. That ID token is exchanged with AWS STS
  * `AssumeRoleWithWebIdentity` for temporary AWS credentials.
  *
- * The credentials obtained this way are exposed through [RefreshableAwsCredentialsProvider],
- * wrapped in [AwsCredentialsProviderAdapter] to satisfy the `AwsCredentialsProvider` type upstream
- * `tink-awskms`'s public `AwsKmsClient.withCredentialsProvider` method currently requires.
- *
  * @param refreshMargin How far before expiration to proactively refresh credentials.
  * @param clock Clock used to determine the current time.
  */
@@ -65,19 +63,17 @@ class GCloudToAwsKmsClientFactory(
    * service account impersonation -> OIDC ID token -> AWS STS AssumeRoleWithWebIdentity).
    *
    * @param config The Google Cloud-to-AWS WIF configuration.
-   * @return An initialized [KmsClient] wrapping the upstream `tink-awskms` client — see
-   *   [org.wfanet.measurement.aws.kms.CompletionExceptionTranslatingKmsClient] for the wrapping's
-   *   contract.
+   * @return An initialized [KmsClient] whose [Aead] instances do not throw [CompletionException].
    * @throws GeneralSecurityException if credentials cannot be obtained or exchanged.
    */
   override fun getKmsClient(config: GCloudToAwsWifCredentials): KmsClient {
     val credentialsProvider =
-      RefreshableAwsCredentialsProvider(refreshMargin = refreshMargin, clock = clock) {
+      RefreshableAwsCredentialsIdentityProvider(refreshMargin = refreshMargin, clock = clock) {
         // The credential chain is blocking, and the AWS SDK resolves credentials from a
         // thread where blocking is expected, so it runs inline rather than on another thread.
         CompletableFuture.completedFuture(obtainAwsCredentials(config))
       }
-    return CompletionExceptionTranslatingKmsClient(
+    return CompletionExceptionTranslatingKmsClient.wrap(
       TinkAwsKmsClient()
         .withCredentialsProvider(
           // TODO(tink-crypto/tink-java-awskms#6): once a release including the fix is

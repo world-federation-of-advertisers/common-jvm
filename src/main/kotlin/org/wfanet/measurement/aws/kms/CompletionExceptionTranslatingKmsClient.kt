@@ -16,6 +16,7 @@ package org.wfanet.measurement.aws.kms
 
 import com.google.crypto.tink.Aead
 import com.google.crypto.tink.KmsClient
+import com.google.crypto.tink.integration.awskms.AwsKmsClient as TinkAwsKmsClient
 import java.security.GeneralSecurityException
 import java.util.concurrent.CompletionException
 
@@ -25,7 +26,7 @@ import java.util.concurrent.CompletionException
  * `encrypt`/`decrypt` into a [GeneralSecurityException].
  *
  * A failed async credential refresh (e.g. a credential chain backed by
- * [org.wfanet.measurement.aws.RefreshableAwsCredentialsProvider]) surfaces here as a raw
+ * [org.wfanet.measurement.aws.RefreshableAwsCredentialsIdentityProvider]) surfaces here as a raw
  * [CompletionException]: the AWS SDK's internal synchronous credential resolution unwraps a failed
  * future's `CompletionException` down to its cause only when that cause is a [RuntimeException],
  * and such a credential chain can fail with a checked [GeneralSecurityException] instead, which the
@@ -34,16 +35,19 @@ import java.util.concurrent.CompletionException
  * specific knowledge of -- is not that documented shape, so the [CompletionException] itself is
  * rethrown unchanged rather than being unwrapped or otherwise guessed at.
  *
+ * This is a workaround specifically for [TinkAwsKmsClient]'s behavior, not a general-purpose
+ * [KmsClient] wrapper -- another implementation's [CompletionException]s, if any, would not
+ * necessarily share this shape.
+ *
  * TODO(tink-crypto/tink-java-awskms#5): drop this class once a release including the fix is
  *   available.
  */
-class CompletionExceptionTranslatingKmsClient(private val delegate: KmsClient) :
+class CompletionExceptionTranslatingKmsClient(private val delegate: TinkAwsKmsClient) :
   KmsClient by delegate {
   override fun withCredentials(credentialPath: String?): KmsClient =
-    CompletionExceptionTranslatingKmsClient(delegate.withCredentials(credentialPath))
+    wrap(delegate.withCredentials(credentialPath))
 
-  override fun withDefaultCredentials(): KmsClient =
-    CompletionExceptionTranslatingKmsClient(delegate.withDefaultCredentials())
+  override fun withDefaultCredentials(): KmsClient = wrap(delegate.withDefaultCredentials())
 
   override fun getAead(keyUri: String?): Aead {
     val delegateAead = delegate.getAead(keyUri)
@@ -68,6 +72,21 @@ class CompletionExceptionTranslatingKmsClient(private val delegate: KmsClient) :
           }
           throw GeneralSecurityException("KMS operation failed", cause)
         }
+    }
+  }
+
+  companion object {
+    /**
+     * Wraps [kmsClient], which must be a [TinkAwsKmsClient] -- the only concrete type
+     * [TinkAwsKmsClient]'s own [KmsClient]-typed methods
+     * ([TinkAwsKmsClient.withCredentialsProvider], [TinkAwsKmsClient.withCredentials],
+     * [TinkAwsKmsClient.withDefaultCredentials]) ever return.
+     */
+    fun wrap(kmsClient: KmsClient): CompletionExceptionTranslatingKmsClient {
+      check(kmsClient is TinkAwsKmsClient) {
+        "Expected a TinkAwsKmsClient, got ${kmsClient::class}"
+      }
+      return CompletionExceptionTranslatingKmsClient(kmsClient)
     }
   }
 }

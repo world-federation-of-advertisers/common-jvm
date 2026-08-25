@@ -35,14 +35,17 @@ import software.amazon.awssdk.auth.credentials.AwsSessionCredentials
 import software.amazon.awssdk.identity.spi.AwsCredentialsIdentity
 
 @RunWith(JUnit4::class)
-class RefreshableAwsCredentialsProviderTest {
+class RefreshableAwsCredentialsIdentityProviderTest {
 
   @Test
   fun `resolveIdentity obtains credentials on first call`() {
     var callCount = 0
     val clock = Clock.fixed(Instant.parse("2026-06-03T12:00:00Z"), ZoneOffset.UTC)
     val provider =
-      RefreshableAwsCredentialsProvider(refreshMargin = Duration.ofMinutes(5), clock = clock) {
+      RefreshableAwsCredentialsIdentityProvider(
+        refreshMargin = Duration.ofMinutes(5),
+        clock = clock,
+      ) {
         callCount++
         completedRefresh("key-$callCount", Instant.parse("2026-06-03T13:00:00Z"))
       }
@@ -58,7 +61,10 @@ class RefreshableAwsCredentialsProviderTest {
     val clock = Clock.fixed(Instant.parse("2026-06-03T12:00:00Z"), ZoneOffset.UTC)
     var callCount = 0
     val provider =
-      RefreshableAwsCredentialsProvider(refreshMargin = Duration.ofMinutes(5), clock = clock) {
+      RefreshableAwsCredentialsIdentityProvider(
+        refreshMargin = Duration.ofMinutes(5),
+        clock = clock,
+      ) {
         callCount++
         completedRefresh("key-$callCount", Instant.parse("2026-06-03T13:00:00Z"))
       }
@@ -79,7 +85,10 @@ class RefreshableAwsCredentialsProviderTest {
     val clock = Clock.fixed(withinMargin, ZoneOffset.UTC)
     var callCount = 0
     val provider =
-      RefreshableAwsCredentialsProvider(refreshMargin = Duration.ofMinutes(5), clock = clock) {
+      RefreshableAwsCredentialsIdentityProvider(
+        refreshMargin = Duration.ofMinutes(5),
+        clock = clock,
+      ) {
         callCount++
         completedRefresh(
           "key-$callCount",
@@ -99,7 +108,10 @@ class RefreshableAwsCredentialsProviderTest {
     val clock = Clock.fixed(Instant.parse("2026-06-03T12:00:00Z"), ZoneOffset.UTC)
     var callCount = 0
     val provider =
-      RefreshableAwsCredentialsProvider(refreshMargin = Duration.ofMinutes(5), clock = clock) {
+      RefreshableAwsCredentialsIdentityProvider(
+        refreshMargin = Duration.ofMinutes(5),
+        clock = clock,
+      ) {
         callCount++
         completedRefresh(
           "key-$callCount",
@@ -120,7 +132,10 @@ class RefreshableAwsCredentialsProviderTest {
     val clock = Clock.fixed(outsideMargin, ZoneOffset.UTC)
     var callCount = 0
     val provider =
-      RefreshableAwsCredentialsProvider(refreshMargin = Duration.ofMinutes(5), clock = clock) {
+      RefreshableAwsCredentialsIdentityProvider(
+        refreshMargin = Duration.ofMinutes(5),
+        clock = clock,
+      ) {
         callCount++
         completedRefresh("key-$callCount", expiration)
       }
@@ -139,7 +154,10 @@ class RefreshableAwsCredentialsProviderTest {
     val clock = Clock.fixed(exactlyAtMargin, ZoneOffset.UTC)
     var callCount = 0
     val provider =
-      RefreshableAwsCredentialsProvider(refreshMargin = Duration.ofMinutes(5), clock = clock) {
+      RefreshableAwsCredentialsIdentityProvider(
+        refreshMargin = Duration.ofMinutes(5),
+        clock = clock,
+      ) {
         callCount++
         completedRefresh(
           "key-$callCount",
@@ -157,7 +175,10 @@ class RefreshableAwsCredentialsProviderTest {
   fun `resolveIdentity propagates a supplier exception`() {
     val clock = Clock.fixed(Instant.parse("2026-06-03T12:00:00Z"), ZoneOffset.UTC)
     val provider =
-      RefreshableAwsCredentialsProvider(refreshMargin = Duration.ofMinutes(5), clock = clock) {
+      RefreshableAwsCredentialsIdentityProvider(
+        refreshMargin = Duration.ofMinutes(5),
+        clock = clock,
+      ) {
         throw RuntimeException("credential chain failed")
       }
 
@@ -170,7 +191,10 @@ class RefreshableAwsCredentialsProviderTest {
   fun `resolveIdentity propagates a failed refresh`() {
     val clock = Clock.fixed(Instant.parse("2026-06-03T12:00:00Z"), ZoneOffset.UTC)
     val provider =
-      RefreshableAwsCredentialsProvider(refreshMargin = Duration.ofMinutes(5), clock = clock) {
+      RefreshableAwsCredentialsIdentityProvider(
+        refreshMargin = Duration.ofMinutes(5),
+        clock = clock,
+      ) {
         failedRefresh("credential chain failed")
       }
 
@@ -184,7 +208,10 @@ class RefreshableAwsCredentialsProviderTest {
     val clock = Clock.fixed(Instant.parse("2026-06-03T12:00:00Z"), ZoneOffset.UTC)
     var callCount = 0
     val provider =
-      RefreshableAwsCredentialsProvider(refreshMargin = Duration.ofMinutes(5), clock = clock) {
+      RefreshableAwsCredentialsIdentityProvider(
+        refreshMargin = Duration.ofMinutes(5),
+        clock = clock,
+      ) {
         callCount++
         if (callCount == 1) throw RuntimeException("transient failure")
         completedRefresh("key-$callCount", Instant.parse("2026-06-03T13:00:00Z"))
@@ -202,7 +229,10 @@ class RefreshableAwsCredentialsProviderTest {
     val clock = Clock.fixed(Instant.parse("2026-06-03T12:00:00Z"), ZoneOffset.UTC)
     var callCount = 0
     val provider =
-      RefreshableAwsCredentialsProvider(refreshMargin = Duration.ofMinutes(5), clock = clock) {
+      RefreshableAwsCredentialsIdentityProvider(
+        refreshMargin = Duration.ofMinutes(5),
+        clock = clock,
+      ) {
         callCount++
         if (callCount == 1) failedRefresh("transient failure")
         else completedRefresh("key-$callCount", Instant.parse("2026-06-03T13:00:00Z"))
@@ -222,7 +252,7 @@ class RefreshableAwsCredentialsProviderTest {
     val clock = Clock.fixed(justBeforeExpiry, ZoneOffset.UTC)
     var callCount = 0
     val provider =
-      RefreshableAwsCredentialsProvider(refreshMargin = Duration.ZERO, clock = clock) {
+      RefreshableAwsCredentialsIdentityProvider(refreshMargin = Duration.ZERO, clock = clock) {
         callCount++
         completedRefresh("key-$callCount", expiration)
       }
@@ -240,7 +270,10 @@ class RefreshableAwsCredentialsProviderTest {
     var callCount = 0
     val refresh = CompletableFuture<TimeBoundCredentials>()
     val provider =
-      RefreshableAwsCredentialsProvider(refreshMargin = Duration.ofMinutes(5), clock = clock) {
+      RefreshableAwsCredentialsIdentityProvider(
+        refreshMargin = Duration.ofMinutes(5),
+        clock = clock,
+      ) {
         callCount++
         refresh
       }
@@ -260,7 +293,10 @@ class RefreshableAwsCredentialsProviderTest {
     val callCount = AtomicInteger()
     val refresh = CompletableFuture<TimeBoundCredentials>()
     val provider =
-      RefreshableAwsCredentialsProvider(refreshMargin = Duration.ofMinutes(5), clock = clock) {
+      RefreshableAwsCredentialsIdentityProvider(
+        refreshMargin = Duration.ofMinutes(5),
+        clock = clock,
+      ) {
         callCount.incrementAndGet()
         refresh
       }

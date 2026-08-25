@@ -1,9 +1,9 @@
 load("@wfa_rules_kotlin_jvm//kotlin:defs.bzl", "kt_jvm_test")
 
 kt_jvm_test(
-    name = "RefreshableAwsCredentialsProviderTest",
-    srcs = ["RefreshableAwsCredentialsProviderTest.kt"],
-    test_class = "org.wfanet.measurement.aws.RefreshableAwsCredentialsProviderTest",
+    name = "RefreshableAwsCredentialsIdentityProviderTest",
+    srcs = ["RefreshableAwsCredentialsIdentityProviderTest.kt"],
+    test_class = "org.wfanet.measurement.aws.RefreshableAwsCredentialsIdentityProviderTest",
     deps = [
         "//imports/java/com/google/common/truth",
         "//imports/java/org/junit",
@@ -18,20 +18,6 @@ kt_jvm_test(
     name = "AwsCredentialsProviderAdapterTest",
     srcs = ["AwsCredentialsProviderAdapterTest.kt"],
     test_class = "org.wfanet.measurement.aws.AwsCredentialsProviderAdapterTest",
-    deps = [
-        "//imports/java/com/google/common/truth",
-        "//imports/java/org/junit",
-        "//imports/java/software/amazon/awssdk/auth",
-        "//imports/java/software/amazon/awssdk/identity/spi",
-        "//imports/kotlin/kotlin/test",
-        "//src/main/kotlin/org/wfanet/measurement/aws:refreshable_aws_credentials_provider",
-    ],
-)
-
-kt_jvm_test(
-    name = "SynchronousExceptionTranslatingIdentityProviderTest",
-    srcs = ["SynchronousExceptionTranslatingIdentityProviderTest.kt"],
-    test_class = "org.wfanet.measurement.aws.SynchronousExceptionTranslatingIdentityProviderTest",
     deps = [
         "//imports/java/com/google/common/truth",
         "//imports/java/org/junit",
