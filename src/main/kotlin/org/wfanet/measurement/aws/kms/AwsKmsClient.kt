@@ -32,11 +32,23 @@ import software.amazon.awssdk.services.kms.model.KmsException
 /**
  * A Tink [KmsClient] implementation for AWS KMS using AWS SDK v2.
  *
- * This avoids the `tink-awskms` library which depends on AWS SDK v1, allowing usage in projects
- * that standardize on AWS SDK v2.
- *
  * @param credentialsProvider Provider of the AWS credentials to authenticate with AWS KMS.
+ * @deprecated Superseded by the upstream `com.google.crypto.tink.integration.awskms.AwsKmsClient`
+ *   (`tink-awskms` >= 2.0.0), which also targets AWS SDK v2. This class encodes associated data as
+ *   Base64, which is NOT compatible with the upstream client's hex encoding when the associated
+ *   data is non-empty -- ciphertext produced by one with non-empty associated data cannot be
+ *   decrypted by the other (both encode empty associated data identically). New usages should use
+ *   the upstream client instead. This class is unreferenced by any factory and kept only as a
+ *   fallback in case a currently-undiscovered consumer turns out to still need it to decrypt
+ *   previously-written ciphertext; there is no way to make it produce upstream-compatible output.
+ *   If no such consumer materializes, it can be deleted outright in a follow-up.
  */
+@Deprecated(
+  "Superseded by upstream com.google.crypto.tink.integration.awskms.AwsKmsClient (tink-awskms). " +
+    "Its Base64 associated-data encoding is not compatible with the upstream client's hex " +
+    "encoding for non-empty associated data; it exists only to decrypt ciphertext previously " +
+    "written with it."
+)
 class AwsKmsClient(private val credentialsProvider: IdentityProvider<AwsCredentialsIdentity>) :
   KmsClient {
 
@@ -103,8 +115,9 @@ class AwsKmsClient(private val credentialsProvider: IdentityProvider<AwsCredenti
 /**
  * An [Aead] implementation backed by AWS KMS using AWS SDK v2.
  *
- * Encryption context with `associatedData` (Base64-encoded) is included when [associatedData] is
- * non-null and non-empty, matching the behavior of Tink's `AwsKmsAead`.
+ * When [associatedData] is non-null and non-empty, it is added to the KMS encryption context under
+ * the key `associatedData`, Base64-encoded. This is NOT the same encoding upstream Tink's
+ * `AwsKmsAead` uses (hex), so ciphertext is not portable between the two.
  */
 private class AwsKmsAead(private val kmsClient: SdkKmsClient, private val keyArn: String) : Aead {
 

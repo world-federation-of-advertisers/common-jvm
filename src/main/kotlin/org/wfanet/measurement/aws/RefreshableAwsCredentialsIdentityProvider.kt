@@ -51,22 +51,25 @@ data class TimeBoundCredentials(val credentials: AwsSessionCredentials, val expi
  * Thread-safe: callers that arrive while a refresh is in flight share its result rather than
  * starting a second one.
  *
+ * See [AwsCredentialsProviderAdapter] to adapt this to the AWS SDK's synchronous
+ * [software.amazon.awssdk.auth.credentials.AwsCredentialsProvider] type instead.
+ *
  * @param refreshMargin How far before expiration to proactively refresh credentials.
  * @param clock Clock used to determine the current time.
  * @param credentialSupplier Function that starts obtaining fresh credentials and their expiration.
  */
-class RefreshableAwsCredentialsProvider(
+class RefreshableAwsCredentialsIdentityProvider(
   private val refreshMargin: Duration,
   private val clock: Clock = Clock.systemUTC(),
   private val credentialSupplier: () -> CompletableFuture<TimeBoundCredentials>,
 ) : IdentityProvider<AwsCredentialsIdentity> {
 
+  override fun identityType(): Class<AwsCredentialsIdentity> = AwsCredentialsIdentity::class.java
+
   @Volatile private var cachedCredentials: TimeBoundCredentials? = null
 
   /** Refresh that has been started but has not completed yet. Guarded by `this`. */
   private var inFlightRefresh: CompletableFuture<TimeBoundCredentials>? = null
-
-  override fun identityType(): Class<AwsCredentialsIdentity> = AwsCredentialsIdentity::class.java
 
   override fun resolveIdentity(
     request: ResolveIdentityRequest
@@ -124,6 +127,6 @@ class RefreshableAwsCredentialsProvider(
 
   companion object {
     private val logger: Logger =
-      Logger.getLogger(RefreshableAwsCredentialsProvider::class.java.name)
+      Logger.getLogger(RefreshableAwsCredentialsIdentityProvider::class.java.name)
   }
 }
