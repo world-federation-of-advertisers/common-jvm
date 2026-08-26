@@ -1,0 +1,6 @@
+package(default_visibility = ["//visibility:public"])
+
+alias(
+    name = "http",
+    actual = "@maven//:io_projectreactor_netty_reactor_netty_http",
+)

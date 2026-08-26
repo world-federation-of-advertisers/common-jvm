@@ -18,8 +18,10 @@ import com.google.crypto.tink.Aead
 import com.google.crypto.tink.KmsClient
 import java.security.GeneralSecurityException
 import java.util.Locale
-import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider
+import java.util.concurrent.CompletionException
 import software.amazon.awssdk.core.SdkBytes
+import software.amazon.awssdk.identity.spi.AwsCredentialsIdentity
+import software.amazon.awssdk.identity.spi.IdentityProvider
 import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.kms.KmsClient as SdkKmsClient
 import software.amazon.awssdk.services.kms.model.DecryptRequest
@@ -34,9 +36,10 @@ import software.amazon.awssdk.utils.BinaryUtils
  * while remaining wire-compatible with it: associated data is encoded into the KMS encryption
  * context exactly as upstream Tink's `AwsKmsAead` does.
  *
- * @param credentialsProvider The [AwsCredentialsProvider] to use for authenticating with AWS KMS.
+ * @param credentialsProvider Provider of the AWS credentials to authenticate with AWS KMS.
  */
-class AwsKmsClient(private val credentialsProvider: AwsCredentialsProvider) : KmsClient {
+class AwsKmsClient(private val credentialsProvider: IdentityProvider<AwsCredentialsIdentity>) :
+  KmsClient {
 
   override fun doesSupport(keyUri: String?): Boolean {
     return keyUri != null && keyUri.lowercase(Locale.US).startsWith(KEY_URI_PREFIX)
@@ -108,8 +111,8 @@ class AwsKmsClient(private val credentialsProvider: AwsCredentialsProvider) : Km
  */
 private class AwsKmsAead(private val kmsClient: SdkKmsClient, private val keyArn: String) : Aead {
 
-  override fun encrypt(plaintext: ByteArray, associatedData: ByteArray?): ByteArray {
-    try {
+  override fun encrypt(plaintext: ByteArray, associatedData: ByteArray?): ByteArray =
+    inKmsCall("Encryption") {
       val request =
         EncryptRequest.builder()
           .apply {
@@ -120,15 +123,11 @@ private class AwsKmsAead(private val kmsClient: SdkKmsClient, private val keyArn
             }
           }
           .build()
-      val response = kmsClient.encrypt(request)
-      return response.ciphertextBlob().asByteArray()
-    } catch (e: KmsException) {
-      throw GeneralSecurityException("Encryption failed", e)
+      kmsClient.encrypt(request).ciphertextBlob().asByteArray()
     }
-  }
 
-  override fun decrypt(ciphertext: ByteArray, associatedData: ByteArray?): ByteArray {
-    try {
+  override fun decrypt(ciphertext: ByteArray, associatedData: ByteArray?): ByteArray =
+    inKmsCall("Decryption") {
       val request =
         DecryptRequest.builder()
           .apply {
@@ -142,11 +141,20 @@ private class AwsKmsAead(private val kmsClient: SdkKmsClient, private val keyArn
       if (response.keyId() != keyArn) {
         throw GeneralSecurityException("Decryption failed: wrong key id")
       }
-      return response.plaintext().asByteArray()
-    } catch (e: KmsException) {
-      throw GeneralSecurityException("Decryption failed", e)
+      response.plaintext().asByteArray()
     }
-  }
+
+  /** Runs [block], reporting AWS failures as [GeneralSecurityException] per the [Aead] contract. */
+  private inline fun <T> inKmsCall(operation: String, block: () -> T): T =
+    try {
+      block()
+    } catch (e: KmsException) {
+      throw GeneralSecurityException("$operation failed", e)
+    } catch (e: CompletionException) {
+      // The SDK resolves credentials by joining a future, and rethrows the CompletionException
+      // as-is when its cause is a checked exception.
+      throw GeneralSecurityException("$operation failed", e.cause ?: e)
+    }
 
   companion object {
     private const val ASSOCIATED_DATA_KEY = "associatedData"

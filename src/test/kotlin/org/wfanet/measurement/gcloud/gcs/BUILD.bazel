@@ -1,6 +1,21 @@
 load("@wfa_rules_kotlin_jvm//kotlin:defs.bzl", "kt_jvm_test")
 
 kt_jvm_test(
+    name = "GcsStorageOptionsTest",
+    srcs = ["GcsStorageOptionsTest.kt"],
+    test_class = "org.wfanet.measurement.gcloud.gcs.GcsStorageOptionsTest",
+    deps = [
+        "//imports/java/com/google/api/gax",
+        "//imports/java/com/google/cloud/storage",
+        "//imports/java/com/google/common/truth",
+        "//imports/java/org/junit",
+        "//imports/kotlin/kotlinx/coroutines:core",
+        "//src/main/kotlin/org/wfanet/measurement/common",
+        "//src/main/kotlin/org/wfanet/measurement/gcloud/gcs",
+    ],
+)
+
+kt_jvm_test(
     name = "GcsStorageClientTest",
     srcs = ["GcsStorageClientTest.kt"],
     tags = [

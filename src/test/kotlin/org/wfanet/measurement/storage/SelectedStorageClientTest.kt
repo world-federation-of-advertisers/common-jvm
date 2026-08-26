@@ -19,6 +19,7 @@ package org.wfanet.measurement.storage
 import com.google.common.truth.Truth.assertThat
 import com.google.protobuf.kotlin.toByteStringUtf8
 import java.nio.file.Files
+import java.time.Duration
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.runBlocking
@@ -27,6 +28,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 import org.wfanet.measurement.common.flatten
+import org.wfanet.measurement.gcloud.gcs.GcsStorageRetryConfig
 import org.wfanet.measurement.storage.filesystem.FileSystemStorageClient
 
 @RunWith(JUnit4::class)
@@ -41,6 +43,15 @@ class SelectedStorageClientTest {
   fun `constructor for gs scheme does not throw error`() {
     val blobUri = BlobUri("gs", "bucket", "path/to/file")
     SelectedStorageClient(blobUri)
+  }
+
+  @Test
+  fun `constructor for gs scheme accepts a custom retry config`() {
+    val blobUri = BlobUri("gs", "bucket", "path/to/file")
+    SelectedStorageClient(
+      blobUri,
+      retryConfig = GcsStorageRetryConfig.DEFAULT.copy(readTimeout = Duration.ofSeconds(10)),
+    )
   }
 
   @Test

@@ -19,18 +19,24 @@ import com.google.cloud.storage.StorageOptions
 import org.wfanet.measurement.common.Instrumentation
 import picocli.CommandLine
 
-/** Client access provider for Google Cloud Storage (GCS) via command-line flags. */
-class GcsFromFlags(private val flags: Flags) {
+/**
+ * Client access provider for Google Cloud Storage (GCS) via command-line flags.
+ *
+ * @param flags command-line flags
+ * @param retryConfig resilient retry/timeout configuration applied to the GCS client; defaults to
+ *   [GcsStorageRetryConfig.DEFAULT]
+ */
+class GcsFromFlags(
+  private val flags: Flags,
+  private val retryConfig: GcsStorageRetryConfig = GcsStorageRetryConfig.DEFAULT,
+) {
 
   private val storageOptions: StorageOptions by lazy {
-    val builder =
-      if (flags.useGrpc) {
-        StorageOptions.grpc().setEnableGrpcClientMetrics(true)
-      } else {
-        StorageOptions.newBuilder()
-      }
-
-    builder.setOpenTelemetry(Instrumentation.openTelemetry).setProjectId(flags.projectName).build()
+    retryConfig.buildStorageOptions(
+      projectId = flags.projectName,
+      useGrpc = flags.useGrpc,
+      openTelemetry = Instrumentation.openTelemetry,
+    )
   }
 
   val storage: Storage
