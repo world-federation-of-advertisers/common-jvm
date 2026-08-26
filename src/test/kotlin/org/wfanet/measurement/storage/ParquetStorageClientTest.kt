@@ -18,9 +18,11 @@ package org.wfanet.measurement.storage
 
 import com.google.common.truth.Truth.assertThat
 import com.google.crypto.tink.Aead
+import com.google.crypto.tink.DeterministicAead
 import com.google.crypto.tink.KeyTemplates
 import com.google.crypto.tink.KeysetHandle
 import com.google.crypto.tink.aead.AeadConfig
+import com.google.crypto.tink.daead.DeterministicAeadConfig
 import com.google.protobuf.ByteString
 import com.google.protobuf.timestamp
 import com.google.type.date
@@ -115,6 +117,10 @@ class ParquetStorageClientTest {
       }
     }
 
+  private fun newDeterministicAead(): DeterministicAead =
+    KeysetHandle.generateNew(KeyTemplates.get("AES256_SIV"))
+      .getPrimitive(DeterministicAead::class.java)
+
   /** Serialized sample [ParquetRow] used by the encryption round-trip tests. */
   private fun encRow(): ByteString =
     parquetRow {
@@ -199,6 +205,116 @@ class ParquetStorageClientTest {
 
     assertThat(client.getBlob("empty-meta.parquet")!!.readKeyValueMetadata())
       .containsAtLeast("foo", "bar")
+  }
+
+  // ===== Warehouse-compatible deterministic column encryption =====
+
+  @Test
+  fun `deterministic column encryption writes standard parquet and decrypts on configured read`():
+    Unit = runBlocking {
+    val config =
+      ParquetDeterministicAeadConfig(
+        newDeterministicAead(),
+        mapOf("person_id" to ParquetPlaintextType.STRING),
+      )
+    val encryptingClient =
+      ParquetStorageClient(
+        Configuration(),
+        Path(tempDir.root.absolutePath),
+        deterministicAeadConfig = config,
+      )
+    val rows =
+      flowOf(
+        parquetRow {
+            columns["person_id"] = parquetValue { stringValue = "person-123" }
+            columns["event_id"] = parquetValue { stringValue = "event-1" }
+          }
+          .toByteString(),
+        parquetRow {
+            columns["person_id"] = parquetValue { stringValue = "person-123" }
+            columns["event_id"] = parquetValue { stringValue = "event-2" }
+          }
+          .toByteString(),
+      )
+
+    encryptingClient.writeBlob("warehouse.parquet", rows)
+
+    // A warehouse with no WFA KMS adapter can scan the file. The protected column is ordinary
+    // Parquet BINARY, while unprotected columns retain their original types.
+    val rawRows = newClient().getBlob("warehouse.parquet")!!.readRows().toList()
+    assertThat(rawRows).hasSize(2)
+    assertThat(rawRows[0]["person_id"]!!.kindCase).isEqualTo(ParquetValue.KindCase.BYTES_VALUE)
+    assertThat(rawRows[0]["person_id"]!!.bytesValue).isEqualTo(rawRows[1]["person_id"]!!.bytesValue)
+    assertThat(rawRows[0]["person_id"]!!.bytesValue)
+      .isNotEqualTo(ByteString.copyFromUtf8("person-123"))
+    assertThat(rawRows[0]["event_id"]!!.stringValue).isEqualTo("event-1")
+
+    val decryptedRows =
+      encryptingClient.getBlob("warehouse.parquet")!!.readRows().toList().map { it.toNative() }
+    assertThat(decryptedRows[0]).containsExactly("person_id", "person-123", "event_id", "event-1")
+    assertThat(decryptedRows[1]).containsExactly("person_id", "person-123", "event_id", "event-2")
+    assertThat(encryptingClient.getBlob("warehouse.parquet")!!.readSchema())
+      .containsExactly(
+        "person_id",
+        ParquetValue.KindCase.STRING_VALUE,
+        "event_id",
+        ParquetValue.KindCase.STRING_VALUE,
+      )
+  }
+
+  @Test
+  fun `deterministic column encryption uses column name as authenticated data`(): Unit =
+    runBlocking {
+      val config =
+        ParquetDeterministicAeadConfig(
+          newDeterministicAead(),
+          mapOf(
+            "person_id" to ParquetPlaintextType.STRING,
+            "household_id" to ParquetPlaintextType.STRING,
+          ),
+        )
+      val client =
+        ParquetStorageClient(
+          Configuration(),
+          Path(tempDir.root.absolutePath),
+          deterministicAeadConfig = config,
+        )
+      val row =
+        parquetRow {
+            columns["person_id"] = parquetValue { stringValue = "same-value" }
+            columns["household_id"] = parquetValue { stringValue = "same-value" }
+          }
+          .toByteString()
+
+      client.writeBlob("domain-separated.parquet", flowOf(row))
+
+      val rawRow = newClient().getBlob("domain-separated.parquet")!!.readRows().toList().single()
+      assertThat(rawRow["person_id"]!!.bytesValue).isNotEqualTo(rawRow["household_id"]!!.bytesValue)
+    }
+
+  @Test
+  fun `deterministic column encryption rejects a missing configured column`(): Unit = runBlocking {
+    val client =
+      ParquetStorageClient(
+        Configuration(),
+        Path(tempDir.root.absolutePath),
+        deterministicAeadConfig =
+          ParquetDeterministicAeadConfig(
+            newDeterministicAead(),
+            mapOf("person_id" to ParquetPlaintextType.STRING),
+          ),
+      )
+    val row = parquetRow { columns["event_id"] = parquetValue { stringValue = "event-1" } }
+
+    val exception =
+      assertFailsWith<IllegalArgumentException> {
+        client.writeBlob("missing-column.parquet", flowOf(row.toByteString()))
+      }
+
+    assertThat(exception)
+      .hasMessageThat()
+      .contains("Configured plaintext columns are absent from the first row: [person_id]")
+    assertThat(File(tempDir.root, "missing-column.parquet").exists()).isFalse()
   }
 
   @Test
@@ -929,8 +1045,9 @@ class ParquetStorageClientTest {
 
   companion object {
     init {
-      // Static one-time Tink Aead registration shared by every test.
+      // Static one-time Tink primitive registration shared by every test.
       AeadConfig.register()
+      DeterministicAeadConfig.register()
     }
   }
 }
