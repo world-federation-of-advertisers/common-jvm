@@ -294,20 +294,23 @@ private constructor(
       flags: Flags,
       nameForLogging: String,
       vararg services: ServerServiceDefinition,
-    ): CommonServer = fromFlags(flags, nameForLogging, services.asIterable())
+      executor: Executor? = null,
+    ): CommonServer = fromFlags(flags, nameForLogging, services.asIterable(), executor)
 
     /** Constructs a [CommonServer] from command-line flags. */
     fun fromFlags(
       flags: Flags,
       nameForLogging: String,
       services: Iterable<BindableService>,
-    ): CommonServer = fromFlags(flags, nameForLogging, services.map { it.bindService() })
+      executor: Executor? = null,
+    ): CommonServer = fromFlags(flags, nameForLogging, services.map { it.bindService() }, executor)
 
     /** Constructs a [CommonServer] from command-line flags. */
     fun fromFlags(
       flags: Flags,
       nameForLogging: String,
       vararg services: BindableService,
-    ): CommonServer = fromFlags(flags, nameForLogging, services.map { it.bindService() })
+      executor: Executor? = null,
+    ): CommonServer = fromFlags(flags, nameForLogging, services.map { it.bindService() }, executor)
   }
 }
