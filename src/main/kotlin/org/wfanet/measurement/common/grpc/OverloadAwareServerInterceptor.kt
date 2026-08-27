@@ -35,13 +35,6 @@ import kotlinx.coroutines.Job
  * [ServerInterceptor] that surfaces rejection of a coroutine-service [Executor] dispatch to the
  * client as a clean gRPC status instead of leaving the RPC to hang until its deadline.
  *
- * Coroutine services dispatched via an [Executor]-backed [CoroutineDispatcher] (e.g.
- * `executor.asCoroutineDispatcher()`) already have kotlinx-coroutines' own safety net for a
- * [RejectedExecutionException]: it cancels the coroutine's [Job] and completes bookkeeping on
- * [Dispatchers.IO]. But nothing in that path closes the underlying [ServerCall], so the client
- * simply waits until its own deadline expires. This interceptor overrides the per-RPC
- * [CoroutineContext] with a dispatcher that closes the call itself, immediately, on rejection.
- *
  * Must be paired with [CloseOnceServerInterceptor] ordered ahead of this interceptor in the chain
  * (i.e. added *after* this one, since the last-added interceptor runs first): gRPC does not
  * tolerate a [ServerCall] being closed twice, and the coroutine's own completion handling will

@@ -33,6 +33,7 @@ import kotlinx.coroutines.CancellableContinuation
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
@@ -50,13 +51,10 @@ import org.wfanet.measurement.common.FakeServiceGrpcKt
 import org.wfanet.measurement.common.fakeRequest
 
 /**
- * Verifies that a rejection on a *resumption* dispatch (RPC already active, suspended and
- * redispatching) closes with `INTERNAL`, not the `RESOURCE_EXHAUSTED` used for the *initial*
- * dispatch case covered by [CommonServerOverloadTest] -- the RPC's handler has already run some
- * code by this point, so it would be unsafe to imply the whole RPC can simply be retried. Without
- * OverloadAwareServerInterceptor, this scenario surfaces as `CANCELLED` instead (confirmed via a
- * separate scratch investigation) -- distinct from the initial-dispatch case, which just hangs to
- * deadline.
+ * Verifies that a rejection on a resumption dispatch -- an RPC that is already active, suspends,
+ * and redispatches -- closes with `INTERNAL`, not the `RESOURCE_EXHAUSTED` used for the initial
+ * dispatch case covered by [CommonServerOverloadTest], since the RPC's handler has already run some
+ * code by this point and may have performed a non-idempotent side effect.
  */
 @RunWith(JUnit4::class)
 class CommonServerNestedRejectionTest {
@@ -77,7 +75,7 @@ class CommonServerNestedRejectionTest {
 
   private val service =
     object : FakeServiceGrpcKt.FakeServiceCoroutineImplBase(executor.asCoroutineDispatcher()) {
-      override suspend fun fake(requests: kotlinx.coroutines.flow.Flow<FakeRequest>): FakeResponse {
+      override suspend fun fake(requests: Flow<FakeRequest>): FakeResponse {
         val request = requests.first()
         when (request.number) {
           1 -> {

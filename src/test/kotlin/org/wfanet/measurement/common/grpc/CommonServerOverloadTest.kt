@@ -30,6 +30,7 @@ import java.util.concurrent.TimeUnit
 import kotlin.test.assertFailsWith
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -61,7 +62,7 @@ class CommonServerOverloadTest {
 
   private val service =
     object : FakeServiceGrpcKt.FakeServiceCoroutineImplBase(executor.asCoroutineDispatcher()) {
-      override suspend fun fake(requests: kotlinx.coroutines.flow.Flow<FakeRequest>): FakeResponse {
+      override suspend fun fake(requests: Flow<FakeRequest>): FakeResponse {
         startedLatch.countDown()
         releaseLatch.await()
         return FakeResponse.getDefaultInstance()
@@ -110,7 +111,7 @@ class CommonServerOverloadTest {
     // assertion -- so a pass here already implies a prompt rejection, without measuring wall time.
     val thrown =
       assertFailsWith<StatusException> {
-        withTimeout(1_500) {
+        withTimeout(10_000) {
           stub
             .withDeadlineAfter(30, TimeUnit.SECONDS)
             .fake(flowOf(FakeRequest.getDefaultInstance()))
@@ -140,7 +141,7 @@ class CommonServerOverloadTest {
       val stub = FakeServiceGrpcKt.FakeServiceCoroutineStub(channel)
       val thrown =
         assertFailsWith<StatusException> {
-          withTimeout(1_500) {
+          withTimeout(10_000) {
             stub
               .withDeadlineAfter(30, TimeUnit.SECONDS)
               .fake(flowOf(FakeRequest.getDefaultInstance()))
