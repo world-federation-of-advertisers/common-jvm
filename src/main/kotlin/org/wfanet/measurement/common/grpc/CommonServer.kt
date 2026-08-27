@@ -24,6 +24,7 @@ import io.grpc.protobuf.services.ProtoReflectionServiceV1
 import io.netty.handler.ssl.ClientAuth
 import io.netty.handler.ssl.SslContext
 import java.io.IOException
+import java.util.concurrent.Executor
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.logging.Level
@@ -42,6 +43,7 @@ private constructor(
   verboseGrpcLogging: Boolean,
   services: Iterable<ServerServiceDefinition>,
   sslContext: SslContext?,
+  executor: Executor?,
 ) : AutoCloseable {
   private val healthStatusManager = HealthStatusManager()
   private val started = AtomicBoolean(false)
@@ -71,6 +73,14 @@ private constructor(
           intercept(LoggingServerInterceptor)
         } else {
           intercept(ErrorLoggingServerInterceptor)
+        }
+        if (executor != null) {
+          // CloseOnceServerInterceptor must be added last (i.e. run first) so that
+          // OverloadAwareServerInterceptor's direct call to ServerCall.close on rejection goes
+          // through it, guarding against a second close from the coroutine's own completion
+          // handling.
+          intercept(OverloadAwareServerInterceptor(executor))
+          intercept(CloseOnceServerInterceptor)
         }
       }
       .build()
@@ -228,7 +238,14 @@ private constructor(
 
     const val DEFAULT_SHUTDOWN_GRACE_PERIOD_SECONDS = 25
 
-    /** Constructs a [CommonServer] from parameters. */
+    /**
+     * Constructs a [CommonServer] from parameters.
+     *
+     * If [executor] is non-null, it is assumed to be the same [Executor] backing each service's own
+     * coroutine dispatcher, and rejections from it will be surfaced to clients as
+     * `RESOURCE_EXHAUSTED` rather than left to hang until deadline. See
+     * [OverloadAwareServerInterceptor].
+     */
     fun fromParameters(
       verboseGrpcLogging: Boolean,
       certs: SigningCerts?,
@@ -238,6 +255,7 @@ private constructor(
       port: Int = 0,
       healthPort: Int = 0,
       shutdownGracePeriodSeconds: Int = DEFAULT_SHUTDOWN_GRACE_PERIOD_SECONDS,
+      executor: Executor? = null,
     ): CommonServer {
       return CommonServer(
         nameForLogging,
@@ -247,6 +265,7 @@ private constructor(
         verboseGrpcLogging,
         services,
         certs?.toServerTlsContext(clientAuth),
+        executor,
       )
     }
 
@@ -255,6 +274,7 @@ private constructor(
       flags: Flags,
       nameForLogging: String,
       services: Iterable<ServerServiceDefinition>,
+      executor: Executor? = null,
     ): CommonServer {
       return fromParameters(
         flags.debugVerboseGrpcLogging,
@@ -265,6 +285,7 @@ private constructor(
         flags.port,
         flags.healthPort,
         flags.shutdownGracePeriodSeconds,
+        executor,
       )
     }
 
