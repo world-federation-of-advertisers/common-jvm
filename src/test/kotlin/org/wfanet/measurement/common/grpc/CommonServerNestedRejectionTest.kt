@@ -28,10 +28,10 @@ import java.util.concurrent.SynchronousQueue
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import kotlin.test.assertFailsWith
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.async
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
@@ -57,6 +57,7 @@ import org.wfanet.measurement.common.fakeRequest
 @RunWith(JUnit4::class)
 class CommonServerNestedRejectionTest {
   private val aStartedLatch = CountDownLatch(1)
+  private val aResumeSignal = CompletableDeferred<Unit>()
   private val bStartedLatch = CountDownLatch(1)
   private val bReleaseLatch = CountDownLatch(1)
 
@@ -77,13 +78,15 @@ class CommonServerNestedRejectionTest {
         when (request.number) {
           1 -> {
             // Call A: initial dispatch succeeds, then suspends -- releasing the sole thread --
-            // and must be redispatched through the same executor to resume.
+            // and must be redispatched through the same executor to resume. The test only
+            // completes aResumeSignal once call B has deterministically acquired that thread, so
+            // there's no race on timing.
             aStartedLatch.countDown()
-            delay(500)
+            aResumeSignal.await()
           }
           2 -> {
-            // Call B: occupies the (now-free) sole thread long enough to still be running when
-            // A's delay elapses and tries to redispatch.
+            // Call B: occupies the (now-free) sole thread until released, so it's still running
+            // when A's resumption dispatch is triggered.
             bStartedLatch.countDown()
             bReleaseLatch.await()
           }
@@ -132,10 +135,12 @@ class CommonServerNestedRejectionTest {
         }
       assertThat(bStartedLatch.await(5, TimeUnit.SECONDS)).isTrue()
 
-      // A's delay(500) elapses while B still holds the sole thread, forcing a rejected
-      // redispatch. A tight withTimeout paired with a much longer RPC deadline distinguishes a
+      // B has deterministically acquired the sole worker thread -- only now trigger A's
+      // resumption dispatch, guaranteeing it lands while B still holds the thread, with no race
+      // on timing. A tight withTimeout paired with a much longer RPC deadline distinguishes a
       // prompt clean failure from a hang: a hang would blow through withTimeout and throw
       // TimeoutCancellationException instead of StatusException, failing this assertion.
+      aResumeSignal.complete(Unit)
       val thrown = assertFailsWith<StatusException> { withTimeout(3_000) { aDeferred.await() } }
       assertThat(thrown.status.code).isEqualTo(Status.Code.RESOURCE_EXHAUSTED)
 
