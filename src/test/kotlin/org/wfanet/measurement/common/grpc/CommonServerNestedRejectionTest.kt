@@ -27,8 +27,9 @@ import java.util.concurrent.Executors
 import java.util.concurrent.SynchronousQueue
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
+import kotlin.coroutines.resume
 import kotlin.test.assertFailsWith
-import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CancellableContinuation
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.async
@@ -37,6 +38,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.supervisorScope
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Test
@@ -59,7 +61,7 @@ import org.wfanet.measurement.common.fakeRequest
 @RunWith(JUnit4::class)
 class CommonServerNestedRejectionTest {
   private val aStartedLatch = CountDownLatch(1)
-  private val aResumeSignal = CompletableDeferred<Unit>()
+  private var aPendingResume: CancellableContinuation<Unit>? = null
   private val bStartedLatch = CountDownLatch(1)
   private val bReleaseLatch = CountDownLatch(1)
 
@@ -80,11 +82,15 @@ class CommonServerNestedRejectionTest {
         when (request.number) {
           1 -> {
             // Call A: initial dispatch succeeds, then suspends -- releasing the sole thread --
-            // and must be redispatched through the same executor to resume. The test only
-            // completes aResumeSignal once call B has deterministically acquired that thread, so
-            // there's no race on timing.
-            aStartedLatch.countDown()
-            aResumeSignal.await()
+            // and must be redispatched through the same executor to resume. The continuation is
+            // captured, and the latch only counted down, once this suspension is genuinely
+            // committed -- unlike a CompletableDeferred the test completes, there's no window
+            // where resuming races ahead of the suspend actually taking effect and turns into a
+            // same-thread no-op instead of a real redispatch.
+            suspendCancellableCoroutine<Unit> { cont ->
+              aPendingResume = cont
+              aStartedLatch.countDown()
+            }
           }
           2 -> {
             // Call B: occupies the (now-free) sole thread until released, so it's still running
@@ -142,7 +148,7 @@ class CommonServerNestedRejectionTest {
       // on timing. A tight withTimeout paired with a much longer RPC deadline distinguishes a
       // prompt clean failure from a hang: a hang would blow through withTimeout and throw
       // TimeoutCancellationException instead of StatusException, failing this assertion.
-      aResumeSignal.complete(Unit)
+      aPendingResume!!.resume(Unit)
       val thrown = assertFailsWith<StatusException> { withTimeout(3_000) { aDeferred.await() } }
       assertThat(thrown.status.code).isEqualTo(Status.Code.INTERNAL)
 
@@ -167,7 +173,7 @@ class CommonServerNestedRejectionTest {
       // resumption -- this must not be conflated with a clean pre-start shutdown, which is safe
       // to call UNAVAILABLE.
       executor.shutdown()
-      aResumeSignal.complete(Unit)
+      aPendingResume!!.resume(Unit)
 
       val thrown = assertFailsWith<StatusException> { withTimeout(3_000) { aDeferred.await() } }
       assertThat(thrown.status.code).isEqualTo(Status.Code.INTERNAL)
