@@ -100,3 +100,20 @@ kt_jvm_test(
         "//src/test/proto/wfa/measurement/common:fake_service_kt_jvm_grpc_proto",
     ],
 )
+
+kt_jvm_test(
+    name = "CommonServerNestedRejectionTest",
+    srcs = ["CommonServerNestedRejectionTest.kt"],
+    test_class = "org.wfanet.measurement.common.grpc.CommonServerNestedRejectionTest",
+    deps = [
+        "//imports/java/com/google/common/truth",
+        "//imports/java/io/grpc:api",
+        "//imports/java/io/grpc/netty",
+        "//imports/java/io/netty/handler",
+        "//imports/java/org/junit",
+        "//imports/kotlin/kotlin/test",
+        "//imports/kotlin/kotlinx/coroutines:core",
+        "//src/main/kotlin/org/wfanet/measurement/common/grpc",
+        "//src/test/proto/wfa/measurement/common:fake_service_kt_jvm_grpc_proto",
+    ],
+)

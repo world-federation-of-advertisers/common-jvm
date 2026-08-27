@@ -106,10 +106,14 @@ class InProcessServersMethodsOverloadTest {
       }
     assertThat(startedLatch.await(5, TimeUnit.SECONDS)).isTrue()
 
+    // A hang would blow through withTimeout and throw TimeoutCancellationException instead of
+    // StatusException, failing this assertion -- so a pass already implies a prompt rejection.
     val thrown =
       assertFailsWith<StatusException> {
-        withTimeout(5_000) {
-          stub.withDeadlineAfter(5, TimeUnit.SECONDS).fake(flowOf(FakeRequest.getDefaultInstance()))
+        withTimeout(1_500) {
+          stub
+            .withDeadlineAfter(30, TimeUnit.SECONDS)
+            .fake(flowOf(FakeRequest.getDefaultInstance()))
         }
       }
 

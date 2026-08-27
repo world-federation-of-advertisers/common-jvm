@@ -68,10 +68,10 @@ class OverloadAwareServerInterceptor(private val executor: Executor) :
         executor.execute(block)
       } catch (e: RejectedExecutionException) {
         val status =
-          if (executor is ExecutorService && executor.isShutdown) {
-            Status.UNAVAILABLE
+          if ((executor as? ExecutorService)?.isShutdown == true) {
+            Status.UNAVAILABLE.withDescription("Service executor is shut down")
           } else {
-            Status.RESOURCE_EXHAUSTED
+            Status.RESOURCE_EXHAUSTED.withDescription("Service executor rejected the task")
           }
         call.close(status.withCause(e), Metadata())
         context[Job]?.cancel(CancellationException("Rejected by executor", e))

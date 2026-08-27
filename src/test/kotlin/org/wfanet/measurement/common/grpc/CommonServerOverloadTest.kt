@@ -104,19 +104,20 @@ class CommonServerOverloadTest {
       }
     assertThat(startedLatch.await(5, TimeUnit.SECONDS)).isTrue()
 
-    // A second call must dispatch through the same saturated, zero-capacity-queue executor.
-    val start = System.nanoTime()
+    // A second call must dispatch through the same saturated, zero-capacity-queue executor. The
+    // RPC deadline is deliberately much longer than the withTimeout: a hang would blow through
+    // withTimeout and throw TimeoutCancellationException instead of StatusException, failing this
+    // assertion -- so a pass here already implies a prompt rejection, without measuring wall time.
     val thrown =
       assertFailsWith<StatusException> {
-        withTimeout(5_000) {
-          stub.withDeadlineAfter(5, TimeUnit.SECONDS).fake(flowOf(FakeRequest.getDefaultInstance()))
+        withTimeout(1_500) {
+          stub
+            .withDeadlineAfter(30, TimeUnit.SECONDS)
+            .fake(flowOf(FakeRequest.getDefaultInstance()))
         }
       }
-    val elapsedMillis = (System.nanoTime() - start) / 1_000_000
 
     assertThat(thrown.status.code).isEqualTo(Status.Code.RESOURCE_EXHAUSTED)
-    // Should fail promptly on rejection, not wait out the 5s client deadline.
-    assertThat(elapsedMillis).isLessThan(2_000)
 
     releaseLatch.countDown()
     holderJob.join()
@@ -139,9 +140,9 @@ class CommonServerOverloadTest {
       val stub = FakeServiceGrpcKt.FakeServiceCoroutineStub(channel)
       val thrown =
         assertFailsWith<StatusException> {
-          withTimeout(5_000) {
+          withTimeout(1_500) {
             stub
-              .withDeadlineAfter(5, TimeUnit.SECONDS)
+              .withDeadlineAfter(30, TimeUnit.SECONDS)
               .fake(flowOf(FakeRequest.getDefaultInstance()))
           }
         }
