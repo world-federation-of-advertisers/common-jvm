@@ -241,10 +241,14 @@ private constructor(
     /**
      * Constructs a [CommonServer] from parameters.
      *
-     * If [executor] is non-null, it is assumed to be the same [Executor] backing each service's own
-     * coroutine dispatcher, and rejections from it will be surfaced to clients as
-     * `RESOURCE_EXHAUSTED` rather than left to hang until deadline. See
-     * [OverloadAwareServerInterceptor].
+     * If [executor] is non-null, [OverloadAwareServerInterceptor] is installed globally,
+     * *overriding* the per-RPC coroutine dispatcher for every service registered with this server
+     * -- regardless of what [kotlin.coroutines.CoroutineContext] each service was individually
+     * constructed with. [executor] must therefore be the same [Executor] every registered service
+     * actually uses for its own coroutine dispatcher; passing a different one will silently
+     * redirect all of their dispatching to it instead. In exchange, a rejection from it is surfaced
+     * to clients as a clean status (`RESOURCE_EXHAUSTED`, `UNAVAILABLE`, or `INTERNAL`) rather than
+     * left to hang until deadline. See [OverloadAwareServerInterceptor].
      */
     fun fromParameters(
       verboseGrpcLogging: Boolean,

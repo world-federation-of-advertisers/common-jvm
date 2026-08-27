@@ -16,10 +16,8 @@
 
 package org.wfanet.measurement.common.grpc
 
-import io.grpc.ForwardingServerCall.SimpleForwardingServerCall
 import io.grpc.Metadata
 import io.grpc.ServerCall
-import io.grpc.ServerCallHandler
 import io.grpc.ServerInterceptor
 import io.grpc.Status
 import io.grpc.kotlin.CoroutineContextServerInterceptor
@@ -93,37 +91,6 @@ class OverloadAwareServerInterceptor(private val executor: Executor) :
         call.close(status.withCause(e), Metadata())
         context[Job]?.cancel(CancellationException("Rejected by executor", e))
         Dispatchers.IO.dispatch(context, block)
-      }
-    }
-  }
-}
-
-/**
- * [ServerInterceptor] that makes [ServerCall.close] idempotent, so a later close attempt (e.g. from
- * grpc-kotlin's own coroutine-completion handling after [OverloadAwareServerInterceptor] has
- * already closed the call) silently no-ops instead of throwing `IllegalStateException: call already
- * closed`.
- *
- * Must be ordered ahead of [OverloadAwareServerInterceptor] in the interceptor chain (i.e. added
- * *after* it, since the last-added interceptor runs first) so that interceptor's direct call to
- * `close()` goes through this wrapper.
- */
-object CloseOnceServerInterceptor : ServerInterceptor {
-  override fun <ReqT : Any, RespT : Any> interceptCall(
-    call: ServerCall<ReqT, RespT>,
-    headers: Metadata,
-    next: ServerCallHandler<ReqT, RespT>,
-  ): ServerCall.Listener<ReqT> {
-    return next.startCall(CloseOnceServerCall(call), headers)
-  }
-
-  private class CloseOnceServerCall<ReqT, RespT>(delegate: ServerCall<ReqT, RespT>) :
-    SimpleForwardingServerCall<ReqT, RespT>(delegate) {
-    private val closed = AtomicBoolean(false)
-
-    override fun close(status: Status, trailers: Metadata) {
-      if (closed.compareAndSet(false, true)) {
-        super.close(status, trailers)
       }
     }
   }
