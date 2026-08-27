@@ -19,6 +19,7 @@ package org.wfanet.measurement.common.grpc
 import io.grpc.Server
 import io.grpc.ServerServiceDefinition
 import io.grpc.inprocess.InProcessServerBuilder
+import java.util.concurrent.Executor
 import java.util.concurrent.TimeUnit
 
 /** Utility methods for creating and managing in-process gRPC servers. */
@@ -29,12 +30,16 @@ object InProcessServersMethods {
    * @param serverName the name of the in-process server
    * @param commonServerFlags common server configuration flags
    * @param service the gRPC service definition to add to the server
+   * @param executor if non-null, assumed to be the same [Executor] backing the service's own
+   *   coroutine dispatcher; rejections from it are surfaced as `RESOURCE_EXHAUSTED` rather than
+   *   left to hang until deadline. See [OverloadAwareServerInterceptor].
    * @return the started [Server] instance
    */
   fun startInProcessServerWithService(
     serverName: String,
     commonServerFlags: CommonServer.Flags,
     service: ServerServiceDefinition,
+    executor: Executor? = null,
   ): Server {
     val server: Server =
       InProcessServerBuilder.forName(serverName)
@@ -45,6 +50,14 @@ object InProcessServersMethods {
             intercept(LoggingServerInterceptor)
           } else {
             intercept(ErrorLoggingServerInterceptor)
+          }
+          if (executor != null) {
+            // CloseOnceServerInterceptor must be added last (i.e. run first) so that
+            // OverloadAwareServerInterceptor's direct call to ServerCall.close on rejection goes
+            // through it, guarding against a second close from the coroutine's own completion
+            // handling.
+            intercept(OverloadAwareServerInterceptor(executor))
+            intercept(CloseOnceServerInterceptor)
           }
         }
         .build()
