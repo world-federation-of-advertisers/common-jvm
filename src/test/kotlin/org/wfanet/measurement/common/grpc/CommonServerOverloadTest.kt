@@ -129,4 +129,23 @@ class CommonServerOverloadTest {
     val response = stub.fake(flowOf(FakeRequest.getDefaultInstance()))
     assertThat(response).isEqualTo(FakeResponse.getDefaultInstance())
   }
+
+  @Test
+  fun `shutdown executor closes call with UNAVAILABLE rather than RESOURCE_EXHAUSTED`() =
+    runBlocking {
+      releaseLatch.countDown()
+      executor.shutdown()
+
+      val stub = FakeServiceGrpcKt.FakeServiceCoroutineStub(channel)
+      val thrown =
+        assertFailsWith<StatusException> {
+          withTimeout(5_000) {
+            stub
+              .withDeadlineAfter(5, TimeUnit.SECONDS)
+              .fake(flowOf(FakeRequest.getDefaultInstance()))
+          }
+        }
+
+      assertThat(thrown.status.code).isEqualTo(Status.Code.UNAVAILABLE)
+    }
 }

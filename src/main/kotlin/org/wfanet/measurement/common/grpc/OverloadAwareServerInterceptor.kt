@@ -24,6 +24,7 @@ import io.grpc.ServerInterceptor
 import io.grpc.Status
 import io.grpc.kotlin.CoroutineContextServerInterceptor
 import java.util.concurrent.Executor
+import java.util.concurrent.ExecutorService
 import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.CoroutineContext
@@ -48,6 +49,9 @@ import kotlinx.coroutines.Job
  * tolerate a [ServerCall] being closed twice, and the coroutine's own completion handling will
  * still attempt to close the call with `CANCELLED` after this interceptor has already closed it
  * with `RESOURCE_EXHAUSTED`.
+ *
+ * A rejection while [executor] is already shut down (e.g. during server shutdown) is distinct from
+ * saturation under load, so it is surfaced as `UNAVAILABLE` instead.
  */
 class OverloadAwareServerInterceptor(private val executor: Executor) :
   CoroutineContextServerInterceptor() {
@@ -63,7 +67,13 @@ class OverloadAwareServerInterceptor(private val executor: Executor) :
       try {
         executor.execute(block)
       } catch (e: RejectedExecutionException) {
-        call.close(Status.RESOURCE_EXHAUSTED.withCause(e), Metadata())
+        val status =
+          if (executor is ExecutorService && executor.isShutdown) {
+            Status.UNAVAILABLE
+          } else {
+            Status.RESOURCE_EXHAUSTED
+          }
+        call.close(status.withCause(e), Metadata())
         context[Job]?.cancel(CancellationException("Rejected by executor", e))
         Dispatchers.IO.dispatch(context, block)
       }
