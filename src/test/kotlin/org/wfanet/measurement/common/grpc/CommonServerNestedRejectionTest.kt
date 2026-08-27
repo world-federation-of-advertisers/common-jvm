@@ -49,10 +49,12 @@ import org.wfanet.measurement.common.fakeRequest
 
 /**
  * Verifies that a rejection on a *resumption* dispatch (RPC already active, suspended and
- * redispatching) is also converted to `RESOURCE_EXHAUSTED`, not just the *initial* dispatch case
- * covered by [CommonServerOverloadTest]. Without OverloadAwareServerInterceptor, this scenario
- * surfaces as `CANCELLED` instead (confirmed via a separate scratch investigation) -- distinct from
- * the initial-dispatch case, which just hangs to deadline.
+ * redispatching) closes with `INTERNAL`, not the `RESOURCE_EXHAUSTED` used for the *initial*
+ * dispatch case covered by [CommonServerOverloadTest] -- the RPC's handler has already run some
+ * code by this point, so it would be unsafe to imply the whole RPC can simply be retried. Without
+ * OverloadAwareServerInterceptor, this scenario surfaces as `CANCELLED` instead (confirmed via a
+ * separate scratch investigation) -- distinct from the initial-dispatch case, which just hangs to
+ * deadline.
  */
 @RunWith(JUnit4::class)
 class CommonServerNestedRejectionTest {
@@ -117,7 +119,7 @@ class CommonServerNestedRejectionTest {
   }
 
   @Test
-  fun `rejected resumption dispatch also closes with RESOURCE_EXHAUSTED`() = runBlocking {
+  fun `rejected resumption dispatch closes with INTERNAL not RESOURCE_EXHAUSTED`() = runBlocking {
     val stub = FakeServiceGrpcKt.FakeServiceCoroutineStub(channel)
 
     supervisorScope {
@@ -142,10 +144,33 @@ class CommonServerNestedRejectionTest {
       // TimeoutCancellationException instead of StatusException, failing this assertion.
       aResumeSignal.complete(Unit)
       val thrown = assertFailsWith<StatusException> { withTimeout(3_000) { aDeferred.await() } }
-      assertThat(thrown.status.code).isEqualTo(Status.Code.RESOURCE_EXHAUSTED)
+      assertThat(thrown.status.code).isEqualTo(Status.Code.INTERNAL)
 
       bReleaseLatch.countDown()
       bJob.join()
+    }
+  }
+
+  @Test
+  fun `resumption rejected by shutdown closes with INTERNAL not UNAVAILABLE`() = runBlocking {
+    val stub = FakeServiceGrpcKt.FakeServiceCoroutineStub(channel)
+
+    supervisorScope {
+      val aDeferred =
+        async(Dispatchers.IO) {
+          stub.withDeadlineAfter(30, TimeUnit.SECONDS).fake(flowOf(fakeRequest { number = 1 }))
+        }
+      assertThat(aStartedLatch.await(5, TimeUnit.SECONDS)).isTrue()
+
+      // The RPC has already started (and, in a real handler, could have already performed a
+      // non-idempotent side effect) before the executor shuts down out from under its
+      // resumption -- this must not be conflated with a clean pre-start shutdown, which is safe
+      // to call UNAVAILABLE.
+      executor.shutdown()
+      aResumeSignal.complete(Unit)
+
+      val thrown = assertFailsWith<StatusException> { withTimeout(3_000) { aDeferred.await() } }
+      assertThat(thrown.status.code).isEqualTo(Status.Code.INTERNAL)
     }
   }
 }
