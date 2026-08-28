@@ -27,6 +27,9 @@ import java.util.concurrent.Executors
 import java.util.concurrent.SynchronousQueue
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
+import java.util.logging.Handler
+import java.util.logging.LogRecord
+import java.util.logging.Logger
 import kotlin.coroutines.resume
 import kotlin.test.assertFailsWith
 import kotlinx.coroutines.CancellableContinuation
@@ -126,6 +129,23 @@ class CommonServerNestedRejectionTest {
   fun `rejected resumption dispatch closes with INTERNAL not RESOURCE_EXHAUSTED`() = runBlocking {
     val stub = FakeServiceGrpcKt.FakeServiceCoroutineStub(channel)
 
+    // ErrorLoggingServerInterceptor only logs UNKNOWN/INTERNAL closes -- capturing its output
+    // verifies that OverloadAwareServerInterceptor's own close actually reaches it, rather than
+    // bypassing it via interceptor ordering.
+    val errorLoggingRecords = mutableListOf<LogRecord>()
+    val errorLoggingHandler =
+      object : Handler() {
+        override fun publish(record: LogRecord) {
+          errorLoggingRecords.add(record)
+        }
+
+        override fun flush() {}
+
+        override fun close() {}
+      }
+    val errorLoggingLogger = Logger.getLogger(ErrorLoggingServerInterceptor::class.java.name)
+    errorLoggingLogger.addHandler(errorLoggingHandler)
+
     supervisorScope {
       val aDeferred =
         async(Dispatchers.IO) {
@@ -149,6 +169,8 @@ class CommonServerNestedRejectionTest {
       aPendingResume!!.resume(Unit)
       val thrown = assertFailsWith<StatusException> { withTimeout(3_000) { aDeferred.await() } }
       assertThat(thrown.status.code).isEqualTo(Status.Code.INTERNAL)
+      assertThat(errorLoggingRecords.map { it.message }.any { it.contains("INTERNAL") }).isTrue()
+      errorLoggingLogger.removeHandler(errorLoggingHandler)
 
       bReleaseLatch.countDown()
       bJob.join()

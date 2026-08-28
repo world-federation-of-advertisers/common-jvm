@@ -69,17 +69,21 @@ private constructor(
           addService(service)
         }
         addService(ProtoReflectionServiceV1.newInstance())
+        // The last-added interceptor runs first. OverloadAwareServerInterceptor is added before
+        // the logging interceptor so that its direct call to ServerCall.close on rejection passes
+        // through logging, same as any other call outcome. CloseOnceServerInterceptor is added
+        // last (i.e. runs first, outermost) so that both that call and grpc-kotlin's own
+        // completion handling -- which also attempts to close the call -- go through its
+        // duplicate-close guard.
+        if (executor != null) {
+          intercept(OverloadAwareServerInterceptor(executor))
+        }
         if (verboseGrpcLogging) {
           intercept(LoggingServerInterceptor)
         } else {
           intercept(ErrorLoggingServerInterceptor)
         }
         if (executor != null) {
-          // CloseOnceServerInterceptor must be added last (i.e. run first) so that
-          // OverloadAwareServerInterceptor's direct call to ServerCall.close on rejection goes
-          // through it, guarding against a second close from the coroutine's own completion
-          // handling.
-          intercept(OverloadAwareServerInterceptor(executor))
           intercept(CloseOnceServerInterceptor)
         }
       }
