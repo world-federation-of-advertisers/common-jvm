@@ -30,11 +30,11 @@ import java.util.logging.Logger
  * [ServerInterceptor] that makes [ServerCall.close] idempotent, since gRPC itself throws
  * `IllegalStateException` on a second call.
  *
- * Needed alongside [OverloadAwareServerInterceptor]: that interceptor closes the call directly on a
- * rejected dispatch, but the coroutine's own completion handling will still attempt to close the
- * same call afterward (e.g. with `CANCELLED`). This interceptor must be added *after*
- * [OverloadAwareServerInterceptor] in server setup, so that it runs first and wraps the call before
- * that interceptor's close call reaches it.
+ * Needed alongside [ExecutorRejectionServerInterceptor]: that interceptor closes the call directly
+ * on a rejected dispatch, but the coroutine's own completion handling will still attempt to close
+ * the same call afterward (e.g. with `CANCELLED`). This interceptor must be added *after*
+ * [ExecutorRejectionServerInterceptor] in server setup, so that it runs first and wraps the call
+ * before that interceptor's close call reaches it.
  */
 object CloseOnceServerInterceptor : ServerInterceptor {
   override fun <ReqT : Any, RespT : Any> interceptCall(

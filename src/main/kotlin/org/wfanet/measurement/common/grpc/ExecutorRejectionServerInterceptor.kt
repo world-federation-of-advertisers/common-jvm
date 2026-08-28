@@ -53,13 +53,13 @@ import kotlinx.coroutines.Job
  *   so it would be unsafe to suggest -- via a conventionally-retryable status -- that the client
  *   can simply retry the whole RPC.
  */
-class OverloadAwareServerInterceptor(private val executor: Executor) :
+class ExecutorRejectionServerInterceptor(private val executor: Executor) :
   CoroutineContextServerInterceptor() {
   override fun coroutineContext(call: ServerCall<*, *>, headers: Metadata): CoroutineContext {
-    return OverloadAwareDispatcher(executor, call)
+    return ExecutorRejectionDispatcher(executor, call)
   }
 
-  private class OverloadAwareDispatcher(
+  private class ExecutorRejectionDispatcher(
     private val executor: Executor,
     private val call: ServerCall<*, *>,
   ) : CoroutineDispatcher() {

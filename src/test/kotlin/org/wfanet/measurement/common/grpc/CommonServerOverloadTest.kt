@@ -76,7 +76,7 @@ class CommonServerOverloadTest {
         clientAuth = ClientAuth.NONE,
         nameForLogging = "CommonServerOverloadTest",
         services = listOf(service.bindService()),
-        executor = executor,
+        serviceCoroutineExecutor = executor,
       )
       .start()
 

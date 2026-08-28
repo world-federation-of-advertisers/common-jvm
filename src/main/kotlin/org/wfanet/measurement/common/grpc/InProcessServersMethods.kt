@@ -30,33 +30,37 @@ object InProcessServersMethods {
    * @param serverName the name of the in-process server
    * @param commonServerFlags common server configuration flags
    * @param service the gRPC service definition to add to the server
-   * @param executor if non-null, assumed to be the same [Executor] backing the service's own
-   *   coroutine dispatcher; rejections from it are surfaced as `RESOURCE_EXHAUSTED` rather than
-   *   left to hang until deadline. See [OverloadAwareServerInterceptor].
+   * @param serviceCoroutineExecutor if non-null, assumed to be the same [Executor] backing the
+   *   service's own coroutine dispatcher; rejections from it are surfaced as a clean gRPC status
+   *   rather than left to hang until deadline. See [ExecutorRejectionServerInterceptor].
    * @return the started [Server] instance
    */
   fun startInProcessServerWithService(
     serverName: String,
     commonServerFlags: CommonServer.Flags,
     service: ServerServiceDefinition,
-    executor: Executor? = null,
+    serviceCoroutineExecutor: Executor? = null,
   ): Server {
     val server: Server =
       InProcessServerBuilder.forName(serverName)
         .apply {
           directExecutor()
           addService(service)
+          // The last-added interceptor runs first. ExecutorRejectionServerInterceptor is added
+          // before the logging interceptor so that its direct call to ServerCall.close on
+          // rejection passes through logging, same as any other call outcome.
+          // CloseOnceServerInterceptor is added last (i.e. runs first, outermost) so that both
+          // that call and grpc-kotlin's own completion handling -- which also attempts to close
+          // the call -- go through its duplicate-close guard.
+          if (serviceCoroutineExecutor != null) {
+            intercept(ExecutorRejectionServerInterceptor(serviceCoroutineExecutor))
+          }
           if (commonServerFlags.debugVerboseGrpcLogging) {
             intercept(LoggingServerInterceptor)
           } else {
             intercept(ErrorLoggingServerInterceptor)
           }
-          if (executor != null) {
-            // CloseOnceServerInterceptor must be added last (i.e. run first) so that
-            // OverloadAwareServerInterceptor's direct call to ServerCall.close on rejection goes
-            // through it, guarding against a second close from the coroutine's own completion
-            // handling.
-            intercept(OverloadAwareServerInterceptor(executor))
+          if (serviceCoroutineExecutor != null) {
             intercept(CloseOnceServerInterceptor)
           }
         }

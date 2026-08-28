@@ -45,9 +45,9 @@ import org.wfanet.measurement.common.FakeServiceGrpcKt
 import picocli.CommandLine
 
 /**
- * Verifies that [InProcessServersMethods.startInProcessServerWithService]'s optional executor
- * parameter actually installs overload protection -- this is a distinct code path from
- * [CommonServer], not covered by [CommonServerOverloadTest].
+ * Verifies that [InProcessServersMethods.startInProcessServerWithService]'s optional
+ * serviceCoroutineExecutor parameter actually installs executor-rejection handling -- this is a
+ * distinct code path from [CommonServer], not covered by [CommonServerOverloadTest].
  */
 @RunWith(JUnit4::class)
 class InProcessServersMethodsOverloadTest {

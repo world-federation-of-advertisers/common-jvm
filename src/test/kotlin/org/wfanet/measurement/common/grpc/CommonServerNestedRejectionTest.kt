@@ -27,6 +27,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.SynchronousQueue
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.logging.Handler
 import java.util.logging.LogRecord
 import java.util.logging.Logger
@@ -65,6 +66,10 @@ class CommonServerNestedRejectionTest {
   private var aPendingResume: CancellableContinuation<Unit>? = null
   private val bStartedLatch = CountDownLatch(1)
   private val bReleaseLatch = CountDownLatch(1)
+  private val cStartedLatch = CountDownLatch(1)
+  private var cPendingResume: CancellableContinuation<Unit>? = null
+  private val cFinallyRanLatch = CountDownLatch(1)
+  private val cContinuedAfterSuspend = AtomicBoolean(false)
 
   private val executor =
     ThreadPoolExecutor(
@@ -95,9 +100,24 @@ class CommonServerNestedRejectionTest {
           }
           2 -> {
             // Call B: occupies the (now-free) sole thread until released, so it's still running
-            // when A's resumption dispatch is triggered.
+            // when A's (or C's) resumption dispatch is triggered.
             bStartedLatch.countDown()
             bReleaseLatch.await()
+          }
+          3 -> {
+            // Call C: same setup as call A, but wrapped in try/finally to prove that a rejected
+            // resumption cancels the coroutine at its suspension point -- skipping the code that
+            // would otherwise follow -- rather than letting it continue, while still unwinding
+            // through finally so cleanup runs.
+            try {
+              suspendCancellableCoroutine<Unit> { cont ->
+                cPendingResume = cont
+                cStartedLatch.countDown()
+              }
+              cContinuedAfterSuspend.set(true)
+            } finally {
+              cFinallyRanLatch.countDown()
+            }
           }
         }
         return FakeResponse.getDefaultInstance()
@@ -111,7 +131,7 @@ class CommonServerNestedRejectionTest {
         clientAuth = ClientAuth.NONE,
         nameForLogging = "CommonServerNestedRejectionTest",
         services = listOf(service.bindService()),
-        executor = executor,
+        serviceCoroutineExecutor = executor,
       )
       .start()
 
@@ -130,8 +150,8 @@ class CommonServerNestedRejectionTest {
     val stub = FakeServiceGrpcKt.FakeServiceCoroutineStub(channel)
 
     // ErrorLoggingServerInterceptor only logs UNKNOWN/INTERNAL closes -- capturing its output
-    // verifies that OverloadAwareServerInterceptor's own close actually reaches it, rather than
-    // bypassing it via interceptor ordering.
+    // verifies that ExecutorRejectionServerInterceptor's own close actually reaches it, rather
+    // than bypassing it via interceptor ordering.
     val errorLoggingRecords = mutableListOf<LogRecord>()
     val errorLoggingHandler =
       object : Handler() {
@@ -199,4 +219,39 @@ class CommonServerNestedRejectionTest {
       assertThat(thrown.status.code).isEqualTo(Status.Code.INTERNAL)
     }
   }
+
+  @Test
+  fun `rejected resumption cancels the coroutine at suspension instead of continuing, but still runs cleanup`() =
+    runBlocking {
+      val stub = FakeServiceGrpcKt.FakeServiceCoroutineStub(channel)
+
+      supervisorScope {
+        val cDeferred =
+          async(Dispatchers.IO) {
+            stub.withDeadlineAfter(30, TimeUnit.SECONDS).fake(flowOf(fakeRequest { number = 3 }))
+          }
+        assertThat(cStartedLatch.await(5, TimeUnit.SECONDS)).isTrue()
+
+        val bJob =
+          launch(Dispatchers.IO) {
+            runCatching {
+              stub.withDeadlineAfter(30, TimeUnit.SECONDS).fake(flowOf(fakeRequest { number = 2 }))
+            }
+          }
+        assertThat(bStartedLatch.await(5, TimeUnit.SECONDS)).isTrue()
+
+        cPendingResume!!.resume(Unit)
+        val thrown = assertFailsWith<StatusException> { withTimeout(3_000) { cDeferred.await() } }
+        assertThat(thrown.status.code).isEqualTo(Status.Code.INTERNAL)
+
+        // The redispatch to Dispatchers.IO exists so cancellation can unwind the coroutine's
+        // stack -- including a finally block -- not so it can keep running past the suspension
+        // point it was rejected while resuming from.
+        assertThat(cFinallyRanLatch.await(5, TimeUnit.SECONDS)).isTrue()
+        assertThat(cContinuedAfterSuspend.get()).isFalse()
+
+        bReleaseLatch.countDown()
+        bJob.join()
+      }
+    }
 }
