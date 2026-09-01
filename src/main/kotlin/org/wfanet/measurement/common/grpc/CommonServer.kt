@@ -24,6 +24,7 @@ import io.grpc.protobuf.services.ProtoReflectionServiceV1
 import io.netty.handler.ssl.ClientAuth
 import io.netty.handler.ssl.SslContext
 import java.io.IOException
+import java.util.concurrent.Executor
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.logging.Level
@@ -42,6 +43,7 @@ private constructor(
   verboseGrpcLogging: Boolean,
   services: Iterable<ServerServiceDefinition>,
   sslContext: SslContext?,
+  serviceCoroutineExecutor: Executor?,
 ) : AutoCloseable {
   private val healthStatusManager = HealthStatusManager()
   private val started = AtomicBoolean(false)
@@ -67,10 +69,22 @@ private constructor(
           addService(service)
         }
         addService(ProtoReflectionServiceV1.newInstance())
+        // The last-added interceptor runs first. ExecutorRejectionServerInterceptor is added before
+        // the logging interceptor so that its direct call to ServerCall.close on rejection passes
+        // through logging, same as any other call outcome. CloseOnceServerInterceptor is added
+        // last (i.e. runs first, outermost) so that both that call and grpc-kotlin's own
+        // completion handling -- which also attempts to close the call -- go through its
+        // duplicate-close guard.
+        if (serviceCoroutineExecutor != null) {
+          intercept(ExecutorRejectionServerInterceptor(serviceCoroutineExecutor))
+        }
         if (verboseGrpcLogging) {
           intercept(LoggingServerInterceptor)
         } else {
           intercept(ErrorLoggingServerInterceptor)
+        }
+        if (serviceCoroutineExecutor != null) {
+          intercept(CloseOnceServerInterceptor)
         }
       }
       .build()
@@ -228,7 +242,19 @@ private constructor(
 
     const val DEFAULT_SHUTDOWN_GRACE_PERIOD_SECONDS = 25
 
-    /** Constructs a [CommonServer] from parameters. */
+    /**
+     * Constructs a [CommonServer] from parameters.
+     *
+     * If [serviceCoroutineExecutor] is non-null, [ExecutorRejectionServerInterceptor] is installed
+     * globally, *overriding* the per-RPC coroutine dispatcher for every service registered with
+     * this server -- regardless of what [kotlin.coroutines.CoroutineContext] each service was
+     * individually constructed with. [serviceCoroutineExecutor] must therefore be the same
+     * [Executor] every registered service actually uses for its own coroutine dispatcher; passing a
+     * different one will silently redirect all of their dispatching to it instead. In exchange, a
+     * rejection from it is surfaced to clients as a clean status (`RESOURCE_EXHAUSTED`,
+     * `UNAVAILABLE`, or `INTERNAL`) rather than left to hang until deadline. See
+     * [ExecutorRejectionServerInterceptor].
+     */
     fun fromParameters(
       verboseGrpcLogging: Boolean,
       certs: SigningCerts?,
@@ -238,6 +264,7 @@ private constructor(
       port: Int = 0,
       healthPort: Int = 0,
       shutdownGracePeriodSeconds: Int = DEFAULT_SHUTDOWN_GRACE_PERIOD_SECONDS,
+      serviceCoroutineExecutor: Executor? = null,
     ): CommonServer {
       return CommonServer(
         nameForLogging,
@@ -247,6 +274,7 @@ private constructor(
         verboseGrpcLogging,
         services,
         certs?.toServerTlsContext(clientAuth),
+        serviceCoroutineExecutor,
       )
     }
 
@@ -255,6 +283,7 @@ private constructor(
       flags: Flags,
       nameForLogging: String,
       services: Iterable<ServerServiceDefinition>,
+      serviceCoroutineExecutor: Executor? = null,
     ): CommonServer {
       return fromParameters(
         flags.debugVerboseGrpcLogging,
@@ -265,6 +294,7 @@ private constructor(
         flags.port,
         flags.healthPort,
         flags.shutdownGracePeriodSeconds,
+        serviceCoroutineExecutor,
       )
     }
 
@@ -273,20 +303,26 @@ private constructor(
       flags: Flags,
       nameForLogging: String,
       vararg services: ServerServiceDefinition,
-    ): CommonServer = fromFlags(flags, nameForLogging, services.asIterable())
+      serviceCoroutineExecutor: Executor? = null,
+    ): CommonServer =
+      fromFlags(flags, nameForLogging, services.asIterable(), serviceCoroutineExecutor)
 
     /** Constructs a [CommonServer] from command-line flags. */
     fun fromFlags(
       flags: Flags,
       nameForLogging: String,
       services: Iterable<BindableService>,
-    ): CommonServer = fromFlags(flags, nameForLogging, services.map { it.bindService() })
+      serviceCoroutineExecutor: Executor? = null,
+    ): CommonServer =
+      fromFlags(flags, nameForLogging, services.map { it.bindService() }, serviceCoroutineExecutor)
 
     /** Constructs a [CommonServer] from command-line flags. */
     fun fromFlags(
       flags: Flags,
       nameForLogging: String,
       vararg services: BindableService,
-    ): CommonServer = fromFlags(flags, nameForLogging, services.map { it.bindService() })
+      serviceCoroutineExecutor: Executor? = null,
+    ): CommonServer =
+      fromFlags(flags, nameForLogging, services.map { it.bindService() }, serviceCoroutineExecutor)
   }
 }
