@@ -91,11 +91,6 @@ class AwsKmsClientFactory : KmsClientFactory<AwsWebIdentityCredentials> {
       }
 
     return TinkAwsKmsClient()
-      .withCredentialsProvider(
-        // TODO(tink-crypto/tink-java-awskms#6): once a release including the fix is available,
-        // pass credentialsProvider directly instead of wrapping it in
-        // AwsCredentialsProviderAdapter.
-        AwsCredentialsProviderAdapter(credentialsProvider)
-      )
+      .withCredentialsProvider(AwsCredentialsProviderAdapter(credentialsProvider))
   }
 }

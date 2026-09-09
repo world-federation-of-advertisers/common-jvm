@@ -39,6 +39,9 @@ class AwsCredentialsProviderAdapter(
   override fun resolveIdentity(
     request: ResolveIdentityRequest
   ): CompletableFuture<AwsCredentialsIdentity> =
+    // .thenApply { it } adapts the Java wildcard return type
+    // (CompletableFuture<? extends AwsCredentialsIdentity>) to the invariant type Kotlin requires
+    // for this override's signature.
     delegate
       .resolveIdentity(request)
       .thenApply { it }
