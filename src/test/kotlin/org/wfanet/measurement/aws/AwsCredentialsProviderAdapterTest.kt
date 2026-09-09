@@ -15,6 +15,7 @@
 package org.wfanet.measurement.aws
 
 import com.google.common.truth.Truth.assertThat
+import java.io.IOException
 import java.security.GeneralSecurityException
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ExecutionException
@@ -72,8 +73,47 @@ class AwsCredentialsProviderAdapterTest {
   }
 
   @Test
+  fun `resolveIdentity translates IOException to SdkClientException`() {
+    val failure = IOException("credential file unavailable")
+    val delegate =
+      object : IdentityProvider<AwsCredentialsIdentity> {
+        override fun identityType(): Class<AwsCredentialsIdentity> =
+          AwsCredentialsIdentity::class.java
+
+        override fun resolveIdentity(
+          request: ResolveIdentityRequest
+        ): CompletableFuture<AwsCredentialsIdentity> = CompletableFuture.failedFuture(failure)
+      }
+    val adapter = AwsCredentialsProviderAdapter(delegate)
+
+    val exception = assertFailsWith<ExecutionException> { adapter.resolveIdentity().get() }
+
+    assertThat(exception).hasCauseThat().isInstanceOf(SdkClientException::class.java)
+    assertThat(exception.cause).hasCauseThat().isSameInstanceAs(failure)
+  }
+
+  @Test
   fun `resolveIdentity preserves a runtime failure`() {
     val failure = IllegalStateException("credential provider bug")
+    val delegate =
+      object : IdentityProvider<AwsCredentialsIdentity> {
+        override fun identityType(): Class<AwsCredentialsIdentity> =
+          AwsCredentialsIdentity::class.java
+
+        override fun resolveIdentity(
+          request: ResolveIdentityRequest
+        ): CompletableFuture<AwsCredentialsIdentity> = CompletableFuture.failedFuture(failure)
+      }
+    val adapter = AwsCredentialsProviderAdapter(delegate)
+
+    val exception = assertFailsWith<ExecutionException> { adapter.resolveIdentity().get() }
+
+    assertThat(exception).hasCauseThat().isSameInstanceAs(failure)
+  }
+
+  @Test
+  fun `resolveIdentity preserves an Error`() {
+    val failure = AssertionError("credential provider invariant failed")
     val delegate =
       object : IdentityProvider<AwsCredentialsIdentity> {
         override fun identityType(): Class<AwsCredentialsIdentity> =
