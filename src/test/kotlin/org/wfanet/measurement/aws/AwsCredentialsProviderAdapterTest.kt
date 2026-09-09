@@ -93,6 +93,25 @@ class AwsCredentialsProviderAdapterTest {
   }
 
   @Test
+  fun `resolveIdentity preserves an SdkClientException`() {
+    val failure = SdkClientException.create("credentials unavailable")
+    val delegate =
+      object : IdentityProvider<AwsCredentialsIdentity> {
+        override fun identityType(): Class<AwsCredentialsIdentity> =
+          AwsCredentialsIdentity::class.java
+
+        override fun resolveIdentity(
+          request: ResolveIdentityRequest
+        ): CompletableFuture<AwsCredentialsIdentity> = CompletableFuture.failedFuture(failure)
+      }
+    val adapter = AwsCredentialsProviderAdapter(delegate)
+
+    val exception = assertFailsWith<ExecutionException> { adapter.resolveIdentity().get() }
+
+    assertThat(exception).hasCauseThat().isSameInstanceAs(failure)
+  }
+
+  @Test
   fun `resolveIdentity preserves a runtime failure`() {
     val failure = IllegalStateException("credential provider bug")
     val delegate =
