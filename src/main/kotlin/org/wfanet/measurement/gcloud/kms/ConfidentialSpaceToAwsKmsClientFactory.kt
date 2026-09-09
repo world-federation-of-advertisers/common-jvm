@@ -14,17 +14,14 @@
 
 package org.wfanet.measurement.gcloud.kms
 
-import com.google.crypto.tink.Aead
 import com.google.crypto.tink.KmsClient
 import com.google.crypto.tink.integration.awskms.AwsKmsClient as TinkAwsKmsClient
 import java.security.GeneralSecurityException
 import java.time.Clock
 import java.time.Duration
-import java.util.concurrent.CompletionException
 import org.wfanet.measurement.aws.AwsCredentialsProviderAdapter
 import org.wfanet.measurement.aws.RefreshableAwsCredentialsIdentityProvider
 import org.wfanet.measurement.aws.TimeBoundCredentials
-import org.wfanet.measurement.aws.kms.CompletionExceptionTranslatingKmsClient
 import org.wfanet.measurement.common.crypto.tink.ConfidentialSpaceToAwsWifCredentials
 import org.wfanet.measurement.common.crypto.tink.KmsClientFactory
 import org.wfanet.measurement.gcloud.confidentialspace.AttestationTokenProvider
@@ -65,26 +62,23 @@ class ConfidentialSpaceToAwsKmsClientFactory(
    * Returns a [KmsClient] using a Confidential Space attestation token to authenticate directly
    * with AWS.
    *
-   * The token fetch and STS exchange are deferred until the AWS SDK resolves credentials, and fail
-   * that resolution with a [GeneralSecurityException] when they cannot be completed.
+   * The token fetch and STS exchange are deferred until the AWS SDK resolves credentials.
    *
    * @param config The Confidential Space-to-AWS configuration.
-   * @return An initialized [KmsClient] whose [Aead] instances do not throw [CompletionException].
+   * @return An initialized [KmsClient].
    */
   override fun getKmsClient(config: ConfidentialSpaceToAwsWifCredentials): KmsClient {
     val credentialsProvider =
       RefreshableAwsCredentialsIdentityProvider(refreshMargin = refreshMargin, clock = clock) {
         obtainAwsCredentials(config).toFuture()
       }
-    return CompletionExceptionTranslatingKmsClient.wrap(
-      TinkAwsKmsClient()
-        .withCredentialsProvider(
-          // TODO(tink-crypto/tink-java-awskms#6): once a release including the fix is
-          // available, pass credentialsProvider directly instead of wrapping it in
-          // AwsCredentialsProviderAdapter.
-          AwsCredentialsProviderAdapter(credentialsProvider)
-        )
-    )
+    return TinkAwsKmsClient()
+      .withCredentialsProvider(
+        // TODO(tink-crypto/tink-java-awskms#6): once a release including the fix is available,
+        // pass credentialsProvider directly instead of wrapping it in
+        // AwsCredentialsProviderAdapter.
+        AwsCredentialsProviderAdapter(credentialsProvider)
+      )
   }
 
   private fun obtainAwsCredentials(

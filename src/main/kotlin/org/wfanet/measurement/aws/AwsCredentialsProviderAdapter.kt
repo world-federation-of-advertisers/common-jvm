@@ -15,8 +15,10 @@
 package org.wfanet.measurement.aws
 
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CompletionException
 import software.amazon.awssdk.auth.credentials.AwsCredentials
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider
+import software.amazon.awssdk.core.exception.SdkClientException
 import software.amazon.awssdk.identity.spi.AwsCredentialsIdentity
 import software.amazon.awssdk.identity.spi.IdentityProvider
 import software.amazon.awssdk.identity.spi.ResolveIdentityRequest
@@ -26,6 +28,9 @@ import software.amazon.awssdk.identity.spi.ResolveIdentityRequest
  * some AWS SDK integrations require in place of the more general [IdentityProvider] -- for
  * integrations that only ever call [resolveIdentity]. [resolveCredentials] is not supported; see
  * its KDoc.
+ *
+ * Checked failures from the delegate are translated to [SdkClientException] so synchronous AWS
+ * clients surface them through their documented credential-loading failure path.
  */
 class AwsCredentialsProviderAdapter(
   private val delegate: IdentityProvider<AwsCredentialsIdentity>
@@ -34,10 +39,24 @@ class AwsCredentialsProviderAdapter(
   override fun resolveIdentity(
     request: ResolveIdentityRequest
   ): CompletableFuture<AwsCredentialsIdentity> =
-    // .thenApply { it } adapts the Java wildcard return type
-    // (CompletableFuture<? extends AwsCredentialsIdentity>) to the invariant type Kotlin requires
-    // for this override's signature.
-    delegate.resolveIdentity(request).thenApply { it }
+    delegate
+      .resolveIdentity(request)
+      .thenApply { it }
+      .exceptionally { exception -> throw normalizeFailure(exception) }
+
+  private fun normalizeFailure(exception: Throwable): Throwable {
+    val cause: Throwable =
+      if (exception is CompletionException && exception.cause != null) {
+        exception.cause!!
+      } else {
+        exception
+      }
+    return when (cause) {
+      is RuntimeException,
+      is Error -> cause
+      else -> SdkClientException.create("Failed to resolve AWS credentials", cause)
+    }
+  }
 
   /**
    * Returns [AwsCredentials] that can be used to authorize an AWS request.

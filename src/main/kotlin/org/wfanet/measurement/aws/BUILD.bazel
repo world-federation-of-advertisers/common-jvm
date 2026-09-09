@@ -13,6 +13,7 @@ kt_jvm_library(
     ],
     deps = [
         "//imports/java/software/amazon/awssdk/auth",
+        "//imports/java/software/amazon/awssdk/core",
         "//imports/java/software/amazon/awssdk/identity/spi",
     ],
 )

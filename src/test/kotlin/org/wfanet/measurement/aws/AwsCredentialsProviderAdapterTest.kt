@@ -15,12 +15,15 @@
 package org.wfanet.measurement.aws
 
 import com.google.common.truth.Truth.assertThat
+import java.security.GeneralSecurityException
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ExecutionException
 import kotlin.test.assertFailsWith
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 import software.amazon.awssdk.auth.credentials.AwsSessionCredentials
+import software.amazon.awssdk.core.exception.SdkClientException
 import software.amazon.awssdk.identity.spi.AwsCredentialsIdentity
 import software.amazon.awssdk.identity.spi.IdentityProvider
 import software.amazon.awssdk.identity.spi.ResolveIdentityRequest
@@ -46,6 +49,45 @@ class AwsCredentialsProviderAdapterTest {
     val resolved = adapter.resolveIdentity().get()
 
     assertThat(resolved).isSameInstanceAs(credentials)
+  }
+
+  @Test
+  fun `resolveIdentity translates a checked failure to SdkClientException`() {
+    val failure = GeneralSecurityException("credential chain failed")
+    val delegate =
+      object : IdentityProvider<AwsCredentialsIdentity> {
+        override fun identityType(): Class<AwsCredentialsIdentity> =
+          AwsCredentialsIdentity::class.java
+
+        override fun resolveIdentity(
+          request: ResolveIdentityRequest
+        ): CompletableFuture<AwsCredentialsIdentity> = CompletableFuture.failedFuture(failure)
+      }
+    val adapter = AwsCredentialsProviderAdapter(delegate)
+
+    val exception = assertFailsWith<ExecutionException> { adapter.resolveIdentity().get() }
+
+    assertThat(exception).hasCauseThat().isInstanceOf(SdkClientException::class.java)
+    assertThat(exception.cause).hasCauseThat().isSameInstanceAs(failure)
+  }
+
+  @Test
+  fun `resolveIdentity preserves a runtime failure`() {
+    val failure = IllegalStateException("credential provider bug")
+    val delegate =
+      object : IdentityProvider<AwsCredentialsIdentity> {
+        override fun identityType(): Class<AwsCredentialsIdentity> =
+          AwsCredentialsIdentity::class.java
+
+        override fun resolveIdentity(
+          request: ResolveIdentityRequest
+        ): CompletableFuture<AwsCredentialsIdentity> = CompletableFuture.failedFuture(failure)
+      }
+    val adapter = AwsCredentialsProviderAdapter(delegate)
+
+    val exception = assertFailsWith<ExecutionException> { adapter.resolveIdentity().get() }
+
+    assertThat(exception).hasCauseThat().isSameInstanceAs(failure)
   }
 
   @Test
