@@ -18,6 +18,7 @@ import com.google.common.truth.Truth.assertThat
 import java.io.IOException
 import java.security.GeneralSecurityException
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CompletionException
 import java.util.concurrent.ExecutionException
 import kotlin.test.assertFailsWith
 import org.junit.Test
@@ -53,7 +54,7 @@ class AwsCredentialsProviderAdapterTest {
   }
 
   @Test
-  fun `resolveIdentity translates a checked failure to SdkClientException`() {
+  fun `resolveIdentity translates a CompletionException with a checked cause`() {
     val failure = GeneralSecurityException("credential chain failed")
     val delegate =
       object : IdentityProvider<AwsCredentialsIdentity> {
@@ -62,7 +63,8 @@ class AwsCredentialsProviderAdapterTest {
 
         override fun resolveIdentity(
           request: ResolveIdentityRequest
-        ): CompletableFuture<AwsCredentialsIdentity> = CompletableFuture.failedFuture(failure)
+        ): CompletableFuture<AwsCredentialsIdentity> =
+          CompletableFuture.failedFuture(CompletionException(failure))
       }
     val adapter = AwsCredentialsProviderAdapter(delegate)
 
