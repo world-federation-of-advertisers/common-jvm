@@ -52,8 +52,9 @@ protected constructor(
 ) : ReadContext {
 
   override suspend fun executeQuery(query: BoundStatement): QueryResult {
-    val result: Result =
-      executeInTransaction { query.toStatement(connection).execute().awaitSingle() }
+    val result: Result = executeInTransaction {
+      query.toStatement(connection).execute().awaitSingle()
+    }
     return QueryResult(result)
   }
 
@@ -90,10 +91,7 @@ protected constructor(
     /** SQLSTATE indicating that the transaction failed to serialize and can be retried. */
     private const val SERIALIZATION_FAILURE_SQL_STATE = "40001"
 
-    fun create(
-      connection: Connection,
-      transactionDefinition: TransactionDefinition,
-    ): ReadContext {
+    fun create(connection: Connection, transactionDefinition: TransactionDefinition): ReadContext {
       return ReadContextImpl(connection, transactionDefinition)
     }
 
@@ -124,10 +122,7 @@ private constructor(connection: Connection, transactionDefinition: TransactionDe
   }
 
   companion object {
-    fun create(
-      connection: Connection,
-      transactionDefinition: TransactionDefinition,
-    ): ReadContext {
+    fun create(connection: Connection, transactionDefinition: TransactionDefinition): ReadContext {
       return SingleUseReadContext(connection, transactionDefinition)
     }
   }

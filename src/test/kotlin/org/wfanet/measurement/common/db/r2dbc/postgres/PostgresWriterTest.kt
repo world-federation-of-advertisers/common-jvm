@@ -50,9 +50,7 @@ class PostgresWriterTest {
   private suspend fun readCarYear(carId: InternalId): Int =
     dbClient
       .singleUse()
-      .executeQuery(
-        boundStatement("SELECT Year FROM Cars WHERE CarId = $1") { bind("$1", carId) }
-      )
+      .executeQuery(boundStatement("SELECT Year FROM Cars WHERE CarId = $1") { bind("$1", carId) })
       .consume<Int> { row -> row["Year"] }
       .toList()
       .first()
@@ -68,32 +66,31 @@ class PostgresWriterTest {
   }
 
   @Test
-  fun `execute does not commit statements of a retried attempt individually`(): Unit =
-    runBlocking {
-      val firstStatementExecuted = CompletableDeferred<Unit>()
-      val resumeAttempt = CompletableDeferred<Unit>()
-      val writer =
-        InsertCarsWriter(
-          failFirstAttempt = true,
-          betweenStatements = {
-            firstStatementExecuted.complete(Unit)
-            resumeAttempt.await()
-          },
-        )
+  fun `execute does not commit statements of a retried attempt individually`(): Unit = runBlocking {
+    val firstStatementExecuted = CompletableDeferred<Unit>()
+    val resumeAttempt = CompletableDeferred<Unit>()
+    val writer =
+      InsertCarsWriter(
+        failFirstAttempt = true,
+        betweenStatements = {
+          firstStatementExecuted.complete(Unit)
+          resumeAttempt.await()
+        },
+      )
 
-      coroutineScope {
-        val execution = async { writer.execute(dbClient, ID_GENERATOR) }
-        firstStatementExecuted.await()
+    coroutineScope {
+      val execution = async { writer.execute(dbClient, ID_GENERATOR) }
+      firstStatementExecuted.await()
 
-        // The retried attempt has executed its first statement but has not committed.
-        assertThat(readCarIds()).isEmpty()
+      // The retried attempt has executed its first statement but has not committed.
+      assertThat(readCarIds()).isEmpty()
 
-        resumeAttempt.complete(Unit)
-        execution.await()
-      }
-
-      assertThat(readCarIds()).containsExactly(FIRST_CAR_ID, SECOND_CAR_ID).inOrder()
+      resumeAttempt.complete(Unit)
+      execution.await()
     }
+
+    assertThat(readCarIds()).containsExactly(FIRST_CAR_ID, SECOND_CAR_ID).inOrder()
+  }
 
   @Test
   fun `execute retries when another transaction updates the same row`(): Unit = runBlocking {

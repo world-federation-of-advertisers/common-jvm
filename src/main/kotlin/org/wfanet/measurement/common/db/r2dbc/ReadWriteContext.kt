@@ -44,16 +44,15 @@ private constructor(connection: Connection, transactionDefinition: TransactionDe
 
   @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class) // For `flatMapConcat`.
   override suspend fun executeStatement(statement: BoundStatement): StatementResult {
-    val numRowsUpdated =
-      executeInTransaction {
-        statement
-          .toStatement(connection)
-          .execute()
-          .asFlow()
-          .flatMapConcat { it.rowsUpdated.asFlow() }
-          .cancellable()
-          .fold(0L) { sum: Long, rowsUpdated: Long -> sum + rowsUpdated }
-      }
+    val numRowsUpdated = executeInTransaction {
+      statement
+        .toStatement(connection)
+        .execute()
+        .asFlow()
+        .flatMapConcat { it.rowsUpdated.asFlow() }
+        .cancellable()
+        .fold(0L) { sum: Long, rowsUpdated: Long -> sum + rowsUpdated }
+    }
     return StatementResult(numRowsUpdated)
   }
 
