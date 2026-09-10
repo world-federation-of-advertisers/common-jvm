@@ -32,30 +32,33 @@ interface ReadWriteContext : ReadContext {
   /**
    * Commits the transaction.
    *
-   * This closes the underlying connection.
+   * The context remains usable: the next query or statement begins a new transaction. Call [close]
+   * to close the underlying connection.
    */
   suspend fun commit()
 }
 
-internal class ReadWriteContextImpl private constructor(connection: Connection) :
-  ReadWriteContext, ReadContextImpl(connection) {
+internal class ReadWriteContextImpl
+private constructor(connection: Connection, transactionDefinition: TransactionDefinition) :
+  ReadWriteContext, ReadContextImpl(connection, transactionDefinition) {
 
   @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class) // For `flatMapConcat`.
   override suspend fun executeStatement(statement: BoundStatement): StatementResult {
     val numRowsUpdated =
-      statement
-        .toStatement(connection)
-        .execute()
-        .asFlow()
-        .flatMapConcat { it.rowsUpdated.asFlow() }
-        .cancellable()
-        .fold(0L) { sum: Long, rowsUpdated: Long -> sum + rowsUpdated }
+      executeInTransaction {
+        statement
+          .toStatement(connection)
+          .execute()
+          .asFlow()
+          .flatMapConcat { it.rowsUpdated.asFlow() }
+          .cancellable()
+          .fold(0L) { sum: Long, rowsUpdated: Long -> sum + rowsUpdated }
+      }
     return StatementResult(numRowsUpdated)
   }
 
   override suspend fun commit() {
     connection.commitTransaction().awaitFirstOrNull()
-    close()
   }
 
   override suspend fun rollback() {
@@ -63,12 +66,11 @@ internal class ReadWriteContextImpl private constructor(connection: Connection) 
   }
 
   companion object {
-    suspend fun create(
+    fun create(
       connection: Connection,
       transactionDefinition: TransactionDefinition,
     ): ReadWriteContext {
-      beginTransaction(connection, transactionDefinition)
-      return ReadWriteContextImpl(connection)
+      return ReadWriteContextImpl(connection, transactionDefinition)
     }
   }
 }

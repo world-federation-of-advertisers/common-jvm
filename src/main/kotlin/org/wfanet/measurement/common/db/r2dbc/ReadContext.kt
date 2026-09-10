@@ -17,6 +17,7 @@
 package org.wfanet.measurement.common.db.r2dbc
 
 import io.r2dbc.spi.Connection
+import io.r2dbc.spi.R2dbcException
 import io.r2dbc.spi.Result
 import io.r2dbc.spi.Row
 import io.r2dbc.spi.TransactionDefinition
@@ -39,16 +40,20 @@ interface ReadContext {
   /**
    * Rollbacks the transaction.
    *
-   * Note: Using this on a new transaction causes the transaction to be stuck in the IDLE state.
+   * The context remains usable: the next query or statement begins a new transaction.
    */
   suspend fun rollback()
 }
 
-internal open class ReadContextImpl protected constructor(protected val connection: Connection) :
-  ReadContext {
+internal open class ReadContextImpl
+protected constructor(
+  protected val connection: Connection,
+  private val transactionDefinition: TransactionDefinition,
+) : ReadContext {
 
   override suspend fun executeQuery(query: BoundStatement): QueryResult {
-    val result: Result = query.toStatement(connection).execute().awaitSingle()
+    val result: Result =
+      executeInTransaction { query.toStatement(connection).execute().awaitSingle() }
     return QueryResult(result)
   }
 
@@ -60,13 +65,36 @@ internal open class ReadContextImpl protected constructor(protected val connecti
     connection.rollbackTransaction().awaitFirstOrNull()
   }
 
+  /**
+   * Executes [block] within the transaction, beginning one if the connection is not already in a
+   * transaction.
+   *
+   * A serialization failure aborts the transaction, so it is rolled back to leave the connection in
+   * a state where [block] can be attempted again in a new transaction.
+   */
+  protected suspend fun <T> executeInTransaction(block: suspend () -> T): T {
+    if (connection.isAutoCommit) {
+      beginTransaction(connection, transactionDefinition)
+    }
+    try {
+      return block()
+    } catch (e: R2dbcException) {
+      if (e.sqlState == SERIALIZATION_FAILURE_SQL_STATE) {
+        rollback()
+      }
+      throw e
+    }
+  }
+
   companion object {
-    suspend fun create(
+    /** SQLSTATE indicating that the transaction failed to serialize and can be retried. */
+    private const val SERIALIZATION_FAILURE_SQL_STATE = "40001"
+
+    fun create(
       connection: Connection,
       transactionDefinition: TransactionDefinition,
     ): ReadContext {
-      beginTransaction(connection, transactionDefinition)
-      return ReadContextImpl(connection)
+      return ReadContextImpl(connection, transactionDefinition)
     }
 
     suspend fun beginTransaction(connection: Connection, definition: TransactionDefinition) {
@@ -80,13 +108,14 @@ internal open class ReadContextImpl protected constructor(protected val connecti
   }
 }
 
-internal class SingleUseReadContext private constructor(connection: Connection) :
-  ReadContextImpl(connection) {
+internal class SingleUseReadContext
+private constructor(connection: Connection, transactionDefinition: TransactionDefinition) :
+  ReadContextImpl(connection, transactionDefinition) {
 
   override suspend fun executeQuery(query: BoundStatement): QueryResult {
     val result: Result =
       try {
-        query.toStatement(connection).execute().awaitSingle()
+        executeInTransaction { query.toStatement(connection).execute().awaitSingle() }
       } catch (e: Exception) {
         close()
         throw e
@@ -95,12 +124,11 @@ internal class SingleUseReadContext private constructor(connection: Connection) 
   }
 
   companion object {
-    suspend fun create(
+    fun create(
       connection: Connection,
       transactionDefinition: TransactionDefinition,
     ): ReadContext {
-      beginTransaction(connection, transactionDefinition)
-      return SingleUseReadContext(connection)
+      return SingleUseReadContext(connection, transactionDefinition)
     }
   }
 }
