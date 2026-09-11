@@ -12,10 +12,11 @@ GRPC_JAVA_VERSION = "1.77.0"  # Compatible with rules_kotlin_jvm version.
 
 GRPC_KOTLIN_VERSION = "1.5.0"  # Compatible with rules_kotlin_jvm version.
 
-# Note: The AWS SDK version needs to match with the EMR image version to avoid class conflicts at runtime.
-# Current version matches with the SDK version in EMR image 7.1.0
-# (https://docs.aws.amazon.com/emr/latest/ReleaseGuide/emr-710-release.html).
-AWS_JAVA_SDK_VERSION = "2.23.18"
+# AWS SDK 2.54.3 prevents checked credential-provider failures from leaking as CompletionException
+# through Tink AWS KMS. Downstream Beam deployments must verify EMR compatibility: EMR 7.1.0
+# bundles AWS SDK 2.23.18, and even the latest EMR 7.13.0 release lags at 2.42.12.
+# https://docs.aws.amazon.com/emr/latest/ReleaseGuide/emr-7130-release.html
+AWS_JAVA_SDK_VERSION = "2.54.3"
 
 TRUTH_VERSION = "1.4.4"
 
@@ -258,23 +259,20 @@ maven.install(
         "com.google.auth:google-auth-library-oauth2-http",
         "com.google.auth:google-auth-library-credentials",
         "com.google.crypto.tink:tink-gcpkms:1.11.0",
-        "com.google.crypto.tink:tink-awskms:2.0.0",
+        "com.google.crypto.tink:tink-awskms:2.1.0",
 
         # Cloud Functions
         "io.cloudevents:cloudevents-core",
 
         # AWS.
         "software.amazon.awssdk:auth",
+        "software.amazon.awssdk:sdk-core",
         "software.amazon.awssdk:identity-spi",
         "software.amazon.awssdk:regions",
         "software.amazon.awssdk:s3",
         "software.amazon.awssdk:secretsmanager",
         "software.amazon.awssdk:kms",
         "software.amazon.awssdk:sts",
-        # commons-logging is an optional dependency of the Apache HTTP client that
-        # software.amazon.awssdk:sts uses by default, so rules_jvm_external does not pull it
-        # in transitively; StsClient.builder().build() throws ClassNotFoundException without it.
-        "commons-logging:commons-logging:1.1.3",
 
         # OpenTelemetry.
         "io.opentelemetry:opentelemetry-api",
