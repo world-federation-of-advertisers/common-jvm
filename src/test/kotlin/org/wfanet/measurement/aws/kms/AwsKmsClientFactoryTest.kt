@@ -17,12 +17,11 @@
 package org.wfanet.measurement.aws.kms
 
 import com.google.common.truth.Truth.assertThat
+import java.nio.file.Files
 import java.security.GeneralSecurityException
 import kotlin.test.assertFailsWith
 import org.junit.Before
-import org.junit.Rule
 import org.junit.Test
-import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 import org.wfanet.measurement.common.crypto.tink.AwsWebIdentityCredentials
@@ -38,8 +37,6 @@ private const val INVALID_ARN_KEY_URI = "aws-kms://invalid-arn"
 /** Tests for [AwsKmsClient]. */
 @RunWith(JUnit4::class)
 class AwsKmsClientFactoryTest {
-  @get:Rule val temporaryFolder = TemporaryFolder()
-
   private lateinit var kmsClient: AwsKmsClient
 
   @Before
@@ -87,10 +84,12 @@ class AwsKmsClientFactoryTest {
   @Test
   fun `getKmsClient with invalid config preserves the credential failure cause chain`() {
     val factory = AwsKmsClientFactory()
+    val missingTokenFile = Files.createTempFile("aws-web-identity-", ".token")
+    Files.delete(missingTokenFile)
     val config =
       AwsWebIdentityCredentials(
         roleArn = "arn:aws:iam::123456789012:role/test-role",
-        webIdentityTokenFilePath = temporaryFolder.root.resolve("missing-token").path,
+        webIdentityTokenFilePath = missingTokenFile.toString(),
         roleSessionName = "test-session",
         region = "us-east-1",
       )
