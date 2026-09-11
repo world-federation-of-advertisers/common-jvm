@@ -7,7 +7,6 @@ kt_jvm_library(
     srcs = [
         "AwsKmsClient.kt",
         "AwsKmsClientFactory.kt",
-        "CompletionExceptionTranslatingKmsClient.kt",
     ],
     deps = [
         "//imports/java/com/google/crypto/tink",
