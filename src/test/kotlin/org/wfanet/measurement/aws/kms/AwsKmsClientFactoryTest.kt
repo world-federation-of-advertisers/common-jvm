@@ -27,6 +27,7 @@ import org.junit.runners.JUnit4
 import org.wfanet.measurement.common.crypto.tink.AwsWebIdentityCredentials
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider
+import software.amazon.awssdk.core.exception.SdkClientException
 
 private const val AWS_KMS_KEY_URI = "aws-kms://arn:aws:kms:us-east-1:123456789012:key/test-key-id"
 private const val GCP_KMS_KEY_URI = "gcp-kms://projects/test/locations/us/keyRings/kr/cryptoKeys/ck"
@@ -81,7 +82,7 @@ class AwsKmsClientFactoryTest {
   }
 
   @Test
-  fun `getKmsClient translates a credential resolution CompletionException`() {
+  fun `getKmsClient with invalid config preserves the credential failure cause chain`() {
     val factory = AwsKmsClientFactory()
     val missingTokenFile = Files.createTempFile("aws-web-identity-", ".token")
     Files.delete(missingTokenFile)
@@ -98,6 +99,7 @@ class AwsKmsClientFactoryTest {
 
     val exception = assertFailsWith<GeneralSecurityException> { aead.encrypt(ByteArray(0), null) }
 
-    assertThat(exception).hasCauseThat().isInstanceOf(GeneralSecurityException::class.java)
+    assertThat(exception).hasCauseThat().isInstanceOf(SdkClientException::class.java)
+    assertThat(exception.cause).hasCauseThat().isInstanceOf(GeneralSecurityException::class.java)
   }
 }

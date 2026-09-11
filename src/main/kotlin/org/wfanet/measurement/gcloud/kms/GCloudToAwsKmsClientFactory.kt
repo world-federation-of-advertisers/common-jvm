@@ -17,7 +17,6 @@ package org.wfanet.measurement.gcloud.kms
 import com.google.auth.oauth2.GoogleCredentials
 import com.google.auth.oauth2.IdTokenCredentials
 import com.google.auth.oauth2.ImpersonatedCredentials
-import com.google.crypto.tink.Aead
 import com.google.crypto.tink.KmsClient
 import com.google.crypto.tink.integration.awskms.AwsKmsClient as TinkAwsKmsClient
 import com.google.gson.JsonArray
@@ -26,12 +25,10 @@ import java.security.GeneralSecurityException
 import java.time.Clock
 import java.time.Duration
 import java.util.concurrent.CompletableFuture
-import java.util.concurrent.CompletionException
 import java.util.logging.Logger
 import org.wfanet.measurement.aws.AwsCredentialsProviderAdapter
 import org.wfanet.measurement.aws.RefreshableAwsCredentialsIdentityProvider
 import org.wfanet.measurement.aws.TimeBoundCredentials
-import org.wfanet.measurement.aws.kms.CompletionExceptionTranslatingKmsClient
 import org.wfanet.measurement.common.crypto.tink.GCloudToAwsWifCredentials
 import org.wfanet.measurement.common.crypto.tink.KmsClientFactory
 import software.amazon.awssdk.auth.credentials.AnonymousCredentialsProvider
@@ -63,7 +60,7 @@ class GCloudToAwsKmsClientFactory(
    * service account impersonation -> OIDC ID token -> AWS STS AssumeRoleWithWebIdentity).
    *
    * @param config The Google Cloud-to-AWS WIF configuration.
-   * @return An initialized [KmsClient] whose [Aead] instances do not throw [CompletionException].
+   * @return An initialized [KmsClient].
    * @throws GeneralSecurityException if credentials cannot be obtained or exchanged.
    */
   override fun getKmsClient(config: GCloudToAwsWifCredentials): KmsClient {
@@ -73,9 +70,8 @@ class GCloudToAwsKmsClientFactory(
         // thread where blocking is expected, so it runs inline rather than on another thread.
         CompletableFuture.completedFuture(obtainAwsCredentials(config))
       }
-    return CompletionExceptionTranslatingKmsClient.wrap(
-      TinkAwsKmsClient().withCredentialsProvider(AwsCredentialsProviderAdapter(credentialsProvider))
-    )
+    return TinkAwsKmsClient()
+      .withCredentialsProvider(AwsCredentialsProviderAdapter(credentialsProvider))
   }
 
   companion object {

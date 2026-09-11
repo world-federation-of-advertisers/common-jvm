@@ -12,10 +12,9 @@ GRPC_JAVA_VERSION = "1.77.0"  # Compatible with rules_kotlin_jvm version.
 
 GRPC_KOTLIN_VERSION = "1.5.0"  # Compatible with rules_kotlin_jvm version.
 
-# Keep this aligned with the AWS SDK bundled in EMR 7.1.0. Beam jobs run in EMR's classloader,
-# where a different SDK version can conflict with the application JAR at runtime.
-# https://docs.aws.amazon.com/emr/latest/ReleaseGuide/emr-710-release.html
-AWS_JAVA_SDK_VERSION = "2.23.18"
+# The AWS SDK version must match the version bundled in the deployed EMR image to avoid class
+# conflicts at runtime. Coordinate upgrades with the EMR release used by downstream applications.
+AWS_JAVA_SDK_VERSION = "2.54.3"
 
 TRUTH_VERSION = "1.4.4"
 
@@ -272,10 +271,6 @@ maven.install(
         "software.amazon.awssdk:secretsmanager",
         "software.amazon.awssdk:kms",
         "software.amazon.awssdk:sts",
-        # commons-logging is an optional dependency of the Apache HTTP client that
-        # software.amazon.awssdk:sts uses by default, so rules_jvm_external does not pull it
-        # in transitively; StsClient.builder().build() throws ClassNotFoundException without it.
-        "commons-logging:commons-logging:1.1.3",
 
         # OpenTelemetry.
         "io.opentelemetry:opentelemetry-api",
