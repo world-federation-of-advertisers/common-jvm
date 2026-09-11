@@ -13,8 +13,9 @@ GRPC_JAVA_VERSION = "1.77.0"  # Compatible with rules_kotlin_jvm version.
 GRPC_KOTLIN_VERSION = "1.5.0"  # Compatible with rules_kotlin_jvm version.
 
 # AWS SDK 2.54.3 prevents checked credential-provider failures from leaking as CompletionException
-# through Tink AWS KMS. Downstream Beam deployments must verify compatibility with EMR 7.1.0,
-# which bundles AWS SDK 2.23.18.
+# through Tink AWS KMS. Downstream Beam deployments must verify EMR compatibility: EMR 7.1.0
+# bundles AWS SDK 2.23.18, and even the latest EMR 7.13.0 release lags at 2.42.12.
+# https://docs.aws.amazon.com/emr/latest/ReleaseGuide/emr-7130-release.html
 AWS_JAVA_SDK_VERSION = "2.54.3"
 
 TRUTH_VERSION = "1.4.4"
