@@ -14,14 +14,17 @@
 
 package org.wfanet.measurement.gcloud.kms
 
+import com.google.crypto.tink.Aead
 import com.google.crypto.tink.KmsClient
 import com.google.crypto.tink.integration.awskms.AwsKmsClient as TinkAwsKmsClient
 import java.security.GeneralSecurityException
 import java.time.Clock
 import java.time.Duration
+import java.util.concurrent.CompletionException
 import org.wfanet.measurement.aws.AwsCredentialsProviderAdapter
 import org.wfanet.measurement.aws.RefreshableAwsCredentialsIdentityProvider
 import org.wfanet.measurement.aws.TimeBoundCredentials
+import org.wfanet.measurement.aws.kms.CompletionExceptionTranslatingKmsClient
 import org.wfanet.measurement.common.crypto.tink.ConfidentialSpaceToAwsWifCredentials
 import org.wfanet.measurement.common.crypto.tink.KmsClientFactory
 import org.wfanet.measurement.gcloud.confidentialspace.AttestationTokenProvider
@@ -62,18 +65,20 @@ class ConfidentialSpaceToAwsKmsClientFactory(
    * Returns a [KmsClient] using a Confidential Space attestation token to authenticate directly
    * with AWS.
    *
-   * The token fetch and STS exchange are deferred until the AWS SDK resolves credentials.
+   * The token fetch and STS exchange are deferred until the AWS SDK resolves credentials, and fail
+   * that resolution with a [GeneralSecurityException] when they cannot be completed.
    *
    * @param config The Confidential Space-to-AWS configuration.
-   * @return An initialized [KmsClient].
+   * @return An initialized [KmsClient] whose [Aead] instances do not throw [CompletionException].
    */
   override fun getKmsClient(config: ConfidentialSpaceToAwsWifCredentials): KmsClient {
     val credentialsProvider =
       RefreshableAwsCredentialsIdentityProvider(refreshMargin = refreshMargin, clock = clock) {
         obtainAwsCredentials(config).toFuture()
       }
-    return TinkAwsKmsClient()
-      .withCredentialsProvider(AwsCredentialsProviderAdapter(credentialsProvider))
+    return CompletionExceptionTranslatingKmsClient.wrap(
+      TinkAwsKmsClient().withCredentialsProvider(AwsCredentialsProviderAdapter(credentialsProvider))
+    )
   }
 
   private fun obtainAwsCredentials(

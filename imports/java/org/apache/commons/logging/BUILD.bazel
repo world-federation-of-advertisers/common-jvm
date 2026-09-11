@@ -1,0 +1,6 @@
+package(default_visibility = ["//visibility:public"])
+
+alias(
+    name = "logging",
+    actual = "@maven//:commons_logging_commons_logging",
+)
