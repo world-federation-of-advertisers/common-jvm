@@ -9,12 +9,6 @@ kt_jvm_library(
         "AwsKmsClientFactory.kt",
         "CompletionExceptionTranslatingKmsClient.kt",
     ],
-    # commons-logging is an optional dependency of the Apache HTTP client that
-    # software.amazon.awssdk:sts uses by default; no source here imports it directly, but
-    # StsClient.builder().build() needs it on the runtime classpath.
-    runtime_deps = [
-        "//imports/java/org/apache/commons/logging",
-    ],
     deps = [
         "//imports/java/com/google/crypto/tink",
         "//imports/java/com/google/crypto/tink:awskms",
