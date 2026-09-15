@@ -33,7 +33,6 @@ import kotlinx.coroutines.channels.produce
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import org.jetbrains.annotations.BlockingExecutor
 import org.wfanet.measurement.gcloud.common.await
 import org.wfanet.measurement.queue.MessageConsumer
@@ -196,14 +195,12 @@ class Subscriber(
             while (isActive) {
               delay(ackDeadlineExtensionIntervalSeconds * 1000L)
               try {
-                runBlocking {
-                  googlePubSubClient.modifyAckDeadline(
-                    projectId = projectId,
-                    subscriptionId = subscriptionId,
-                    ackIds = listOf(ackId),
-                    ackDeadlineSeconds = ackDeadlineExtensionSeconds,
-                  )
-                }
+                googlePubSubClient.modifyAckDeadline(
+                  projectId = projectId,
+                  subscriptionId = subscriptionId,
+                  ackIds = listOf(ackId),
+                  ackDeadlineSeconds = ackDeadlineExtensionSeconds,
+                )
                 logger.info(
                   "Extended ack deadline to $ackDeadlineExtensionSeconds seconds for message $ackId"
                 )
@@ -240,14 +237,14 @@ class Subscriber(
     override fun nack() {
       ackDeadlineExtensionJob?.cancel()
       // Nack by setting deadline to 0, making message immediately available for redelivery
-      runBlocking {
-        googlePubSubClient.modifyAckDeadline(
+      googlePubSubClient
+        .modifyAckDeadlineAsync(
           projectId = projectId,
           subscriptionId = subscriptionId,
           ackIds = listOf(ackId),
           ackDeadlineSeconds = 0,
         )
-      }
+        .get()
     }
   }
 
