@@ -27,6 +27,7 @@ import io.grpc.inprocess.InProcessChannelBuilder
 import io.grpc.inprocess.InProcessServerBuilder
 import io.grpc.stub.StreamObserver
 import io.grpc.testing.GrpcCleanupRule
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.assertFailsWith
 import org.junit.Rule
@@ -49,6 +50,38 @@ class ServiceConfigTest {
   @Test
   fun `default config suppresses retries after failure threshold`() {
     val attemptCount = AtomicInteger()
+    val stub = buildStub(attemptCount, AtomicBoolean(true))
+
+    assertFailsWith<StatusRuntimeException> { stub.check(HealthCheckRequest.getDefaultInstance()) }
+    assertThat(attemptCount.get()).isEqualTo(5)
+
+    assertFailsWith<StatusRuntimeException> { stub.check(HealthCheckRequest.getDefaultInstance()) }
+    assertThat(attemptCount.get()).isEqualTo(6)
+  }
+
+  @Test
+  fun `default config resumes retries after successful RPCs`() {
+    val attemptCount = AtomicInteger()
+    val rejectRequests = AtomicBoolean(true)
+    val stub = buildStub(attemptCount, rejectRequests)
+
+    assertFailsWith<StatusRuntimeException> { stub.check(HealthCheckRequest.getDefaultInstance()) }
+    assertThat(attemptCount.get()).isEqualTo(5)
+
+    rejectRequests.set(false)
+    repeat(11) { stub.check(HealthCheckRequest.getDefaultInstance()) }
+
+    rejectRequests.set(true)
+    val attemptCountBeforeRetry = attemptCount.get()
+    assertFailsWith<StatusRuntimeException> { stub.check(HealthCheckRequest.getDefaultInstance()) }
+
+    assertThat(attemptCount.get() - attemptCountBeforeRetry).isEqualTo(2)
+  }
+
+  private fun buildStub(
+    attemptCount: AtomicInteger,
+    rejectRequests: AtomicBoolean,
+  ): HealthGrpc.HealthBlockingStub {
     val serverName = InProcessServerBuilder.generateName()
     val service =
       object : HealthGrpc.HealthImplBase() {
@@ -57,8 +90,13 @@ class ServiceConfigTest {
           responseObserver: StreamObserver<HealthCheckResponse>,
         ) {
           attemptCount.incrementAndGet()
-          val trailers = Metadata().apply { put(RETRY_PUSHBACK_KEY, "0") }
-          responseObserver.onError(Status.UNAVAILABLE.asRuntimeException(trailers))
+          if (rejectRequests.get()) {
+            val trailers = Metadata().apply { put(RETRY_PUSHBACK_KEY, "0") }
+            responseObserver.onError(Status.UNAVAILABLE.asRuntimeException(trailers))
+            return
+          }
+          responseObserver.onNext(HealthCheckResponse.getDefaultInstance())
+          responseObserver.onCompleted()
         }
       }
     grpcCleanup.register(
@@ -76,13 +114,7 @@ class ServiceConfigTest {
           .defaultServiceConfig(ProtobufServiceConfig.DEFAULT.asMap())
           .build()
       )
-    val stub = HealthGrpc.newBlockingStub(channel)
-
-    assertFailsWith<StatusRuntimeException> { stub.check(HealthCheckRequest.getDefaultInstance()) }
-    assertThat(attemptCount.get()).isEqualTo(5)
-
-    assertFailsWith<StatusRuntimeException> { stub.check(HealthCheckRequest.getDefaultInstance()) }
-    assertThat(attemptCount.get()).isEqualTo(6)
+    return HealthGrpc.newBlockingStub(channel)
   }
 
   companion object {
