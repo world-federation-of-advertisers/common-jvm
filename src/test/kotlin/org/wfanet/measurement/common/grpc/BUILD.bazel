@@ -1,6 +1,17 @@
 load("@wfa_rules_kotlin_jvm//kotlin:defs.bzl", "kt_jvm_test")
 
 kt_jvm_test(
+    name = "ServiceConfigTest",
+    srcs = ["ServiceConfigTest.kt"],
+    test_class = "org.wfanet.measurement.common.grpc.ServiceConfigTest",
+    deps = [
+        "//imports/java/com/google/common/truth",
+        "//imports/java/org/junit",
+        "//src/main/kotlin/org/wfanet/measurement/common/grpc",
+    ],
+)
+
+kt_jvm_test(
     name = "ChannelShutdownHookTest",
     srcs = ["ChannelShutdownHookTest.kt"],
     test_class = "org.wfanet.measurement.common.grpc.ChannelShutdownHookTest",
