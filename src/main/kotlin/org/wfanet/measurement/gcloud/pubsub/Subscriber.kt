@@ -22,6 +22,7 @@ import com.google.pubsub.v1.PullRequest
 import java.util.logging.Level
 import java.util.logging.Logger
 import kotlin.coroutines.CoroutineContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -205,6 +206,8 @@ class Subscriber(
                 logger.info(
                   "Extended ack deadline to $ackDeadlineExtensionSeconds seconds for message $ackId"
                 )
+              } catch (e: CancellationException) {
+                throw e
               } catch (e: Exception) {
                 logger.log(Level.WARNING, e) { "Failed to extend ack deadline for message $ackId" }
               }
