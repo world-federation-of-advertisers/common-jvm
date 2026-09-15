@@ -14,13 +14,11 @@
 
 package org.wfanet.measurement.gcloud.pubsub
 
-import com.google.api.core.ApiFuture
 import com.google.cloud.pubsub.v1.AckReplyConsumer
 import com.google.cloud.pubsub.v1.Publisher as GooglePublisher
 import com.google.cloud.pubsub.v1.Subscriber as GoogleSubscriber
 import com.google.cloud.pubsub.v1.SubscriptionAdminClient
 import com.google.cloud.pubsub.v1.TopicAdminClient
-import com.google.protobuf.Empty
 import com.google.pubsub.v1.DeleteTopicRequest
 import com.google.pubsub.v1.ModifyAckDeadlineRequest
 import com.google.pubsub.v1.ProjectSubscriptionName
@@ -118,16 +116,6 @@ abstract class GooglePubSubClient : AutoCloseable {
     ackIds: List<String>,
     ackDeadlineSeconds: Int,
   ) {
-    modifyAckDeadlineAsync(projectId, subscriptionId, ackIds, ackDeadlineSeconds).await()
-  }
-
-  /** Asynchronously modifies the acknowledgment deadline for specific messages. */
-  fun modifyAckDeadlineAsync(
-    projectId: String,
-    subscriptionId: String,
-    ackIds: List<String>,
-    ackDeadlineSeconds: Int,
-  ): ApiFuture<Empty> {
     require(ackDeadlineSeconds in 0..600) {
       "ackDeadlineSeconds must be between 0 and 600, got $ackDeadlineSeconds"
     }
@@ -146,7 +134,7 @@ abstract class GooglePubSubClient : AutoCloseable {
         .setAckDeadlineSeconds(ackDeadlineSeconds)
         .build()
 
-    return subscriptionAdminClient.value.modifyAckDeadlineCallable().futureCall(request)
+    subscriptionAdminClient.value.modifyAckDeadlineCallable().futureCall(request).await()
   }
 
   override fun close() {
