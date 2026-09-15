@@ -22,6 +22,7 @@ import com.google.pubsub.v1.PullRequest
 import java.util.logging.Level
 import java.util.logging.Logger
 import kotlin.coroutines.CoroutineContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -130,6 +131,7 @@ class Subscriber(
                   googlePubSubClient = googlePubSubClient,
                   ackDeadlineExtensionIntervalSeconds = ackDeadlineExtensionIntervalSeconds,
                   ackDeadlineExtensionSeconds = ackDeadlineExtensionSeconds,
+                  scope = scope,
                 )
 
               // Create queue message with ack ID
@@ -181,6 +183,7 @@ class Subscriber(
     private val googlePubSubClient: GooglePubSubClient,
     private val ackDeadlineExtensionIntervalSeconds: Int,
     private val ackDeadlineExtensionSeconds: Int,
+    private val scope: CoroutineScope,
   ) : MessageConsumer {
 
     private var ackDeadlineExtensionJob: Job? = null
@@ -192,21 +195,21 @@ class Subscriber(
           "Starting ack deadline extension job for message ${ackId} (interval: ${ackDeadlineExtensionIntervalSeconds}s, deadline: ${ackDeadlineExtensionSeconds}s)"
         )
         ackDeadlineExtensionJob =
-          CoroutineScope(Dispatchers.IO).launch {
+          scope.launch {
             while (isActive) {
               delay(ackDeadlineExtensionIntervalSeconds * 1000L)
               try {
-                runBlocking {
-                  googlePubSubClient.modifyAckDeadline(
-                    projectId = projectId,
-                    subscriptionId = subscriptionId,
-                    ackIds = listOf(ackId),
-                    ackDeadlineSeconds = ackDeadlineExtensionSeconds,
-                  )
-                }
+                googlePubSubClient.modifyAckDeadline(
+                  projectId = projectId,
+                  subscriptionId = subscriptionId,
+                  ackIds = listOf(ackId),
+                  ackDeadlineSeconds = ackDeadlineExtensionSeconds,
+                )
                 logger.info(
                   "Extended ack deadline to $ackDeadlineExtensionSeconds seconds for message $ackId"
                 )
+              } catch (e: CancellationException) {
+                throw e
               } catch (e: Exception) {
                 logger.log(Level.WARNING, e) { "Failed to extend ack deadline for message $ackId" }
               }

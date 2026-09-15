@@ -40,3 +40,22 @@ kt_jvm_test(
         "//src/main/kotlin/org/wfanet/measurement/gcloud/pubsub/testing:google_pub_sub_emulator_provider",
     ],
 )
+
+kt_jvm_test(
+    name = "SubscriberTest",
+    srcs = ["SubscriberTest.kt"],
+    test_class = "org.wfanet.measurement.gcloud.pubsub.SubscriberTest",
+    deps = [
+        "//imports/java/com/google/api/core",
+        "//imports/java/com/google/api/gax",
+        "//imports/java/com/google/cloud/pubsub",
+        "//imports/java/com/google/common/truth",
+        "//imports/java/com/google/protobuf",
+        "//imports/java/org/junit",
+        "//imports/kotlin/kotlinx/coroutines:core",
+        "//imports/kotlin/kotlinx/coroutines/test",
+        "//imports/kotlin/org/mockito/kotlin",
+        "//src/main/kotlin/org/wfanet/measurement/gcloud/pubsub:google_pub_sub_client",
+        "//src/main/kotlin/org/wfanet/measurement/gcloud/pubsub:subscriber",
+    ],
+)
