@@ -17,14 +17,17 @@
 package org.wfanet.measurement.common.db.r2dbc
 
 import io.r2dbc.spi.Connection
-import io.r2dbc.spi.R2dbcException
 import io.r2dbc.spi.Result
 import io.r2dbc.spi.Row
 import io.r2dbc.spi.TransactionDefinition
 import kotlinx.coroutines.reactive.awaitFirstOrNull
 import kotlinx.coroutines.reactive.awaitSingle
 
-/** A transaction context for reading. */
+/**
+ * A transaction context for reading.
+ *
+ * [close] must be called when done with this context.
+ */
 interface ReadContext {
   /**
    * Executes a query.
@@ -38,9 +41,9 @@ interface ReadContext {
   suspend fun close()
 
   /**
-   * Rollbacks the transaction.
+   * Rolls back the transaction state.
    *
-   * The context remains usable: the next query or statement begins a new transaction.
+   * This transaction context may be reused.
    */
   suspend fun rollback()
 }
@@ -69,28 +72,15 @@ protected constructor(
   /**
    * Executes [block] within the transaction, beginning one if the connection is not already in a
    * transaction.
-   *
-   * A serialization failure aborts the transaction, so it is rolled back to leave the connection in
-   * a state where [block] can be attempted again in a new transaction.
    */
   protected suspend fun <T> executeInTransaction(block: suspend () -> T): T {
     if (connection.isAutoCommit) {
       beginTransaction(connection, transactionDefinition)
     }
-    try {
-      return block()
-    } catch (e: R2dbcException) {
-      if (e.sqlState == SERIALIZATION_FAILURE_SQL_STATE) {
-        rollback()
-      }
-      throw e
-    }
+    return block()
   }
 
   companion object {
-    /** SQLSTATE indicating that the transaction failed to serialize and can be retried. */
-    private const val SERIALIZATION_FAILURE_SQL_STATE = "40001"
-
     fun create(connection: Connection, transactionDefinition: TransactionDefinition): ReadContext {
       return ReadContextImpl(connection, transactionDefinition)
     }

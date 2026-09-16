@@ -24,7 +24,11 @@ import kotlinx.coroutines.flow.fold
 import kotlinx.coroutines.reactive.asFlow
 import kotlinx.coroutines.reactive.awaitFirstOrNull
 
-/** A transaction context for reading and writing. */
+/**
+ * A transaction context for reading and writing.
+ *
+ * [close] must be called when done with this context.
+ */
 interface ReadWriteContext : ReadContext {
   /** Executes a DML statement. */
   suspend fun executeStatement(statement: BoundStatement): StatementResult
@@ -32,8 +36,8 @@ interface ReadWriteContext : ReadContext {
   /**
    * Commits the transaction.
    *
-   * The context remains usable: the next query or statement begins a new transaction. Call [close]
-   * to close the underlying connection.
+   * This context represents a single logical transaction, so it must not be committed more than
+   * once. This does not close the underlying connection.
    */
   suspend fun commit()
 }
