@@ -52,6 +52,7 @@ kt_jvm_test(
         "//imports/java/com/google/common/truth",
         "//imports/java/com/google/protobuf",
         "//imports/java/org/junit",
+        "//imports/java/org/threeten/bp",
         "//imports/kotlin/kotlinx/coroutines:core",
         "//imports/kotlin/kotlinx/coroutines/test",
         "//imports/kotlin/org/mockito/kotlin",

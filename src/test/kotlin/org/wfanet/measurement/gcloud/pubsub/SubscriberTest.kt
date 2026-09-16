@@ -130,7 +130,9 @@ class SubscriberTest {
         )
         .isEmpty()
     } finally {
+      extensionFuture.cancel(false)
       subscriber.close()
+      runCurrent()
       rootLogger.removeHandler(loggingHandler)
     }
   }
