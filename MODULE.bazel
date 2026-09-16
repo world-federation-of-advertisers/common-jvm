@@ -32,6 +32,7 @@ bazel_dep(
     version = "0.15.0",
     repo_name = "wfa_rules_kotlin_jvm",
 )
+
 bazel_dep(
     name = "cloud-spanner-emulator-bin",
     version = "1.5.52",
@@ -191,7 +192,9 @@ maven.artifact(
     group = "com.google.cloud.bigdataoss",
     version = "hadoop3-2.2.26",
 )
+
 maven.install(
+
     name = "maven",
     artifacts = [
         "junit:junit:4.13.2",
@@ -339,19 +342,19 @@ use_repo(maven, "maven")
 oci = use_extension("@rules_oci//oci:extensions.bzl", "oci")
 oci.pull(
     name = "java_image_base",
+    reproducible = True,
+    tag = "nonroot",    
     digest = "sha256:c97caa04324a70ea594e82ac31d75cdcc3730845dfc528de38847dcbd52bb599",
     image = "gcr.io/distroless/java17-debian13",
     platforms = ["linux/amd64"],
-    reproducible = True,
-    tag = "nonroot",
 )
 oci.pull(
     name = "java_debug_image_base",
+    reproducible = True,
+    tag = "debug-nonroot",    
     digest = "sha256:d8d8ebdc9841612875375e6e348f6470577dfb5fc6d3c2c11621faaad445bd14",
     image = "gcr.io/distroless/java17-debian13",
     platforms = ["linux/amd64"],
-    reproducible = True,
-    tag = "debug-nonroot",
 )
 use_repo(
     oci,
