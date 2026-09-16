@@ -21,6 +21,7 @@ import java.net.ServerSocket
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.logging.Logger
 import kotlin.coroutines.CoroutineContext
 import kotlin.properties.Delegates
@@ -69,8 +70,6 @@ class FunctionsFrameworkInvokerProcess(
       return localPort
     }
 
-  private lateinit var reader: Readable
-
   /**
    * Starts the CloudFunction process if it has not already been started.
    *
@@ -114,16 +113,18 @@ class FunctionsFrameworkInvokerProcess(
         processBuilder.environment().putAll(env)
         // Start the process
         process = processBuilder.start()
-        reader = process.inputStream.bufferedReader()
         val readyPattern = "Serving function..."
-        var isReady = false
+        // Written by the output coroutine on Dispatchers.IO and polled below on another
+        // thread, so it has to be safely published or the poll can miss the ready message
+        // and time out after the function is already serving.
+        val isReady = AtomicBoolean()
         CoroutineScope(Dispatchers.IO).launch {
           process.inputStream.bufferedReader().use { reader ->
             var line: String?
             try {
               while (reader.readLine().also { line = it } != null) {
                 if (line != null && line!!.contains(readyPattern)) {
-                  isReady = true
+                  isReady.set(true)
                 }
                 logger.info(line)
               }
@@ -136,7 +137,7 @@ class FunctionsFrameworkInvokerProcess(
         // Wait for the ready message or timeout
         val timeout: Duration = 10.seconds
         val startTime = TimeSource.Monotonic.markNow()
-        while (!isReady) {
+        while (!isReady.get()) {
           yield()
           check(process.isAlive) { "Google Cloud Function stopped unexpectedly" }
           if (startTime.elapsedNow() >= timeout) {

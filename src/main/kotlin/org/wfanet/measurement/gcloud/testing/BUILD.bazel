@@ -9,6 +9,7 @@ kt_jvm_library(
     name = "functions_framework_invoker_process",
     srcs = ["FunctionsFrameworkInvokerProcess.kt"],
     deps = [
+        "//imports/java/org/jetbrains/annotations",
         "//imports/kotlin/kotlinx/coroutines:core",
         "//src/main/kotlin/org/wfanet/measurement/common",
     ],
