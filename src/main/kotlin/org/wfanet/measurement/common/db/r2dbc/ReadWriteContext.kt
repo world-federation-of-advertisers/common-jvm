@@ -24,7 +24,11 @@ import kotlinx.coroutines.flow.fold
 import kotlinx.coroutines.reactive.asFlow
 import kotlinx.coroutines.reactive.awaitFirstOrNull
 
-/** A transaction context for reading and writing. */
+/**
+ * A transaction context for reading and writing.
+ *
+ * [close] must be called when done with this context.
+ */
 interface ReadWriteContext : ReadContext {
   /** Executes a DML statement. */
   suspend fun executeStatement(statement: BoundStatement): StatementResult
@@ -32,17 +36,19 @@ interface ReadWriteContext : ReadContext {
   /**
    * Commits the transaction.
    *
-   * This closes the underlying connection.
+   * This context represents a single logical transaction, so it must not be committed more than
+   * once. This does not close the underlying connection.
    */
   suspend fun commit()
 }
 
-internal class ReadWriteContextImpl private constructor(connection: Connection) :
-  ReadWriteContext, ReadContextImpl(connection) {
+internal class ReadWriteContextImpl
+private constructor(connection: Connection, transactionDefinition: TransactionDefinition) :
+  ReadWriteContext, ReadContextImpl(connection, transactionDefinition) {
 
   @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class) // For `flatMapConcat`.
   override suspend fun executeStatement(statement: BoundStatement): StatementResult {
-    val numRowsUpdated =
+    val numRowsUpdated = executeInTransaction {
       statement
         .toStatement(connection)
         .execute()
@@ -50,12 +56,12 @@ internal class ReadWriteContextImpl private constructor(connection: Connection) 
         .flatMapConcat { it.rowsUpdated.asFlow() }
         .cancellable()
         .fold(0L) { sum: Long, rowsUpdated: Long -> sum + rowsUpdated }
+    }
     return StatementResult(numRowsUpdated)
   }
 
   override suspend fun commit() {
     connection.commitTransaction().awaitFirstOrNull()
-    close()
   }
 
   override suspend fun rollback() {
@@ -63,12 +69,11 @@ internal class ReadWriteContextImpl private constructor(connection: Connection) 
   }
 
   companion object {
-    suspend fun create(
+    fun create(
       connection: Connection,
       transactionDefinition: TransactionDefinition,
     ): ReadWriteContext {
-      beginTransaction(connection, transactionDefinition)
-      return ReadWriteContextImpl(connection)
+      return ReadWriteContextImpl(connection, transactionDefinition)
     }
   }
 }
