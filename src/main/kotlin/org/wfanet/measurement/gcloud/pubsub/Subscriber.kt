@@ -59,7 +59,7 @@ import org.wfanet.measurement.queue.QueueSubscriber
  * @param ackDeadlineExtensionSeconds The number of seconds to extend the ack deadline by. Default
  *   is 600 seconds (10 minutes).
  * @param blockingContext The coroutine context used for subscriber background work, including
- *   message pulls and automatic acknowledgment-deadline extensions. Default is Dispatchers.IO.
+ *   message pulls and automatic acknowledgment-deadline extensions.
  */
 class Subscriber(
   private val projectId: String,
@@ -72,7 +72,6 @@ class Subscriber(
 ) : QueueSubscriber {
 
   private val scope = CoroutineScope(blockingContext)
-  private val ackDeadlineExtensionContext = blockingContext.minusKey(Job)
 
   init {
     require(ackDeadlineExtensionIntervalSeconds in 0..600) {
@@ -132,7 +131,7 @@ class Subscriber(
                   googlePubSubClient = googlePubSubClient,
                   ackDeadlineExtensionIntervalSeconds = ackDeadlineExtensionIntervalSeconds,
                   ackDeadlineExtensionSeconds = ackDeadlineExtensionSeconds,
-                  ackDeadlineExtensionContext = ackDeadlineExtensionContext,
+                  scope = scope,
                 )
 
               // Create queue message with ack ID
@@ -184,7 +183,7 @@ class Subscriber(
     private val googlePubSubClient: GooglePubSubClient,
     private val ackDeadlineExtensionIntervalSeconds: Int,
     private val ackDeadlineExtensionSeconds: Int,
-    private val ackDeadlineExtensionContext: CoroutineContext,
+    private val scope: CoroutineScope,
   ) : MessageConsumer {
 
     private var ackDeadlineExtensionJob: Job? = null
@@ -196,7 +195,7 @@ class Subscriber(
           "Starting ack deadline extension job for message ${ackId} (interval: ${ackDeadlineExtensionIntervalSeconds}s, deadline: ${ackDeadlineExtensionSeconds}s)"
         )
         ackDeadlineExtensionJob =
-          CoroutineScope(ackDeadlineExtensionContext).launch {
+          scope.launch {
             while (isActive) {
               delay(ackDeadlineExtensionIntervalSeconds * 1000L)
               try {

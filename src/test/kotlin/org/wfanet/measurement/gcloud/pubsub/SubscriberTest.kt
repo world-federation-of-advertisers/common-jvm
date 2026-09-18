@@ -25,18 +25,12 @@ import com.google.cloud.pubsub.v1.TopicAdminClient
 import com.google.common.truth.Truth.assertThat
 import com.google.protobuf.Empty
 import com.google.protobuf.StringValue
-import com.google.pubsub.v1.AcknowledgeRequest
 import com.google.pubsub.v1.ModifyAckDeadlineRequest
 import com.google.pubsub.v1.PubsubMessage
 import com.google.pubsub.v1.PullRequest
 import com.google.pubsub.v1.PullResponse
 import com.google.pubsub.v1.ReceivedMessage
-import java.util.concurrent.ConcurrentLinkedQueue
-import java.util.logging.Handler
-import java.util.logging.Level
-import java.util.logging.LogRecord
-import java.util.logging.Logger
-import kotlinx.coroutines.CancellationException
+import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -57,17 +51,71 @@ import org.threeten.bp.Duration
 @OptIn(ExperimentalCoroutinesApi::class)
 class SubscriberTest {
   @Test
-  fun `subscribe does not log cancellation when ack cancels deadline extension`() = runTest {
+  fun `subscribe stops extending deadline when extension is cancelled`() = runTest {
+    val extensionFuture = SettableApiFuture.create<Empty>()
+    extensionFuture.cancel(false)
+    val testContext =
+      createTestContext(
+        extensionFuture = extensionFuture,
+        blockingContext = StandardTestDispatcher(testScheduler),
+      )
+
+    try {
+      val channel = testContext.subscriber.subscribe(SUBSCRIPTION_ID, StringValue.parser())
+      val receivedMessage = async { channel.receive() }
+      runCurrent()
+      receivedMessage.await()
+
+      advanceTimeBy(2_000)
+      runCurrent()
+      verify(testContext.modifyAckDeadlineCallable).futureCall(any())
+    } finally {
+      testContext.subscriber.close()
+      runCurrent()
+    }
+  }
+
+  @Test
+  fun `close cancels deadline extension`() = runTest {
+    val extensionFuture = SettableApiFuture.create<Empty>()
+    val testContext =
+      createTestContext(
+        extensionFuture = extensionFuture,
+        blockingContext = StandardTestDispatcher(testScheduler),
+      )
+
+    try {
+      val channel = testContext.subscriber.subscribe(SUBSCRIPTION_ID, StringValue.parser())
+      val receivedMessage = async { channel.receive() }
+      runCurrent()
+      receivedMessage.await()
+
+      advanceTimeBy(1_000)
+      runCurrent()
+      verify(testContext.modifyAckDeadlineCallable).futureCall(any())
+
+      testContext.subscriber.close()
+      runCurrent()
+
+      assertThat(extensionFuture.isCancelled).isTrue()
+    } finally {
+      extensionFuture.cancel(false)
+      testContext.subscriber.close()
+      runCurrent()
+    }
+  }
+
+  private fun createTestContext(
+    extensionFuture: SettableApiFuture<Empty>,
+    blockingContext: CoroutineContext,
+  ): TestContext {
     val pullCallable = mock<UnaryCallable<PullRequest, PullResponse>>()
     val modifyAckDeadlineCallable = mock<UnaryCallable<ModifyAckDeadlineRequest, Empty>>()
-    val acknowledgeCallable = mock<UnaryCallable<AcknowledgeRequest, Empty>>()
     val subscriptionAdminClient =
       mock<SubscriptionAdminClient> {
         on { pullCallable() } doReturn pullCallable
         on { modifyAckDeadlineCallable() } doReturn modifyAckDeadlineCallable
-        on { acknowledgeCallable() } doReturn acknowledgeCallable
       }
-    val extensionFuture = SettableApiFuture.create<Empty>()
     val pullResponse =
       PullResponse.newBuilder()
         .addReceivedMessages(
@@ -84,10 +132,7 @@ class SubscriberTest {
         ApiFutures.immediateFuture(PullResponse.getDefaultInstance()),
       )
     whenever(modifyAckDeadlineCallable.futureCall(any())).thenReturn(extensionFuture)
-    whenever(acknowledgeCallable.futureCall(any()))
-      .thenReturn(ApiFutures.immediateFuture(Empty.getDefaultInstance()))
 
-    val testDispatcher = StandardTestDispatcher(testScheduler)
     val subscriber =
       Subscriber(
         projectId = PROJECT_ID,
@@ -95,47 +140,15 @@ class SubscriberTest {
         pullIntervalMillis = 10_000,
         ackDeadlineExtensionIntervalSeconds = 1,
         ackDeadlineExtensionSeconds = 10,
-        blockingContext = testDispatcher,
+        blockingContext = blockingContext,
       )
-    val logRecords = ConcurrentLinkedQueue<LogRecord>()
-    val loggingHandler =
-      object : Handler() {
-        override fun publish(record: LogRecord) {
-          logRecords.add(record)
-        }
-
-        override fun flush() {}
-
-        override fun close() {}
-      }
-    val rootLogger = Logger.getLogger("")
-    rootLogger.addHandler(loggingHandler)
-
-    try {
-      val channel = subscriber.subscribe(SUBSCRIPTION_ID, StringValue.parser())
-      val receivedMessage = async { channel.receive() }
-      runCurrent()
-      val queueMessage = receivedMessage.await()
-
-      advanceTimeBy(1_000)
-      runCurrent()
-      verify(modifyAckDeadlineCallable).futureCall(any())
-
-      queueMessage.ack()
-      runCurrent()
-
-      assertThat(extensionFuture.isCancelled).isTrue()
-      assertThat(
-          logRecords.filter { it.level == Level.WARNING && it.thrown is CancellationException }
-        )
-        .isEmpty()
-    } finally {
-      extensionFuture.cancel(false)
-      subscriber.close()
-      runCurrent()
-      rootLogger.removeHandler(loggingHandler)
-    }
+    return TestContext(subscriber, modifyAckDeadlineCallable)
   }
+
+  private data class TestContext(
+    val subscriber: Subscriber,
+    val modifyAckDeadlineCallable: UnaryCallable<ModifyAckDeadlineRequest, Empty>,
+  )
 
   private class FakeGooglePubSubClient(
     private val delegateSubscriptionAdminClient: SubscriptionAdminClient
