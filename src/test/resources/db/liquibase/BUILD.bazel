@@ -5,5 +5,8 @@ package(
 
 filegroup(
     name = "liquibase",
-    srcs = ["invalid-dbms-changelog.sql"],
+    srcs = [
+        "invalid-dbms-changelog.sql",
+        "valid-dbms-changelog.sql",
+    ],
 )

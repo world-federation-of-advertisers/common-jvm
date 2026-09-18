@@ -30,9 +30,7 @@ import org.wfanet.measurement.common.getJarResourcePath
 class LiquibaseTest {
   @Test
   fun `update fails when change set has unsupported database`() {
-    val postgresContainer = PostgreSQLContainer(POSTGRES_IMAGE_NAME)
-    postgresContainer.start()
-    try {
+    withPostgres { postgresContainer ->
       postgresContainer.createConnection("").use { connection ->
         val exception =
           assertFailsWith<CommandValidationException> {
@@ -41,6 +39,32 @@ class LiquibaseTest {
 
         assertThat(exception).hasMessageThat().contains("postgresl is not a supported DB")
       }
+    }
+  }
+
+  @Test
+  fun `update applies change set with supported database`() {
+    withPostgres { postgresContainer ->
+      postgresContainer.createConnection("").use { connection ->
+        Liquibase.update(connection, VALID_DBMS_CHANGELOG_PATH)
+      }
+
+      postgresContainer.createConnection("").use { connection ->
+        connection.createStatement().use { statement ->
+          statement.executeQuery("SELECT TestId FROM TestTable").use { resultSet ->
+            assertThat(resultSet.next()).isTrue()
+            assertThat(resultSet.getLong(1)).isEqualTo(1L)
+          }
+        }
+      }
+    }
+  }
+
+  private fun withPostgres(block: (PostgreSQLContainer) -> Unit) {
+    val postgresContainer = PostgreSQLContainer(POSTGRES_IMAGE_NAME)
+    postgresContainer.start()
+    try {
+      block(postgresContainer)
     } finally {
       postgresContainer.stop()
     }
@@ -54,5 +78,7 @@ class LiquibaseTest {
           .contextClassLoader
           .getJarResourcePath("db/liquibase/invalid-dbms-changelog.sql")
       )
+    private val VALID_DBMS_CHANGELOG_PATH: Path =
+      INVALID_DBMS_CHANGELOG_PATH.resolveSibling("valid-dbms-changelog.sql")
   }
 }
