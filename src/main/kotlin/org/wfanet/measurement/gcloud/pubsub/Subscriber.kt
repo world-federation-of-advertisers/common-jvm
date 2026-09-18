@@ -131,7 +131,7 @@ class Subscriber(
                   googlePubSubClient = googlePubSubClient,
                   ackDeadlineExtensionIntervalSeconds = ackDeadlineExtensionIntervalSeconds,
                   ackDeadlineExtensionSeconds = ackDeadlineExtensionSeconds,
-                  scope = scope,
+                  ackDeadlineExtensionScope = scope,
                 )
 
               // Create queue message with ack ID
@@ -183,7 +183,7 @@ class Subscriber(
     private val googlePubSubClient: GooglePubSubClient,
     private val ackDeadlineExtensionIntervalSeconds: Int,
     private val ackDeadlineExtensionSeconds: Int,
-    private val scope: CoroutineScope,
+    private val ackDeadlineExtensionScope: CoroutineScope,
   ) : MessageConsumer {
 
     private var ackDeadlineExtensionJob: Job? = null
@@ -195,7 +195,7 @@ class Subscriber(
           "Starting ack deadline extension job for message ${ackId} (interval: ${ackDeadlineExtensionIntervalSeconds}s, deadline: ${ackDeadlineExtensionSeconds}s)"
         )
         ackDeadlineExtensionJob =
-          scope.launch {
+          ackDeadlineExtensionScope.launch {
             while (isActive) {
               delay(ackDeadlineExtensionIntervalSeconds * 1000L)
               try {
