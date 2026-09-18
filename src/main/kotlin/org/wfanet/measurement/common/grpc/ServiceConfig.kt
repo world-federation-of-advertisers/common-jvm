@@ -59,6 +59,11 @@ data class ProtobufServiceConfig(val message: io.grpc.serviceconfig.ServiceConfi
     val DEFAULT =
       ProtobufServiceConfig(
         serviceConfig {
+          retryThrottling =
+            ServiceConfigKt.retryThrottlingPolicy {
+              maxTokens = 10
+              tokenRatio = 0.1f
+            }
           methodConfig += methodConfig {
             name += MethodConfig.Name.getDefaultInstance()
             timeout = Durations.fromSeconds(30)
