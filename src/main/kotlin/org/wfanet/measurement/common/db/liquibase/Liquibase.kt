@@ -23,13 +23,17 @@ import java.util.logging.Logger
 import liquibase.Scope
 import liquibase.UpdateSummaryOutputEnum
 import liquibase.changelog.ChangeLogParameters
+import liquibase.changelog.DatabaseChangeLog
 import liquibase.command.CommandScope
 import liquibase.command.core.UpdateCommandStep
 import liquibase.command.core.helpers.DatabaseChangelogCommandStep
 import liquibase.command.core.helpers.DbUrlConnectionArgumentsCommandStep
 import liquibase.command.core.helpers.ShowSummaryArgument
 import liquibase.database.DatabaseFactory
+import liquibase.database.DatabaseList
 import liquibase.database.jvm.JdbcConnection
+import liquibase.exception.CommandValidationException
+import liquibase.exception.ValidationErrors
 import liquibase.logging.core.JavaLogService
 import liquibase.resource.DirectoryResourceAccessor
 
@@ -48,20 +52,44 @@ object Liquibase {
 
         Scope.child(scopeObjects) {
           Scope.getCurrentScope().setLogLevel(Level.INFO)
+          val changeLogParameters = ChangeLogParameters(database)
+          val databaseChangeLog =
+            DatabaseChangelogCommandStep.getDatabaseChangeLog(
+              changelogPath.toString(),
+              changeLogParameters,
+              database,
+            )
+          validateDbmsDefinitions(databaseChangeLog)
 
           CommandScope(*UpdateCommandStep.COMMAND_NAME)
             .apply {
               addArgumentValue(DbUrlConnectionArgumentsCommandStep.DATABASE_ARG, database)
-              addArgumentValue(UpdateCommandStep.CHANGELOG_FILE_ARG, changelogPath.toString())
+              addArgumentValue(UpdateCommandStep.CHANGELOG_ARG, databaseChangeLog)
               addArgumentValue(
                 DatabaseChangelogCommandStep.CHANGELOG_PARAMETERS,
-                ChangeLogParameters(database),
+                changeLogParameters,
               )
               addArgumentValue(ShowSummaryArgument.SHOW_SUMMARY_OUTPUT, UpdateSummaryOutputEnum.LOG)
             }
             .execute()
         }
       }
+  }
+
+  private fun validateDbmsDefinitions(databaseChangeLog: DatabaseChangeLog) {
+    val validationErrors = ValidationErrors()
+    for (changeSet in databaseChangeLog.changeSets) {
+      val dbmsSet = changeSet.dbmsSet ?: continue
+      val changeSetValidationErrors = ValidationErrors()
+      DatabaseList.validateDefinitions(dbmsSet, changeSetValidationErrors)
+      validationErrors.addAll(changeSetValidationErrors, changeSet)
+    }
+
+    if (validationErrors.hasErrors()) {
+      throw CommandValidationException(
+        "Invalid DBMS definitions: ${validationErrors.errorMessages.joinToString()}"
+      )
+    }
   }
 }
 
