@@ -20,3 +20,27 @@ kt_jvm_test(
         "//src/main/kotlin/org/wfanet/measurement/common/db/r2dbc/postgres/testing:database_provider",
     ],
 )
+
+kt_jvm_test(
+    name = "PostgresWriterTest",
+    srcs = ["PostgresWriterTest.kt"],
+    resources = [
+        "//src/test/resources/db/postgres",
+    ],
+    test_class = "org.wfanet.measurement.common.db.r2dbc.postgres.PostgresWriterTest",
+    runtime_deps = [
+        "//imports/java/org/yaml:snakeyaml",
+    ],
+    deps = [
+        "//imports/java/com/google/common/truth",
+        "//imports/java/io/r2dbc",
+        "//imports/java/org/junit",
+        "//imports/java/org/postgresql:r2dbc",
+        "//imports/kotlin/kotlinx/coroutines:core",
+        "//src/main/kotlin/org/wfanet/measurement/common",
+        "//src/main/kotlin/org/wfanet/measurement/common/db/r2dbc",
+        "//src/main/kotlin/org/wfanet/measurement/common/db/r2dbc/postgres",
+        "//src/main/kotlin/org/wfanet/measurement/common/db/r2dbc/postgres/testing:database_provider",
+        "//src/main/kotlin/org/wfanet/measurement/common/identity",
+    ],
+)
