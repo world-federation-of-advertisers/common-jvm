@@ -99,7 +99,10 @@ def java_image(
         base = None,
         labels = None,
         cmd_args = None,
+        jvm_args = None,
         env = None,
+        tars = None,
+        tags = None,
         visibility = None,
         **kwargs):
     """Java container image.
@@ -112,8 +115,11 @@ def java_image(
       binary: label of java_binary target
       base: label of base Java oci_image
       cmd_args: list of command-line arguments
+      jvm_args: list of command-line arguments for the JVM
       env: dictionary of environment variables
       labels: dictionary of labels for the image config
+      tars: list TAR archives for layers
+      tags: standard attribute
       visibility: standard attribute
       **kwargs: other args to pass to the resulting target
     """
@@ -122,6 +128,8 @@ def java_image(
     deploy_jar_file_name = binary_label.name + "_deploy.jar"
     deploy_jar_label = binary_label.relative(deploy_jar_file_name)
     cmd_args = cmd_args or []
+    jvm_args = jvm_args or []
+    tars = tars or []
 
     jar_files_name = "{name}_jar_files".format(name = name)
     pkg_files(
@@ -130,16 +138,16 @@ def java_image(
         renames = {
             deploy_jar_label: deploy_jar_file_name,
         },
+        tags = tags,
         visibility = ["//visibility:private"],
-        **kwargs
     )
 
     native_libraries_name = "{name}_native_libraries".format(name = name)
     java_native_libraries(
         name = native_libraries_name,
         java_target = binary,
+        tags = tags,
         visibility = ["//visibility:private"],
-        **kwargs
     )
 
     native_library_files_name = "{name}_native_library_files".format(name = name)
@@ -147,8 +155,8 @@ def java_image(
         name = native_library_files_name,
         srcs = [":" + native_libraries_name],
         prefix = "native",
+        tags = tags,
         visibility = ["//visibility:private"],
-        **kwargs
     )
 
     runfiles_pkg_name = "{name}_runfiles_pkg".format(name = name)
@@ -158,8 +166,8 @@ def java_image(
         include_repo_mapping_manifest = True,
         excluded_files = ["@bazel_tools//tools/jdk:current_java_runtime"],
         excluded_file_extensions = ["jar"],
+        tags = tags,
         visibility = ["//visibility:private"],
-        **kwargs
     )
 
     layer_name = "{name}_layer".format(name = name)
@@ -171,22 +179,24 @@ def java_image(
             ":" + runfiles_pkg_name,
         ],
         extension = "tar.gz",
+        tags = tags,
         visibility = ["//visibility:private"],
-        **kwargs
     )
 
     oci_image(
         name = name,
         base = base or DEFAULT_JAVA_IMAGE_BASE,
-        tars = [":" + layer_name],
+        tars = tars + [":" + layer_name],
         entrypoint = [
             "java",
             "-Djava.library.path=/native",
+        ] + jvm_args + [
             "-jar",
             "/" + deploy_jar_file_name,
         ] + cmd_args,
         labels = labels,
         env = dicts.add(env, RUNFILES_DIR = "/" + runfiles_pkg_name),
+        tags = tags,
         visibility = visibility,
         **kwargs
     )
