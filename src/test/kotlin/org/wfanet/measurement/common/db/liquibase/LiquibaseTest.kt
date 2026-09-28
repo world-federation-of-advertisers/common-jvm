@@ -71,7 +71,7 @@ class LiquibaseTest {
   }
 
   companion object {
-    private const val POSTGRES_IMAGE_NAME = "postgres:15"
+    private const val POSTGRES_IMAGE_NAME = "postgres:16"
     private val INVALID_DBMS_CHANGELOG_PATH: Path =
       checkNotNull(
         Thread.currentThread()
