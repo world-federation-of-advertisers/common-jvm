@@ -17,6 +17,7 @@ kt_jvm_test(
         "//imports/kotlin/kotlin/test",
         "//imports/kotlin/kotlinx/coroutines:core",
         "//imports/kotlin/kotlinx/coroutines/debug",
+        "//imports/kotlin/org/mockito/kotlin",
         "//src/main/kotlin/org/wfanet/measurement/common",
         "//src/main/kotlin/org/wfanet/measurement/gcloud/spanner",
         "//src/main/kotlin/org/wfanet/measurement/gcloud/spanner/testing",
