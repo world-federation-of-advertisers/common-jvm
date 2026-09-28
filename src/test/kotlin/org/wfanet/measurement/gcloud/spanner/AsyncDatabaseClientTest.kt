@@ -54,6 +54,21 @@ class AsyncDatabaseClientTest {
   }
 
   @Test
+  fun `executeQuery returns more rows than the flow buffer capacity`() {
+    val expected = (1L..500L).toList()
+    val values = expected.joinToString(",")
+    val query = statement("SELECT value FROM UNNEST([$values]) AS value ORDER BY value")
+
+    repeat(10) {
+      val results: List<Long> = runBlocking {
+        databaseClient.singleUse().executeQuery(query).toList().map { row -> row.getLong("value") }
+      }
+
+      assertThat(results).containsExactlyElementsIn(expected).inOrder()
+    }
+  }
+
+  @Test
   fun `run applies buffered mutations`() {
     runBlocking {
       databaseClient.readWriteTransaction().run { txn ->
