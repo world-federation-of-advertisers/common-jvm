@@ -53,13 +53,15 @@ class FunctionsFrameworkInvokerProcess(
   private val coroutineContext: @BlockingExecutor CoroutineContext = Dispatchers.IO,
 ) : AutoCloseable {
   private val startMutex = Mutex()
-  @Volatile private lateinit var process: Process
+  // Published only once the process reports ready, so a failed start leaves this null and the
+  // instance reusable rather than handing out a port for a process that never served.
+  @Volatile private var process: Process? = null
   private var localPort by Delegates.notNull<Int>()
   /*
    * Indicates whether the process has started.
    */
   val started: Boolean
-    get() = this::process.isInitialized
+    get() = process != null
 
   /*
    * Returns the port the process is listening on.
@@ -112,14 +114,14 @@ class FunctionsFrameworkInvokerProcess(
         // Set environment variables
         processBuilder.environment().putAll(env)
         // Start the process
-        process = processBuilder.start()
+        val launched: Process = processBuilder.start()
         val readyPattern = "Serving function..."
         // Written by the output coroutine on Dispatchers.IO and polled below on another
         // thread, so it has to be safely published or the poll can miss the ready message
         // and time out after the function is already serving.
         val isReady = AtomicBoolean()
         CoroutineScope(Dispatchers.IO).launch {
-          process.inputStream.bufferedReader().use { reader ->
+          launched.inputStream.bufferedReader().use { reader ->
             var line: String?
             try {
               while (reader.readLine().also { line = it } != null) {
@@ -134,16 +136,24 @@ class FunctionsFrameworkInvokerProcess(
           }
         }
 
-        // Wait for the ready message or timeout
+        // Wait for the ready message or timeout. A process that never reports ready is torn down
+        // here: leaving it running would hold its port and, because `started` would be true, let a
+        // later start() hand back that port without ever having seen the function serve.
         val timeout: Duration = 10.seconds
         val startTime = TimeSource.Monotonic.markNow()
-        while (!isReady.get()) {
-          yield()
-          check(process.isAlive) { "Google Cloud Function stopped unexpectedly" }
-          if (startTime.elapsedNow() >= timeout) {
-            throw IllegalStateException("Timeout waiting for Google Cloud Function to start")
+        try {
+          while (!isReady.get()) {
+            yield()
+            check(launched.isAlive) { "Google Cloud Function stopped unexpectedly" }
+            if (startTime.elapsedNow() >= timeout) {
+              throw IllegalStateException("Timeout waiting for Google Cloud Function to start")
+            }
           }
+        } catch (e: Throwable) {
+          terminate(launched)
+          throw e
         }
+        process = launched
         localPort
       }
     }
@@ -151,16 +161,22 @@ class FunctionsFrameworkInvokerProcess(
 
   /** Closes the process if it has been started. */
   override fun close() {
-    if (started) {
-      process.destroy()
-      try {
-        if (!process.waitFor(5, TimeUnit.SECONDS)) {
-          process.destroyForcibly()
-        }
-      } catch (e: InterruptedException) {
-        process.destroyForcibly()
-        Thread.currentThread().interrupt()
+    val current: Process? = process
+    if (current != null) {
+      terminate(current)
+    }
+  }
+
+  /** Stops [target], escalating to a forced kill if it does not exit promptly. */
+  private fun terminate(target: Process) {
+    target.destroy()
+    try {
+      if (!target.waitFor(5, TimeUnit.SECONDS)) {
+        target.destroyForcibly()
       }
+    } catch (e: InterruptedException) {
+      target.destroyForcibly()
+      Thread.currentThread().interrupt()
     }
   }
 
