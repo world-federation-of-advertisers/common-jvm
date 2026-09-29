@@ -16,21 +16,36 @@
 
 package org.wfanet.measurement.gcloud.spanner
 
+import com.google.cloud.spanner.AsyncResultSet
+import com.google.cloud.spanner.DatabaseClient
+import com.google.cloud.spanner.ReadContext
 import com.google.cloud.spanner.Struct
 import com.google.common.truth.Truth.assertThat
 import java.nio.file.Path
+import java.util.concurrent.CountDownLatch as JavaCountDownLatch
+import java.util.concurrent.Executor
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.assertFailsWith
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.debug.junit4.CoroutinesTimeout
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.ClassRule
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
+import org.mockito.kotlin.any
+import org.mockito.kotlin.doAnswer
+import org.mockito.kotlin.mock
+import org.mockito.kotlin.whenever
 import org.wfanet.measurement.common.CountDownLatch
 import org.wfanet.measurement.common.getJarResourcePath
 import org.wfanet.measurement.gcloud.spanner.testing.SpannerEmulatorDatabaseRule
@@ -51,6 +66,74 @@ class AsyncDatabaseClientTest {
     }
 
     assertThat(results.single().getBoolean(0)).isTrue()
+  }
+
+  @Test
+  fun `executeQuery resumes after Spanner processes pause response`() {
+    val delegate = mock<DatabaseClient>()
+    val readContext = mock<ReadContext>()
+    val resultSet = mock<AsyncResultSet>()
+    whenever(delegate.singleUse(any())).thenReturn(readContext)
+    whenever(readContext.executeQueryAsync(any())).thenReturn(resultSet)
+
+    val rows = (1L..66L).map { value -> struct { set("value").to(value) } }
+    val rowIndex = AtomicInteger()
+    whenever(resultSet.tryNext()).thenAnswer {
+      if (rowIndex.getAndIncrement() < rows.size) {
+        AsyncResultSet.CursorState.OK
+      } else {
+        AsyncResultSet.CursorState.DONE
+      }
+    }
+    whenever(resultSet.currentRowAsStruct).thenAnswer { rows[rowIndex.get() - 1] }
+
+    val consumerGate = CompletableDeferred<Unit>()
+    val resumeAttempted = JavaCountDownLatch(1)
+    val callbackProcessed = AtomicBoolean()
+    lateinit var callbackExecutor: Executor
+    lateinit var readyCallback: AsyncResultSet.ReadyCallback
+    lateinit var scheduleCallback: () -> Unit
+    scheduleCallback = {
+      callbackExecutor.execute {
+        val response = readyCallback.cursorReady(resultSet)
+        if (response == AsyncResultSet.CallbackResponse.PAUSE) {
+          consumerGate.complete(Unit)
+          resumeAttempted.await(1, TimeUnit.SECONDS)
+          callbackProcessed.set(true)
+        }
+      }
+    }
+    doAnswer { invocation ->
+        callbackExecutor = invocation.getArgument(0)
+        readyCallback = invocation.getArgument(1)
+        scheduleCallback()
+        null
+      }
+      .whenever(resultSet)
+      .setCallback(any(), any())
+    doAnswer {
+        resumeAttempted.countDown()
+        if (callbackProcessed.compareAndSet(true, false)) {
+          scheduleCallback()
+        }
+        null
+      }
+      .whenever(resultSet)
+      .resume()
+
+    val results: List<Long> =
+      runBlocking(Dispatchers.Default) {
+        withTimeout(3_000) {
+          AsyncDatabaseClient(delegate)
+            .singleUse()
+            .executeQuery(statement("SELECT value"))
+            .onEach { consumerGate.await() }
+            .toList()
+            .map { row -> row.getLong("value") }
+        }
+      }
+
+    assertThat(results).containsExactlyElementsIn(1L..66L).inOrder()
   }
 
   @Test
