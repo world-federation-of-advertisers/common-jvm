@@ -19,10 +19,7 @@ on:
     inputs:
       base-version:
         description: Base artifact version, which will be suffixed with "-SNAPSHOT"
-        required: false
-      artifact-version:
-        description: Exact artifact version, such as "0.159.0-rc1"
-        required: false
+        required: true
 
 jobs:
   publish-artifacts:
@@ -33,19 +30,13 @@ jobs:
 
       - id: get-artifact-version
         env:
-          ARTIFACT_VERSION: ${{ inputs.artifact-version }}
           BASE_VERSION: ${{ inputs.base-version }}
         run: |
           declare artifact_version
           if [[ "$GITHUB_EVENT_NAME" == 'release' ]]; then
             artifact_version="${GITHUB_REF_NAME#v}"
-          elif [[ -n "$ARTIFACT_VERSION" ]]; then
-            artifact_version="$ARTIFACT_VERSION"
-          elif [[ -n "$BASE_VERSION" ]]; then
-            artifact_version="${BASE_VERSION}-SNAPSHOT"
           else
-            echo 'Either artifact-version or base-version must be specified.' >&2
-            exit 1
+            artifact_version="${BASE_VERSION}-SNAPSHOT"
           fi
           
           echo "artifact-version=${artifact_version}" >> "$GITHUB_OUTPUT"
