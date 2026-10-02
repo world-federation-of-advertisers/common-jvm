@@ -22,6 +22,8 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
+import java.util.logging.Level
 import java.util.logging.Logger
 import kotlin.coroutines.CoroutineContext
 import kotlin.properties.Delegates
@@ -30,6 +32,7 @@ import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -42,30 +45,33 @@ import org.wfanet.measurement.common.getRuntimePath
  * Wrapper for a Cloud Function binary process. Exposes a port where the process can receive data.
  * This class is used for starting a process that invokes Google Cloud Functions for tests.
  *
- * @param javaBinaryPath the runfiles-relative path of the binary that runs the Cloud Run Invoker
+ * @param javaBinaryPath the runfiles-relative path of the Functions Framework Invoker binary
  * @param classTarget the class name that the invoker will run. This must be in the class path of
  *   the binary that will be run.
  * @param coroutineContext the context under which the process will run
+ * @param startupTimeout how long to wait for the process to report that it is ready
+ * @param terminationTimeout how long to wait for graceful termination before forcing it
  */
 class FunctionsFrameworkInvokerProcess(
   private val javaBinaryPath: Path,
   private val classTarget: String,
   private val coroutineContext: @BlockingExecutor CoroutineContext = Dispatchers.IO,
+  private val startupTimeout: Duration = 10.seconds,
+  private val terminationTimeout: Duration = 5.seconds,
 ) : AutoCloseable {
   private val startMutex = Mutex()
+  private val processScope = CoroutineScope(coroutineContext)
   // Published only once the process reports ready, so a failed start leaves this null and the
   // instance reusable rather than handing out a port for a process that never served.
   @Volatile private var process: Process? = null
+  private var outputJob: Job? = null
   private var localPort by Delegates.notNull<Int>()
-  /*
-   * Indicates whether the process has started.
-   */
-  val started: Boolean
-    get() = process != null
 
-  /*
-   * Returns the port the process is listening on.
-   */
+  /** Indicates whether the process is running. */
+  val started: Boolean
+    get() = process?.isAlive == true
+
+  /** Returns the port on which the process is listening. */
   val port: Int
     get() {
       check(started) { "CloudFunction process not started" }
@@ -116,41 +122,52 @@ class FunctionsFrameworkInvokerProcess(
         // Start the process
         val launched: Process = processBuilder.start()
         val readyPattern = "Serving function..."
-        // Written by the output coroutine on Dispatchers.IO and polled below on another
-        // thread, so it has to be safely published or the poll can miss the ready message
-        // and time out after the function is already serving.
+        // Written by the output coroutine and polled below, so readiness has to be safely
+        // published or the poll can miss the ready message and time out after the function serves.
         val isReady = AtomicBoolean()
-        CoroutineScope(Dispatchers.IO).launch {
-          launched.inputStream.bufferedReader().use { reader ->
-            var line: String?
-            try {
-              while (reader.readLine().also { line = it } != null) {
-                if (line != null && line!!.contains(readyPattern)) {
-                  isReady.set(true)
+        val outputFailure = AtomicReference<IOException?>()
+        val launchedOutputJob: Job =
+          processScope.launch {
+            launched.inputStream.bufferedReader().use { reader ->
+              var line: String?
+              try {
+                while (reader.readLine().also { line = it } != null) {
+                  if (line != null && line!!.contains(readyPattern)) {
+                    isReady.set(true)
+                  }
+                  logger.info(line)
                 }
-                logger.info(line)
+              } catch (e: IOException) {
+                if (isReady.get()) {
+                  if (process === launched && launched.isAlive) {
+                    logger.log(Level.WARNING, "Failed to read Cloud Function process output", e)
+                  }
+                } else {
+                  outputFailure.set(e)
+                }
               }
-            } catch (e: IOException) {
-              logger.info(e.message)
             }
           }
-        }
+        outputJob = launchedOutputJob
 
         // Wait for the ready message or timeout. A process that never reports ready is torn down
         // here: leaving it running would hold its port and, because `started` would be true, let a
         // later start() hand back that port without ever having seen the function serve.
-        val timeout: Duration = 10.seconds
         val startTime = TimeSource.Monotonic.markNow()
         try {
           while (!isReady.get()) {
             yield()
+            outputFailure.get()?.let {
+              throw IllegalStateException("Failed to read Cloud Function process output", it)
+            }
             check(launched.isAlive) { "Google Cloud Function stopped unexpectedly" }
-            if (startTime.elapsedNow() >= timeout) {
+            if (startTime.elapsedNow() >= startupTimeout) {
               throw IllegalStateException("Timeout waiting for Google Cloud Function to start")
             }
           }
         } catch (e: Throwable) {
-          terminate(launched)
+          terminate(launched, launchedOutputJob)
+          outputJob = null
           throw e
         }
         process = launched
@@ -163,20 +180,25 @@ class FunctionsFrameworkInvokerProcess(
   override fun close() {
     val current: Process? = process
     if (current != null) {
-      terminate(current)
+      process = null
+      terminate(current, outputJob)
+      outputJob = null
     }
   }
 
   /** Stops [target], escalating to a forced kill if it does not exit promptly. */
-  private fun terminate(target: Process) {
-    target.destroy()
+  private fun terminate(target: Process, outputJob: Job?) {
     try {
-      if (!target.waitFor(5, TimeUnit.SECONDS)) {
+      target.destroy()
+      if (!target.waitFor(terminationTimeout.inWholeMilliseconds, TimeUnit.MILLISECONDS)) {
         target.destroyForcibly()
+        target.waitFor()
       }
     } catch (e: InterruptedException) {
       target.destroyForcibly()
       Thread.currentThread().interrupt()
+    } finally {
+      outputJob?.cancel()
     }
   }
 
