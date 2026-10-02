@@ -11,12 +11,12 @@ kt_jvm_library(
     testonly = True,
     srcs = glob(["*.kt"]),
     tags = ["maven_coordinates=" + MAVEN_COORDINATES],
+    exports = ["//src/main/kotlin/org/wfanet/measurement/gcloud/testing:functions_framework_invoker_process"],
     deps = [
         "//imports/java/com/google/common/truth",
         "//imports/java/com/google/common/truth/extensions/proto",
         "//imports/java/com/google/protobuf",
         "//imports/java/io/grpc:api",
-        "//imports/java/org/jetbrains/annotations",
         "//imports/java/org/junit",
         "//imports/java/org/mockito",
         "//imports/kotlin/kotlinx/coroutines:core",

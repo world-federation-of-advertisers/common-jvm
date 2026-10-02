@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.wfanet.measurement.common.testing
+package org.wfanet.measurement.gcloud.testing
 
 import com.google.common.truth.Truth.assertThat
 import java.nio.file.Path
@@ -161,7 +161,7 @@ class FunctionsFrameworkInvokerProcessTest {
         "org",
         "wfanet",
         "measurement",
-        "common",
+        "gcloud",
         "testing",
         "function_process_test_server",
       )

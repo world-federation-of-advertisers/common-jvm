@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.wfanet.measurement.common.testing
+package org.wfanet.measurement.gcloud.testing
 
 import java.io.IOException
 import java.net.ServerSocket
