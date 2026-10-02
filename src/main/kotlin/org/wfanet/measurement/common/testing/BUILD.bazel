@@ -1,22 +1,35 @@
+load("@rules_jvm_external//:defs.bzl", "maven_export")
 load("@wfa_rules_kotlin_jvm//kotlin:defs.bzl", "kt_jvm_library")
+load("//build/maven:defs.bzl", "artifact_version")
 
 package(default_visibility = ["//visibility:public"])
+
+MAVEN_COORDINATES = "org.wfanet.measurement:common-testing:" + artifact_version()
 
 kt_jvm_library(
     name = "testing",
     testonly = True,
     srcs = glob(["*.kt"]),
+    tags = ["maven_coordinates=" + MAVEN_COORDINATES],
     deps = [
         "//imports/java/com/google/common/truth",
         "//imports/java/com/google/common/truth/extensions/proto",
         "//imports/java/com/google/protobuf",
         "//imports/java/io/grpc:api",
+        "//imports/java/org/jetbrains/annotations",
         "//imports/java/org/junit",
         "//imports/java/org/mockito",
         "//imports/kotlin/kotlinx/coroutines:core",
         "//imports/kotlin/org/mockito/kotlin",
         "//src/main/kotlin/org/wfanet/measurement/common",
-        "//src/main/kotlin/org/wfanet/measurement/common/grpc",
-        "//src/main/kotlin/org/wfanet/measurement/common/grpc/testing",
     ],
+)
+
+maven_export(
+    name = "testing_maven",
+    testonly = True,
+    lib_name = "testing",
+    maven_coordinates = MAVEN_COORDINATES,
+    tags = ["no-javadocs"],
+    visibility = ["//visibility:private"],
 )
