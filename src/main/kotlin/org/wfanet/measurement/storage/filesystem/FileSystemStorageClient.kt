@@ -222,8 +222,8 @@ class FileSystemStorageClient(
   }
 
   /**
-   * Write-if-absent: atomic create via NIO; throws [BlobChangedException] if a blob already exists.
-   * The create itself is atomic across processes on the same host via [Files.createFile].
+   * Write-if-absent: stages the content in a temporary sibling, then publishes it atomically with a
+   * hard link. Creating the link is atomic across processes on the same host.
    *
    * @throws BlobChangedException if a blob already exists at [blobKey]
    */
@@ -234,12 +234,15 @@ class FileSystemStorageClient(
     val file: File = resolvePath(blobKey)
     return withContext(coroutineContext + CoroutineName("writeBlobIfNotFound")) {
       file.parentFile.mkdirs()
+      val temp = Files.createTempFile(file.parentFile.toPath(), ".write-", ".tmp")
       try {
-        Files.createFile(file.toPath())
+        writeContentTo(temp.toFile(), content)
+        Files.createLink(file.toPath(), temp)
       } catch (e: FileAlreadyExistsException) {
         throw BlobChangedException("Blob already exists: $blobKey", e)
+      } finally {
+        Files.deleteIfExists(temp)
       }
-      writeContentTo(file, content)
       Blob(file, blobKey)
     }
   }
