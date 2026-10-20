@@ -213,7 +213,7 @@ interface ConditionalOperationStorageClient : StorageClient {
    * Writes [content] to [blobKey] only if no blob currently exists at that key. First-writer-wins
    * semantics — concurrent peers race atomically and exactly one succeeds.
    *
-   * If collecting [content] fails, no partial blob from that invocation is published.
+   * If collecting [content] fails, no incomplete blob from that invocation is published.
    *
    * @throws BlobChangedException if a blob already exists at [blobKey]
    */

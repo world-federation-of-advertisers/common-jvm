@@ -190,7 +190,7 @@ abstract class AbstractConditionalOperationStorageClientTest<
   fun `writeBlobIfNotFound leaves key retryable when content fails`(): Unit = runBlocking {
     val blobKey = "failed-write"
     val failingContent = flow {
-      emit("partial content".toByteStringUtf8())
+      emit("content prefix".toByteStringUtf8())
       throw IllegalStateException("content failed")
     }
 

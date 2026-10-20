@@ -14,11 +14,16 @@
 
 package org.wfanet.measurement.gcloud.gcs
 
+import com.google.cloud.WriteChannel
 import com.google.cloud.storage.BlobId
 import com.google.cloud.storage.BlobInfo
+import com.google.cloud.storage.Storage
 import com.google.common.truth.Truth.assertThat
 import com.google.protobuf.kotlin.toByteStringUtf8
+import java.nio.ByteBuffer
 import java.time.Instant
+import kotlin.test.assertFailsWith
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Before
@@ -26,6 +31,11 @@ import org.junit.ClassRule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
+import org.mockito.kotlin.any
+import org.mockito.kotlin.mock
+import org.mockito.kotlin.never
+import org.mockito.kotlin.verify
+import org.mockito.kotlin.whenever
 import org.wfanet.measurement.gcloud.gcs.testing.StorageEmulatorRule
 import org.wfanet.measurement.storage.testing.AbstractBlobMetadataStorageClientTest
 import org.wfanet.measurement.storage.testing.BlobSubject.Companion.assertThat
@@ -88,6 +98,31 @@ class GcsStorageClientTest : AbstractBlobMetadataStorageClientTest<GcsStorageCli
 
     val refetched = checkNotNull(storageClient.getBlob(blobKey))
     assertThat(refetched.metadata).doesNotContainKey("foo")
+  }
+
+  @Test
+  fun `writeBlobIfNotFound does not finalize upload when content fails`(): Unit = runBlocking {
+    val writeChannel = mock<WriteChannel>()
+    whenever(writeChannel.write(any())).thenAnswer { invocation ->
+      val buffer = invocation.getArgument<ByteBuffer>(0)
+      val byteCount = buffer.remaining()
+      buffer.position(buffer.limit())
+      byteCount
+    }
+    val storage = mock<Storage>()
+    whenever(storage.writer(any(), any<Storage.BlobWriteOption>())).thenReturn(writeChannel)
+    val client = GcsStorageClient(storage, BUCKET)
+    val failingContent = flow {
+      emit("truncated content".toByteStringUtf8())
+      throw IllegalStateException("content failed")
+    }
+
+    assertFailsWith<IllegalStateException> {
+      client.writeBlobIfNotFound("failed-write", failingContent)
+    }
+
+    verify(writeChannel).write(any())
+    verify(writeChannel, never()).close()
   }
 
   companion object {
