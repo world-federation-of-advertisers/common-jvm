@@ -29,10 +29,10 @@ import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.yield
 import org.jetbrains.annotations.Blocking
@@ -133,11 +133,12 @@ class GcsStorageClient(
     }
 
   /**
-   * Shared body for [writeBlob], [writeBlobIfUnchanged] and [writeBlobIfNotFound]. Single resumable
-   * upload with any [writeOptions] applied; refetches the resulting blob to get its generation +
-   * updateTime. Translates HTTP 412 into [BlobChangedException] iff [preconditionMessage] is
-   * non-null (i.e. the caller actually set a precondition). The caller is responsible for wrapping
-   * the call in a [CoroutineName] that identifies the public entry point.
+   * Shared body for [writeBlob], [writeBlobIfUnchanged] and [writeBlobIfNotFound]. Finalizes a
+   * single resumable upload after [content] completes, with any [writeOptions] applied, then
+   * refetches the resulting blob to get its generation and update time. Translates HTTP 412 into
+   * [BlobChangedException] iff [preconditionMessage] is non-null (i.e. the caller actually set a
+   * precondition). The caller is responsible for wrapping the call in a [CoroutineName] that
+   * identifies the public entry point.
    */
   private suspend fun doWrite(
     blobKey: String,
@@ -148,9 +149,11 @@ class GcsStorageClient(
     withContext(blockingContext) {
       val blobInfo = BlobInfo.newBuilder(bucketName, blobKey).build()
       try {
-        storage.writer(blobInfo, *writeOptions).use { byteChannel ->
-          writeChannel(byteChannel, content)
-        }
+        val byteChannel = storage.writer(blobInfo, *writeOptions)
+        // Closing finalizes the resumable upload, so abandon the channel if content collection
+        // fails instead of publishing the bytes written so far.
+        writeChannel(byteChannel, content)
+        byteChannel.close()
         val writtenBlob =
           storage.get(BlobId.of(bucketName, blobKey))
             ?: throw StorageException("Blob $blobKey vanished after successful write")
@@ -311,7 +314,8 @@ class GcsStorageClient(
 private suspend fun writeChannel(byteChannel: WriteChannel, content: Flow<ByteString>) {
   content.collect { bytes ->
     for (buffer in bytes.asReadOnlyByteBufferList()) {
-      while (buffer.hasRemaining() && currentCoroutineContext().isActive) {
+      while (buffer.hasRemaining()) {
+        currentCoroutineContext().ensureActive()
         // Writer has its own internal buffering, so we can just use whatever buffers we already
         // have.
         if (byteChannel.write(buffer) == 0) {
