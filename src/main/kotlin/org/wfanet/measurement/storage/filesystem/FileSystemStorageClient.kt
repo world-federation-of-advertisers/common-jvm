@@ -43,6 +43,7 @@ import org.wfanet.measurement.storage.ConditionalOperationStorageClient
 import org.wfanet.measurement.storage.StorageClient
 
 private const val READ_BUFFER_SIZE = 1024 * 4 // 4 KiB
+private const val STAGING_DIRECTORY_NAME = ".wfa-storage-client-staging"
 
 /**
  * [StorageClient] implementation that stores blobs as files under [directory].
@@ -63,6 +64,9 @@ private const val READ_BUFFER_SIZE = 1024 * 4 // 4 KiB
  * cross-host workload that needs conditional writes (the typical TEE / Pub/Sub redelivery
  * scenario), use [GcsStorageClient] (or another backend whose underlying storage system enforces
  * the precondition atomically).
+ *
+ * `.wfa-storage-client-staging` is reserved for internal write staging. Blob keys containing that
+ * path segment cannot be written and are treated as absent by read and list operations.
  */
 class FileSystemStorageClient(
   private val directory: File,
@@ -91,6 +95,9 @@ class FileSystemStorageClient(
   }
 
   override suspend fun getBlob(blobKey: String): StorageClient.Blob? {
+    if (isStagingPath(blobKey)) {
+      return null
+    }
     val file: File = resolvePath(blobKey)
     return withContext(coroutineContext + CoroutineName(::getBlob.name)) {
       if (file.exists()) Blob(file, blobKey) else null
@@ -98,6 +105,9 @@ class FileSystemStorageClient(
   }
 
   override suspend fun listBlobs(prefix: String?): Flow<StorageClient.Blob> {
+    if (prefix != null && isStagingPath(prefix)) {
+      return emptyFlow()
+    }
     // Optimization to traverse fewer files if possible
     val pathStart: Path =
       if (prefix.isNullOrEmpty()) {
@@ -121,6 +131,14 @@ class FileSystemStorageClient(
         Files.walkFileTree(
           pathStart,
           object : SimpleFileVisitor<Path>() {
+            override fun preVisitDirectory(dir: Path, attrs: BasicFileAttributes): FileVisitResult {
+              return if (dir != pathStart && dir.fileName.toString() == STAGING_DIRECTORY_NAME) {
+                FileVisitResult.SKIP_SUBTREE
+              } else {
+                FileVisitResult.CONTINUE
+              }
+            }
+
             override fun visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult {
               if (attrs.isRegularFile) {
                 val relativePath = file.relativeTo(directory.toPath())
@@ -138,6 +156,9 @@ class FileSystemStorageClient(
   }
 
   override suspend fun listBlobKeysAndPrefixes(prefix: String): Flow<String> {
+    if (isStagingPath(prefix)) {
+      return emptyFlow()
+    }
 
     val prefixDir =
       if (prefix.isEmpty()) {
@@ -152,7 +173,10 @@ class FileSystemStorageClient(
 
     return channelFlow<String> {
         withContext(coroutineContext) {
-          prefixDir.listFiles()?.forEach { entry ->
+          for (entry in prefixDir.listFiles().orEmpty()) {
+            if (entry.name == STAGING_DIRECTORY_NAME) {
+              continue
+            }
             val relativePath = entry.toPath().relativeTo(directory.toPath()).toBlobKey()
             if (entry.isDirectory) {
               trySendBlocking("$relativePath/")
@@ -166,6 +190,9 @@ class FileSystemStorageClient(
   }
 
   override suspend fun getFreshnessToken(blobKey: String): String? {
+    if (isStagingPath(blobKey)) {
+      return null
+    }
     val file: File = resolvePath(blobKey)
     return withContext(coroutineContext + CoroutineName("getFreshnessToken")) {
       if (file.exists()) file.lastModified().toString() else null
@@ -207,16 +234,18 @@ class FileSystemStorageClient(
           "Blob $blobKey is at generation ${file.lastModified()}, not $expectedGeneration"
         )
       }
-      // Write to a temp sibling and atomically move into place, so partially-written content
-      // is never visible.
-      val temp = File.createTempFile(file.name, ".tmp", file.parentFile)
-      writeContentTo(temp, content)
-      Files.move(
-        temp.toPath(),
-        file.toPath(),
-        StandardCopyOption.ATOMIC_MOVE,
-        StandardCopyOption.REPLACE_EXISTING,
-      )
+      val temp = createStagingFile(file)
+      try {
+        writeContentTo(temp.toFile(), content)
+        Files.move(
+          temp,
+          file.toPath(),
+          StandardCopyOption.ATOMIC_MOVE,
+          StandardCopyOption.REPLACE_EXISTING,
+        )
+      } finally {
+        Files.deleteIfExists(temp)
+      }
       Blob(file, blobKey)
     }
   }
@@ -234,7 +263,7 @@ class FileSystemStorageClient(
     val file: File = resolvePath(blobKey)
     return withContext(coroutineContext + CoroutineName("writeBlobIfNotFound")) {
       file.parentFile.mkdirs()
-      val temp = Files.createTempFile(file.parentFile.toPath(), ".write-", ".tmp")
+      val temp = createStagingFile(file)
       try {
         writeContentTo(temp.toFile(), content)
         Files.createLink(file.toPath(), temp)
@@ -271,7 +300,16 @@ class FileSystemStorageClient(
       }
   }
 
+  private fun createStagingFile(destination: File): Path {
+    val stagingDirectory: Path =
+      Files.createDirectories(destination.parentFile.resolve(STAGING_DIRECTORY_NAME).toPath())
+    return Files.createTempFile(stagingDirectory, "write-", ".tmp")
+  }
+
   private fun resolvePath(blobKey: String): File {
+    require(!isStagingPath(blobKey)) {
+      "Blob key cannot contain the reserved path segment $STAGING_DIRECTORY_NAME"
+    }
     val relativePath =
       if (File.separatorChar == '/') {
         blobKey
@@ -279,6 +317,10 @@ class FileSystemStorageClient(
         blobKey.replace('/', File.separatorChar)
       }
     return directory.resolve(relativePath)
+  }
+
+  private fun isStagingPath(blobKey: String): Boolean {
+    return blobKey.split('/').contains(STAGING_DIRECTORY_NAME)
   }
 
   private fun Path.toBlobKey(): String {
