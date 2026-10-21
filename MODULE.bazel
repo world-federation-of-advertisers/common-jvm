@@ -345,7 +345,7 @@ oci.pull(
     name = "java_image_base",
     reproducible = True,
     tag = "nonroot",    
-    digest = "sha256:c97caa04324a70ea594e82ac31d75cdcc3730845dfc528de38847dcbd52bb599",
+    digest = "sha256:890021421383f5613068800efe9b6d76688b78f501177dcd912c5908a8c5b437",
     image = "gcr.io/distroless/java17-debian13",
     platforms = ["linux/amd64"],
 )
@@ -353,7 +353,7 @@ oci.pull(
     name = "java_debug_image_base",
     reproducible = True,
     tag = "debug-nonroot",    
-    digest = "sha256:d8d8ebdc9841612875375e6e348f6470577dfb5fc6d3c2c11621faaad445bd14",
+    digest = "sha256:0bccf2b897d0418422b86c58be0d15487cf6fa13b1d27d95f3e1634c67a32cd6",
     image = "gcr.io/distroless/java17-debian13",
     platforms = ["linux/amd64"],
 )
