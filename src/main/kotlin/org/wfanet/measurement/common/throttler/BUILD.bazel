@@ -10,6 +10,7 @@ kt_jvm_library(
     name = "throttler",
     srcs = glob(["*.kt"]),
     tags = ["maven_coordinates=" + MAVEN_COORDINATES],
+    exports = ["//src/main/kotlin/org/wfanet/measurement/common/ratelimit:token_bucket"],
     deps = [
         "//imports/java/picocli",
         "//imports/kotlin/kotlinx/coroutines:core",

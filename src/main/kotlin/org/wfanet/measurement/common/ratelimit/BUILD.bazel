@@ -13,6 +13,7 @@ kt_jvm_library(
 kt_jvm_library(
     name = "token_bucket",
     srcs = ["TokenBucket.kt"],
+    exports = [":rate_limiter"],
     deps = [
         ":rate_limiter",
         "//imports/kotlin/kotlinx/coroutines:core",
