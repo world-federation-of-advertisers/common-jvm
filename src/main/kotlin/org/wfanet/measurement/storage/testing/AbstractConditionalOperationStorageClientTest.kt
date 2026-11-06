@@ -20,6 +20,7 @@ import com.google.common.truth.Truth.assertThat
 import com.google.protobuf.kotlin.toByteStringUtf8
 import kotlin.test.assertFailsWith
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
@@ -183,6 +184,23 @@ abstract class AbstractConditionalOperationStorageClientTest<
 
     assertThat(written).contentEqualTo(testBlobContent)
     assertThat(checkNotNull(storageClient.getBlob(blobKey))).contentEqualTo(testBlobContent)
+  }
+
+  @Test
+  fun `writeBlobIfNotFound leaves key retryable when content fails`(): Unit = runBlocking {
+    val blobKey = "failed-write"
+    val failingContent = flow {
+      emit("content prefix".toByteStringUtf8())
+      throw IllegalStateException("content failed")
+    }
+
+    assertFailsWith<IllegalStateException> {
+      storageClient.writeBlobIfNotFound(blobKey, failingContent)
+    }
+
+    assertThat(storageClient.getBlob(blobKey)).isNull()
+    val written = storageClient.writeBlobIfNotFound(blobKey, flowOf(testBlobContent))
+    assertThat(written).contentEqualTo(testBlobContent)
   }
 
   @Test
