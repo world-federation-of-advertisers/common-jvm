@@ -17,6 +17,7 @@ package org.wfanet.measurement.gcloud.kms
 import com.google.crypto.tink.Aead
 import com.google.crypto.tink.KmsClient
 import com.google.crypto.tink.integration.awskms.AwsKmsClient as TinkAwsKmsClient
+import java.io.IOException
 import java.security.GeneralSecurityException
 import java.time.Clock
 import java.time.Duration
@@ -27,6 +28,8 @@ import org.wfanet.measurement.aws.TimeBoundCredentials
 import org.wfanet.measurement.aws.kms.CompletionExceptionTranslatingKmsClient
 import org.wfanet.measurement.common.crypto.tink.ConfidentialSpaceToAwsWifCredentials
 import org.wfanet.measurement.common.crypto.tink.KmsClientFactory
+import org.wfanet.measurement.common.crypto.tink.KmsClientWithRetryInfo
+import org.wfanet.measurement.common.crypto.tink.KmsKeyAccessException
 import org.wfanet.measurement.gcloud.confidentialspace.AttestationTokenProvider
 import org.wfanet.measurement.gcloud.confidentialspace.AttestationTokenRequest
 import org.wfanet.measurement.gcloud.confidentialspace.ConfidentialSpaceTokenClient
@@ -38,6 +41,7 @@ import software.amazon.awssdk.auth.credentials.AwsSessionCredentials
 import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.sts.StsClient
 import software.amazon.awssdk.services.sts.model.AssumeRoleWithWebIdentityRequest
+import software.amazon.awssdk.services.sts.model.StsException
 
 /**
  * A [KmsClientFactory] for accessing AWS KMS directly from a Google Cloud Confidential Space
@@ -52,7 +56,9 @@ import software.amazon.awssdk.services.sts.model.AssumeRoleWithWebIdentityReques
  * The returned client uses a credentials provider that automatically refreshes the AWS session
  * credentials before they expire by re-executing the token fetch + STS exchange.
  *
- * @param tokenProvider Source of Confidential Space attestation tokens.
+ * @param tokenProvider Source of Confidential Space attestation tokens. Attestation I/O failures
+ *   and AWS STS throttling or HTTP 408/429/5xx permit bounded retries. Other credential and opaque
+ *   key-operation failures are nonretryable.
  * @param refreshMargin How far before expiration to proactively refresh credentials.
  * @param clock Clock used to determine the current time.
  */
@@ -76,14 +82,16 @@ class ConfidentialSpaceToAwsKmsClientFactory(
       RefreshableAwsCredentialsIdentityProvider(refreshMargin = refreshMargin, clock = clock) {
         obtainAwsCredentials(config).toFuture()
       }
-    return CompletionExceptionTranslatingKmsClient.wrap(
-      TinkAwsKmsClient()
-        .withCredentialsProvider(
-          // TODO(tink-crypto/tink-java-awskms#6): once a release including the fix is
-          // available, pass credentialsProvider directly instead of wrapping it in
-          // AwsCredentialsProviderAdapter.
-          AwsCredentialsProviderAdapter(credentialsProvider)
-        )
+    return KmsClientWithRetryInfo(
+      CompletionExceptionTranslatingKmsClient.wrap(
+        TinkAwsKmsClient()
+          .withCredentialsProvider(
+            // TODO(tink-crypto/tink-java-awskms#6): once a release including the fix is
+            // available, pass credentialsProvider directly instead of wrapping it in
+            // AwsCredentialsProviderAdapter.
+            AwsCredentialsProviderAdapter(credentialsProvider)
+          )
+      )
     )
   }
 
@@ -94,8 +102,8 @@ class ConfidentialSpaceToAwsKmsClientFactory(
       .flatMap { signatureKeyIds -> attestationToken(config, signatureKeyIds) }
       .flatMap { attestationToken -> exchangeForAwsCredentials(config, attestationToken) }
       .onErrorMap { e ->
-        if (e is GeneralSecurityException) e
-        else GeneralSecurityException("Failed to obtain AWS credentials", e)
+        if (e is KmsKeyAccessException) e
+        else KmsKeyAccessException("Failed to obtain AWS credentials", false, e)
       }
 
   /**
@@ -120,8 +128,9 @@ class ConfidentialSpaceToAwsKmsClientFactory(
         )
       }
       .onErrorMap { e ->
-        GeneralSecurityException(
+        KmsKeyAccessException(
           "Failed to obtain Confidential Space OIDC token for signature discovery",
+          e is IOException,
           e,
         )
       }
@@ -144,7 +153,11 @@ class ConfidentialSpaceToAwsKmsClientFactory(
         )
       }
       .onErrorMap { e ->
-        GeneralSecurityException("Failed to obtain Confidential Space attestation token", e)
+        KmsKeyAccessException(
+          "Failed to obtain Confidential Space attestation token",
+          e is IOException,
+          e,
+        )
       }
 
   /**
@@ -173,7 +186,7 @@ class ConfidentialSpaceToAwsKmsClientFactory(
           }
           .build()
       } catch (e: Exception) {
-        throw GeneralSecurityException("Failed to create AWS STS client", e)
+        throw KmsKeyAccessException("Failed to create AWS STS client", false, e)
       }
 
     val stsResponse =
@@ -189,7 +202,15 @@ class ConfidentialSpaceToAwsKmsClientFactory(
               .build()
           )
         } catch (e: Exception) {
-          throw GeneralSecurityException("AWS STS AssumeRoleWithWebIdentity failed", e)
+          throw KmsKeyAccessException(
+            "AWS STS AssumeRoleWithWebIdentity failed",
+            e is StsException &&
+              (e.isThrottlingException ||
+                e.statusCode() == 408 ||
+                e.statusCode() == 429 ||
+                e.statusCode() in 500..599),
+            e,
+          )
         }
       }
 

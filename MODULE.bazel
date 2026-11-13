@@ -259,6 +259,7 @@ maven.install(
         "com.google.cloud:google-cloudevent-types:0.16.0",
         "com.google.auth:google-auth-library-oauth2-http",
         "com.google.auth:google-auth-library-credentials",
+        "com.google.http-client:google-http-client",
         "com.google.crypto.tink:tink-gcpkms:1.11.0",
         "com.google.crypto.tink:tink-awskms:2.0.0",
 

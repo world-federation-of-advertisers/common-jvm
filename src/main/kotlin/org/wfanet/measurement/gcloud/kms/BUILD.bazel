@@ -6,9 +6,10 @@ kt_jvm_library(
     name = "gcp_kms_client_factory",
     srcs = ["GCloudKmsClientFactory.kt"],
     deps = [
+        "//imports/java/com/google/api/client/http",
+        "//imports/java/com/google/auth:credentials",
+        "//imports/java/com/google/auth:oauth2_http",
         "//src/main/kotlin/org/wfanet/measurement/common/crypto/tink",
-        "@maven//:com_google_auth_google_auth_library_credentials",
-        "@maven//:com_google_auth_google_auth_library_oauth2_http",
         "@maven//:com_google_crypto_tink_tink_gcpkms",
     ],
 )
@@ -17,6 +18,9 @@ kt_jvm_library(
     name = "gcloud_to_aws_kms_client_factory",
     srcs = ["GCloudToAwsKmsClientFactory.kt"],
     deps = [
+        "//imports/java/com/google/api/client/http",
+        "//imports/java/com/google/auth:credentials",
+        "//imports/java/com/google/auth:oauth2_http",
         "//imports/java/com/google/crypto/tink",
         "//imports/java/com/google/crypto/tink:awskms",
         "//imports/java/com/google/gson",
@@ -27,8 +31,6 @@ kt_jvm_library(
         "//src/main/kotlin/org/wfanet/measurement/aws:refreshable_aws_credentials_provider",
         "//src/main/kotlin/org/wfanet/measurement/aws/kms:aws_kms_client_factory",
         "//src/main/kotlin/org/wfanet/measurement/common/crypto/tink",
-        "@maven//:com_google_auth_google_auth_library_credentials",
-        "@maven//:com_google_auth_google_auth_library_oauth2_http",
     ],
 )
 

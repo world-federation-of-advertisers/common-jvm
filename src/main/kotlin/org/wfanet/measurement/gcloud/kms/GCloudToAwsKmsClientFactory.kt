@@ -14,6 +14,8 @@
 
 package org.wfanet.measurement.gcloud.kms
 
+import com.google.api.client.http.HttpResponseException
+import com.google.auth.Retryable
 import com.google.auth.oauth2.GoogleCredentials
 import com.google.auth.oauth2.IdTokenCredentials
 import com.google.auth.oauth2.ImpersonatedCredentials
@@ -22,6 +24,9 @@ import com.google.crypto.tink.KmsClient
 import com.google.crypto.tink.integration.awskms.AwsKmsClient as TinkAwsKmsClient
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
+import java.io.FileNotFoundException
+import java.io.IOException
+import java.nio.file.NoSuchFileException
 import java.security.GeneralSecurityException
 import java.time.Clock
 import java.time.Duration
@@ -34,11 +39,14 @@ import org.wfanet.measurement.aws.TimeBoundCredentials
 import org.wfanet.measurement.aws.kms.CompletionExceptionTranslatingKmsClient
 import org.wfanet.measurement.common.crypto.tink.GCloudToAwsWifCredentials
 import org.wfanet.measurement.common.crypto.tink.KmsClientFactory
+import org.wfanet.measurement.common.crypto.tink.KmsClientWithRetryInfo
+import org.wfanet.measurement.common.crypto.tink.KmsKeyAccessException
 import software.amazon.awssdk.auth.credentials.AnonymousCredentialsProvider
 import software.amazon.awssdk.auth.credentials.AwsSessionCredentials
 import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.sts.StsClient
 import software.amazon.awssdk.services.sts.model.AssumeRoleWithWebIdentityRequest
+import software.amazon.awssdk.services.sts.model.StsException
 
 /**
  * A [KmsClientFactory] for accessing AWS KMS from a Google Cloud Confidential Space workload.
@@ -47,6 +55,10 @@ import software.amazon.awssdk.services.sts.model.AssumeRoleWithWebIdentityReques
  * Confidential Space attestation token for Google Cloud credentials, then impersonates a service
  * account to obtain an OIDC ID token. That ID token is exchanged with AWS STS
  * `AssumeRoleWithWebIdentity` for temporary AWS credentials.
+ *
+ * Public Google authentication retry hints and AWS STS throttling or HTTP 408/429/5xx permit
+ * bounded retries. Other credential I/O failures permit bounded retries except known file failures.
+ * Unclassified key-operation failures are nonretryable.
  *
  * @param refreshMargin How far before expiration to proactively refresh credentials.
  * @param clock Clock used to determine the current time.
@@ -73,14 +85,16 @@ class GCloudToAwsKmsClientFactory(
         // thread where blocking is expected, so it runs inline rather than on another thread.
         CompletableFuture.completedFuture(obtainAwsCredentials(config))
       }
-    return CompletionExceptionTranslatingKmsClient.wrap(
-      TinkAwsKmsClient()
-        .withCredentialsProvider(
-          // TODO(tink-crypto/tink-java-awskms#6): once a release including the fix is
-          // available, pass credentialsProvider directly instead of wrapping it in
-          // AwsCredentialsProviderAdapter.
-          AwsCredentialsProviderAdapter(credentialsProvider)
-        )
+    return KmsClientWithRetryInfo(
+      CompletionExceptionTranslatingKmsClient.wrap(
+        TinkAwsKmsClient()
+          .withCredentialsProvider(
+            // TODO(tink-crypto/tink-java-awskms#6): once a release including the fix is
+            // available, pass credentialsProvider directly instead of wrapping it in
+            // AwsCredentialsProviderAdapter.
+            AwsCredentialsProviderAdapter(credentialsProvider)
+          )
+      )
     )
   }
 
@@ -112,14 +126,15 @@ class GCloudToAwsKmsClientFactory(
       try {
         return GoogleCredentials.fromStream(wifConfigJson.byteInputStream(Charsets.UTF_8))
       } catch (e: Exception) {
-        throw GeneralSecurityException("Failed to create GoogleCredentials from WIF config", e)
+        throw KmsKeyAccessException("Failed to create GoogleCredentials from WIF config", false, e)
       }
     }
 
     private fun extractServiceAccount(impersonationUrl: String): String {
       return SERVICE_ACCOUNT_REGEX.find(impersonationUrl)?.groupValues?.get(1)
-        ?: throw GeneralSecurityException(
-          "Cannot extract service account from impersonation URL: $impersonationUrl"
+        ?: throw KmsKeyAccessException(
+          "Cannot extract service account from impersonation URL: $impersonationUrl",
+          false,
         )
     }
 
@@ -147,7 +162,17 @@ class GCloudToAwsKmsClientFactory(
           idTokenCredentials.refresh()
           idTokenCredentials.idToken.tokenValue
         } catch (e: Exception) {
-          throw GeneralSecurityException("Failed to obtain Google Cloud ID token", e)
+          val retryable =
+            when (e) {
+              is HttpResponseException ->
+                e.statusCode == 408 || e.statusCode == 429 || e.statusCode in 500..599
+              is Retryable -> e.isRetryable
+              is FileNotFoundException,
+              is NoSuchFileException -> false
+              is IOException -> true
+              else -> false
+            }
+          throw KmsKeyAccessException("Failed to obtain Google Cloud ID token", retryable, e)
         }
 
       val stsClient: StsClient =
@@ -159,7 +184,7 @@ class GCloudToAwsKmsClientFactory(
             }
             .build()
         } catch (e: Exception) {
-          throw GeneralSecurityException("Failed to create AWS STS client", e)
+          throw KmsKeyAccessException("Failed to create AWS STS client", false, e)
         }
 
       val stsResponse =
@@ -174,7 +199,15 @@ class GCloudToAwsKmsClientFactory(
               .build()
           )
         } catch (e: Exception) {
-          throw GeneralSecurityException("AWS STS AssumeRoleWithWebIdentity failed", e)
+          throw KmsKeyAccessException(
+            "AWS STS AssumeRoleWithWebIdentity failed",
+            e is StsException &&
+              (e.isThrottlingException ||
+                e.statusCode() == 408 ||
+                e.statusCode() == 429 ||
+                e.statusCode() in 500..599),
+            e,
+          )
         } finally {
           stsClient.close()
         }

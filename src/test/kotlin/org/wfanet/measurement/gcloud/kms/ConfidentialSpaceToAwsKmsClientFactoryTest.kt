@@ -14,19 +14,24 @@
 
 package org.wfanet.measurement.gcloud.kms
 
+import com.google.common.truth.Truth.assertThat
+import java.io.IOException
 import java.security.GeneralSecurityException
+import java.util.concurrent.CompletableFuture
 import kotlin.test.assertFailsWith
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 import org.wfanet.measurement.common.crypto.tink.ConfidentialSpaceToAwsWifCredentials
+import org.wfanet.measurement.common.crypto.tink.KmsKeyAccessException
+import org.wfanet.measurement.gcloud.confidentialspace.AttestationTokenProvider
 
 /**
  * Tests for [ConfidentialSpaceToAwsKmsClientFactory].
  *
  * Full integration testing requires a Confidential Space environment with a configured AWS trust
- * relationship. This unit test verifies that the factory fails gracefully with a bogus config. The
- * token-fetch path is covered by
+ * relationship. These tests verify retry information and failure handling through real AWS
+ * credential resolution. The token-fetch path is covered by
  * [org.wfanet.measurement.gcloud.confidentialspace.ConfidentialSpaceTokenClientTest].
  */
 @RunWith(JUnit4::class)
@@ -45,5 +50,49 @@ class ConfidentialSpaceToAwsKmsClientFactoryTest {
     val kmsClient = factory.getKmsClient(config)
     val aead = kmsClient.getAead("aws-kms://arn:aws:kms:us-east-1:123456789012:key/test-key")
     assertFailsWith<GeneralSecurityException> { aead.encrypt(ByteArray(0), null) }
+  }
+
+  @Test
+  fun `encrypt reports retryable attestation failure through the real AWS credential chain`() {
+    val original = IOException("launcher quota exceeded")
+    val provider = AttestationTokenProvider { CompletableFuture.failedFuture(original) }
+    val factory = ConfidentialSpaceToAwsKmsClientFactory(tokenProvider = provider)
+    val config =
+      ConfidentialSpaceToAwsWifCredentials(
+        roleArn = "arn:aws:iam::123456789012:role/test-role",
+        roleSessionName = "test-session",
+        region = "us-east-1",
+        audience = "https://example.com",
+        containerImageSignatureKeyIds = listOf("signing-key"),
+      )
+    val aead =
+      factory
+        .getKmsClient(config)
+        .getAead("aws-kms://arn:aws:kms:us-east-1:123456789012:key/test-key")
+    val failure = assertFailsWith<KmsKeyAccessException> { aead.encrypt(ByteArray(0), null) }
+    assertThat(failure.isRetryable).isTrue()
+    assertThat(failure.cause).isSameInstanceAs(original)
+  }
+
+  @Test
+  fun `decrypt preserves nonretryable attestation-provider failure`() {
+    val original = IllegalArgumentException("invalid attestation configuration")
+    val provider = AttestationTokenProvider { CompletableFuture.failedFuture(original) }
+    val factory = ConfidentialSpaceToAwsKmsClientFactory(tokenProvider = provider)
+    val config =
+      ConfidentialSpaceToAwsWifCredentials(
+        roleArn = "arn:aws:iam::123456789012:role/test-role",
+        roleSessionName = "test-session",
+        region = "us-east-1",
+        audience = "https://example.com",
+        containerImageSignatureKeyIds = listOf("signing-key"),
+      )
+    val aead =
+      factory
+        .getKmsClient(config)
+        .getAead("aws-kms://arn:aws:kms:us-east-1:123456789012:key/test-key")
+    val failure = assertFailsWith<KmsKeyAccessException> { aead.decrypt(ByteArray(0), null) }
+    assertThat(failure.isRetryable).isFalse()
+    assertThat(failure.cause).isSameInstanceAs(original)
   }
 }

@@ -14,28 +14,45 @@
 
 package org.wfanet.measurement.gcloud.kms
 
+import com.google.api.client.http.HttpResponseException
+import com.google.auth.Retryable
+import com.google.auth.http.HttpTransportFactory
 import com.google.auth.oauth2.GoogleCredentials
 import com.google.crypto.tink.KmsClient
 import com.google.crypto.tink.integration.gcpkms.GcpKmsClient
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
+import java.io.FileNotFoundException
 import java.io.IOException
+import java.nio.file.NoSuchFileException
 import java.security.GeneralSecurityException
 import org.wfanet.measurement.common.crypto.tink.GCloudWifCredentials
 import org.wfanet.measurement.common.crypto.tink.KmsClientFactory
+import org.wfanet.measurement.common.crypto.tink.KmsClientWithRetryInfo
+import org.wfanet.measurement.common.crypto.tink.KmsKeyAccessException
 
-/** A [KmsClientFactory] for creating Tink [KmsClient] instances for Google Cloud KMS. */
-class GCloudKmsClientFactory : KmsClientFactory<GCloudWifCredentials> {
+/**
+ * [KmsClientFactory] for Google Cloud KMS with documented retry information.
+ *
+ * Credentials are refreshed before key use. Public HTTP status and [Retryable] hints determine
+ * retries when available. Other credential I/O failures permit bounded retries, except known file
+ * failures; opaque key-operation failures default to nonretryable.
+ *
+ * @param httpTransportFactory Optional HTTP transport for authentication; null retains the Google
+ *   credentials library's default transport.
+ */
+class GCloudKmsClientFactory(private val httpTransportFactory: HttpTransportFactory? = null) :
+  KmsClientFactory<GCloudWifCredentials> {
   /**
-   * Returns a [GcpKmsClient] configured for Workload Identity Federation (WIF) with service account
-   * impersonation.
+   * Returns a [KmsClient] backed by [GcpKmsClient] configured for Workload Identity Federation
+   * (WIF) with service account impersonation.
    *
    * This method programmatically builds an `ExternalAccountCredentials` object, which is ideal for
    * environments like Confidential Space where a short-lived token from a file needs to be
    * exchanged for a GCP access token.
    *
    * @param config The Google Cloud specific WIF and impersonation configuration.
-   * @return An initialized [GcpKmsClient].
+   * @return An initialized [KmsClient] exposing [KmsKeyAccessException] on key-access failures.
    * @throws GeneralSecurityException if the client cannot be initialized.
    */
   override fun getKmsClient(config: GCloudWifCredentials): KmsClient {
@@ -56,11 +73,39 @@ class GCloudKmsClientFactory : KmsClientFactory<GCloudWifCredentials> {
 
     val credentials =
       try {
-        GoogleCredentials.fromStream(wifConfigJson.byteInputStream(Charsets.UTF_8))
+        if (httpTransportFactory == null) {
+          GoogleCredentials.fromStream(wifConfigJson.byteInputStream(Charsets.UTF_8))
+        } else {
+          GoogleCredentials.fromStream(
+            wifConfigJson.byteInputStream(Charsets.UTF_8),
+            httpTransportFactory,
+          )
+        }
       } catch (e: IOException) {
-        throw GeneralSecurityException("Failed to create GoogleCredentials from WIF config", e)
+        throw KmsKeyAccessException("Failed to create GoogleCredentials from WIF config", false, e)
       }
 
-    return GcpKmsClient().withCredentials(credentials)
+    val client =
+      try {
+        GcpKmsClient().withCredentials(credentials)
+      } catch (e: GeneralSecurityException) {
+        throw KmsKeyAccessException("Failed to initialize Google Cloud KMS client", false, e)
+      }
+    return KmsClientWithRetryInfo(client) {
+      try {
+        credentials.refreshIfExpired()
+      } catch (e: IOException) {
+        val retryable =
+          when (e) {
+            is HttpResponseException ->
+              e.statusCode == 408 || e.statusCode == 429 || e.statusCode in 500..599
+            is Retryable -> e.isRetryable
+            is FileNotFoundException,
+            is NoSuchFileException -> false
+            else -> true
+          }
+        throw KmsKeyAccessException("Failed to refresh Google Cloud credentials", retryable, e)
+      }
+    }
   }
 }

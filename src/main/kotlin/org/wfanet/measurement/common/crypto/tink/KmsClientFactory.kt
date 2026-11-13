@@ -120,6 +120,10 @@ data class ConfidentialSpaceToAwsWifCredentials(
 /**
  * Factory for creating [KmsClient] instances.
  *
+ * WFA factories report client initialization, credential refresh, and key-access failures using
+ * [KmsKeyAccessException]. Callers can use its retry recommendation without inspecting SDK errors.
+ * Other implementations may throw [GeneralSecurityException] without retry information.
+ *
  * @param T The specific type of [WifCredentials] this factory supports.
  */
 interface KmsClientFactory<T : WifCredentials> {

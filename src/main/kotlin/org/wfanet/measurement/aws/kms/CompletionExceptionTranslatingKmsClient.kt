@@ -19,6 +19,7 @@ import com.google.crypto.tink.KmsClient
 import com.google.crypto.tink.integration.awskms.AwsKmsClient as TinkAwsKmsClient
 import java.security.GeneralSecurityException
 import java.util.concurrent.CompletionException
+import org.wfanet.measurement.common.crypto.tink.KmsKeyAccessException
 
 /**
  * Wraps [delegate] so the [Aead] returned by [getAead] translates the one specific checked-failure
@@ -69,6 +70,9 @@ class CompletionExceptionTranslatingKmsClient(private val delegate: TinkAwsKmsCl
           val cause = e.cause
           if (cause !is GeneralSecurityException) {
             throw e
+          }
+          if (cause is KmsKeyAccessException) {
+            throw cause
           }
           throw GeneralSecurityException("KMS operation failed", cause)
         }
