@@ -23,7 +23,11 @@ import io.r2dbc.spi.TransactionDefinition
 import kotlinx.coroutines.reactive.awaitFirstOrNull
 import kotlinx.coroutines.reactive.awaitSingle
 
-/** A transaction context for reading. */
+/**
+ * A transaction context for reading.
+ *
+ * [close] must be called when done with this context.
+ */
 interface ReadContext {
   /**
    * Executes a query.
@@ -37,18 +41,23 @@ interface ReadContext {
   suspend fun close()
 
   /**
-   * Rollbacks the transaction.
+   * Rolls back the transaction state.
    *
-   * Note: Using this on a new transaction causes the transaction to be stuck in the IDLE state.
+   * This transaction context may be reused.
    */
   suspend fun rollback()
 }
 
-internal open class ReadContextImpl protected constructor(protected val connection: Connection) :
-  ReadContext {
+internal open class ReadContextImpl
+protected constructor(
+  protected val connection: Connection,
+  private val transactionDefinition: TransactionDefinition,
+) : ReadContext {
 
   override suspend fun executeQuery(query: BoundStatement): QueryResult {
-    val result: Result = query.toStatement(connection).execute().awaitSingle()
+    val result: Result = executeInTransaction {
+      query.toStatement(connection).execute().awaitSingle()
+    }
     return QueryResult(result)
   }
 
@@ -60,13 +69,20 @@ internal open class ReadContextImpl protected constructor(protected val connecti
     connection.rollbackTransaction().awaitFirstOrNull()
   }
 
-  companion object {
-    suspend fun create(
-      connection: Connection,
-      transactionDefinition: TransactionDefinition,
-    ): ReadContext {
+  /**
+   * Executes [block] within the transaction, beginning one if the connection is not already in a
+   * transaction.
+   */
+  protected suspend fun <T> executeInTransaction(block: suspend () -> T): T {
+    if (connection.isAutoCommit) {
       beginTransaction(connection, transactionDefinition)
-      return ReadContextImpl(connection)
+    }
+    return block()
+  }
+
+  companion object {
+    fun create(connection: Connection, transactionDefinition: TransactionDefinition): ReadContext {
+      return ReadContextImpl(connection, transactionDefinition)
     }
 
     suspend fun beginTransaction(connection: Connection, definition: TransactionDefinition) {
@@ -80,13 +96,14 @@ internal open class ReadContextImpl protected constructor(protected val connecti
   }
 }
 
-internal class SingleUseReadContext private constructor(connection: Connection) :
-  ReadContextImpl(connection) {
+internal class SingleUseReadContext
+private constructor(connection: Connection, transactionDefinition: TransactionDefinition) :
+  ReadContextImpl(connection, transactionDefinition) {
 
   override suspend fun executeQuery(query: BoundStatement): QueryResult {
     val result: Result =
       try {
-        query.toStatement(connection).execute().awaitSingle()
+        executeInTransaction { query.toStatement(connection).execute().awaitSingle() }
       } catch (e: Exception) {
         close()
         throw e
@@ -95,12 +112,8 @@ internal class SingleUseReadContext private constructor(connection: Connection) 
   }
 
   companion object {
-    suspend fun create(
-      connection: Connection,
-      transactionDefinition: TransactionDefinition,
-    ): ReadContext {
-      beginTransaction(connection, transactionDefinition)
-      return SingleUseReadContext(connection)
+    fun create(connection: Connection, transactionDefinition: TransactionDefinition): ReadContext {
+      return SingleUseReadContext(connection, transactionDefinition)
     }
   }
 }

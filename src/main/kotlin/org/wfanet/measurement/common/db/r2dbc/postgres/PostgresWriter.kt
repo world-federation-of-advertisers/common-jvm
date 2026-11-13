@@ -53,6 +53,7 @@ abstract class PostgresWriter<T> {
     } catch (e: Exception) {
       // PostgresqlException is an interface, not a subclass of Exception
       if (e is PostgresqlException) {
+        // Discard the aborted transaction so that the connection can be used for another attempt.
         transactionContext.rollback()
       }
       throw (e)
@@ -63,6 +64,10 @@ abstract class PostgresWriter<T> {
    * Executes the PostgresWriter by starting a PostgresWriter then running [runTransaction].
    *
    * This can only be called once per instance.
+   *
+   * On a serialization failure, [runTransaction] is attempted again. Each attempt runs in its own
+   * transaction, as the [ReadWriteContext] begins one for the first query or statement of the
+   * attempt.
    *
    * @return the output of [runTransaction]
    */

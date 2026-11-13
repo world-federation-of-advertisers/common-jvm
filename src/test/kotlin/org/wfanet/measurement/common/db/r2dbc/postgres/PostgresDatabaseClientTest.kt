@@ -94,6 +94,7 @@ class PostgresDatabaseClientTest {
     with(dbClient.readWriteTransaction()) {
       executeStatement(insertStatement)
       commit()
+      close()
     }
 
     val query = boundStatement("SELECT * FROM Cars")
@@ -123,7 +124,12 @@ class PostgresDatabaseClientTest {
       }
 
     val statementResult =
-      with(dbClient.readWriteTransaction()) { executeStatement(insertStatement).also { commit() } }
+      with(dbClient.readWriteTransaction()) {
+        executeStatement(insertStatement).also {
+          commit()
+          close()
+        }
+      }
     assertThat(statementResult.numRowsUpdated).isEqualTo(2L)
 
     val query = boundStatement("SELECT * FROM Cars ORDER BY CarId")
@@ -157,7 +163,12 @@ class PostgresDatabaseClientTest {
       }
 
     val statementResult =
-      with(dbClient.readWriteTransaction()) { executeStatement(insertStatement).also { commit() } }
+      with(dbClient.readWriteTransaction()) {
+        executeStatement(insertStatement).also {
+          commit()
+          close()
+        }
+      }
     assertThat(statementResult.numRowsUpdated).isEqualTo(2L)
 
     val query = boundStatement("SELECT * FROM Cars ORDER BY CarId")
@@ -187,7 +198,12 @@ class PostgresDatabaseClientTest {
       }
 
     val insertStatementResult =
-      with(dbClient.readWriteTransaction()) { executeStatement(insertStatement).also { commit() } }
+      with(dbClient.readWriteTransaction()) {
+        executeStatement(insertStatement).also {
+          commit()
+          close()
+        }
+      }
     assertThat(insertStatementResult.numRowsUpdated).isEqualTo(2L)
 
     val updatedCars =
@@ -219,7 +235,12 @@ class PostgresDatabaseClientTest {
       }
 
     val updateStatementResult =
-      with(dbClient.readWriteTransaction()) { executeStatement(updateStatement).also { commit() } }
+      with(dbClient.readWriteTransaction()) {
+        executeStatement(updateStatement).also {
+          commit()
+          close()
+        }
+      }
     assertThat(updateStatementResult.numRowsUpdated).isEqualTo(2L)
 
     val query = boundStatement("SELECT * FROM Cars ORDER BY CarId")

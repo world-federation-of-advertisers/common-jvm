@@ -1,0 +1,18 @@
+load("@wfa_rules_kotlin_jvm//kotlin:defs.bzl", "kt_jvm_test")
+
+kt_jvm_test(
+    name = "LiquibaseTest",
+    srcs = ["LiquibaseTest.kt"],
+    resources = ["//src/test/resources/db/liquibase"],
+    test_class = "org.wfanet.measurement.common.db.liquibase.LiquibaseTest",
+    runtime_deps = ["//imports/java/liquibase/ext:postgresql"],
+    deps = [
+        "//imports/java/com/google/common/truth",
+        "//imports/java/liquibase:core",
+        "//imports/java/org/junit",
+        "//imports/java/org/testcontainers/postgresql",
+        "//imports/kotlin/kotlin/test",
+        "//src/main/kotlin/org/wfanet/measurement/common",
+        "//src/main/kotlin/org/wfanet/measurement/common/db/liquibase",
+    ],
+)

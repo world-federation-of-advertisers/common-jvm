@@ -28,3 +28,16 @@ kt_jvm_test(
         "//src/main/kotlin/org/wfanet/measurement/common/throttler",
     ],
 )
+
+kt_jvm_test(
+    name = "MaximumRateThrottlerTest",
+    srcs = ["MaximumRateThrottlerTest.kt"],
+    test_class = "org.wfanet.measurement.common.throttler.MaximumRateThrottlerTest",
+    deps = [
+        "//imports/java/com/google/common/truth",
+        "//imports/java/org/junit",
+        "//imports/kotlin/kotlinx/coroutines:core",
+        "//imports/kotlin/kotlinx/coroutines/test",
+        "//src/main/kotlin/org/wfanet/measurement/common/throttler",
+    ],
+)

@@ -62,7 +62,7 @@ class PostgresDatabaseProviderRule(private val changelogPath: Path) :
 
   companion object {
     /** Name of PostgreSQL Docker image. */
-    private const val POSTGRES_IMAGE_NAME = "postgres:15"
+    private const val POSTGRES_IMAGE_NAME = "postgres:16"
     private const val TEMPLATE_DATABASE_NAME = "template1"
 
     private val dbNumber = AtomicInteger()

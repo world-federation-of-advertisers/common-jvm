@@ -42,10 +42,12 @@ import java.time.Duration
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.Executor
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 import java.util.logging.Logger
 import kotlin.coroutines.ContinuationInterceptor
 import kotlin.coroutines.coroutineContext
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
@@ -257,7 +259,7 @@ private class ReadContextImpl(private val delegate: ReadContext) :
     // Defer executing the query until we're in the producer scope.
     val resultSet: AsyncResultSet = executeQuery()
 
-    resultSet.setCallback(underlyingExecutor, ::readyCallback)
+    setReadyCallback(resultSet)
     awaitClose { resultSet.cancel() }
   }
 }
@@ -372,7 +374,7 @@ private class TransactionManagerImpl(private val delegate: AsyncTransactionManag
         var resultSet: AsyncResultSet? = null
 
         manager.runInTransaction { txn ->
-          resultSet = read(txn).also { it.setCallback(underlyingExecutor, ::readyCallback) }
+          resultSet = read(txn).also { setReadyCallback(it) }
           future
         }
         awaitClose {
@@ -459,9 +461,25 @@ private class ConformingFutureAdapter(
 private fun AsyncTransactionManager.CommitTimestampFuture.asConformingFuture():
   ApiFuture<Timestamp> = ConformingFutureAdapter(this)
 
+/** Registers a callback whose completion can be awaited before resuming a paused cursor. */
+private fun ProducerScope<Struct>.setReadyCallback(resultSet: AsyncResultSet) {
+  val callbackCompletion = AtomicReference<CompletableDeferred<Unit>?>(null)
+  val callbackExecutor = Executor { command ->
+    underlyingExecutor.execute {
+      try {
+        command.run()
+      } finally {
+        callbackCompletion.getAndSet(null)?.complete(Unit)
+      }
+    }
+  }
+  resultSet.setCallback(callbackExecutor) { cursor -> readyCallback(cursor, callbackCompletion) }
+}
+
 /** Coroutine [AsyncResultSet.ReadyCallback]. */
 private fun ProducerScope<Struct>.readyCallback(
-  cursor: AsyncResultSet
+  cursor: AsyncResultSet,
+  callbackCompletion: AtomicReference<CompletableDeferred<Unit>?>,
 ): AsyncResultSet.CallbackResponse {
   try {
     while (true) {
@@ -471,9 +489,15 @@ private fun ProducerScope<Struct>.readyCallback(
           if (trySend(currentRow).isSuccess) {
             continue
           }
+          val callbackCompleted = CompletableDeferred<Unit>()
+          check(callbackCompletion.compareAndSet(null, callbackCompleted)) {
+            "An AsyncResultSet callback is already paused"
+          }
           launch(CoroutineName("AsyncResultSet cursorReady resume")) {
             try {
               send(currentRow)
+              // Spanner ignores resume() until it has processed the callback's PAUSE response.
+              callbackCompleted.await()
               cursor.resume()
             } catch (t: Throwable) {
               cancel(CancellationException("Error resuming AsyncResultSet", t))
