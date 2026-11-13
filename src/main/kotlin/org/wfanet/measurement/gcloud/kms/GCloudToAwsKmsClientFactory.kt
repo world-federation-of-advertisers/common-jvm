@@ -23,9 +23,6 @@ import com.google.crypto.tink.KmsClient
 import com.google.crypto.tink.integration.awskms.AwsKmsClient as TinkAwsKmsClient
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
-import java.io.FileNotFoundException
-import java.io.IOException
-import java.nio.file.NoSuchFileException
 import java.security.GeneralSecurityException
 import java.time.Clock
 import java.time.Duration
@@ -54,9 +51,8 @@ import software.amazon.awssdk.services.sts.model.StsException
  * account to obtain an OIDC ID token. That ID token is exchanged with AWS STS
  * `AssumeRoleWithWebIdentity` for temporary AWS credentials.
  *
- * Public Google authentication retry hints and AWS STS throttling or HTTP 408/429/5xx permit
- * bounded retries. Other credential I/O failures permit bounded retries except known file failures.
- * Unclassified key-operation failures are nonretryable.
+ * Public Google authentication retry hints, AWS STS throttling, and transient HTTP status codes
+ * permit bounded retries. Unclassified failures have no retry recommendation.
  *
  * @param refreshMargin How far before expiration to proactively refresh credentials.
  * @param clock Clock used to determine the current time.
@@ -157,12 +153,8 @@ class GCloudToAwsKmsClientFactory(
         } catch (e: Exception) {
           val retryable =
             when (e) {
-              is HttpResponseException ->
-                e.statusCode == 408 || e.statusCode == 429 || e.statusCode in 500..599
+              is HttpResponseException -> KmsClientWithRetryInfo.isRetryableHttpStatus(e.statusCode)
               is Retryable -> e.isRetryable
-              is FileNotFoundException,
-              is NoSuchFileException -> false
-              is IOException -> true
               else -> false
             }
           throw KmsKeyAccessException("Failed to obtain Google Cloud ID token", retryable, e)
@@ -196,9 +188,7 @@ class GCloudToAwsKmsClientFactory(
             "AWS STS AssumeRoleWithWebIdentity failed",
             e is StsException &&
               (e.isThrottlingException ||
-                e.statusCode() == 408 ||
-                e.statusCode() == 429 ||
-                e.statusCode() in 500..599),
+                KmsClientWithRetryInfo.isRetryableHttpStatus(e.statusCode())),
             e,
           )
         } finally {

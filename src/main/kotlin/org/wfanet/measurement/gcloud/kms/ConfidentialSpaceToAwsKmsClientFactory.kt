@@ -14,9 +14,9 @@
 
 package org.wfanet.measurement.gcloud.kms
 
+import com.google.api.client.http.HttpResponseException
 import com.google.crypto.tink.KmsClient
 import com.google.crypto.tink.integration.awskms.AwsKmsClient as TinkAwsKmsClient
-import java.io.IOException
 import java.time.Clock
 import java.time.Duration
 import org.wfanet.measurement.aws.AwsCredentialsProviderAdapter
@@ -53,9 +53,9 @@ import software.amazon.awssdk.services.sts.model.StsException
  * The returned client uses a credentials provider that automatically refreshes the AWS session
  * credentials before they expire by re-executing the token fetch + STS exchange.
  *
- * @param tokenProvider Source of Confidential Space attestation tokens. Attestation I/O failures
- *   and AWS STS throttling or HTTP 408/429/5xx permit bounded retries. Other credential and opaque
- *   key-operation failures are nonretryable.
+ * @param tokenProvider Source of Confidential Space attestation tokens. Transient HTTP status codes
+ *   and AWS STS throttling permit bounded retries. Unclassified failures have no retry
+ *   recommendation.
  * @param refreshMargin How far before expiration to proactively refresh credentials.
  * @param clock Clock used to determine the current time.
  */
@@ -122,7 +122,7 @@ class ConfidentialSpaceToAwsKmsClientFactory(
       .onErrorMap { e ->
         KmsKeyAccessException(
           "Failed to obtain Confidential Space OIDC token for signature discovery",
-          e is IOException,
+          e is HttpResponseException && KmsClientWithRetryInfo.isRetryableHttpStatus(e.statusCode),
           e,
         )
       }
@@ -147,7 +147,7 @@ class ConfidentialSpaceToAwsKmsClientFactory(
       .onErrorMap { e ->
         KmsKeyAccessException(
           "Failed to obtain Confidential Space attestation token",
-          e is IOException,
+          e is HttpResponseException && KmsClientWithRetryInfo.isRetryableHttpStatus(e.statusCode),
           e,
         )
       }
@@ -198,9 +198,7 @@ class ConfidentialSpaceToAwsKmsClientFactory(
             "AWS STS AssumeRoleWithWebIdentity failed",
             e is StsException &&
               (e.isThrottlingException ||
-                e.statusCode() == 408 ||
-                e.statusCode() == 429 ||
-                e.statusCode() in 500..599),
+                KmsClientWithRetryInfo.isRetryableHttpStatus(e.statusCode())),
             e,
           )
         }

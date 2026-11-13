@@ -20,13 +20,12 @@ import java.security.GeneralSecurityException
 import java.util.concurrent.CancellationException
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ExecutionException
-import org.wfanet.measurement.common.crypto.tink.KmsKeyAccessException
 
 /**
- * [KmsClient] wrapper exposing failures as [KmsKeyAccessException].
+ * [KmsClient] wrapper preparing credentials before key use.
  *
- * Preserves retry information supplied by the adapter. Unclassified [GeneralSecurityException]s are
- * reported as nonretryable; their cause chains are not interpreted.
+ * Prepares credentials before entering the SDK, preserving retry information supplied by the
+ * adapter. Key-operation errors pass through unchanged.
  *
  * @param delegate Client providing the cryptographic operations.
  * @param prepareKeyAccess Optional credential refresh performed before encryption or decryption.
@@ -36,41 +35,41 @@ internal class KmsClientWithRetryInfo(
   private val delegate: KmsClient,
   private val prepareKeyAccess: () -> Unit = {},
 ) : KmsClient by delegate {
-  override fun withCredentials(credentialPath: String?): KmsClient = keyAccessCall {
+  override fun withCredentials(credentialPath: String?): KmsClient =
     KmsClientWithRetryInfo(delegate.withCredentials(credentialPath))
-  }
 
-  override fun withDefaultCredentials(): KmsClient = keyAccessCall {
+  override fun withDefaultCredentials(): KmsClient =
     KmsClientWithRetryInfo(delegate.withDefaultCredentials())
-  }
 
   override fun getAead(keyUri: String?): Aead {
-    val aead = keyAccessCall { delegate.getAead(keyUri) }
+    val aead = delegate.getAead(keyUri)
     return object : Aead {
-      override fun encrypt(plaintext: ByteArray, associatedData: ByteArray?): ByteArray =
-        keyAccessCall {
-          prepareKeyAccess()
-          aead.encrypt(plaintext, associatedData)
-        }
+      override fun encrypt(plaintext: ByteArray, associatedData: ByteArray?): ByteArray {
+        prepareKeyAccess()
+        return aead.encrypt(plaintext, associatedData)
+      }
 
-      override fun decrypt(ciphertext: ByteArray, associatedData: ByteArray?): ByteArray =
-        keyAccessCall {
-          prepareKeyAccess()
-          aead.decrypt(ciphertext, associatedData)
-        }
+      override fun decrypt(ciphertext: ByteArray, associatedData: ByteArray?): ByteArray {
+        prepareKeyAccess()
+        return aead.decrypt(ciphertext, associatedData)
+      }
     }
   }
 
-  private inline fun <T> keyAccessCall(block: () -> T): T =
-    try {
-      block()
-    } catch (e: KmsKeyAccessException) {
-      throw e
-    } catch (e: GeneralSecurityException) {
-      throw KmsKeyAccessException("KMS key access failed", isRetryable = false, cause = e)
-    }
-
   internal companion object {
+    /** HTTP statuses for which another attempt can reasonably succeed after backoff. */
+    @JvmSynthetic
+    fun isRetryableHttpStatus(statusCode: Int): Boolean =
+      when (statusCode) {
+        408,
+        429,
+        500,
+        502,
+        503,
+        504 -> true
+        else -> false
+      }
+
     /**
      * Resolves credentials before the SDK can replace the adapter's retry information.
      *
@@ -84,14 +83,14 @@ internal class KmsClientWithRetryInfo(
       } catch (e: ExecutionException) {
         val cause = e.cause ?: e
         when (cause) {
-          is KmsKeyAccessException -> throw cause
+          is GeneralSecurityException -> throw cause
           is CancellationException -> throw cause
           is Error -> throw cause
-          else -> throw KmsKeyAccessException("Failed to obtain KMS credentials", false, cause)
+          else -> throw GeneralSecurityException("Failed to obtain KMS credentials", cause)
         }
       } catch (e: InterruptedException) {
         Thread.currentThread().interrupt()
-        throw KmsKeyAccessException("Interrupted while obtaining KMS credentials", true, e)
+        throw GeneralSecurityException("Interrupted while obtaining KMS credentials", e)
       }
     }
   }

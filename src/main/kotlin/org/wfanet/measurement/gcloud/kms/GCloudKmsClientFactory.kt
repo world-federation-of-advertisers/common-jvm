@@ -22,9 +22,7 @@ import com.google.crypto.tink.KmsClient
 import com.google.crypto.tink.integration.gcpkms.GcpKmsClient
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
-import java.io.FileNotFoundException
 import java.io.IOException
-import java.nio.file.NoSuchFileException
 import java.security.GeneralSecurityException
 import org.wfanet.measurement.common.crypto.tink.GCloudWifCredentials
 import org.wfanet.measurement.common.crypto.tink.KmsClientFactory
@@ -35,8 +33,8 @@ import org.wfanet.measurement.common.crypto.tink.internal.KmsClientWithRetryInfo
  * [KmsClientFactory] for Google Cloud KMS with documented retry information.
  *
  * Credentials are refreshed before key use. Public HTTP status and [Retryable] hints determine
- * retries when available. Other credential I/O failures permit bounded retries, except known file
- * failures; opaque key-operation failures default to nonretryable.
+ * retries when available. Unclassified failures have no retry recommendation, and key-operation
+ * errors pass through unchanged.
  */
 class GCloudKmsClientFactory
 private constructor(private val httpTransportFactory: HttpTransportFactory?) :
@@ -52,7 +50,7 @@ private constructor(private val httpTransportFactory: HttpTransportFactory?) :
    * exchanged for a GCP access token.
    *
    * @param config The Google Cloud specific WIF and impersonation configuration.
-   * @return An initialized [KmsClient] exposing [KmsKeyAccessException] on key-access failures.
+   * @return An initialized [KmsClient] exposing credential retry hints via [KmsKeyAccessException].
    * @throws GeneralSecurityException if the client cannot be initialized.
    */
   override fun getKmsClient(config: GCloudWifCredentials): KmsClient {
@@ -97,12 +95,9 @@ private constructor(private val httpTransportFactory: HttpTransportFactory?) :
       } catch (e: IOException) {
         val retryable =
           when (e) {
-            is HttpResponseException ->
-              e.statusCode == 408 || e.statusCode == 429 || e.statusCode in 500..599
+            is HttpResponseException -> KmsClientWithRetryInfo.isRetryableHttpStatus(e.statusCode)
             is Retryable -> e.isRetryable
-            is FileNotFoundException,
-            is NoSuchFileException -> false
-            else -> true
+            else -> false
           }
         throw KmsKeyAccessException("Failed to refresh Google Cloud credentials", retryable, e)
       }

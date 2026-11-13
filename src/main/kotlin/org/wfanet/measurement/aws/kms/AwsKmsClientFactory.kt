@@ -36,8 +36,8 @@ import software.amazon.awssdk.services.sts.model.StsException
 /**
  * A [KmsClientFactory] for creating Tink [KmsClient] instances for AWS KMS.
  *
- * AWS STS throttling, HTTP 408/429, and HTTP 5xx permit bounded retries. Unclassified credential or
- * key-operation failures are nonretryable.
+ * AWS STS throttling and transient HTTP status codes permit bounded retries. Unclassified failures
+ * have no retry recommendation.
  */
 class AwsKmsClientFactory : KmsClientFactory<AwsWebIdentityCredentials> {
   /**
@@ -97,9 +97,7 @@ class AwsKmsClientFactory : KmsClientFactory<AwsWebIdentityCredentials> {
                 "Failed to resolve AWS credentials",
                 e is StsException &&
                   (e.isThrottlingException ||
-                    e.statusCode() == 408 ||
-                    e.statusCode() == 429 ||
-                    e.statusCode() in 500..599),
+                    KmsClientWithRetryInfo.isRetryableHttpStatus(e.statusCode())),
                 e,
               )
             )

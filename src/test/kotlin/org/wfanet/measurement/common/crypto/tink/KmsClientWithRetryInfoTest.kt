@@ -42,14 +42,11 @@ class KmsClientWithRetryInfoTest {
   }
 
   @Test
-  fun `decrypt marks invalid ciphertext nonretryable`() {
+  fun `decrypt preserves invalid ciphertext errors`() {
     val wrapped = KmsClientWithRetryInfo(client(aead)).getAead("test-key")
-    val failure =
-      assertFailsWith<KmsKeyAccessException> {
-        wrapped.decrypt("invalid ciphertext".toByteArray(), null)
-      }
-    assertThat(failure.isRetryable).isFalse()
-    assertThat(failure.cause).isInstanceOf(GeneralSecurityException::class.java)
+    assertFailsWith<GeneralSecurityException> {
+      wrapped.decrypt("invalid ciphertext".toByteArray(), null)
+    }
   }
 
   @Test
@@ -72,24 +69,22 @@ class KmsClientWithRetryInfoTest {
   fun `encrypt does not interpret an opaque failure cause chain`() {
     val original = GeneralSecurityException("opaque", IOException("hidden transport error"))
     val wrapped = KmsClientWithRetryInfo(client(failingAead(original))).getAead("test-key")
-    val failure = assertFailsWith<KmsKeyAccessException> { wrapped.encrypt(ByteArray(0), null) }
-    assertThat(failure.isRetryable).isFalse()
-    assertThat(failure.cause).isSameInstanceAs(original)
+    val failure = assertFailsWith<GeneralSecurityException> { wrapped.encrypt(ByteArray(0), null) }
+    assertThat(failure).isSameInstanceAs(original)
   }
 
   @Test
-  fun `getAead reports key lookup failure with conservative retry information`() {
+  fun `getAead preserves key lookup failure`() {
     val original = GeneralSecurityException("unsupported key")
     val delegate =
       object : KmsClient by client(aead) {
         override fun getAead(keyUri: String?): Aead = throw original
       }
     val failure =
-      assertFailsWith<KmsKeyAccessException> {
+      assertFailsWith<GeneralSecurityException> {
         KmsClientWithRetryInfo(delegate).getAead("unsupported-key")
       }
-    assertThat(failure.isRetryable).isFalse()
-    assertThat(failure.cause).isSameInstanceAs(original)
+    assertThat(failure).isSameInstanceAs(original)
   }
 
   @Test
@@ -131,9 +126,8 @@ class KmsClientWithRetryInfoTest {
           KmsClientWithRetryInfo.awaitCredentials(CompletableFuture.failedFuture<Unit>(original))
         }
         .getAead("test-key")
-    val failure = assertFailsWith<KmsKeyAccessException> { wrapped.encrypt(ByteArray(0), null) }
-    assertThat(failure.isRetryable).isFalse()
-    assertThat(failure.cause).isSameInstanceAs(original)
+    val failure = assertFailsWith<GeneralSecurityException> { wrapped.encrypt(ByteArray(0), null) }
+    assertThat(failure).isSameInstanceAs(original)
   }
 
   @Test
@@ -145,8 +139,8 @@ class KmsClientWithRetryInfoTest {
         .getAead("test-key")
     try {
       Thread.currentThread().interrupt()
-      val failure = assertFailsWith<KmsKeyAccessException> { wrapped.encrypt(ByteArray(0), null) }
-      assertThat(failure.isRetryable).isTrue()
+      val failure =
+        assertFailsWith<GeneralSecurityException> { wrapped.encrypt(ByteArray(0), null) }
       assertThat(failure.cause).isInstanceOf(InterruptedException::class.java)
       assertThat(Thread.currentThread().isInterrupted).isTrue()
     } finally {

@@ -17,6 +17,7 @@ kt_jvm_test(
     srcs = ["ConfidentialSpaceToAwsKmsClientFactoryTest.kt"],
     test_class = "org.wfanet.measurement.gcloud.kms.ConfidentialSpaceToAwsKmsClientFactoryTest",
     deps = [
+        "//imports/java/com/google/api/client/http",
         "//imports/java/com/google/common/truth",
         "//imports/java/org/junit",
         "//imports/kotlin/kotlin/test",

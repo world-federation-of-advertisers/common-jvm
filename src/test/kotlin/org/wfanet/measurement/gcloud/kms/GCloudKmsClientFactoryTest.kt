@@ -43,7 +43,7 @@ class GCloudKmsClientFactoryTest {
   }
 
   @Test
-  fun `encrypt exposes credential refresh failure before calling KMS`() {
+  fun `encrypt leaves hidden impersonation retry information unclassified`() {
     val response =
       MockLowLevelHttpResponse()
         .setStatusCode(503)
@@ -69,7 +69,7 @@ class GCloudKmsClientFactoryTest {
         .getAead("gcp-kms://projects/project/locations/global/keyRings/ring/cryptoKeys/key")
     val failure = assertFailsWith<KmsKeyAccessException> { aead.encrypt(ByteArray(0), null) }
     assertThat(failure.cause).isInstanceOf(IOException::class.java)
-    // The impersonation layer exposes IOException without a public retry hint.
-    assertThat(failure.isRetryable).isTrue()
+    // The impersonation layer hides the 503 behind an IOException without a public retry hint.
+    assertThat(failure.isRetryable).isFalse()
   }
 }

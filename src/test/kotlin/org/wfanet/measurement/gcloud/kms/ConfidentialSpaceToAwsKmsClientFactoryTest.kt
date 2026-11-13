@@ -14,6 +14,8 @@
 
 package org.wfanet.measurement.gcloud.kms
 
+import com.google.api.client.http.HttpHeaders
+import com.google.api.client.http.HttpResponseException
 import com.google.common.truth.Truth.assertThat
 import java.io.IOException
 import java.security.GeneralSecurityException
@@ -54,7 +56,7 @@ class ConfidentialSpaceToAwsKmsClientFactoryTest {
 
   @Test
   fun `encrypt retries attestation retrieval using the same client after a temporary failure`() {
-    val original = IOException("launcher quota exceeded")
+    val original = HttpResponseException.Builder(429, "Too Many Requests", HttpHeaders()).build()
     var tokenRequests = 0
     val provider = AttestationTokenProvider {
       tokenRequests++
@@ -79,6 +81,30 @@ class ConfidentialSpaceToAwsKmsClientFactoryTest {
       assertThat(failure.cause).isSameInstanceAs(original)
     }
     assertThat(tokenRequests).isEqualTo(2)
+  }
+
+  @Test
+  fun `encrypt leaves a generic token provider failure unclassified`() {
+    val original = IOException("token unavailable")
+    val factory =
+      ConfidentialSpaceToAwsKmsClientFactory(
+        tokenProvider = AttestationTokenProvider { CompletableFuture.failedFuture(original) }
+      )
+    val config =
+      ConfidentialSpaceToAwsWifCredentials(
+        roleArn = "arn:aws:iam::123456789012:role/test-role",
+        roleSessionName = "test-session",
+        region = "us-east-1",
+        audience = "https://example.com",
+        containerImageSignatureKeyIds = listOf("signing-key"),
+      )
+    val aead =
+      factory
+        .getKmsClient(config)
+        .getAead("aws-kms://arn:aws:kms:us-east-1:123456789012:key/test-key")
+    val failure = assertFailsWith<KmsKeyAccessException> { aead.encrypt(ByteArray(0), null) }
+    assertThat(failure.isRetryable).isFalse()
+    assertThat(failure.cause).isSameInstanceAs(original)
   }
 
   @Test

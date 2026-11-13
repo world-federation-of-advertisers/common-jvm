@@ -20,8 +20,9 @@ import java.security.GeneralSecurityException
  * KMS client or key-access failure with a recommendation for bounded retries.
  *
  * [isRetryable] describes the adapter's recommendation, not a guarantee that another attempt
- * succeeds. Opaque cryptographic failures have no retry information and default to false. Existing
- * callers can continue catching [GeneralSecurityException].
+ * succeeds. A false value also covers failures with no public retry hint. Key-operation errors
+ * without retry information remain ordinary [GeneralSecurityException]s. Existing callers can
+ * continue catching [GeneralSecurityException].
  */
 class KmsKeyAccessException(message: String, val isRetryable: Boolean, cause: Throwable? = null) :
   GeneralSecurityException(message, cause)
