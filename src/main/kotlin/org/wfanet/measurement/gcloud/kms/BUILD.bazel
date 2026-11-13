@@ -5,6 +5,7 @@ package(default_visibility = ["//visibility:public"])
 kt_jvm_library(
     name = "gcp_kms_client_factory",
     srcs = ["GCloudKmsClientFactory.kt"],
+    associates = ["//src/main/kotlin/org/wfanet/measurement/common/crypto/tink/internal:kms_client_with_retry_info"],
     deps = [
         "//imports/java/com/google/api/client/http",
         "//imports/java/com/google/auth:credentials",
@@ -17,6 +18,7 @@ kt_jvm_library(
 kt_jvm_library(
     name = "gcloud_to_aws_kms_client_factory",
     srcs = ["GCloudToAwsKmsClientFactory.kt"],
+    associates = ["//src/main/kotlin/org/wfanet/measurement/common/crypto/tink/internal:kms_client_with_retry_info"],
     deps = [
         "//imports/java/com/google/api/client/http",
         "//imports/java/com/google/auth:credentials",
@@ -37,6 +39,7 @@ kt_jvm_library(
 kt_jvm_library(
     name = "confidential_space_to_aws_kms_client_factory",
     srcs = ["ConfidentialSpaceToAwsKmsClientFactory.kt"],
+    associates = ["//src/main/kotlin/org/wfanet/measurement/common/crypto/tink/internal:kms_client_with_retry_info"],
     deps = [
         "//imports/java/com/google/crypto/tink",
         "//imports/java/com/google/crypto/tink:awskms",

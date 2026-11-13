@@ -24,8 +24,8 @@ import java.util.concurrent.CompletionException
 import org.wfanet.measurement.aws.AwsCredentialsProviderAdapter
 import org.wfanet.measurement.common.crypto.tink.AwsWebIdentityCredentials
 import org.wfanet.measurement.common.crypto.tink.KmsClientFactory
-import org.wfanet.measurement.common.crypto.tink.KmsClientWithRetryInfo
 import org.wfanet.measurement.common.crypto.tink.KmsKeyAccessException
+import org.wfanet.measurement.common.crypto.tink.internal.KmsClientWithRetryInfo
 import software.amazon.awssdk.auth.credentials.AnonymousCredentialsProvider
 import software.amazon.awssdk.identity.spi.AwsCredentialsIdentity
 import software.amazon.awssdk.identity.spi.IdentityProvider

@@ -30,6 +30,19 @@ class GCloudKmsClientFactoryTest {
   @get:Rule val temporaryFolder = TemporaryFolder()
 
   @Test
+  fun `only the default constructor is public`() {
+    assertThat(
+        GCloudKmsClientFactory::class
+          .java
+          .constructors
+          .filterNot { it.isSynthetic }
+          .map { it.parameterCount }
+      )
+      .containsExactly(0)
+    GCloudKmsClientFactory::class.java.getConstructor().newInstance()
+  }
+
+  @Test
   fun `encrypt exposes credential refresh failure before calling KMS`() {
     val response =
       MockLowLevelHttpResponse()
@@ -37,7 +50,8 @@ class GCloudKmsClientFactoryTest {
         .setContentType("application/json")
         .setContent("{\"error\":\"temporarily_unavailable\"}")
     val transport = MockHttpTransport.Builder().setLowLevelHttpResponse(response).build()
-    val factory = GCloudKmsClientFactory(HttpTransportFactory { transport })
+    val factory =
+      GCloudKmsClientFactory.withHttpTransportFactory(HttpTransportFactory { transport })
     val token = temporaryFolder.newFile("token").apply { writeText("test-token") }
     val config =
       GCloudWifCredentials(

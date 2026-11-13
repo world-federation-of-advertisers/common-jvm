@@ -39,8 +39,8 @@ import org.wfanet.measurement.aws.TimeBoundCredentials
 import org.wfanet.measurement.aws.kms.CompletionExceptionTranslatingKmsClient
 import org.wfanet.measurement.common.crypto.tink.GCloudToAwsWifCredentials
 import org.wfanet.measurement.common.crypto.tink.KmsClientFactory
-import org.wfanet.measurement.common.crypto.tink.KmsClientWithRetryInfo
 import org.wfanet.measurement.common.crypto.tink.KmsKeyAccessException
+import org.wfanet.measurement.common.crypto.tink.internal.KmsClientWithRetryInfo
 import software.amazon.awssdk.auth.credentials.AnonymousCredentialsProvider
 import software.amazon.awssdk.auth.credentials.AwsSessionCredentials
 import software.amazon.awssdk.regions.Region

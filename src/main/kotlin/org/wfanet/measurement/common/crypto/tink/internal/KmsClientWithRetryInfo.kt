@@ -12,11 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package org.wfanet.measurement.common.crypto.tink
+package org.wfanet.measurement.common.crypto.tink.internal
 
 import com.google.crypto.tink.Aead
 import com.google.crypto.tink.KmsClient
 import java.security.GeneralSecurityException
+import org.wfanet.measurement.common.crypto.tink.KmsKeyAccessException
 
 /**
  * [KmsClient] wrapper exposing failures as [KmsKeyAccessException].
@@ -28,7 +29,7 @@ import java.security.GeneralSecurityException
  * @param prepareKeyAccess Optional credential refresh performed before encryption or decryption.
  *   Replacing credentials through [withCredentials] or [withDefaultCredentials] drops this hook.
  */
-class KmsClientWithRetryInfo(
+internal class KmsClientWithRetryInfo(
   private val delegate: KmsClient,
   private val prepareKeyAccess: () -> Unit = {},
 ) : KmsClient by delegate {

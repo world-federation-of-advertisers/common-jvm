@@ -22,6 +22,7 @@ import java.io.IOException
 import java.security.GeneralSecurityException
 import kotlin.test.assertFailsWith
 import org.junit.Test
+import org.wfanet.measurement.common.crypto.tink.internal.KmsClientWithRetryInfo
 
 class KmsClientWithRetryInfoTest {
   private val aead = AesGcmJce(ByteArray(32) { it.toByte() })

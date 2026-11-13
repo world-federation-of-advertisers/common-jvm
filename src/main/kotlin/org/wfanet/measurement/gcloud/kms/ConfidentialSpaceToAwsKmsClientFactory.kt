@@ -28,8 +28,8 @@ import org.wfanet.measurement.aws.TimeBoundCredentials
 import org.wfanet.measurement.aws.kms.CompletionExceptionTranslatingKmsClient
 import org.wfanet.measurement.common.crypto.tink.ConfidentialSpaceToAwsWifCredentials
 import org.wfanet.measurement.common.crypto.tink.KmsClientFactory
-import org.wfanet.measurement.common.crypto.tink.KmsClientWithRetryInfo
 import org.wfanet.measurement.common.crypto.tink.KmsKeyAccessException
+import org.wfanet.measurement.common.crypto.tink.internal.KmsClientWithRetryInfo
 import org.wfanet.measurement.gcloud.confidentialspace.AttestationTokenProvider
 import org.wfanet.measurement.gcloud.confidentialspace.AttestationTokenRequest
 import org.wfanet.measurement.gcloud.confidentialspace.ConfidentialSpaceTokenClient

@@ -28,8 +28,8 @@ import java.nio.file.NoSuchFileException
 import java.security.GeneralSecurityException
 import org.wfanet.measurement.common.crypto.tink.GCloudWifCredentials
 import org.wfanet.measurement.common.crypto.tink.KmsClientFactory
-import org.wfanet.measurement.common.crypto.tink.KmsClientWithRetryInfo
 import org.wfanet.measurement.common.crypto.tink.KmsKeyAccessException
+import org.wfanet.measurement.common.crypto.tink.internal.KmsClientWithRetryInfo
 
 /**
  * [KmsClientFactory] for Google Cloud KMS with documented retry information.
@@ -37,12 +37,12 @@ import org.wfanet.measurement.common.crypto.tink.KmsKeyAccessException
  * Credentials are refreshed before key use. Public HTTP status and [Retryable] hints determine
  * retries when available. Other credential I/O failures permit bounded retries, except known file
  * failures; opaque key-operation failures default to nonretryable.
- *
- * @param httpTransportFactory Optional HTTP transport for authentication; null retains the Google
- *   credentials library's default transport.
  */
-class GCloudKmsClientFactory(private val httpTransportFactory: HttpTransportFactory? = null) :
+class GCloudKmsClientFactory
+private constructor(private val httpTransportFactory: HttpTransportFactory?) :
   KmsClientFactory<GCloudWifCredentials> {
+  constructor() : this(null)
+
   /**
    * Returns a [KmsClient] backed by [GcpKmsClient] configured for Workload Identity Federation
    * (WIF) with service account impersonation.
@@ -107,5 +107,13 @@ class GCloudKmsClientFactory(private val httpTransportFactory: HttpTransportFact
         throw KmsKeyAccessException("Failed to refresh Google Cloud credentials", retryable, e)
       }
     }
+  }
+
+  internal companion object {
+    /** Creates a factory with a supplied authentication transport for tests. */
+    @JvmSynthetic
+    fun withHttpTransportFactory(
+      httpTransportFactory: HttpTransportFactory
+    ): GCloudKmsClientFactory = GCloudKmsClientFactory(httpTransportFactory)
   }
 }
