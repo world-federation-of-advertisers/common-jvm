@@ -53,9 +53,13 @@ class ConfidentialSpaceToAwsKmsClientFactoryTest {
   }
 
   @Test
-  fun `encrypt reports retryable attestation failure through the real AWS credential chain`() {
+  fun `encrypt retries attestation retrieval using the same client after a temporary failure`() {
     val original = IOException("launcher quota exceeded")
-    val provider = AttestationTokenProvider { CompletableFuture.failedFuture(original) }
+    var tokenRequests = 0
+    val provider = AttestationTokenProvider {
+      tokenRequests++
+      CompletableFuture.failedFuture(original)
+    }
     val factory = ConfidentialSpaceToAwsKmsClientFactory(tokenProvider = provider)
     val config =
       ConfidentialSpaceToAwsWifCredentials(
@@ -69,9 +73,12 @@ class ConfidentialSpaceToAwsKmsClientFactoryTest {
       factory
         .getKmsClient(config)
         .getAead("aws-kms://arn:aws:kms:us-east-1:123456789012:key/test-key")
-    val failure = assertFailsWith<KmsKeyAccessException> { aead.encrypt(ByteArray(0), null) }
-    assertThat(failure.isRetryable).isTrue()
-    assertThat(failure.cause).isSameInstanceAs(original)
+    repeat(2) {
+      val failure = assertFailsWith<KmsKeyAccessException> { aead.encrypt(ByteArray(0), null) }
+      assertThat(failure.isRetryable).isTrue()
+      assertThat(failure.cause).isSameInstanceAs(original)
+    }
+    assertThat(tokenRequests).isEqualTo(2)
   }
 
   @Test
