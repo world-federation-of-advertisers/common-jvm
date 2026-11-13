@@ -15,9 +15,11 @@
 package org.wfanet.measurement.aws
 
 import com.google.common.truth.Truth.assertThat
+import java.io.IOException
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
+import java.time.ZoneId
 import java.time.ZoneOffset
 import java.util.concurrent.Callable
 import java.util.concurrent.CompletableFuture
@@ -27,6 +29,7 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.Future
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.test.assertFailsWith
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -326,6 +329,66 @@ class RefreshableAwsCredentialsIdentityProviderTest {
     } finally {
       executor.shutdownNow()
     }
+  }
+
+  @Test
+  fun `canceling one caller keeps the shared refresh available to other callers`() {
+    val refresh = CompletableFuture<TimeBoundCredentials>()
+    var calls = 0
+    val provider =
+      RefreshableAwsCredentialsIdentityProvider(Duration.ofMinutes(5)) {
+        calls++
+        refresh
+      }
+    val first = provider.resolveIdentity()
+    val second = provider.resolveIdentity()
+
+    first.cancel(false)
+    assertThat(refresh.isCancelled).isFalse()
+    assertThat(second.isDone).isFalse()
+    refresh.complete(timeBoundCredentials("renewed-key", Instant.now().plusSeconds(3600)))
+
+    assertThat(second.get().accessKeyId()).isEqualTo("renewed-key")
+    assertThat(provider.resolveIdentity().get()).isSameInstanceAs(second.get())
+    assertThat(calls).isEqualTo(1)
+  }
+
+  @Test
+  fun `renewal failure is cleared and the same provider can renew on a later call`() {
+    val expiration = Instant.parse("2026-06-03T13:00:00Z")
+    val current = AtomicReference(Instant.parse("2026-06-03T12:00:00Z"))
+    val clock =
+      object : Clock() {
+        override fun instant(): Instant = current.get()
+
+        override fun getZone(): ZoneId = ZoneOffset.UTC
+
+        override fun withZone(zone: ZoneId): Clock = Clock.fixed(current.get(), zone)
+      }
+    val renewal = CompletableFuture<TimeBoundCredentials>()
+    var calls = 0
+    val provider =
+      RefreshableAwsCredentialsIdentityProvider(Duration.ofMinutes(5), clock) {
+        calls++
+        when (calls) {
+          1 -> completedRefresh("initial-key", expiration)
+          2 -> CompletableFuture.failedFuture(IOException("refresh budget exhausted"))
+          else -> renewal
+        }
+      }
+    assertThat(provider.resolveIdentity().get().accessKeyId()).isEqualTo("initial-key")
+
+    current.set(expiration.minusSeconds(120))
+    assertFailsWith<ExecutionException> { provider.resolveIdentity().get() }
+    val first = provider.resolveIdentity()
+    val second = provider.resolveIdentity()
+    assertThat(calls).isEqualTo(3)
+    renewal.complete(timeBoundCredentials("renewed-key", expiration.plusSeconds(3600)))
+
+    assertThat(first.get().accessKeyId()).isEqualTo("renewed-key")
+    assertThat(second.get()).isSameInstanceAs(first.get())
+    assertThat(provider.resolveIdentity().get()).isSameInstanceAs(first.get())
+    assertThat(calls).isEqualTo(3)
   }
 
   private fun timeBoundCredentials(accessKeyId: String, expiration: Instant) =

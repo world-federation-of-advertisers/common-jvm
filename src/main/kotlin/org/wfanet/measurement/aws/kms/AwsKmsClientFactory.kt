@@ -22,8 +22,6 @@ import java.util.concurrent.CompletableFuture
 import org.wfanet.measurement.aws.AwsCredentialsProviderAdapter
 import org.wfanet.measurement.common.crypto.tink.AwsWebIdentityCredentials
 import org.wfanet.measurement.common.crypto.tink.KmsClientFactory
-import org.wfanet.measurement.common.crypto.tink.KmsKeyAccessException
-import org.wfanet.measurement.common.crypto.tink.internal.KmsClientWithRetryInfo
 import software.amazon.awssdk.auth.credentials.AnonymousCredentialsProvider
 import software.amazon.awssdk.identity.spi.AwsCredentialsIdentity
 import software.amazon.awssdk.identity.spi.IdentityProvider
@@ -31,14 +29,8 @@ import software.amazon.awssdk.identity.spi.ResolveIdentityRequest
 import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.sts.StsClient
 import software.amazon.awssdk.services.sts.auth.StsWebIdentityTokenFileCredentialsProvider
-import software.amazon.awssdk.services.sts.model.StsException
 
-/**
- * A [KmsClientFactory] for creating Tink [KmsClient] instances for AWS KMS.
- *
- * AWS STS throttling and transient HTTP status codes permit bounded retries. Unclassified failures
- * have no retry recommendation.
- */
+/** A [KmsClientFactory] for creating Tink [KmsClient] instances for AWS KMS. */
 class AwsKmsClientFactory : KmsClientFactory<AwsWebIdentityCredentials> {
   /**
    * Returns a [KmsClient] configured via STS AssumeRoleWithWebIdentity.
@@ -64,7 +56,7 @@ class AwsKmsClientFactory : KmsClientFactory<AwsWebIdentityCredentials> {
           }
           .build()
       } catch (e: Exception) {
-        throw KmsKeyAccessException("Failed to create STS client", false, e)
+        throw GeneralSecurityException("Failed to create STS client", e)
       }
 
     val stsCredentialsProvider =
@@ -93,22 +85,12 @@ class AwsKmsClientFactory : KmsClientFactory<AwsWebIdentityCredentials> {
             stsCredentialsProvider.resolveIdentity(request).thenApply { it }
           } catch (e: Exception) {
             CompletableFuture.failedFuture(
-              KmsKeyAccessException(
-                "Failed to resolve AWS credentials",
-                e is StsException &&
-                  (e.isThrottlingException ||
-                    KmsClientWithRetryInfo.isRetryableHttpStatus(e.statusCode())),
-                e,
-              )
+              GeneralSecurityException("Failed to resolve AWS credentials", e)
             )
           }
       }
 
-    val identityRequest = ResolveIdentityRequest.builder().build()
-    return KmsClientWithRetryInfo(
-      TinkAwsKmsClient().withCredentialsProvider(AwsCredentialsProviderAdapter(credentialsProvider))
-    ) {
-      KmsClientWithRetryInfo.awaitCredentials(credentialsProvider.resolveIdentity(identityRequest))
-    }
+    return TinkAwsKmsClient()
+      .withCredentialsProvider(AwsCredentialsProviderAdapter(credentialsProvider))
   }
 }

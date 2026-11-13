@@ -19,24 +19,11 @@ kt_jvm_test(
     deps = [
         "//imports/java/com/google/api/client/http",
         "//imports/java/com/google/common/truth",
+        "//imports/java/com/google/crypto/tink",
         "//imports/java/org/junit",
         "//imports/kotlin/kotlin/test",
         "//src/main/kotlin/org/wfanet/measurement/common/crypto/tink",
-        "//src/main/kotlin/org/wfanet/measurement/gcloud/confidentialspace:confidential_space_token_client",
         "//src/main/kotlin/org/wfanet/measurement/gcloud/kms:confidential_space_to_aws_kms_client_factory",
-    ],
-)
-
-kt_jvm_test(
-    name = "GCloudKmsClientFactoryTest",
-    srcs = ["GCloudKmsClientFactoryTest.kt"],
-    associates = ["//src/main/kotlin/org/wfanet/measurement/gcloud/kms:gcp_kms_client_factory"],
-    deps = [
-        "//imports/java/com/google/api/client/http",
-        "//imports/java/com/google/auth:credentials",
-        "//imports/java/com/google/common/truth",
-        "//imports/java/org/junit",
-        "//imports/kotlin/kotlin/test",
-        "//src/main/kotlin/org/wfanet/measurement/common/crypto/tink",
+        "@maven//:io_projectreactor_reactor_test",
     ],
 )

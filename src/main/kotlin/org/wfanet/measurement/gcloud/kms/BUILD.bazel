@@ -5,12 +5,10 @@ package(default_visibility = ["//visibility:public"])
 kt_jvm_library(
     name = "gcp_kms_client_factory",
     srcs = ["GCloudKmsClientFactory.kt"],
-    associates = ["//src/main/kotlin/org/wfanet/measurement/common/crypto/tink/internal:kms_client_with_retry_info"],
     deps = [
-        "//imports/java/com/google/api/client/http",
-        "//imports/java/com/google/auth:credentials",
-        "//imports/java/com/google/auth:oauth2_http",
         "//src/main/kotlin/org/wfanet/measurement/common/crypto/tink",
+        "@maven//:com_google_auth_google_auth_library_credentials",
+        "@maven//:com_google_auth_google_auth_library_oauth2_http",
         "@maven//:com_google_crypto_tink_tink_gcpkms",
     ],
 )
@@ -18,28 +16,28 @@ kt_jvm_library(
 kt_jvm_library(
     name = "gcloud_to_aws_kms_client_factory",
     srcs = ["GCloudToAwsKmsClientFactory.kt"],
-    associates = ["//src/main/kotlin/org/wfanet/measurement/common/crypto/tink/internal:kms_client_with_retry_info"],
     deps = [
         "//imports/java/com/google/api/client/http",
-        "//imports/java/com/google/auth:credentials",
-        "//imports/java/com/google/auth:oauth2_http",
         "//imports/java/com/google/crypto/tink",
         "//imports/java/com/google/crypto/tink:awskms",
         "//imports/java/com/google/gson",
+        "//imports/java/reactor:core",
         "//imports/java/software/amazon/awssdk/auth",
         "//imports/java/software/amazon/awssdk/identity/spi",
         "//imports/java/software/amazon/awssdk/services/regions",
         "//imports/java/software/amazon/awssdk/services/sts",
         "//src/main/kotlin/org/wfanet/measurement/aws:refreshable_aws_credentials_provider",
         "//src/main/kotlin/org/wfanet/measurement/common/crypto/tink",
+        "@maven//:com_google_auth_google_auth_library_credentials",
+        "@maven//:com_google_auth_google_auth_library_oauth2_http",
     ],
 )
 
 kt_jvm_library(
     name = "confidential_space_to_aws_kms_client_factory",
     srcs = ["ConfidentialSpaceToAwsKmsClientFactory.kt"],
-    associates = ["//src/main/kotlin/org/wfanet/measurement/common/crypto/tink/internal:kms_client_with_retry_info"],
     deps = [
+        "//imports/java/com/google/api/client/http",
         "//imports/java/com/google/crypto/tink",
         "//imports/java/com/google/crypto/tink:awskms",
         "//imports/java/reactor:core",

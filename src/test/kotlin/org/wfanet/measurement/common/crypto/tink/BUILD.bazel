@@ -106,16 +106,3 @@ kt_jvm_test(
         "//src/main/kotlin/org/wfanet/measurement/storage/testing",
     ],
 )
-
-kt_jvm_test(
-    name = "KmsClientWithRetryInfoTest",
-    srcs = ["KmsClientWithRetryInfoTest.kt"],
-    associates = ["//src/main/kotlin/org/wfanet/measurement/common/crypto/tink/internal:kms_client_with_retry_info"],
-    deps = [
-        "//imports/java/com/google/common/truth",
-        "//imports/java/com/google/crypto/tink",
-        "//imports/java/org/junit",
-        "//imports/kotlin/kotlin/test",
-        "//src/main/kotlin/org/wfanet/measurement/common/crypto/tink",
-    ],
-)

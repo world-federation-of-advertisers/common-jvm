@@ -8,7 +8,6 @@ kt_jvm_library(
         "AwsKmsClient.kt",
         "AwsKmsClientFactory.kt",
     ],
-    associates = ["//src/main/kotlin/org/wfanet/measurement/common/crypto/tink/internal:kms_client_with_retry_info"],
     deps = [
         "//imports/java/com/google/crypto/tink",
         "//imports/java/com/google/crypto/tink:awskms",

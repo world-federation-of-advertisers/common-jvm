@@ -290,6 +290,7 @@ maven.install(
         "org.postgresql:r2dbc-postgresql:1.0.7.RELEASE",
         "io.r2dbc:r2dbc-spi:1.0.0.RELEASE",
         "io.projectreactor:reactor-core",
+        "io.projectreactor:reactor-test",
         "io.projectreactor.netty:reactor-netty-core",
         "io.projectreactor.netty:reactor-netty-http",
 

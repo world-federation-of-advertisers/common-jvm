@@ -26,18 +26,17 @@ import com.google.gson.JsonObject
 import java.security.GeneralSecurityException
 import java.time.Clock
 import java.time.Duration
-import java.util.concurrent.CompletableFuture
-import java.util.logging.Logger
+import java.util.concurrent.ThreadLocalRandom
 import org.wfanet.measurement.aws.AwsCredentialsProviderAdapter
 import org.wfanet.measurement.aws.RefreshableAwsCredentialsIdentityProvider
 import org.wfanet.measurement.aws.TimeBoundCredentials
 import org.wfanet.measurement.common.crypto.tink.GCloudToAwsWifCredentials
 import org.wfanet.measurement.common.crypto.tink.KmsClientFactory
-import org.wfanet.measurement.common.crypto.tink.KmsKeyAccessException
-import org.wfanet.measurement.common.crypto.tink.internal.KmsClientWithRetryInfo
+import reactor.core.publisher.Mono
+import reactor.core.scheduler.Schedulers
+import reactor.util.retry.Retry
 import software.amazon.awssdk.auth.credentials.AnonymousCredentialsProvider
 import software.amazon.awssdk.auth.credentials.AwsSessionCredentials
-import software.amazon.awssdk.identity.spi.ResolveIdentityRequest
 import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.sts.StsClient
 import software.amazon.awssdk.services.sts.model.AssumeRoleWithWebIdentityRequest
@@ -51,8 +50,10 @@ import software.amazon.awssdk.services.sts.model.StsException
  * account to obtain an OIDC ID token. That ID token is exchanged with AWS STS
  * `AssumeRoleWithWebIdentity` for temporary AWS credentials.
  *
- * Public Google authentication retry hints, AWS STS throttling, and transient HTTP status codes
- * permit bounded retries. Unclassified failures have no retry recommendation.
+ * Credential retrieval retries only public Google authentication retry hints and transient HTTP or
+ * STS failures, with at most three retries and a two-minute budget for the whole refresh. Quota
+ * failures wait at least one minute. STS retries reuse the Google ID token already obtained. Errors
+ * without a public retry hint, including opaque impersonation I/O failures, are not retried.
  *
  * @param refreshMargin How far before expiration to proactively refresh credentials.
  * @param clock Clock used to determine the current time.
@@ -75,24 +76,20 @@ class GCloudToAwsKmsClientFactory(
   override fun getKmsClient(config: GCloudToAwsWifCredentials): KmsClient {
     val credentialsProvider =
       RefreshableAwsCredentialsIdentityProvider(refreshMargin = refreshMargin, clock = clock) {
-        // Credential preparation runs on the caller of the synchronous AEAD operation, so
-        // this blocking chain runs inline rather than on another thread.
-        CompletableFuture.completedFuture(obtainAwsCredentials(config))
+        obtainAwsCredentials(config).timeout(CREDENTIAL_REFRESH_TIMEOUT).toFuture()
       }
-    val identityRequest = ResolveIdentityRequest.builder().build()
-    return KmsClientWithRetryInfo(
-      TinkAwsKmsClient().withCredentialsProvider(AwsCredentialsProviderAdapter(credentialsProvider))
-    ) {
-      KmsClientWithRetryInfo.awaitCredentials(credentialsProvider.resolveIdentity(identityRequest))
-    }
+    return TinkAwsKmsClient()
+      .withCredentialsProvider(AwsCredentialsProviderAdapter(credentialsProvider))
   }
 
   companion object {
+    private const val MAX_CREDENTIAL_RETRIES = 3L
+    private val CREDENTIAL_REFRESH_TIMEOUT = Duration.ofMinutes(2)
+    private val QUOTA_BACKOFF = Duration.ofMinutes(1)
+
     private val DEFAULT_REFRESH_MARGIN: Duration = Duration.ofMinutes(15)
 
     private val SERVICE_ACCOUNT_REGEX = Regex("serviceAccounts/([^:/]+)")
-
-    private val logger: Logger = Logger.getLogger(this::class.java.enclosingClass.name)
 
     private fun buildExternalAccountCredentials(
       config: GCloudToAwsWifCredentials
@@ -115,19 +112,34 @@ class GCloudToAwsKmsClientFactory(
       try {
         return GoogleCredentials.fromStream(wifConfigJson.byteInputStream(Charsets.UTF_8))
       } catch (e: Exception) {
-        throw KmsKeyAccessException("Failed to create GoogleCredentials from WIF config", false, e)
+        throw GeneralSecurityException("Failed to create GoogleCredentials from WIF config", e)
       }
     }
 
     private fun extractServiceAccount(impersonationUrl: String): String {
       return SERVICE_ACCOUNT_REGEX.find(impersonationUrl)?.groupValues?.get(1)
-        ?: throw KmsKeyAccessException(
-          "Cannot extract service account from impersonation URL: $impersonationUrl",
-          false,
+        ?: throw GeneralSecurityException(
+          "Cannot extract service account from impersonation URL: $impersonationUrl"
         )
     }
 
-    private fun obtainAwsCredentials(config: GCloudToAwsWifCredentials): TimeBoundCredentials {
+    private fun obtainAwsCredentials(
+      config: GCloudToAwsWifCredentials
+    ): Mono<TimeBoundCredentials> =
+      Mono.fromCallable { googleIdToken(config) }
+        .subscribeOn(Schedulers.boundedElastic())
+        .retryWhen(credentialRetry())
+        .onErrorMap { e -> GeneralSecurityException("Failed to obtain Google Cloud ID token", e) }
+        .flatMap { idToken ->
+          Mono.fromCallable { exchangeForAwsCredentials(config, idToken) }
+            .subscribeOn(Schedulers.boundedElastic())
+            .retryWhen(credentialRetry())
+            .onErrorMap { e ->
+              GeneralSecurityException("AWS STS AssumeRoleWithWebIdentity failed", e)
+            }
+        }
+
+    private fun googleIdToken(config: GCloudToAwsWifCredentials): String {
       val externalAccountCredentials: GoogleCredentials = buildExternalAccountCredentials(config)
 
       val impersonatedCredentials: ImpersonatedCredentials =
@@ -139,27 +151,21 @@ class GCloudToAwsKmsClientFactory(
           }
           .build()
 
-      val idToken: String =
-        try {
-          val idTokenCredentials: IdTokenCredentials =
-            IdTokenCredentials.newBuilder()
-              .apply {
-                setIdTokenProvider(impersonatedCredentials)
-                setTargetAudience(config.awsAudience)
-              }
-              .build()
-          idTokenCredentials.refresh()
-          idTokenCredentials.idToken.tokenValue
-        } catch (e: Exception) {
-          val retryable =
-            when (e) {
-              is HttpResponseException -> KmsClientWithRetryInfo.isRetryableHttpStatus(e.statusCode)
-              is Retryable -> e.isRetryable
-              else -> false
-            }
-          throw KmsKeyAccessException("Failed to obtain Google Cloud ID token", retryable, e)
-        }
+      val idTokenCredentials: IdTokenCredentials =
+        IdTokenCredentials.newBuilder()
+          .apply {
+            setIdTokenProvider(impersonatedCredentials)
+            setTargetAudience(config.awsAudience)
+          }
+          .build()
+      idTokenCredentials.refresh()
+      return idTokenCredentials.idToken.tokenValue
+    }
 
+    private fun exchangeForAwsCredentials(
+      config: GCloudToAwsWifCredentials,
+      idToken: String,
+    ): TimeBoundCredentials {
       val stsClient: StsClient =
         try {
           StsClient.builder()
@@ -169,7 +175,7 @@ class GCloudToAwsKmsClientFactory(
             }
             .build()
         } catch (e: Exception) {
-          throw KmsKeyAccessException("Failed to create AWS STS client", false, e)
+          throw GeneralSecurityException("Failed to create AWS STS client", e)
         }
 
       val stsResponse =
@@ -182,14 +188,6 @@ class GCloudToAwsKmsClientFactory(
                 webIdentityToken(idToken)
               }
               .build()
-          )
-        } catch (e: Exception) {
-          throw KmsKeyAccessException(
-            "AWS STS AssumeRoleWithWebIdentity failed",
-            e is StsException &&
-              (e.isThrottlingException ||
-                KmsClientWithRetryInfo.isRetryableHttpStatus(e.statusCode())),
-            e,
           )
         } finally {
           stsClient.close()
@@ -206,5 +204,43 @@ class GCloudToAwsKmsClientFactory(
         expiration = awsCredentials.expiration(),
       )
     }
+
+    /** Retries only failures with public retry hints; quota backoff covers a full minute. */
+    private fun credentialRetry(): Retry =
+      Retry.from { signals ->
+        signals.concatMap { signal ->
+          val failure = signal.failure()
+          val retryable =
+            when (failure) {
+              is HttpResponseException -> isRetryableHttpStatus(failure.statusCode)
+              is StsException ->
+                failure.isThrottlingException || isRetryableHttpStatus(failure.statusCode())
+              is Retryable -> failure.isRetryable
+              else -> false
+            }
+          if (!retryable || signal.totalRetries() >= MAX_CREDENTIAL_RETRIES) {
+            Mono.error<Long>(failure)
+          } else {
+            val quotaFailure =
+              (failure is HttpResponseException && failure.statusCode == 429) ||
+                (failure is StsException && failure.isThrottlingException)
+            val delay =
+              if (quotaFailure) QUOTA_BACKOFF
+              else Duration.ofSeconds(1L shl signal.totalRetries().toInt())
+            Mono.delay(delay.plusMillis(ThreadLocalRandom.current().nextLong(1000)))
+          }
+        }
+      }
+
+    private fun isRetryableHttpStatus(statusCode: Int): Boolean =
+      when (statusCode) {
+        408,
+        429,
+        500,
+        502,
+        503,
+        504 -> true
+        else -> false
+      }
   }
 }

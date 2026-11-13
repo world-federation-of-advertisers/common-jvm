@@ -14,9 +14,6 @@
 
 package org.wfanet.measurement.gcloud.kms
 
-import com.google.api.client.http.HttpResponseException
-import com.google.auth.Retryable
-import com.google.auth.http.HttpTransportFactory
 import com.google.auth.oauth2.GoogleCredentials
 import com.google.crypto.tink.KmsClient
 import com.google.crypto.tink.integration.gcpkms.GcpKmsClient
@@ -26,31 +23,19 @@ import java.io.IOException
 import java.security.GeneralSecurityException
 import org.wfanet.measurement.common.crypto.tink.GCloudWifCredentials
 import org.wfanet.measurement.common.crypto.tink.KmsClientFactory
-import org.wfanet.measurement.common.crypto.tink.KmsKeyAccessException
-import org.wfanet.measurement.common.crypto.tink.internal.KmsClientWithRetryInfo
 
-/**
- * [KmsClientFactory] for Google Cloud KMS with documented retry information.
- *
- * Credentials are refreshed before key use. Public HTTP status and [Retryable] hints determine
- * retries when available. Unclassified failures have no retry recommendation, and key-operation
- * errors pass through unchanged.
- */
-class GCloudKmsClientFactory
-private constructor(private val httpTransportFactory: HttpTransportFactory?) :
-  KmsClientFactory<GCloudWifCredentials> {
-  constructor() : this(null)
-
+/** A [KmsClientFactory] for creating Tink [KmsClient] instances for Google Cloud KMS. */
+class GCloudKmsClientFactory : KmsClientFactory<GCloudWifCredentials> {
   /**
-   * Returns a [KmsClient] backed by [GcpKmsClient] configured for Workload Identity Federation
-   * (WIF) with service account impersonation.
+   * Returns a [GcpKmsClient] configured for Workload Identity Federation (WIF) with service account
+   * impersonation.
    *
    * This method programmatically builds an `ExternalAccountCredentials` object, which is ideal for
    * environments like Confidential Space where a short-lived token from a file needs to be
    * exchanged for a GCP access token.
    *
    * @param config The Google Cloud specific WIF and impersonation configuration.
-   * @return An initialized [KmsClient] exposing credential retry hints via [KmsKeyAccessException].
+   * @return An initialized [GcpKmsClient].
    * @throws GeneralSecurityException if the client cannot be initialized.
    */
   override fun getKmsClient(config: GCloudWifCredentials): KmsClient {
@@ -71,44 +56,11 @@ private constructor(private val httpTransportFactory: HttpTransportFactory?) :
 
     val credentials =
       try {
-        if (httpTransportFactory == null) {
-          GoogleCredentials.fromStream(wifConfigJson.byteInputStream(Charsets.UTF_8))
-        } else {
-          GoogleCredentials.fromStream(
-            wifConfigJson.byteInputStream(Charsets.UTF_8),
-            httpTransportFactory,
-          )
-        }
+        GoogleCredentials.fromStream(wifConfigJson.byteInputStream(Charsets.UTF_8))
       } catch (e: IOException) {
-        throw KmsKeyAccessException("Failed to create GoogleCredentials from WIF config", false, e)
+        throw GeneralSecurityException("Failed to create GoogleCredentials from WIF config", e)
       }
 
-    val client =
-      try {
-        GcpKmsClient().withCredentials(credentials)
-      } catch (e: GeneralSecurityException) {
-        throw KmsKeyAccessException("Failed to initialize Google Cloud KMS client", false, e)
-      }
-    return KmsClientWithRetryInfo(client) {
-      try {
-        credentials.refreshIfExpired()
-      } catch (e: IOException) {
-        val retryable =
-          when (e) {
-            is HttpResponseException -> KmsClientWithRetryInfo.isRetryableHttpStatus(e.statusCode)
-            is Retryable -> e.isRetryable
-            else -> false
-          }
-        throw KmsKeyAccessException("Failed to refresh Google Cloud credentials", retryable, e)
-      }
-    }
-  }
-
-  internal companion object {
-    /** Creates a factory with a supplied authentication transport for tests. */
-    @JvmSynthetic
-    fun withHttpTransportFactory(
-      httpTransportFactory: HttpTransportFactory
-    ): GCloudKmsClientFactory = GCloudKmsClientFactory(httpTransportFactory)
+    return GcpKmsClient().withCredentials(credentials)
   }
 }
