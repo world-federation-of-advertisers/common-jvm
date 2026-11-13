@@ -257,6 +257,7 @@ maven.install(
         "com.google.cloud:google-cloudevent-types:0.16.0",
         "com.google.auth:google-auth-library-oauth2-http",
         "com.google.auth:google-auth-library-credentials",
+        "com.google.http-client:google-http-client",
         "com.google.crypto.tink:tink-gcpkms:1.11.0",
         "com.google.crypto.tink:tink-awskms:2.1.0",
 
@@ -289,6 +290,7 @@ maven.install(
         "org.postgresql:r2dbc-postgresql:1.0.7.RELEASE",
         "io.r2dbc:r2dbc-spi:1.0.0.RELEASE",
         "io.projectreactor:reactor-core",
+        "io.projectreactor:reactor-test",
         "io.projectreactor.netty:reactor-netty-core",
         "io.projectreactor.netty:reactor-netty-http",
 

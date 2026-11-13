@@ -14,6 +14,7 @@
 
 package org.wfanet.measurement.gcloud.confidentialspace
 
+import com.google.api.client.http.HttpResponseException
 import com.google.common.truth.Truth.assertThat
 import java.io.IOException
 import java.net.StandardProtocolFamily
@@ -239,7 +240,7 @@ class ConfidentialSpaceTokenClientTest {
   }
 
   @Test
-  fun `getToken throws on a non-2xx response`(): Unit = runBlocking {
+  fun `getToken preserves a non-2xx response status`(): Unit = runBlocking {
     startServer(
       "HTTP/1.1 400 Bad Request\r\nContent-Length: 16\r\nConnection: close\r\n\r\ninvalid audience"
     )
@@ -247,8 +248,24 @@ class ConfidentialSpaceTokenClientTest {
     val exception =
       assertFailsWith<IOException> { clientForServer().getToken(awsPrincipalTagsRequest()).await() }
 
+    assertThat(exception).isInstanceOf(HttpResponseException::class.java)
+    assertThat((exception as HttpResponseException).statusCode).isEqualTo(400)
     assertThat(exception).hasMessageThat().contains("400")
     assertThat(exception).hasMessageThat().contains("invalid audience")
+  }
+
+  @Test
+  fun `getToken preserves quota status and recovers on the next request`(): Unit = runBlocking {
+    val token = "header.payload.signature"
+    startServer(
+      "HTTP/1.1 429 Too Many Requests\r\nContent-Length: 5\r\n\r\nquota",
+      "HTTP/1.1 200 OK\r\nContent-Length: ${token.length}\r\nConnection: close\r\n\r\n$token",
+    )
+    val client = clientForServer()
+    val failure =
+      assertFailsWith<HttpResponseException> { client.getToken(awsPrincipalTagsRequest()).await() }
+    assertThat(failure.statusCode).isEqualTo(429)
+    assertThat(client.getToken(awsPrincipalTagsRequest()).await()).isEqualTo(token)
   }
 
   @Test

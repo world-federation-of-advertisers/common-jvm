@@ -14,6 +14,8 @@
 
 package org.wfanet.measurement.gcloud.confidentialspace
 
+import com.google.api.client.http.HttpHeaders
+import com.google.api.client.http.HttpResponseException
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
@@ -63,7 +65,8 @@ fun interface AttestationTokenProvider {
   /**
    * Returns a future that completes with a freshly minted attestation token for [request], or
    * completes exceptionally with an [IOException] if the token cannot be obtained. Cancelling the
-   * future abandons the request.
+   * future abandons the request. [ConfidentialSpaceTokenClient] preserves non-success HTTP response
+   * status codes in [HttpResponseException].
    */
   fun getToken(request: AttestationTokenRequest): CompletableFuture<String>
 }
@@ -121,9 +124,11 @@ class ConfidentialSpaceTokenClient(
   private fun extractToken(response: TokenResponse): String {
     val token = response.body.trim()
     if (response.statusCode !in SUCCESS_STATUS_CODES) {
-      throw IOException(
-        "Launcher token request failed with status ${response.statusCode}: ${redactIfJwt(token)}"
-      )
+      throw HttpResponseException.Builder(response.statusCode, null, HttpHeaders())
+        .setMessage(
+          "Launcher token request failed with status ${response.statusCode}: ${redactIfJwt(token)}"
+        )
+        .build()
     }
     if (token.isEmpty()) {
       throw IOException("Launcher returned an empty attestation token")

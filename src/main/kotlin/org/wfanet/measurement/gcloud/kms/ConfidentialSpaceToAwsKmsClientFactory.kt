@@ -14,11 +14,13 @@
 
 package org.wfanet.measurement.gcloud.kms
 
+import com.google.api.client.http.HttpResponseException
 import com.google.crypto.tink.KmsClient
 import com.google.crypto.tink.integration.awskms.AwsKmsClient as TinkAwsKmsClient
 import java.security.GeneralSecurityException
 import java.time.Clock
 import java.time.Duration
+import java.util.concurrent.ThreadLocalRandom
 import org.wfanet.measurement.aws.AwsCredentialsProviderAdapter
 import org.wfanet.measurement.aws.RefreshableAwsCredentialsIdentityProvider
 import org.wfanet.measurement.aws.TimeBoundCredentials
@@ -30,11 +32,13 @@ import org.wfanet.measurement.gcloud.confidentialspace.ConfidentialSpaceTokenCli
 import org.wfanet.measurement.gcloud.confidentialspace.ConfidentialSpaceTokenType
 import reactor.core.publisher.Mono
 import reactor.core.scheduler.Schedulers
+import reactor.util.retry.Retry
 import software.amazon.awssdk.auth.credentials.AnonymousCredentialsProvider
 import software.amazon.awssdk.auth.credentials.AwsSessionCredentials
 import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.sts.StsClient
 import software.amazon.awssdk.services.sts.model.AssumeRoleWithWebIdentityRequest
+import software.amazon.awssdk.services.sts.model.StsException
 
 /**
  * A [KmsClientFactory] for accessing AWS KMS directly from a Google Cloud Confidential Space
@@ -47,7 +51,10 @@ import software.amazon.awssdk.services.sts.model.AssumeRoleWithWebIdentityReques
  * addition to `sts:AssumeRoleWithWebIdentity`).
  *
  * The returned client uses a credentials provider that automatically refreshes the AWS session
- * credentials before they expire by re-executing the token fetch + STS exchange.
+ * credentials before they expire by re-executing the token fetch + STS exchange. Known temporary
+ * token and STS failures permit at most three retries, within a two-minute budget for the entire
+ * refresh. Quota failures wait at least one minute. Each step retries independently, so STS retries
+ * reuse the token already obtained. Exhaustion is reported as a [GeneralSecurityException].
  *
  * @param tokenProvider Source of Confidential Space attestation tokens.
  * @param refreshMargin How far before expiration to proactively refresh credentials.
@@ -70,7 +77,7 @@ class ConfidentialSpaceToAwsKmsClientFactory(
   override fun getKmsClient(config: ConfidentialSpaceToAwsWifCredentials): KmsClient {
     val credentialsProvider =
       RefreshableAwsCredentialsIdentityProvider(refreshMargin = refreshMargin, clock = clock) {
-        obtainAwsCredentials(config).toFuture()
+        obtainAwsCredentials(config).timeout(CREDENTIAL_REFRESH_TIMEOUT).toFuture()
       }
     return TinkAwsKmsClient()
       .withCredentialsProvider(AwsCredentialsProviderAdapter(credentialsProvider))
@@ -108,6 +115,7 @@ class ConfidentialSpaceToAwsKmsClientFactory(
           )
         )
       }
+      .retryWhen(credentialRetry())
       .onErrorMap { e ->
         GeneralSecurityException(
           "Failed to obtain Confidential Space OIDC token for signature discovery",
@@ -132,6 +140,7 @@ class ConfidentialSpaceToAwsKmsClientFactory(
           )
         )
       }
+      .retryWhen(credentialRetry())
       .onErrorMap { e ->
         GeneralSecurityException("Failed to obtain Confidential Space attestation token", e)
       }
@@ -148,6 +157,8 @@ class ConfidentialSpaceToAwsKmsClientFactory(
   ): Mono<TimeBoundCredentials> =
     Mono.fromCallable { assumeRoleWithWebIdentity(config, attestationToken) }
       .subscribeOn(Schedulers.boundedElastic())
+      .retryWhen(credentialRetry())
+      .onErrorMap { e -> GeneralSecurityException("AWS STS AssumeRoleWithWebIdentity failed", e) }
 
   private fun assumeRoleWithWebIdentity(
     config: ConfidentialSpaceToAwsWifCredentials,
@@ -167,19 +178,15 @@ class ConfidentialSpaceToAwsKmsClientFactory(
 
     val stsResponse =
       stsClient.use {
-        try {
-          it.assumeRoleWithWebIdentity(
-            AssumeRoleWithWebIdentityRequest.builder()
-              .apply {
-                roleArn(config.roleArn)
-                roleSessionName(config.roleSessionName)
-                webIdentityToken(attestationToken)
-              }
-              .build()
-          )
-        } catch (e: Exception) {
-          throw GeneralSecurityException("AWS STS AssumeRoleWithWebIdentity failed", e)
-        }
+        it.assumeRoleWithWebIdentity(
+          AssumeRoleWithWebIdentityRequest.builder()
+            .apply {
+              roleArn(config.roleArn)
+              roleSessionName(config.roleSessionName)
+              webIdentityToken(attestationToken)
+            }
+            .build()
+        )
       }
 
     val awsCredentials = stsResponse.credentials()
@@ -194,7 +201,48 @@ class ConfidentialSpaceToAwsKmsClientFactory(
     )
   }
 
+  /** Retries only failures with public retry hints; quota backoff covers a full minute. */
+  private fun credentialRetry(): Retry =
+    Retry.from { signals ->
+      signals.concatMap { signal ->
+        val failure = signal.failure()
+        val retryable =
+          when (failure) {
+            is HttpResponseException -> isRetryableHttpStatus(failure.statusCode)
+            is StsException ->
+              failure.isThrottlingException || isRetryableHttpStatus(failure.statusCode())
+            else -> false
+          }
+        if (!retryable || signal.totalRetries() >= MAX_CREDENTIAL_RETRIES) {
+          Mono.error<Long>(failure)
+        } else {
+          val quotaFailure =
+            (failure is HttpResponseException && failure.statusCode == 429) ||
+              (failure is StsException && failure.isThrottlingException)
+          val delay =
+            if (quotaFailure) QUOTA_BACKOFF
+            else Duration.ofSeconds(1L shl signal.totalRetries().toInt())
+          Mono.delay(delay.plusMillis(ThreadLocalRandom.current().nextLong(1000)))
+        }
+      }
+    }
+
+  private fun isRetryableHttpStatus(statusCode: Int): Boolean =
+    when (statusCode) {
+      408,
+      429,
+      500,
+      502,
+      503,
+      504 -> true
+      else -> false
+    }
+
   companion object {
+    private const val MAX_CREDENTIAL_RETRIES = 3L
+    private val CREDENTIAL_REFRESH_TIMEOUT = Duration.ofMinutes(2)
+    private val QUOTA_BACKOFF = Duration.ofMinutes(1)
+
     private val DEFAULT_REFRESH_MARGIN: Duration = Duration.ofMinutes(15)
   }
 }

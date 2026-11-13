@@ -6,6 +6,7 @@ kt_jvm_library(
     name = "confidential_space_token_client",
     srcs = ["ConfidentialSpaceTokenClient.kt"],
     deps = [
+        "//imports/java/com/google/api/client/http",
         "//imports/java/com/google/gson",
         "//imports/java/io/netty/channel/unix",
         "//imports/java/io/netty/handler/codec:http",
