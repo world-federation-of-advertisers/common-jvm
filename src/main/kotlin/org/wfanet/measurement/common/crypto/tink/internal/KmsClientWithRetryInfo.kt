@@ -17,6 +17,9 @@ package org.wfanet.measurement.common.crypto.tink.internal
 import com.google.crypto.tink.Aead
 import com.google.crypto.tink.KmsClient
 import java.security.GeneralSecurityException
+import java.util.concurrent.CancellationException
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ExecutionException
 import org.wfanet.measurement.common.crypto.tink.KmsKeyAccessException
 
 /**
@@ -66,4 +69,30 @@ internal class KmsClientWithRetryInfo(
     } catch (e: GeneralSecurityException) {
       throw KmsKeyAccessException("KMS key access failed", isRetryable = false, cause = e)
     }
+
+  internal companion object {
+    /**
+     * Resolves credentials before the SDK can replace the adapter's retry information.
+     *
+     * Uses [CompletableFuture.get]'s documented [ExecutionException] cause, without interpreting
+     * SDK exceptions. The SDK subsequently uses the same provider's cached credentials.
+     */
+    @JvmSynthetic
+    fun awaitCredentials(credentials: CompletableFuture<*>) {
+      try {
+        credentials.get()
+      } catch (e: ExecutionException) {
+        val cause = e.cause ?: e
+        when (cause) {
+          is KmsKeyAccessException -> throw cause
+          is CancellationException -> throw cause
+          is Error -> throw cause
+          else -> throw KmsKeyAccessException("Failed to obtain KMS credentials", false, cause)
+        }
+      } catch (e: InterruptedException) {
+        Thread.currentThread().interrupt()
+        throw KmsKeyAccessException("Interrupted while obtaining KMS credentials", true, e)
+      }
+    }
+  }
 }

@@ -20,6 +20,8 @@ import com.google.crypto.tink.KmsClient
 import com.google.crypto.tink.subtle.AesGcmJce
 import java.io.IOException
 import java.security.GeneralSecurityException
+import java.util.concurrent.CancellationException
+import java.util.concurrent.CompletableFuture
 import kotlin.test.assertFailsWith
 import org.junit.Test
 import org.wfanet.measurement.common.crypto.tink.internal.KmsClientWithRetryInfo
@@ -97,7 +99,10 @@ class KmsClientWithRetryInfoTest {
     val wrapped =
       KmsClientWithRetryInfo(client(aead)) {
           refreshes++
-          if (refreshes == 1) throw original
+          KmsClientWithRetryInfo.awaitCredentials(
+            if (refreshes == 1) CompletableFuture.failedFuture<Unit>(original)
+            else CompletableFuture.completedFuture(Unit)
+          )
         }
         .getAead("test-key")
     assertThat(refreshes).isEqualTo(0)
@@ -116,6 +121,47 @@ class KmsClientWithRetryInfoTest {
         .getAead("test-key")
     val ciphertext = wrapped.encrypt("plaintext".toByteArray(), null)
     assertThat(aead.decrypt(ciphertext, null)).isEqualTo("plaintext".toByteArray())
+  }
+
+  @Test
+  fun `credential preparation preserves opaque failures without inspecting causes`() {
+    val original = GeneralSecurityException("opaque", IOException("hidden transport error"))
+    val wrapped =
+      KmsClientWithRetryInfo(client(aead)) {
+          KmsClientWithRetryInfo.awaitCredentials(CompletableFuture.failedFuture<Unit>(original))
+        }
+        .getAead("test-key")
+    val failure = assertFailsWith<KmsKeyAccessException> { wrapped.encrypt(ByteArray(0), null) }
+    assertThat(failure.isRetryable).isFalse()
+    assertThat(failure.cause).isSameInstanceAs(original)
+  }
+
+  @Test
+  fun `credential preparation restores the interrupt flag`() {
+    val wrapped =
+      KmsClientWithRetryInfo(client(aead)) {
+          KmsClientWithRetryInfo.awaitCredentials(CompletableFuture<Unit>())
+        }
+        .getAead("test-key")
+    try {
+      Thread.currentThread().interrupt()
+      val failure = assertFailsWith<KmsKeyAccessException> { wrapped.encrypt(ByteArray(0), null) }
+      assertThat(failure.isRetryable).isTrue()
+      assertThat(failure.cause).isInstanceOf(InterruptedException::class.java)
+      assertThat(Thread.currentThread().isInterrupted).isTrue()
+    } finally {
+      Thread.interrupted()
+    }
+  }
+
+  @Test
+  fun `credential preparation preserves cancellation`() {
+    val credentials = CompletableFuture<Unit>()
+    credentials.cancel(false)
+    val wrapped =
+      KmsClientWithRetryInfo(client(aead)) { KmsClientWithRetryInfo.awaitCredentials(credentials) }
+        .getAead("test-key")
+    assertFailsWith<CancellationException> { wrapped.encrypt(ByteArray(0), null) }
   }
 
   private fun client(aead: Aead): KmsClient =

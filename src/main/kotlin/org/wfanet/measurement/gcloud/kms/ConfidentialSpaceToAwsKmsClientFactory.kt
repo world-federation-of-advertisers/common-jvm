@@ -14,18 +14,14 @@
 
 package org.wfanet.measurement.gcloud.kms
 
-import com.google.crypto.tink.Aead
 import com.google.crypto.tink.KmsClient
 import com.google.crypto.tink.integration.awskms.AwsKmsClient as TinkAwsKmsClient
 import java.io.IOException
-import java.security.GeneralSecurityException
 import java.time.Clock
 import java.time.Duration
-import java.util.concurrent.CompletionException
 import org.wfanet.measurement.aws.AwsCredentialsProviderAdapter
 import org.wfanet.measurement.aws.RefreshableAwsCredentialsIdentityProvider
 import org.wfanet.measurement.aws.TimeBoundCredentials
-import org.wfanet.measurement.aws.kms.CompletionExceptionTranslatingKmsClient
 import org.wfanet.measurement.common.crypto.tink.ConfidentialSpaceToAwsWifCredentials
 import org.wfanet.measurement.common.crypto.tink.KmsClientFactory
 import org.wfanet.measurement.common.crypto.tink.KmsKeyAccessException
@@ -38,6 +34,7 @@ import reactor.core.publisher.Mono
 import reactor.core.scheduler.Schedulers
 import software.amazon.awssdk.auth.credentials.AnonymousCredentialsProvider
 import software.amazon.awssdk.auth.credentials.AwsSessionCredentials
+import software.amazon.awssdk.identity.spi.ResolveIdentityRequest
 import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.sts.StsClient
 import software.amazon.awssdk.services.sts.model.AssumeRoleWithWebIdentityRequest
@@ -71,28 +68,23 @@ class ConfidentialSpaceToAwsKmsClientFactory(
    * Returns a [KmsClient] using a Confidential Space attestation token to authenticate directly
    * with AWS.
    *
-   * The token fetch and STS exchange are deferred until the AWS SDK resolves credentials, and fail
-   * that resolution with a [GeneralSecurityException] when they cannot be completed.
+   * The token fetch and STS exchange are deferred until encryption or decryption. Credentials are
+   * prepared before entering the AWS SDK so failures retain their retry information.
    *
    * @param config The Confidential Space-to-AWS configuration.
-   * @return An initialized [KmsClient] whose [Aead] instances do not throw [CompletionException].
+   * @return An initialized [KmsClient].
    */
   override fun getKmsClient(config: ConfidentialSpaceToAwsWifCredentials): KmsClient {
     val credentialsProvider =
       RefreshableAwsCredentialsIdentityProvider(refreshMargin = refreshMargin, clock = clock) {
         obtainAwsCredentials(config).toFuture()
       }
+    val identityRequest = ResolveIdentityRequest.builder().build()
     return KmsClientWithRetryInfo(
-      CompletionExceptionTranslatingKmsClient.wrap(
-        TinkAwsKmsClient()
-          .withCredentialsProvider(
-            // TODO(tink-crypto/tink-java-awskms#6): once a release including the fix is
-            // available, pass credentialsProvider directly instead of wrapping it in
-            // AwsCredentialsProviderAdapter.
-            AwsCredentialsProviderAdapter(credentialsProvider)
-          )
-      )
-    )
+      TinkAwsKmsClient().withCredentialsProvider(AwsCredentialsProviderAdapter(credentialsProvider))
+    ) {
+      KmsClientWithRetryInfo.awaitCredentials(credentialsProvider.resolveIdentity(identityRequest))
+    }
   }
 
   private fun obtainAwsCredentials(

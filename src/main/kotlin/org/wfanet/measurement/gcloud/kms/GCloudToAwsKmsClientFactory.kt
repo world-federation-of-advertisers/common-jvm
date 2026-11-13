@@ -19,7 +19,6 @@ import com.google.auth.Retryable
 import com.google.auth.oauth2.GoogleCredentials
 import com.google.auth.oauth2.IdTokenCredentials
 import com.google.auth.oauth2.ImpersonatedCredentials
-import com.google.crypto.tink.Aead
 import com.google.crypto.tink.KmsClient
 import com.google.crypto.tink.integration.awskms.AwsKmsClient as TinkAwsKmsClient
 import com.google.gson.JsonArray
@@ -31,18 +30,17 @@ import java.security.GeneralSecurityException
 import java.time.Clock
 import java.time.Duration
 import java.util.concurrent.CompletableFuture
-import java.util.concurrent.CompletionException
 import java.util.logging.Logger
 import org.wfanet.measurement.aws.AwsCredentialsProviderAdapter
 import org.wfanet.measurement.aws.RefreshableAwsCredentialsIdentityProvider
 import org.wfanet.measurement.aws.TimeBoundCredentials
-import org.wfanet.measurement.aws.kms.CompletionExceptionTranslatingKmsClient
 import org.wfanet.measurement.common.crypto.tink.GCloudToAwsWifCredentials
 import org.wfanet.measurement.common.crypto.tink.KmsClientFactory
 import org.wfanet.measurement.common.crypto.tink.KmsKeyAccessException
 import org.wfanet.measurement.common.crypto.tink.internal.KmsClientWithRetryInfo
 import software.amazon.awssdk.auth.credentials.AnonymousCredentialsProvider
 import software.amazon.awssdk.auth.credentials.AwsSessionCredentials
+import software.amazon.awssdk.identity.spi.ResolveIdentityRequest
 import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.sts.StsClient
 import software.amazon.awssdk.services.sts.model.AssumeRoleWithWebIdentityRequest
@@ -75,27 +73,22 @@ class GCloudToAwsKmsClientFactory(
    * service account impersonation -> OIDC ID token -> AWS STS AssumeRoleWithWebIdentity).
    *
    * @param config The Google Cloud-to-AWS WIF configuration.
-   * @return An initialized [KmsClient] whose [Aead] instances do not throw [CompletionException].
+   * @return An initialized [KmsClient].
    * @throws GeneralSecurityException if credentials cannot be obtained or exchanged.
    */
   override fun getKmsClient(config: GCloudToAwsWifCredentials): KmsClient {
     val credentialsProvider =
       RefreshableAwsCredentialsIdentityProvider(refreshMargin = refreshMargin, clock = clock) {
-        // The credential chain is blocking, and the AWS SDK resolves credentials from a
-        // thread where blocking is expected, so it runs inline rather than on another thread.
+        // Credential preparation runs on the caller of the synchronous AEAD operation, so
+        // this blocking chain runs inline rather than on another thread.
         CompletableFuture.completedFuture(obtainAwsCredentials(config))
       }
+    val identityRequest = ResolveIdentityRequest.builder().build()
     return KmsClientWithRetryInfo(
-      CompletionExceptionTranslatingKmsClient.wrap(
-        TinkAwsKmsClient()
-          .withCredentialsProvider(
-            // TODO(tink-crypto/tink-java-awskms#6): once a release including the fix is
-            // available, pass credentialsProvider directly instead of wrapping it in
-            // AwsCredentialsProviderAdapter.
-            AwsCredentialsProviderAdapter(credentialsProvider)
-          )
-      )
-    )
+      TinkAwsKmsClient().withCredentialsProvider(AwsCredentialsProviderAdapter(credentialsProvider))
+    ) {
+      KmsClientWithRetryInfo.awaitCredentials(credentialsProvider.resolveIdentity(identityRequest))
+    }
   }
 
   companion object {

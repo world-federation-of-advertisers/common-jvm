@@ -17,6 +17,7 @@
 package org.wfanet.measurement.aws.kms
 
 import com.google.common.truth.Truth.assertThat
+import java.nio.file.Files
 import java.security.GeneralSecurityException
 import kotlin.test.assertFailsWith
 import org.junit.Before
@@ -24,6 +25,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 import org.wfanet.measurement.common.crypto.tink.AwsWebIdentityCredentials
+import org.wfanet.measurement.common.crypto.tink.KmsKeyAccessException
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider
 
@@ -80,12 +82,14 @@ class AwsKmsClientFactoryTest {
   }
 
   @Test
-  fun `getKmsClient with invalid config fails on first use`() {
+  fun `getKmsClient with missing token reports a nonretryable credential failure`() {
     val factory = AwsKmsClientFactory()
+    val missingTokenFile = Files.createTempFile("aws-web-identity-", ".token")
+    Files.delete(missingTokenFile)
     val config =
       AwsWebIdentityCredentials(
         roleArn = "arn:aws:iam::123456789012:role/test-role",
-        webIdentityTokenFilePath = "/var/run/secrets/token",
+        webIdentityTokenFilePath = missingTokenFile.toString(),
         roleSessionName = "test-session",
         region = "us-east-1",
       )
@@ -93,6 +97,9 @@ class AwsKmsClientFactoryTest {
     val kmsClient = factory.getKmsClient(config)
     val aead = kmsClient.getAead(AWS_KMS_KEY_URI)
 
-    assertFailsWith<GeneralSecurityException> { aead.encrypt(ByteArray(0), null) }
+    val exception = assertFailsWith<KmsKeyAccessException> { aead.encrypt(ByteArray(0), null) }
+
+    assertThat(exception.isRetryable).isFalse()
+    assertThat(exception.cause).isNotNull()
   }
 }

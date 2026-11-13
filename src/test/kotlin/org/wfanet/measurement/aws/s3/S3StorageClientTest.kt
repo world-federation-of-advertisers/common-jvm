@@ -23,6 +23,7 @@ import org.junit.Rule
 import org.wfanet.measurement.storage.testing.AbstractStorageClientTest
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider
+import software.amazon.awssdk.core.checksums.RequestChecksumCalculation
 import software.amazon.awssdk.core.internal.http.loader.DefaultSdkAsyncHttpClientBuilder
 import software.amazon.awssdk.http.SdkHttpConfigurationOption
 import software.amazon.awssdk.regions.Region
@@ -55,6 +56,8 @@ private fun S3MockRule.createAsyncClient(): S3AsyncClient {
     .region(Region.of("us-east-1"))
     .credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create("foo", "bar")))
     .serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(true).build())
+    // S3Mock does not decode the SDK's optional checksum framing.
+    .requestChecksumCalculation(RequestChecksumCalculation.WHEN_REQUIRED)
     .httpClient(
       DefaultSdkAsyncHttpClientBuilder()
         .buildWithDefaults(

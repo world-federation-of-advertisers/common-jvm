@@ -31,7 +31,6 @@ kt_jvm_library(
         "//imports/java/software/amazon/awssdk/services/regions",
         "//imports/java/software/amazon/awssdk/services/sts",
         "//src/main/kotlin/org/wfanet/measurement/aws:refreshable_aws_credentials_provider",
-        "//src/main/kotlin/org/wfanet/measurement/aws/kms:aws_kms_client_factory",
         "//src/main/kotlin/org/wfanet/measurement/common/crypto/tink",
     ],
 )
@@ -49,7 +48,6 @@ kt_jvm_library(
         "//imports/java/software/amazon/awssdk/services/regions",
         "//imports/java/software/amazon/awssdk/services/sts",
         "//src/main/kotlin/org/wfanet/measurement/aws:refreshable_aws_credentials_provider",
-        "//src/main/kotlin/org/wfanet/measurement/aws/kms:aws_kms_client_factory",
         "//src/main/kotlin/org/wfanet/measurement/common/crypto/tink",
         "//src/main/kotlin/org/wfanet/measurement/gcloud/confidentialspace:confidential_space_token_client",
     ],

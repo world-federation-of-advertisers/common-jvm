@@ -14,13 +14,11 @@
 
 package org.wfanet.measurement.aws.kms
 
-import com.google.crypto.tink.Aead
 import com.google.crypto.tink.KmsClient
 import com.google.crypto.tink.integration.awskms.AwsKmsClient as TinkAwsKmsClient
 import java.nio.file.Paths
 import java.security.GeneralSecurityException
 import java.util.concurrent.CompletableFuture
-import java.util.concurrent.CompletionException
 import org.wfanet.measurement.aws.AwsCredentialsProviderAdapter
 import org.wfanet.measurement.common.crypto.tink.AwsWebIdentityCredentials
 import org.wfanet.measurement.common.crypto.tink.KmsClientFactory
@@ -53,7 +51,7 @@ class AwsKmsClientFactory : KmsClientFactory<AwsWebIdentityCredentials> {
    * environments (e.g., Google Cloud).
    *
    * @param config The AWS web identity configuration.
-   * @return An initialized [KmsClient] whose [Aead] instances do not throw [CompletionException].
+   * @return An initialized [KmsClient].
    * @throws GeneralSecurityException if the client cannot be initialized.
    */
   override fun getKmsClient(config: AwsWebIdentityCredentials): KmsClient {
@@ -108,16 +106,11 @@ class AwsKmsClientFactory : KmsClientFactory<AwsWebIdentityCredentials> {
           }
       }
 
+    val identityRequest = ResolveIdentityRequest.builder().build()
     return KmsClientWithRetryInfo(
-      CompletionExceptionTranslatingKmsClient.wrap(
-        TinkAwsKmsClient()
-          .withCredentialsProvider(
-            // TODO(tink-crypto/tink-java-awskms#6): once a release including the fix is
-            // available, pass credentialsProvider directly instead of wrapping it in
-            // AwsCredentialsProviderAdapter.
-            AwsCredentialsProviderAdapter(credentialsProvider)
-          )
-      )
-    )
+      TinkAwsKmsClient().withCredentialsProvider(AwsCredentialsProviderAdapter(credentialsProvider))
+    ) {
+      KmsClientWithRetryInfo.awaitCredentials(credentialsProvider.resolveIdentity(identityRequest))
+    }
   }
 }
