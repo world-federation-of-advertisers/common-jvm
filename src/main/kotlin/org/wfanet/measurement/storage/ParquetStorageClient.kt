@@ -16,6 +16,7 @@
 
 package org.wfanet.measurement.storage
 
+import com.google.crypto.tink.DeterministicAead
 import com.google.crypto.tink.KmsClient
 import com.google.protobuf.ByteString
 import com.google.protobuf.Timestamp
@@ -89,6 +90,42 @@ data class ParquetEncryptionConfig(
   val keyMapping: Map<String, String> = emptyMap(),
 )
 
+/** Plaintext type of a deterministically encrypted Parquet column. */
+enum class ParquetPlaintextType {
+  STRING,
+  BYTES,
+}
+
+/**
+ * Deterministically encrypts selected logical values while leaving the Parquet container itself
+ * unencrypted and readable by data warehouses.
+ *
+ * Each configured column is physically written as an unannotated Parquet `BINARY` value. The
+ * ciphertext is produced by [deterministicAead] with the UTF-8 column name as additional
+ * authenticated data. A reader configured with the same primitive restores the declared
+ * [ParquetPlaintextType]. A reader without this configuration sees ordinary `BYTES` values, which
+ * lets SQL warehouses scan and equality-join the ciphertext without understanding PME.
+ *
+ * To decrypt with BigQuery, [deterministicAead] must be backed by a Tink keyset using an algorithm
+ * BigQuery supports, such as `DETERMINISTIC_AEAD_AES_SIV_CMAC_256`, and the query must use the same
+ * column-name additional authenticated data.
+ *
+ * This is mutually exclusive with [ParquetEncryptionConfig]. PME encrypts Parquet pages and
+ * metadata, preventing a warehouse without a parquet-mr KMS plugin from scanning the file.
+ *
+ * @param deterministicAead stable Tink primitive shared for the required matching scope.
+ * @param columns column name to its plaintext logical type. Only `STRING` and `BYTES` columns are
+ *   supported because deterministic encryption produces byte ciphertext.
+ */
+data class ParquetDeterministicAeadConfig(
+  val deterministicAead: DeterministicAead,
+  val columns: Map<String, ParquetPlaintextType>,
+) {
+  init {
+    require(columns.isNotEmpty()) { "At least one column must be configured" }
+  }
+}
+
 /**
  * A [StorageClient] backed by a Hadoop [Configuration] that reads and writes parquet blobs.
  *
@@ -150,6 +187,18 @@ data class ParquetEncryptionConfig(
  * error) since it parses the footer directly; set `parquet.encryption.plaintext.footer = true` if
  * that metadata must stay readable without keys. [readRows] works with either footer mode.
  *
+ * ## Warehouse-compatible deterministic column encryption
+ *
+ * Pass [deterministicAeadConfig] to encrypt selected STRING or BYTES values before parquet-mr sees
+ * them. The resulting file is structurally ordinary Parquet: encrypted values are stored as
+ * `BINARY`, while unselected columns and the footer remain readable. This allows warehouses to scan
+ * the file and join on deterministic ciphertext without implementing PME or loading
+ * [ParquetKmsClient].
+ *
+ * This mode leaks equality and frequency for protected values by design and must only be used for
+ * columns that require equality matching. It cannot be combined with PME. Callers are responsible
+ * for loading and protecting the stable Tink keyset used by [deterministicAeadConfig].
+ *
  * @param conf Hadoop configuration selecting the storage backend (and, when [encryptionConfig] is
  *   set, carrying the PME key configuration). When [encryptionConfig] is set the constructor
  *   mutates [conf] to register the KMS bridge, so each [ParquetStorageClient] MUST use its own
@@ -163,6 +212,10 @@ data class ParquetEncryptionConfig(
  * @param compressionCodec compression codec applied to written parquet files (default
  *   [CompressionCodecName.SNAPPY], matching standard parquet tooling). Reads handle any codec
  *   natively regardless of this value.
+ * @param deterministicAeadConfig optional logical column encryption. When supplied, selected values
+ *   are deterministically encrypted before writing and decrypted after reading. Omit this parameter
+ *   when a warehouse should consume the ciphertext directly. This cannot be combined with
+ *   [encryptionConfig].
  */
 class ParquetStorageClient(
   private val conf: Configuration,
@@ -170,9 +223,14 @@ class ParquetStorageClient(
   private val parquetContext: @BlockingExecutor CoroutineContext = Dispatchers.IO,
   encryptionConfig: ParquetEncryptionConfig? = null,
   private val compressionCodec: CompressionCodecName = CompressionCodecName.SNAPPY,
+  private val deterministicAeadConfig: ParquetDeterministicAeadConfig? = null,
 ) : StorageClient {
 
   init {
+    require(encryptionConfig == null || deterministicAeadConfig == null) {
+      "Parquet modular encryption and deterministic column encryption cannot be combined"
+    }
+
     // Wire parquet-mr's native PME to the Tink KMS client. Once registered on
     // `conf`, the ParquetReader/ParquetWriter pick up encryption automatically.
     // TODO(world-federation-of-advertisers/cross-media-measurement#3965): the
@@ -273,7 +331,9 @@ class ParquetStorageClient(
       var expectedKinds: Map<String, ParquetValue.KindCase>? = null
       try {
         content.collect { bytes ->
-          val row = ParquetRow.parseFrom(bytes)
+          val plaintextRow = ParquetRow.parseFrom(bytes)
+          if (writer == null) validateDeterministicColumns(plaintextRow)
+          val row = encryptColumns(plaintextRow)
           if (writer == null) {
             schema = deriveSchema(row)
             expectedKinds = row.columnsMap.mapValues { it.value.kindCase }
@@ -392,18 +452,18 @@ class ParquetStorageClient(
 
     /** Row-proto codec read: one serialized [ParquetRow] per parquet row. */
     override fun read(): Flow<ByteString> = rowFlow { group, decoders ->
-      rowToProto(group, decoders).toByteString()
+      valueMapToRow(decryptColumns(rowToValueMap(group, decoders))).toByteString()
     }
 
     override fun readRows(): Flow<Map<String, ParquetValue>> = rowFlow { group, decoders ->
-      rowToValueMap(group, decoders)
+      decryptColumns(rowToValueMap(group, decoders))
     }
 
     override suspend fun readKeyValueMetadata(): Map<String, String> =
       withContext(parquetContext) { readFooterKeyValueMetadata(path) }
 
     override suspend fun readSchema(): Map<String, ParquetValue.KindCase> =
-      withContext(parquetContext) { readFooterSchema(path) }
+      withContext(parquetContext) { restorePlaintextSchema(readFooterSchema(path)) }
 
     override suspend fun delete() {
       withContext(parquetContext) { fileSystem.delete(path, /* recursive= */ false) }
@@ -580,9 +640,9 @@ class ParquetStorageClient(
     }
   }
 
-  /** Builds a [ParquetRow] proto from a parquet [Group] (the [read] codec path). */
-  private fun rowToProto(group: Group, decoders: List<ColumnDecoder>): ParquetRow = parquetRow {
-    columns.putAll(rowToValueMap(group, decoders))
+  /** Builds a [ParquetRow] proto from decoded values (the [StorageClient.Blob.read] codec path). */
+  private fun valueMapToRow(values: Map<String, ParquetValue>): ParquetRow = parquetRow {
+    columns.putAll(values)
   }
 
   /**
@@ -598,6 +658,97 @@ class ParquetStorageClient(
     for (decoder in decoders) out[decoder.name] = valueToProto(decoder.extract(group))
     return out
   }
+
+  // === Warehouse-compatible deterministic column encryption ===
+
+  /** Fails before opening the writer when a configured column is absent from the file schema. */
+  private fun validateDeterministicColumns(firstRow: ParquetRow) {
+    val config = deterministicAeadConfig ?: return
+    val missingColumns = config.columns.keys - firstRow.columnsMap.keys
+    require(missingColumns.isEmpty()) {
+      "Configured plaintext columns are absent from the first row: $missingColumns"
+    }
+  }
+
+  /** Encrypts configured logical values before schema derivation and parquet encoding. */
+  private fun encryptColumns(row: ParquetRow): ParquetRow {
+    val config = deterministicAeadConfig ?: return row
+    val builder = row.toBuilder()
+    for ((column, plaintextType) in config.columns) {
+      val value = row.columnsMap[column] ?: continue
+      if (value.kindCase == ParquetValue.KindCase.KIND_NOT_SET) continue
+      val plaintext =
+        when (plaintextType) {
+          ParquetPlaintextType.STRING -> {
+            require(value.kindCase == ParquetValue.KindCase.STRING_VALUE) {
+              "Configured plaintext column '$column' has kind ${value.kindCase}; expected " +
+                ParquetValue.KindCase.STRING_VALUE
+            }
+            value.stringValue.toByteArray(Charsets.UTF_8)
+          }
+          ParquetPlaintextType.BYTES -> {
+            require(value.kindCase == ParquetValue.KindCase.BYTES_VALUE) {
+              "Configured plaintext column '$column' has kind ${value.kindCase}; expected " +
+                ParquetValue.KindCase.BYTES_VALUE
+            }
+            value.bytesValue.toByteArray()
+          }
+        }
+      val ciphertext =
+        config.deterministicAead.encryptDeterministically(plaintext, columnAad(column))
+      builder.putColumns(column, parquetValue { bytesValue = ByteString.copyFrom(ciphertext) })
+    }
+    return builder.build()
+  }
+
+  /** Decrypts configured ciphertext values after parquet decoding. */
+  private fun decryptColumns(values: Map<String, ParquetValue>): Map<String, ParquetValue> {
+    val config = deterministicAeadConfig ?: return values
+    val out = LinkedHashMap(values)
+    for ((column, plaintextType) in config.columns) {
+      val value = values[column] ?: continue
+      if (value.kindCase == ParquetValue.KindCase.KIND_NOT_SET) continue
+      check(value.kindCase == ParquetValue.KindCase.BYTES_VALUE) {
+        "Encrypted column '$column' has physical kind ${value.kindCase}; expected " +
+          ParquetValue.KindCase.BYTES_VALUE
+      }
+      val plaintext =
+        config.deterministicAead.decryptDeterministically(
+          value.bytesValue.toByteArray(),
+          columnAad(column),
+        )
+      out[column] =
+        when (plaintextType) {
+          ParquetPlaintextType.STRING ->
+            parquetValue { stringValue = plaintext.toString(Charsets.UTF_8) }
+          ParquetPlaintextType.BYTES -> parquetValue { bytesValue = ByteString.copyFrom(plaintext) }
+        }
+    }
+    return out
+  }
+
+  /** Makes [ParquetBlob.readSchema] describe the values returned after logical decryption. */
+  private fun restorePlaintextSchema(
+    physicalSchema: Map<String, ParquetValue.KindCase>
+  ): Map<String, ParquetValue.KindCase> {
+    val config = deterministicAeadConfig ?: return physicalSchema
+    val out = LinkedHashMap(physicalSchema)
+    for ((column, plaintextType) in config.columns) {
+      val physicalKind = physicalSchema[column] ?: continue
+      check(physicalKind == ParquetValue.KindCase.BYTES_VALUE) {
+        "Encrypted column '$column' has physical kind $physicalKind; expected " +
+          ParquetValue.KindCase.BYTES_VALUE
+      }
+      out[column] =
+        when (plaintextType) {
+          ParquetPlaintextType.STRING -> ParquetValue.KindCase.STRING_VALUE
+          ParquetPlaintextType.BYTES -> ParquetValue.KindCase.BYTES_VALUE
+        }
+    }
+    return out
+  }
+
+  private fun columnAad(column: String): ByteArray = column.toByteArray(Charsets.UTF_8)
 
   // === Write: schema derivation + Group construction ===
 
