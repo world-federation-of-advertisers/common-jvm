@@ -1,0 +1,257 @@
+/*
+ * Copyright 2026 The Cross-Media Measurement Authors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.wfanet.measurement.common.grpc
+
+import com.google.common.truth.Truth.assertThat
+import io.grpc.ManagedChannel
+import io.grpc.ManagedChannelBuilder
+import io.grpc.Status
+import io.grpc.StatusException
+import io.netty.handler.ssl.ClientAuth
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.SynchronousQueue
+import java.util.concurrent.ThreadPoolExecutor
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.logging.Handler
+import java.util.logging.LogRecord
+import java.util.logging.Logger
+import kotlin.coroutines.resume
+import kotlin.test.assertFailsWith
+import kotlinx.coroutines.CancellableContinuation
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.supervisorScope
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeout
+import org.junit.After
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.junit.runners.JUnit4
+import org.wfanet.measurement.common.FakeRequest
+import org.wfanet.measurement.common.FakeResponse
+import org.wfanet.measurement.common.FakeServiceGrpcKt
+import org.wfanet.measurement.common.fakeRequest
+
+/**
+ * Verifies that a rejection on a resumption dispatch -- an RPC that is already active, suspends,
+ * and redispatches -- closes with `INTERNAL`, not the `RESOURCE_EXHAUSTED` used for the initial
+ * dispatch case covered by [CommonServerOverloadTest], since the RPC's handler has already run some
+ * code by this point and may have performed a non-idempotent side effect.
+ */
+@RunWith(JUnit4::class)
+class CommonServerNestedRejectionTest {
+  private val aStartedLatch = CountDownLatch(1)
+  private var aPendingResume: CancellableContinuation<Unit>? = null
+  private val bStartedLatch = CountDownLatch(1)
+  private val bReleaseLatch = CountDownLatch(1)
+  private val cStartedLatch = CountDownLatch(1)
+  private var cPendingResume: CancellableContinuation<Unit>? = null
+  private val cFinallyRanLatch = CountDownLatch(1)
+  private val cContinuedAfterSuspend = AtomicBoolean(false)
+
+  private val executor =
+    ThreadPoolExecutor(
+      0,
+      1,
+      60L,
+      TimeUnit.SECONDS,
+      SynchronousQueue(),
+      Executors.defaultThreadFactory(),
+    )
+
+  private val service =
+    object : FakeServiceGrpcKt.FakeServiceCoroutineImplBase(executor.asCoroutineDispatcher()) {
+      override suspend fun fake(requests: Flow<FakeRequest>): FakeResponse {
+        val request = requests.first()
+        when (request.number) {
+          1 -> {
+            // Call A: initial dispatch succeeds, then suspends -- releasing the sole thread --
+            // and must be redispatched through the same executor to resume. The continuation is
+            // captured, and the latch only counted down, once this suspension is genuinely
+            // committed -- unlike a CompletableDeferred the test completes, there's no window
+            // where resuming races ahead of the suspend actually taking effect and turns into a
+            // same-thread no-op instead of a real redispatch.
+            suspendCancellableCoroutine<Unit> { cont ->
+              aPendingResume = cont
+              aStartedLatch.countDown()
+            }
+          }
+          2 -> {
+            // Call B: occupies the (now-free) sole thread until released, so it's still running
+            // when A's (or C's) resumption dispatch is triggered.
+            bStartedLatch.countDown()
+            bReleaseLatch.await()
+          }
+          3 -> {
+            // Call C: same setup as call A, but wrapped in try/finally to prove that a rejected
+            // resumption cancels the coroutine at its suspension point -- skipping the code that
+            // would otherwise follow -- rather than letting it continue, while still unwinding
+            // through finally so cleanup runs.
+            try {
+              suspendCancellableCoroutine<Unit> { cont ->
+                cPendingResume = cont
+                cStartedLatch.countDown()
+              }
+              cContinuedAfterSuspend.set(true)
+            } finally {
+              cFinallyRanLatch.countDown()
+            }
+          }
+        }
+        return FakeResponse.getDefaultInstance()
+      }
+    }
+
+  private val server: CommonServer =
+    CommonServer.fromParameters(
+        verboseGrpcLogging = false,
+        certs = null,
+        clientAuth = ClientAuth.NONE,
+        nameForLogging = "CommonServerNestedRejectionTest",
+        services = listOf(service.bindService()),
+        serviceCoroutineExecutor = executor,
+      )
+      .start()
+
+  private val channel: ManagedChannel =
+    ManagedChannelBuilder.forAddress("localhost", server.port).usePlaintext().build()
+
+  @After
+  fun tearDown() {
+    bReleaseLatch.countDown()
+    channel.shutdownNow()
+    server.close()
+  }
+
+  @Test
+  fun `rejected resumption dispatch closes with INTERNAL not RESOURCE_EXHAUSTED`() = runBlocking {
+    val stub = FakeServiceGrpcKt.FakeServiceCoroutineStub(channel)
+
+    // ErrorLoggingServerInterceptor only logs UNKNOWN/INTERNAL closes -- capturing its output
+    // verifies that ExecutorRejectionServerInterceptor's own close actually reaches it, rather
+    // than bypassing it via interceptor ordering.
+    val errorLoggingRecords = mutableListOf<LogRecord>()
+    val errorLoggingHandler =
+      object : Handler() {
+        override fun publish(record: LogRecord) {
+          errorLoggingRecords.add(record)
+        }
+
+        override fun flush() {}
+
+        override fun close() {}
+      }
+    val errorLoggingLogger = Logger.getLogger(ErrorLoggingServerInterceptor::class.java.name)
+    errorLoggingLogger.addHandler(errorLoggingHandler)
+
+    supervisorScope {
+      val aDeferred =
+        async(Dispatchers.IO) {
+          stub.withDeadlineAfter(30, TimeUnit.SECONDS).fake(flowOf(fakeRequest { number = 1 }))
+        }
+      assertThat(aStartedLatch.await(5, TimeUnit.SECONDS)).isTrue()
+
+      val bJob =
+        launch(Dispatchers.IO) {
+          runCatching {
+            stub.withDeadlineAfter(30, TimeUnit.SECONDS).fake(flowOf(fakeRequest { number = 2 }))
+          }
+        }
+      assertThat(bStartedLatch.await(5, TimeUnit.SECONDS)).isTrue()
+
+      // B has deterministically acquired the sole worker thread -- only now trigger A's
+      // resumption dispatch, guaranteeing it lands while B still holds the thread, with no race
+      // on timing. A tight withTimeout paired with a much longer RPC deadline distinguishes a
+      // prompt clean failure from a hang: a hang would blow through withTimeout and throw
+      // TimeoutCancellationException instead of StatusException, failing this assertion.
+      aPendingResume!!.resume(Unit)
+      val thrown = assertFailsWith<StatusException> { withTimeout(3_000) { aDeferred.await() } }
+      assertThat(thrown.status.code).isEqualTo(Status.Code.INTERNAL)
+      assertThat(errorLoggingRecords.map { it.message }.any { it.contains("INTERNAL") }).isTrue()
+      errorLoggingLogger.removeHandler(errorLoggingHandler)
+
+      bReleaseLatch.countDown()
+      bJob.join()
+    }
+  }
+
+  @Test
+  fun `resumption rejected by shutdown closes with INTERNAL not UNAVAILABLE`() = runBlocking {
+    val stub = FakeServiceGrpcKt.FakeServiceCoroutineStub(channel)
+
+    supervisorScope {
+      val aDeferred =
+        async(Dispatchers.IO) {
+          stub.withDeadlineAfter(30, TimeUnit.SECONDS).fake(flowOf(fakeRequest { number = 1 }))
+        }
+      assertThat(aStartedLatch.await(5, TimeUnit.SECONDS)).isTrue()
+
+      // The RPC has already started (and, in a real handler, could have already performed a
+      // non-idempotent side effect) before the executor shuts down out from under its
+      // resumption -- this must not be conflated with a clean pre-start shutdown, which is safe
+      // to call UNAVAILABLE.
+      executor.shutdown()
+      aPendingResume!!.resume(Unit)
+
+      val thrown = assertFailsWith<StatusException> { withTimeout(3_000) { aDeferred.await() } }
+      assertThat(thrown.status.code).isEqualTo(Status.Code.INTERNAL)
+    }
+  }
+
+  @Test
+  fun `rejected resumption cancels the coroutine at suspension instead of continuing, but still runs cleanup`() =
+    runBlocking {
+      val stub = FakeServiceGrpcKt.FakeServiceCoroutineStub(channel)
+
+      supervisorScope {
+        val cDeferred =
+          async(Dispatchers.IO) {
+            stub.withDeadlineAfter(30, TimeUnit.SECONDS).fake(flowOf(fakeRequest { number = 3 }))
+          }
+        assertThat(cStartedLatch.await(5, TimeUnit.SECONDS)).isTrue()
+
+        val bJob =
+          launch(Dispatchers.IO) {
+            runCatching {
+              stub.withDeadlineAfter(30, TimeUnit.SECONDS).fake(flowOf(fakeRequest { number = 2 }))
+            }
+          }
+        assertThat(bStartedLatch.await(5, TimeUnit.SECONDS)).isTrue()
+
+        cPendingResume!!.resume(Unit)
+        val thrown = assertFailsWith<StatusException> { withTimeout(3_000) { cDeferred.await() } }
+        assertThat(thrown.status.code).isEqualTo(Status.Code.INTERNAL)
+
+        // The redispatch to Dispatchers.IO exists so cancellation can unwind the coroutine's
+        // stack -- including a finally block -- not so it can keep running past the suspension
+        // point it was rejected while resuming from.
+        assertThat(cFinallyRanLatch.await(5, TimeUnit.SECONDS)).isTrue()
+        assertThat(cContinuedAfterSuspend.get()).isFalse()
+
+        bReleaseLatch.countDown()
+        bJob.join()
+      }
+    }
+}
