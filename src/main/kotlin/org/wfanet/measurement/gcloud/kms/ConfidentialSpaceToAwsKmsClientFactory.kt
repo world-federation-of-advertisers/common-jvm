@@ -73,7 +73,11 @@ class ConfidentialSpaceToAwsKmsClientFactory(
         obtainAwsCredentials(config).toFuture()
       }
     return TinkAwsKmsClient()
-      .withCredentialsProvider(AwsCredentialsProviderAdapter(credentialsProvider))
+      .withCredentialsProvider(
+        // TODO(tink-crypto/tink-java-awskms#6): remove this adapter once the
+        // IdentityProvider overload is available in a release.
+        AwsCredentialsProviderAdapter(credentialsProvider)
+      )
   }
 
   private fun obtainAwsCredentials(
