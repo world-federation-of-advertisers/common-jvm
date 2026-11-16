@@ -19,7 +19,6 @@ import com.google.crypto.tink.integration.awskms.AwsKmsClient as TinkAwsKmsClien
 import java.nio.file.Paths
 import java.security.GeneralSecurityException
 import java.util.concurrent.CompletableFuture
-import org.wfanet.measurement.aws.AwsCredentialsProviderAdapter
 import org.wfanet.measurement.common.crypto.tink.AwsWebIdentityCredentials
 import org.wfanet.measurement.common.crypto.tink.KmsClientFactory
 import software.amazon.awssdk.auth.credentials.AnonymousCredentialsProvider
@@ -27,6 +26,7 @@ import software.amazon.awssdk.identity.spi.AwsCredentialsIdentity
 import software.amazon.awssdk.identity.spi.IdentityProvider
 import software.amazon.awssdk.identity.spi.ResolveIdentityRequest
 import software.amazon.awssdk.regions.Region
+import software.amazon.awssdk.services.kms.KmsClient as SdkKmsClient
 import software.amazon.awssdk.services.sts.StsClient
 import software.amazon.awssdk.services.sts.auth.StsWebIdentityTokenFileCredentialsProvider
 
@@ -90,7 +90,18 @@ class AwsKmsClientFactory : KmsClientFactory<AwsWebIdentityCredentials> {
           }
       }
 
-    return TinkAwsKmsClient()
-      .withCredentialsProvider(AwsCredentialsProviderAdapter(credentialsProvider))
+    val kmsClient =
+      try {
+        SdkKmsClient.builder()
+          .apply {
+            region(Region.of(config.region))
+            credentialsProvider(credentialsProvider)
+          }
+          .build()
+      } catch (e: Exception) {
+        throw GeneralSecurityException("Failed to create AWS KMS client", e)
+      }
+
+    return TinkAwsKmsClient().withAwsKms(kmsClient)
   }
 }
