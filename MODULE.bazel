@@ -267,6 +267,8 @@ maven.install(
         # AWS.
         "software.amazon.awssdk:auth",
         "software.amazon.awssdk:sdk-core",
+        "software.amazon.awssdk:aws-core",
+        "software.amazon.awssdk:http-client-spi",
         "software.amazon.awssdk:identity-spi",
         "software.amazon.awssdk:regions",
         "software.amazon.awssdk:s3",

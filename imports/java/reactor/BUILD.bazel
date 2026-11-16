@@ -4,3 +4,8 @@ alias(
     name = "core",
     actual = "@maven//:io_projectreactor_reactor_core",
 )
+
+alias(
+    name = "test",
+    actual = "@maven//:io_projectreactor_reactor_test",
+)

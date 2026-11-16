@@ -33,6 +33,8 @@ kt_jvm_library(
     visibility = ["//visibility:private"],
     deps = [
         "//imports/java/com/google/api/client/http",
+        "//imports/java/com/google/auth:credentials",
+        "//imports/java/com/google/auth:oauth2_http",
         "//imports/java/com/google/crypto/tink",
         "//imports/java/com/google/crypto/tink:awskms",
         "//imports/java/com/google/gson",
@@ -46,7 +48,5 @@ kt_jvm_library(
         "//src/main/kotlin/org/wfanet/measurement/common",
         "//src/main/kotlin/org/wfanet/measurement/common/crypto/tink",
         "//src/main/kotlin/org/wfanet/measurement/gcloud/confidentialspace:confidential_space_token_client",
-        "@maven//:com_google_auth_google_auth_library_credentials",
-        "@maven//:com_google_auth_google_auth_library_oauth2_http",
     ],
 )

@@ -18,11 +18,10 @@ import com.google.api.client.http.HttpHeaders
 import com.google.api.client.http.HttpResponseException
 import com.google.common.truth.Truth.assertThat
 import com.google.crypto.tink.Aead
-import com.sun.net.httpserver.HttpServer
 import java.io.IOException
-import java.net.InetSocketAddress
 import java.security.GeneralSecurityException
 import java.time.Duration
+import java.util.Base64
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.ExecutionException
@@ -39,6 +38,8 @@ import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 import org.wfanet.measurement.common.crypto.tink.ConfidentialSpaceToAwsWifCredentials
 import org.wfanet.measurement.gcloud.confidentialspace.AttestationTokenProvider
+import org.wfanet.measurement.gcloud.confidentialspace.AttestationTokenRequest
+import org.wfanet.measurement.gcloud.confidentialspace.ConfidentialSpaceTokenType
 import reactor.test.scheduler.VirtualTimeScheduler
 
 /**
@@ -67,47 +68,105 @@ class ConfidentialSpaceToAwsKmsClientFactoryTest {
   }
 
   @Test
-  fun `encrypt retries STS without fetching the attestation token again`() {
-    val stsRequests = AtomicInteger()
-    val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
-    server.createContext("/") { exchange ->
-      val first = stsRequests.incrementAndGet() == 1
-      val code = if (first) "ServiceUnavailable" else "AccessDenied"
-      val response =
-        """
-        <ErrorResponse xmlns="https://sts.amazonaws.com/doc/2011-06-15/">
-          <Error><Type>Sender</Type><Code>$code</Code><Message>test failure</Message></Error>
-          <RequestId>test-request</RequestId>
-        </ErrorResponse>
-      """
-          .trimIndent()
-          .toByteArray()
-      exchange.responseHeaders.set("Content-Type", "text/xml")
-      exchange.sendResponseHeaders(if (first) 503 else 403, response.size.toLong())
-      exchange.responseBody.use { it.write(response) }
-      exchange.close()
-    }
-    server.start()
-    val properties = listOf("aws.endpointUrl", "aws.maxAttempts")
-    val originalValues = properties.associateWith { System.getProperty(it) }
-    try {
-      System.setProperty("aws.endpointUrl", "http://127.0.0.1:${server.address.port}")
-      System.setProperty("aws.maxAttempts", "1")
+  fun `encrypt recovers from STS failure without fetching the token again`() {
+    FederationTestServer().use { server ->
+      server.stsResponses.add(FederationTestServer.failure(503, "ServiceUnavailable", null))
       val encryption =
         encrypt(aead { CompletableFuture.completedFuture("header.payload.signature") })
-      check(firstRequest.await(10, TimeUnit.SECONDS))
-      awaitScheduledTasks(2)
-      virtualTime.advanceTimeBy(Duration.ofSeconds(20))
-      assertSecurityFailure(encryption)
-      assertThat(stsRequests.get()).isEqualTo(2)
+      awaitScheduledTasks(3)
+      virtualTime.advanceTimeBy(Duration.ofSeconds(2))
+      assertThat(encryption.get(10, TimeUnit.SECONDS)).isEqualTo("ciphertext".toByteArray())
+      assertThat(server.stsRequests).hasSize(2)
+      assertThat(server.stsRequests[0]).isEqualTo(server.stsRequests[1])
+      assertThat(server.kmsRequests).hasSize(1)
       assertThat(requests.get()).isEqualTo(1)
-    } finally {
-      server.stop(0)
-      for ((name, originalValue) in originalValues) {
-        if (originalValue == null) System.clearProperty(name)
-        else System.setProperty(name, originalValue)
-      }
     }
+  }
+
+  @Test
+  fun `encrypt respects the STS Retry-After header`() {
+    FederationTestServer().use { server ->
+      server.stsResponses.add(FederationTestServer.failure(503, "ServiceUnavailable", "75"))
+      val encryption =
+        encrypt(aead { CompletableFuture.completedFuture("header.payload.signature") })
+      awaitScheduledTasks(3)
+      virtualTime.advanceTimeBy(Duration.ofSeconds(74))
+      assertThat(server.stsRequests).hasSize(1)
+      assertThat(encryption.isDone).isFalse()
+      virtualTime.advanceTimeBy(Duration.ofSeconds(2))
+      assertThat(encryption.get(10, TimeUnit.SECONDS)).isEqualTo("ciphertext".toByteArray())
+      assertThat(server.stsRequests).hasSize(2)
+      assertThat(requests.get()).isEqualTo(1)
+    }
+  }
+
+  @Test
+  fun `encrypt does not retry a permanent STS failure`() {
+    FederationTestServer().use { server ->
+      server.stsResponses.add(FederationTestServer.failure(403, "AccessDenied", null))
+      assertSecurityFailure(
+        encrypt(aead { CompletableFuture.completedFuture("header.payload.signature") })
+      )
+      virtualTime.advanceTimeBy(Duration.ofMinutes(3))
+      assertThat(server.stsRequests).hasSize(1)
+      assertThat(server.kmsRequests).isEmpty()
+      assertThat(requests.get()).isEqualTo(1)
+    }
+  }
+
+  @Test
+  fun `encrypt discovers signing keys once before retrying STS`() {
+    FederationTestServer().use { server ->
+      server.stsResponses.add(FederationTestServer.failure(503, "ServiceUnavailable", null))
+      val tokenRequests = java.util.concurrent.CopyOnWriteArrayList<AttestationTokenRequest>()
+      val oidcPayload =
+        """{"submods":{"container":{"image_signatures":[{"key_id":"signing-key"}]}}}"""
+      val oidcToken =
+        "header." +
+          Base64.getUrlEncoder().withoutPadding().encodeToString(oidcPayload.toByteArray()) +
+          ".signature"
+      val provider = AttestationTokenProvider { request ->
+        tokenRequests.add(request)
+        CompletableFuture.completedFuture(
+          if (request.tokenType == ConfidentialSpaceTokenType.OIDC) oidcToken else "aws-token"
+        )
+      }
+      val encryption =
+        encrypt(
+          ConfidentialSpaceToAwsKmsClientFactory(tokenProvider = provider)
+            .getKmsClient(config(emptyList()))
+            .getAead(KEY_URI)
+        )
+      awaitScheduledTasks(3)
+      virtualTime.advanceTimeBy(Duration.ofSeconds(2))
+      assertThat(encryption.get(10, TimeUnit.SECONDS)).isEqualTo("ciphertext".toByteArray())
+      assertThat(tokenRequests.map { it.tokenType })
+        .containsExactly(
+          ConfidentialSpaceTokenType.OIDC,
+          ConfidentialSpaceTokenType.AWS_PRINCIPAL_TAGS,
+        )
+        .inOrder()
+      assertThat(tokenRequests[1].containerImageSignatureKeyIds).containsExactly("signing-key")
+      assertThat(server.stsRequests).hasSize(2)
+    }
+  }
+
+  @Test
+  fun `encrypt leaves signature-discovery failures to the token provider`() {
+    val calls = AtomicInteger()
+    val provider = AttestationTokenProvider {
+      calls.incrementAndGet()
+      httpFailure(503)
+    }
+    val encryption =
+      encrypt(
+        ConfidentialSpaceToAwsKmsClientFactory(tokenProvider = provider)
+          .getKmsClient(config(emptyList()))
+          .getAead(KEY_URI)
+      )
+    assertSecurityFailure(encryption)
+    virtualTime.advanceTimeBy(Duration.ofMinutes(3))
+    assertThat(calls.get()).isEqualTo(1)
   }
 
   @Test
@@ -162,18 +221,19 @@ class ConfidentialSpaceToAwsKmsClientFactoryTest {
       firstRequest.countDown()
       token(attempt)
     }
-    val config =
-      ConfidentialSpaceToAwsWifCredentials(
-        roleArn = "arn:aws:iam::123456789012:role/test-role",
-        roleSessionName = "test-session",
-        region = "us-east-1",
-        audience = "https://example.com",
-        containerImageSignatureKeyIds = listOf("signing-key"),
-      )
     return ConfidentialSpaceToAwsKmsClientFactory(tokenProvider = provider)
-      .getKmsClient(config)
-      .getAead("aws-kms://arn:aws:kms:us-east-1:123456789012:key/test-key")
+      .getKmsClient(config(listOf("signing-key")))
+      .getAead(KEY_URI)
   }
+
+  private fun config(signatureKeyIds: List<String>): ConfidentialSpaceToAwsWifCredentials =
+    ConfidentialSpaceToAwsWifCredentials(
+      roleArn = "arn:aws:iam::123456789012:role/test-role",
+      roleSessionName = "test-session",
+      region = "us-east-1",
+      audience = "https://example.com",
+      containerImageSignatureKeyIds = signatureKeyIds,
+    )
 
   private fun httpFailure(status: Int): CompletableFuture<String> =
     CompletableFuture.failedFuture(
@@ -190,9 +250,15 @@ class ConfidentialSpaceToAwsKmsClientFactoryTest {
 
   private fun awaitScheduledTasks(count: Long) {
     val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10)
+    virtualTime.advanceTimeBy(Duration.ZERO)
     while (virtualTime.scheduledTaskCount < count) {
+      virtualTime.advanceTimeBy(Duration.ZERO)
       check(System.nanoTime() < deadline) { "Credential operation did not schedule its timer" }
       Thread.sleep(1)
     }
+  }
+
+  companion object {
+    private const val KEY_URI = "aws-kms://arn:aws:kms:us-east-1:123456789012:key/test-key"
   }
 }

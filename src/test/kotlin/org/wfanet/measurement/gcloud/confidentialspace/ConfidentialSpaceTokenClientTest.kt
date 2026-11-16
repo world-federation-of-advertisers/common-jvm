@@ -569,6 +569,40 @@ class ConfidentialSpaceTokenClientTest {
     assertThat(observed.await()).isInstanceOf(CancellationException::class.java)
   }
 
+  @Test
+  fun `getToken cancellation during quota backoff prevents another request`() {
+    withVirtualTime { virtualTime ->
+      startServer("HTTP/1.1 429 Too Many Requests\r\nContent-Length: 5\r\n\r\nquota")
+      val future = clientForServer().getToken(awsPrincipalTagsRequest())
+      awaitRetryTimer(virtualTime, 3)
+      future.cancel(false)
+      virtualTime.advanceTimeBy(Duration.ofMinutes(3))
+      assertThat(future.isCancelled).isTrue()
+      assertThat(requestCount.get()).isEqualTo(1)
+    }
+  }
+
+  @Test
+  fun `getToken does not retry an individual request timeout`() {
+    withVirtualTime { virtualTime ->
+      startSilentServer()
+      val future = clientForServer().getToken(awsPrincipalTagsRequest())
+      val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10)
+      while (!requestReceived.isCompleted) {
+        check(System.nanoTime() < deadline) { "Token request was not received" }
+        Thread.sleep(1)
+      }
+      virtualTime.advanceTimeBy(Duration.ofSeconds(10))
+      val failure =
+        assertFailsWith<java.util.concurrent.ExecutionException> {
+          future.get(10, TimeUnit.SECONDS)
+        }
+      assertThat(failure.cause).isInstanceOf(IOException::class.java)
+      virtualTime.advanceTimeBy(Duration.ofMinutes(3))
+      assertThat(requestCount.get()).isEqualTo(1)
+    }
+  }
+
   private fun withVirtualTime(action: (VirtualTimeScheduler) -> Unit) {
     val virtualTime = VirtualTimeScheduler.getOrSet()
     try {
