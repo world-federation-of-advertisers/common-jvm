@@ -11,5 +11,6 @@ kt_jvm_test(
         "//imports/kotlin/kotlin/test",
         "//imports/kotlin/kotlinx/coroutines:core",
         "//src/main/kotlin/org/wfanet/measurement/gcloud/confidentialspace:confidential_space_token_client",
+        "@maven//:io_projectreactor_reactor_test",
     ],
 )

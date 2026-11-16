@@ -27,6 +27,9 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.time.Duration
+import java.time.ZoneOffset
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
 import java.util.Base64
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -42,6 +45,7 @@ import org.junit.After
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
+import reactor.test.scheduler.VirtualTimeScheduler
 
 /**
  * Tests for [ConfidentialSpaceTokenClient] against a Unix domain socket server that replies with
@@ -55,6 +59,7 @@ class ConfidentialSpaceTokenClientTest {
   private lateinit var socketPath: Path
   @Volatile private var capturedRequest: String = ""
   private val acceptCount = AtomicInteger()
+  private val requestCount = AtomicInteger()
   private val idle = CountDownLatch(1)
   private val requestReceived = CompletableDeferred<Unit>()
 
@@ -136,6 +141,7 @@ class ConfidentialSpaceTokenClientTest {
     while (true) {
       val headerEnd = received.indexOf(HEADER_TERMINATOR)
       if (headerEnd >= 0 && isBodyComplete(received, headerEnd)) {
+        requestCount.incrementAndGet()
         return received.toString()
       }
       buffer.clear()
@@ -255,17 +261,101 @@ class ConfidentialSpaceTokenClientTest {
   }
 
   @Test
-  fun `getToken preserves quota status and recovers on the next request`(): Unit = runBlocking {
-    val token = "header.payload.signature"
-    startServer(
-      "HTTP/1.1 429 Too Many Requests\r\nContent-Length: 5\r\n\r\nquota",
-      "HTTP/1.1 200 OK\r\nContent-Length: ${token.length}\r\nConnection: close\r\n\r\n$token",
-    )
-    val client = clientForServer()
-    val failure =
-      assertFailsWith<HttpResponseException> { client.getToken(awsPrincipalTagsRequest()).await() }
-    assertThat(failure.statusCode).isEqualTo(429)
-    assertThat(client.getToken(awsPrincipalTagsRequest()).await()).isEqualTo(token)
+  fun `getToken retries quota failures within the provider`() {
+    withVirtualTime { virtualTime ->
+      val token = "header.payload.signature"
+      startServer(
+        "HTTP/1.1 429 Too Many Requests\r\nContent-Length: 5\r\n\r\nquota",
+        tokenResponse(token),
+      )
+      val future = clientForServer().getToken(awsPrincipalTagsRequest())
+      awaitRetryTimer(virtualTime, 3)
+      virtualTime.advanceTimeBy(Duration.ofSeconds(59))
+      assertThat(requestCount.get()).isEqualTo(1)
+      assertThat(future.isDone).isFalse()
+      virtualTime.advanceTimeBy(Duration.ofSeconds(2))
+      assertThat(future.get(10, TimeUnit.SECONDS)).isEqualTo(token)
+      assertThat(requestCount.get()).isEqualTo(2)
+    }
+  }
+
+  @Test
+  fun `getToken honors Retry-After seconds`() {
+    withVirtualTime { virtualTime ->
+      val token = "header.payload.signature"
+      startServer(
+        "HTTP/1.1 503 Service Unavailable\r\nRetry-After: 75\r\nContent-Length: 5\r\n\r\nerror",
+        tokenResponse(token),
+      )
+      val future = clientForServer().getToken(awsPrincipalTagsRequest())
+      awaitRetryTimer(virtualTime, 3)
+      virtualTime.advanceTimeBy(Duration.ofSeconds(60))
+      assertThat(requestCount.get()).isEqualTo(1)
+      virtualTime.advanceTimeBy(Duration.ofSeconds(20))
+      assertThat(future.get(10, TimeUnit.SECONDS)).isEqualTo(token)
+      assertThat(requestCount.get()).isEqualTo(2)
+    }
+  }
+
+  @Test
+  fun `getToken honors a Retry-After HTTP date`() {
+    withVirtualTime { virtualTime ->
+      val retryAfter =
+        DateTimeFormatter.RFC_1123_DATE_TIME.format(
+          ZonedDateTime.now(ZoneOffset.UTC).plusSeconds(90)
+        )
+      val token = "header.payload.signature"
+      startServer(
+        "HTTP/1.1 503 Service Unavailable\r\nRetry-After: $retryAfter\r\nContent-Length: 5\r\n\r\nerror",
+        tokenResponse(token),
+      )
+      val future = clientForServer().getToken(awsPrincipalTagsRequest())
+      awaitRetryTimer(virtualTime, 3)
+      virtualTime.advanceTimeBy(Duration.ofSeconds(80))
+      assertThat(requestCount.get()).isEqualTo(1)
+      virtualTime.advanceTimeBy(Duration.ofSeconds(12))
+      assertThat(future.get(10, TimeUnit.SECONDS)).isEqualTo(token)
+      assertThat(requestCount.get()).isEqualTo(2)
+    }
+  }
+
+  @Test
+  fun `getToken bounds service failures to three retries`() {
+    withVirtualTime { virtualTime ->
+      val error =
+        "HTTP/1.1 503 Service Unavailable\r\nRetry-After: invalid\r\nContent-Length: 5\r\n\r\nerror"
+      startServer(error, error, error, error)
+      val future = clientForServer().getToken(awsPrincipalTagsRequest())
+      for (timers in listOf(3L, 5L, 7L)) {
+        awaitRetryTimer(virtualTime, timers)
+        virtualTime.advanceTimeBy(Duration.ofSeconds(10))
+      }
+      val failure =
+        assertFailsWith<java.util.concurrent.ExecutionException> {
+          future.get(10, TimeUnit.SECONDS)
+        }
+      assertThat(failure.cause).isInstanceOf(HttpResponseException::class.java)
+      assertThat(requestCount.get()).isEqualTo(4)
+    }
+  }
+
+  @Test
+  fun `getToken bounds a long Retry-After by the total fetch deadline`() {
+    withVirtualTime { virtualTime ->
+      startServer(
+        "HTTP/1.1 503 Service Unavailable\r\nRetry-After: 600\r\nContent-Length: 5\r\n\r\nerror"
+      )
+      val future = clientForServer().getToken(awsPrincipalTagsRequest())
+      awaitRetryTimer(virtualTime, 3)
+      virtualTime.advanceTimeBy(Duration.ofMinutes(2))
+      val failure =
+        assertFailsWith<java.util.concurrent.ExecutionException> {
+          future.get(10, TimeUnit.SECONDS)
+        }
+      assertThat(failure.cause).isInstanceOf(IOException::class.java)
+      virtualTime.advanceTimeBy(Duration.ofMinutes(10))
+      assertThat(requestCount.get()).isEqualTo(1)
+    }
   }
 
   @Test
@@ -477,6 +567,27 @@ class ConfidentialSpaceTokenClientTest {
     job.cancel()
 
     assertThat(observed.await()).isInstanceOf(CancellationException::class.java)
+  }
+
+  private fun withVirtualTime(action: (VirtualTimeScheduler) -> Unit) {
+    val virtualTime = VirtualTimeScheduler.getOrSet()
+    try {
+      action(virtualTime)
+    } finally {
+      virtualTime.advanceTimeBy(Duration.ofMinutes(3))
+      VirtualTimeScheduler.reset()
+    }
+  }
+
+  private fun tokenResponse(token: String): String =
+    "HTTP/1.1 200 OK\r\nContent-Length: ${token.length}\r\nConnection: close\r\n\r\n$token"
+
+  private fun awaitRetryTimer(virtualTime: VirtualTimeScheduler, count: Long) {
+    val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10)
+    while (virtualTime.scheduledTaskCount < count) {
+      check(System.nanoTime() < deadline) { "Token operation did not schedule its retry" }
+      Thread.sleep(1)
+    }
   }
 
   companion object {

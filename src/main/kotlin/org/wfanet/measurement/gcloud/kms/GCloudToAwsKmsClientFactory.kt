@@ -14,8 +14,6 @@
 
 package org.wfanet.measurement.gcloud.kms
 
-import com.google.api.client.http.HttpResponseException
-import com.google.auth.Retryable
 import com.google.auth.oauth2.GoogleCredentials
 import com.google.auth.oauth2.IdTokenCredentials
 import com.google.auth.oauth2.ImpersonatedCredentials
@@ -26,7 +24,6 @@ import com.google.gson.JsonObject
 import java.security.GeneralSecurityException
 import java.time.Clock
 import java.time.Duration
-import java.util.concurrent.ThreadLocalRandom
 import org.wfanet.measurement.aws.AwsCredentialsProviderAdapter
 import org.wfanet.measurement.aws.RefreshableAwsCredentialsIdentityProvider
 import org.wfanet.measurement.aws.TimeBoundCredentials
@@ -34,13 +31,11 @@ import org.wfanet.measurement.common.crypto.tink.GCloudToAwsWifCredentials
 import org.wfanet.measurement.common.crypto.tink.KmsClientFactory
 import reactor.core.publisher.Mono
 import reactor.core.scheduler.Schedulers
-import reactor.util.retry.Retry
 import software.amazon.awssdk.auth.credentials.AnonymousCredentialsProvider
 import software.amazon.awssdk.auth.credentials.AwsSessionCredentials
 import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.sts.StsClient
 import software.amazon.awssdk.services.sts.model.AssumeRoleWithWebIdentityRequest
-import software.amazon.awssdk.services.sts.model.StsException
 
 /**
  * A [KmsClientFactory] for accessing AWS KMS from a Google Cloud Confidential Space workload.
@@ -76,7 +71,7 @@ class GCloudToAwsKmsClientFactory(
   override fun getKmsClient(config: GCloudToAwsWifCredentials): KmsClient {
     val credentialsProvider =
       RefreshableAwsCredentialsIdentityProvider(refreshMargin = refreshMargin, clock = clock) {
-        obtainAwsCredentials(config).timeout(CREDENTIAL_REFRESH_TIMEOUT).toFuture()
+        obtainAwsCredentials(config).timeout(CredentialRetry.REFRESH_TIMEOUT).toFuture()
       }
     return TinkAwsKmsClient()
       .withCredentialsProvider(
@@ -87,9 +82,6 @@ class GCloudToAwsKmsClientFactory(
   }
 
   companion object {
-    private const val MAX_CREDENTIAL_RETRIES = 3L
-    private val CREDENTIAL_REFRESH_TIMEOUT = Duration.ofMinutes(2)
-    private val QUOTA_BACKOFF = Duration.ofMinutes(1)
 
     private val DEFAULT_REFRESH_MARGIN: Duration = Duration.ofMinutes(15)
 
@@ -132,12 +124,12 @@ class GCloudToAwsKmsClientFactory(
     ): Mono<TimeBoundCredentials> =
       Mono.fromCallable { googleIdToken(config) }
         .subscribeOn(Schedulers.boundedElastic())
-        .retryWhen(credentialRetry())
+        .retryWhen(CredentialRetry.create())
         .onErrorMap { e -> GeneralSecurityException("Failed to obtain Google Cloud ID token", e) }
         .flatMap { idToken ->
           Mono.fromCallable { exchangeForAwsCredentials(config, idToken) }
             .subscribeOn(Schedulers.boundedElastic())
-            .retryWhen(credentialRetry())
+            .retryWhen(CredentialRetry.create())
             .onErrorMap { e ->
               GeneralSecurityException("AWS STS AssumeRoleWithWebIdentity failed", e)
             }
@@ -208,43 +200,5 @@ class GCloudToAwsKmsClientFactory(
         expiration = awsCredentials.expiration(),
       )
     }
-
-    /** Retries only failures with public retry hints; quota backoff covers a full minute. */
-    private fun credentialRetry(): Retry =
-      Retry.from { signals ->
-        signals.concatMap { signal ->
-          val failure = signal.failure()
-          val retryable =
-            when (failure) {
-              is HttpResponseException -> isRetryableHttpStatus(failure.statusCode)
-              is StsException ->
-                failure.isThrottlingException || isRetryableHttpStatus(failure.statusCode())
-              is Retryable -> failure.isRetryable
-              else -> false
-            }
-          if (!retryable || signal.totalRetries() >= MAX_CREDENTIAL_RETRIES) {
-            Mono.error<Long>(failure)
-          } else {
-            val quotaFailure =
-              (failure is HttpResponseException && failure.statusCode == 429) ||
-                (failure is StsException && failure.isThrottlingException)
-            val delay =
-              if (quotaFailure) QUOTA_BACKOFF
-              else Duration.ofSeconds(1L shl signal.totalRetries().toInt())
-            Mono.delay(delay.plusMillis(ThreadLocalRandom.current().nextLong(1000)))
-          }
-        }
-      }
-
-    private fun isRetryableHttpStatus(statusCode: Int): Boolean =
-      when (statusCode) {
-        408,
-        429,
-        500,
-        502,
-        503,
-        504 -> true
-        else -> false
-      }
   }
 }

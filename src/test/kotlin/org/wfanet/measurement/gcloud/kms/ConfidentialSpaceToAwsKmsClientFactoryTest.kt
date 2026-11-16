@@ -18,7 +18,9 @@ import com.google.api.client.http.HttpHeaders
 import com.google.api.client.http.HttpResponseException
 import com.google.common.truth.Truth.assertThat
 import com.google.crypto.tink.Aead
+import com.sun.net.httpserver.HttpServer
 import java.io.IOException
+import java.net.InetSocketAddress
 import java.security.GeneralSecurityException
 import java.time.Duration
 import java.util.concurrent.CompletableFuture
@@ -65,51 +67,61 @@ class ConfidentialSpaceToAwsKmsClientFactoryTest {
   }
 
   @Test
-  fun `encrypt retries quota failure after a full minute using the same client`() {
-    val aead = aead { attempt ->
-      if (attempt == 1) httpFailure(429)
-      else CompletableFuture.failedFuture(IOException("terminal token provider failure"))
+  fun `encrypt retries STS without fetching the attestation token again`() {
+    val stsRequests = AtomicInteger()
+    val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+    server.createContext("/") { exchange ->
+      val first = stsRequests.incrementAndGet() == 1
+      val code = if (first) "ServiceUnavailable" else "AccessDenied"
+      val response =
+        """
+        <ErrorResponse xmlns="https://sts.amazonaws.com/doc/2011-06-15/">
+          <Error><Type>Sender</Type><Code>$code</Code><Message>test failure</Message></Error>
+          <RequestId>test-request</RequestId>
+        </ErrorResponse>
+      """
+          .trimIndent()
+          .toByteArray()
+      exchange.responseHeaders.set("Content-Type", "text/xml")
+      exchange.sendResponseHeaders(if (first) 503 else 403, response.size.toLong())
+      exchange.responseBody.use { it.write(response) }
+      exchange.close()
     }
-    val encryption = encrypt(aead)
-    awaitBackoff()
-
-    virtualTime.advanceTimeBy(Duration.ofSeconds(59))
-    assertThat(requests.get()).isEqualTo(1)
-    assertThat(encryption.isDone).isFalse()
-
-    virtualTime.advanceTimeBy(Duration.ofSeconds(2))
-    assertSecurityFailure(encryption)
-    assertThat(requests.get()).isEqualTo(2)
-
-    // The failed refresh must not be retained by the client's credential provider.
-    assertSecurityFailure(encrypt(aead))
-    assertThat(requests.get()).isEqualTo(3)
+    server.start()
+    val properties = listOf("aws.endpointUrl", "aws.maxAttempts")
+    val originalValues = properties.associateWith { System.getProperty(it) }
+    try {
+      System.setProperty("aws.endpointUrl", "http://127.0.0.1:${server.address.port}")
+      System.setProperty("aws.maxAttempts", "1")
+      val encryption =
+        encrypt(aead { CompletableFuture.completedFuture("header.payload.signature") })
+      check(firstRequest.await(10, TimeUnit.SECONDS))
+      awaitScheduledTasks(2)
+      virtualTime.advanceTimeBy(Duration.ofSeconds(20))
+      assertSecurityFailure(encryption)
+      assertThat(stsRequests.get()).isEqualTo(2)
+      assertThat(requests.get()).isEqualTo(1)
+    } finally {
+      server.stop(0)
+      for ((name, originalValue) in originalValues) {
+        if (originalValue == null) System.clearProperty(name)
+        else System.setProperty(name, originalValue)
+      }
+    }
   }
 
   @Test
-  fun `encrypt bounds repeated service failures to three retries`() {
-    val encryption = encrypt(aead { httpFailure(503) })
-    awaitBackoff()
-
-    virtualTime.advanceTimeBy(Duration.ofSeconds(10))
-
-    assertSecurityFailure(encryption)
-    assertThat(requests.get()).isEqualTo(4)
-  }
-
-  @Test
-  fun `encrypt bounds repeated quota failure to the refresh deadline`() {
-    val encryption = encrypt(aead { httpFailure(429) })
-    awaitBackoff()
-
-    virtualTime.advanceTimeBy(Duration.ofSeconds(119))
-    assertThat(encryption.isDone).isFalse()
-    virtualTime.advanceTimeBy(Duration.ofSeconds(1))
-
-    assertSecurityFailure(encryption)
-    assertThat(requests.get()).isEqualTo(2)
-    virtualTime.advanceTimeBy(Duration.ofMinutes(3))
-    assertThat(requests.get()).isEqualTo(2)
+  fun `encrypt leaves token-provider HTTP failures to the provider`() {
+    for (status in listOf(429, 503, 403, 501)) {
+      val before = requests.get()
+      val clientAead = aead { httpFailure(status) }
+      assertSecurityFailure(encrypt(clientAead))
+      virtualTime.advanceTimeBy(Duration.ofMinutes(3))
+      assertThat(requests.get()).isEqualTo(before + 1)
+      // A failed refresh does not poison the reusable client.
+      assertSecurityFailure(encrypt(clientAead))
+      assertThat(requests.get()).isEqualTo(before + 2)
+    }
   }
 
   @Test
@@ -174,12 +186,6 @@ class ConfidentialSpaceToAwsKmsClientFactoryTest {
   private fun assertSecurityFailure(encryption: Future<ByteArray>) {
     val failure = assertFailsWith<ExecutionException> { encryption.get(10, TimeUnit.SECONDS) }
     assertThat(failure.cause).isInstanceOf(GeneralSecurityException::class.java)
-  }
-
-  private fun awaitBackoff() {
-    check(firstRequest.await(10, TimeUnit.SECONDS))
-    // The refresh deadline and retry delay are both registered before virtual time advances.
-    awaitScheduledTasks(2)
   }
 
   private fun awaitScheduledTasks(count: Long) {

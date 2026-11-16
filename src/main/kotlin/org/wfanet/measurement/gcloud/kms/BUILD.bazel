@@ -13,9 +13,24 @@ kt_jvm_library(
     ],
 )
 
-kt_jvm_library(
+alias(
     name = "gcloud_to_aws_kms_client_factory",
-    srcs = ["GCloudToAwsKmsClientFactory.kt"],
+    actual = ":federated_aws_kms_client_factories",
+)
+
+alias(
+    name = "confidential_space_to_aws_kms_client_factory",
+    actual = ":federated_aws_kms_client_factories",
+)
+
+kt_jvm_library(
+    name = "federated_aws_kms_client_factories",
+    srcs = [
+        "ConfidentialSpaceToAwsKmsClientFactory.kt",
+        "CredentialRetry.kt",
+        "GCloudToAwsKmsClientFactory.kt",
+    ],
+    visibility = ["//visibility:private"],
     deps = [
         "//imports/java/com/google/api/client/http",
         "//imports/java/com/google/crypto/tink",
@@ -23,30 +38,15 @@ kt_jvm_library(
         "//imports/java/com/google/gson",
         "//imports/java/reactor:core",
         "//imports/java/software/amazon/awssdk/auth",
+        "//imports/java/software/amazon/awssdk/core",
         "//imports/java/software/amazon/awssdk/identity/spi",
         "//imports/java/software/amazon/awssdk/services/regions",
         "//imports/java/software/amazon/awssdk/services/sts",
         "//src/main/kotlin/org/wfanet/measurement/aws:refreshable_aws_credentials_provider",
-        "//src/main/kotlin/org/wfanet/measurement/common/crypto/tink",
-        "@maven//:com_google_auth_google_auth_library_credentials",
-        "@maven//:com_google_auth_google_auth_library_oauth2_http",
-    ],
-)
-
-kt_jvm_library(
-    name = "confidential_space_to_aws_kms_client_factory",
-    srcs = ["ConfidentialSpaceToAwsKmsClientFactory.kt"],
-    deps = [
-        "//imports/java/com/google/api/client/http",
-        "//imports/java/com/google/crypto/tink",
-        "//imports/java/com/google/crypto/tink:awskms",
-        "//imports/java/reactor:core",
-        "//imports/java/software/amazon/awssdk/auth",
-        "//imports/java/software/amazon/awssdk/identity/spi",
-        "//imports/java/software/amazon/awssdk/services/regions",
-        "//imports/java/software/amazon/awssdk/services/sts",
-        "//src/main/kotlin/org/wfanet/measurement/aws:refreshable_aws_credentials_provider",
+        "//src/main/kotlin/org/wfanet/measurement/common",
         "//src/main/kotlin/org/wfanet/measurement/common/crypto/tink",
         "//src/main/kotlin/org/wfanet/measurement/gcloud/confidentialspace:confidential_space_token_client",
+        "@maven//:com_google_auth_google_auth_library_credentials",
+        "@maven//:com_google_auth_google_auth_library_oauth2_http",
     ],
 )
