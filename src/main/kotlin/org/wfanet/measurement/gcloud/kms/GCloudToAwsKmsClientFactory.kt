@@ -79,7 +79,11 @@ class GCloudToAwsKmsClientFactory(
         obtainAwsCredentials(config).timeout(CREDENTIAL_REFRESH_TIMEOUT).toFuture()
       }
     return TinkAwsKmsClient()
-      .withCredentialsProvider(AwsCredentialsProviderAdapter(credentialsProvider))
+      .withCredentialsProvider(
+        // TODO(tink-crypto/tink-java-awskms#6): remove this adapter once the
+        // IdentityProvider overload is available in a release.
+        AwsCredentialsProviderAdapter(credentialsProvider)
+      )
   }
 
   companion object {
