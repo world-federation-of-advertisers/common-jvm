@@ -24,6 +24,7 @@ import com.google.gson.JsonObject
 import java.security.GeneralSecurityException
 import java.time.Clock
 import java.time.Duration
+import java.util.logging.Logger
 import org.wfanet.measurement.aws.AwsCredentialsProviderAdapter
 import org.wfanet.measurement.aws.RefreshableAwsCredentialsIdentityProvider
 import org.wfanet.measurement.aws.TimeBoundCredentials
@@ -45,10 +46,13 @@ import software.amazon.awssdk.services.sts.model.AssumeRoleWithWebIdentityReques
  * account to obtain an OIDC ID token. That ID token is exchanged with AWS STS
  * `AssumeRoleWithWebIdentity` for temporary AWS credentials.
  *
- * Credential retrieval retries only public Google authentication retry hints and transient HTTP or
- * STS failures, with at most three retries and a two-minute budget for the whole refresh. Quota
- * failures wait at least one minute. STS retries reuse the Google ID token already obtained. Errors
- * without a public retry hint, including opaque impersonation I/O failures, are not retried.
+ * Credential refresh has a two-minute deadline. The Google authentication library and AWS SDK own
+ * retries for their requests; this factory does not add retries around either library. AWS STS
+ * retries reuse the Google ID token already obtained.
+ *
+ * Some Google IAM failures, including generateIdToken 503 responses in Google auth 1.36.0, are
+ * returned as a plain [java.io.IOException] without a retry hint and fail the refresh without
+ * retry. This factory does not attempt to classify those errors.
  *
  * @param refreshMargin How far before expiration to proactively refresh credentials.
  * @param clock Clock used to determine the current time.
@@ -71,7 +75,10 @@ class GCloudToAwsKmsClientFactory(
   override fun getKmsClient(config: GCloudToAwsWifCredentials): KmsClient {
     val credentialsProvider =
       RefreshableAwsCredentialsIdentityProvider(refreshMargin = refreshMargin, clock = clock) {
-        obtainAwsCredentials(config).timeout(CredentialRetry.REFRESH_TIMEOUT).toFuture()
+        Mono.fromCallable { obtainAwsCredentials(config) }
+          .subscribeOn(Schedulers.boundedElastic())
+          .timeout(CREDENTIAL_REFRESH_TIMEOUT)
+          .toFuture()
       }
     return TinkAwsKmsClient()
       .withCredentialsProvider(
@@ -82,10 +89,13 @@ class GCloudToAwsKmsClientFactory(
   }
 
   companion object {
+    private val CREDENTIAL_REFRESH_TIMEOUT: Duration = Duration.ofMinutes(2)
 
     private val DEFAULT_REFRESH_MARGIN: Duration = Duration.ofMinutes(15)
 
     private val SERVICE_ACCOUNT_REGEX = Regex("serviceAccounts/([^:/]+)")
+
+    private val logger: Logger = Logger.getLogger(this::class.java.enclosingClass.name)
 
     private fun buildExternalAccountCredentials(
       config: GCloudToAwsWifCredentials
@@ -119,23 +129,7 @@ class GCloudToAwsKmsClientFactory(
         )
     }
 
-    private fun obtainAwsCredentials(
-      config: GCloudToAwsWifCredentials
-    ): Mono<TimeBoundCredentials> =
-      Mono.fromCallable { googleIdToken(config) }
-        .subscribeOn(Schedulers.boundedElastic())
-        .retryWhen(CredentialRetry.create())
-        .onErrorMap { e -> GeneralSecurityException("Failed to obtain Google Cloud ID token", e) }
-        .flatMap { idToken ->
-          Mono.fromCallable { exchangeForAwsCredentials(config, idToken) }
-            .subscribeOn(Schedulers.boundedElastic())
-            .retryWhen(CredentialRetry.create())
-            .onErrorMap { e ->
-              GeneralSecurityException("AWS STS AssumeRoleWithWebIdentity failed", e)
-            }
-        }
-
-    private fun googleIdToken(config: GCloudToAwsWifCredentials): String {
+    private fun obtainAwsCredentials(config: GCloudToAwsWifCredentials): TimeBoundCredentials {
       val externalAccountCredentials: GoogleCredentials = buildExternalAccountCredentials(config)
 
       val impersonatedCredentials: ImpersonatedCredentials =
@@ -147,21 +141,21 @@ class GCloudToAwsKmsClientFactory(
           }
           .build()
 
-      val idTokenCredentials: IdTokenCredentials =
-        IdTokenCredentials.newBuilder()
-          .apply {
-            setIdTokenProvider(impersonatedCredentials)
-            setTargetAudience(config.awsAudience)
-          }
-          .build()
-      idTokenCredentials.refresh()
-      return idTokenCredentials.idToken.tokenValue
-    }
+      val idToken: String =
+        try {
+          val idTokenCredentials: IdTokenCredentials =
+            IdTokenCredentials.newBuilder()
+              .apply {
+                setIdTokenProvider(impersonatedCredentials)
+                setTargetAudience(config.awsAudience)
+              }
+              .build()
+          idTokenCredentials.refresh()
+          idTokenCredentials.idToken.tokenValue
+        } catch (e: Exception) {
+          throw GeneralSecurityException("Failed to obtain Google Cloud ID token", e)
+        }
 
-    private fun exchangeForAwsCredentials(
-      config: GCloudToAwsWifCredentials,
-      idToken: String,
-    ): TimeBoundCredentials {
       val stsClient: StsClient =
         try {
           StsClient.builder()
@@ -185,6 +179,8 @@ class GCloudToAwsKmsClientFactory(
               }
               .build()
           )
+        } catch (e: Exception) {
+          throw GeneralSecurityException("AWS STS AssumeRoleWithWebIdentity failed", e)
         } finally {
           stsClient.close()
         }

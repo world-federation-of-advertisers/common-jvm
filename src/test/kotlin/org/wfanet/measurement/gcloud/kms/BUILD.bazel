@@ -12,10 +12,11 @@ kt_jvm_test(
     test_class = "org.wfanet.measurement.gcloud.kms.GCloudToAwsKmsClientFactoryTest",
     deps = [
         "//imports/java/com/google/api/client/http",
-        "//imports/java/com/google/auth:credentials",
+        "//imports/java/com/google/auth:oauth2_http",
         "//imports/java/com/google/common/truth",
         "//imports/java/org/junit",
         "//imports/java/org/mockito",
+        "//imports/java/reactor:core",
         "//imports/java/reactor:test",
         "//imports/kotlin/kotlin/test",
         "//src/main/kotlin/org/wfanet/measurement/common/crypto/tink",
@@ -38,24 +39,7 @@ kt_jvm_test(
         "//imports/java/reactor:test",
         "//imports/kotlin/kotlin/test",
         "//src/main/kotlin/org/wfanet/measurement/common/crypto/tink",
+        "//src/main/kotlin/org/wfanet/measurement/gcloud/confidentialspace:confidential_space_token_client",
         "//src/main/kotlin/org/wfanet/measurement/gcloud/kms:confidential_space_to_aws_kms_client_factory",
-    ],
-)
-
-kt_jvm_test(
-    name = "CredentialRetryTest",
-    srcs = ["CredentialRetryTest.kt"],
-    associates = ["//src/main/kotlin/org/wfanet/measurement/gcloud/kms:gcloud_to_aws_kms_client_factory"],
-    test_class = "org.wfanet.measurement.gcloud.kms.CredentialRetryTest",
-    deps = [
-        "//imports/java/com/google/api/client/http",
-        "//imports/java/com/google/auth:credentials",
-        "//imports/java/com/google/common/truth",
-        "//imports/java/org/junit",
-        "//imports/java/reactor:core",
-        "//imports/java/reactor:test",
-        "//imports/java/software/amazon/awssdk/awscore",
-        "//imports/java/software/amazon/awssdk/http",
-        "//imports/java/software/amazon/awssdk/services/sts",
     ],
 )

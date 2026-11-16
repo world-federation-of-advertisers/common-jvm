@@ -14,19 +14,17 @@
 
 package org.wfanet.measurement.gcloud.kms
 
-import com.google.api.client.http.HttpHeaders
-import com.google.api.client.http.HttpResponseException
 import com.google.api.client.testing.http.MockLowLevelHttpResponse
-import com.google.auth.Retryable
 import com.google.common.truth.Truth.assertThat
-import java.io.IOException
 import java.security.GeneralSecurityException
 import java.time.Duration
 import java.util.Base64
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.Future
+import java.util.concurrent.ThreadFactory
 import java.util.concurrent.TimeUnit
 import kotlin.test.assertFailsWith
 import org.junit.After
@@ -35,6 +33,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 import org.wfanet.measurement.common.crypto.tink.GCloudToAwsWifCredentials
+import reactor.core.scheduler.Scheduler
+import reactor.core.scheduler.Schedulers
 import reactor.test.scheduler.VirtualTimeScheduler
 
 /** Exercises the factory with synthetic Google ID-token responses and a local AWS server. */
@@ -45,7 +45,7 @@ class GCloudToAwsKmsClientFactoryTest {
 
   @Before
   fun setUp() {
-    virtualTime = VirtualTimeScheduler.getOrSet()
+    virtualTime = VirtualTimeScheduler.create()
     executor = Executors.newSingleThreadExecutor()
     GoogleIdTokenTestTransportFactory.requests.set(0)
     GoogleIdTokenTestTransportFactory.response = { url, _ ->
@@ -58,7 +58,7 @@ class GCloudToAwsKmsClientFactoryTest {
 
   @After
   fun tearDown() {
-    virtualTime.advanceTimeBy(Duration.ofMinutes(3))
+    if (!virtualTime.isDisposed) virtualTime.advanceTimeBy(Duration.ofMinutes(3))
     executor.shutdownNow()
     check(executor.awaitTermination(10, TimeUnit.SECONDS))
     VirtualTimeScheduler.reset()
@@ -74,50 +74,65 @@ class GCloudToAwsKmsClientFactoryTest {
   }
 
   @Test
-  fun `encrypt recovers from a public authentication retry hint`() {
+  fun `encrypt obtains credentials through the Google and AWS libraries`() {
     FederationTestServer().use { server ->
-      val success = GoogleIdTokenTestTransportFactory.response
-      GoogleIdTokenTestTransportFactory.response = { url, attempt ->
-        if (attempt == 1) throw AuthFailure(true) else success(url, attempt)
-      }
-      val encryption = encrypt()
-      awaitScheduledTasks(3)
-      virtualTime.advanceTimeBy(Duration.ofSeconds(2))
-      assertThat(encryption.get(10, TimeUnit.SECONDS)).isEqualTo("ciphertext".toByteArray())
-      assertThat(GoogleIdTokenTestTransportFactory.requests.get()).isEqualTo(2)
+      assertThat(encrypt().get(10, TimeUnit.SECONDS)).isEqualTo("ciphertext".toByteArray())
+      assertThat(GoogleIdTokenTestTransportFactory.requests.get()).isEqualTo(1)
       assertThat(server.stsRequests).hasSize(1)
       assertThat(server.kmsRequests).hasSize(1)
     }
   }
 
   @Test
-  fun `encrypt retries STS with the Google ID token already obtained`() {
+  fun `encrypt lets the SDK retry STS with the Google ID token already obtained`() {
     FederationTestServer().use { server ->
-      server.stsResponses.add(FederationTestServer.failure(503, "ServiceUnavailable", null))
-      val encryption = encrypt()
-      awaitScheduledTasks(4)
-      virtualTime.advanceTimeBy(Duration.ofSeconds(2))
-      assertThat(encryption.get(10, TimeUnit.SECONDS)).isEqualTo("ciphertext".toByteArray())
+      repeat(FederationTestServer.SDK_MAX_ATTEMPTS - 1) {
+        server.stsResponses.add(FederationTestServer.failure(503, "ServiceUnavailable", null))
+      }
+
+      assertThat(encrypt().get(10, TimeUnit.SECONDS)).isEqualTo("ciphertext".toByteArray())
       assertThat(GoogleIdTokenTestTransportFactory.requests.get()).isEqualTo(1)
-      assertThat(server.stsRequests).hasSize(2)
-      assertThat(server.stsRequests[0]).isEqualTo(server.stsRequests[1])
-      assertThat(server.stsRequests[0]).contains("WebIdentityToken=")
+      assertThat(server.stsRequests).hasSize(FederationTestServer.SDK_MAX_ATTEMPTS)
+      assertThat(server.stsRequests.toSet()).hasSize(1)
+      assertThat(server.stsRequests[0]).contains("WebIdentityToken=$ID_TOKEN")
     }
   }
 
   @Test
-  fun `encrypt does not retry a negative authentication retry hint`() {
+  fun `encrypt stops when the SDK STS attempt limit is exhausted`() {
     FederationTestServer().use { server ->
-      GoogleIdTokenTestTransportFactory.response = { _, _ -> throw AuthFailure(false) }
+      repeat(FederationTestServer.SDK_MAX_ATTEMPTS) {
+        server.stsResponses.add(FederationTestServer.failure(503, "ServiceUnavailable", null))
+      }
+      // The server would succeed on another request, which must not be sent.
       assertSecurityFailure(encrypt())
-      virtualTime.advanceTimeBy(Duration.ofMinutes(3))
+
+      assertThat(GoogleIdTokenTestTransportFactory.requests.get()).isEqualTo(1)
+      assertThat(server.stsRequests).hasSize(FederationTestServer.SDK_MAX_ATTEMPTS)
+      assertThat(server.stsRequests.toSet()).hasSize(1)
+      assertThat(server.stsRequests[0]).contains("WebIdentityToken=$ID_TOKEN")
+      assertThat(server.kmsRequests).isEmpty()
+    }
+  }
+
+  @Test
+  fun `encrypt leaves Google IAM permission failures to the library`() {
+    FederationTestServer().use { server ->
+      GoogleIdTokenTestTransportFactory.response = { _, _ ->
+        MockLowLevelHttpResponse()
+          .setStatusCode(403)
+          .setContentType("application/json")
+          .setContent("""{"error":{"message":"permission denied"}}""")
+      }
+
+      assertSecurityFailure(encrypt())
       assertThat(GoogleIdTokenTestTransportFactory.requests.get()).isEqualTo(1)
       assertThat(server.stsRequests).isEmpty()
     }
   }
 
   @Test
-  fun `encrypt leaves an opaque Google 503 error unclassified`() {
+  fun `encrypt documents the Google IAM 503 retry gap`() {
     FederationTestServer().use { server ->
       GoogleIdTokenTestTransportFactory.response = { _, _ ->
         MockLowLevelHttpResponse()
@@ -133,21 +148,44 @@ class GCloudToAwsKmsClientFactoryTest {
   }
 
   @Test
-  fun `encrypt bounds repeated Google credential failures to the refresh deadline`() {
-    FederationTestServer().use { server ->
-      GoogleIdTokenTestTransportFactory.response = { _, _ ->
-        throw HttpResponseException.Builder(429, null, HttpHeaders()).build()
+  fun `encrypt bounds an unfinished Google ID token request to the refresh deadline`() {
+    // Advance the timeout clock without running blocking Google HTTP work on that clock.
+    val schedulerSnapshot =
+      Schedulers.setFactoryWithSnapshot(
+        object : Schedulers.Factory {
+          override fun newParallel(parallelism: Int, threadFactory: ThreadFactory): Scheduler =
+            virtualTime
+        }
+      )
+    try {
+      FederationTestServer().use { server ->
+        val firstRequest = CountDownLatch(1)
+        val releaseRequest = CountDownLatch(1)
+        val success = GoogleIdTokenTestTransportFactory.response
+        GoogleIdTokenTestTransportFactory.response = { url, attempt ->
+          firstRequest.countDown()
+          check(releaseRequest.await(10, TimeUnit.SECONDS)) {
+            "Test did not release Google request"
+          }
+          success(url, attempt)
+        }
+
+        try {
+          val encryption = encrypt()
+          check(firstRequest.await(10, TimeUnit.SECONDS))
+          awaitScheduledTasks(1)
+
+          virtualTime.advanceTimeBy(Duration.ofMinutes(2))
+
+          assertSecurityFailure(encryption)
+          assertThat(GoogleIdTokenTestTransportFactory.requests.get()).isEqualTo(1)
+          assertThat(server.stsRequests).isEmpty()
+        } finally {
+          releaseRequest.countDown()
+        }
       }
-      val encryption = encrypt()
-      awaitScheduledTasks(3)
-      virtualTime.advanceTimeBy(Duration.ofSeconds(61))
-      awaitScheduledTasks(5)
-      assertThat(GoogleIdTokenTestTransportFactory.requests.get()).isEqualTo(2)
-      virtualTime.advanceTimeBy(Duration.ofSeconds(59))
-      assertSecurityFailure(encryption)
-      virtualTime.advanceTimeBy(Duration.ofMinutes(3))
-      assertThat(GoogleIdTokenTestTransportFactory.requests.get()).isEqualTo(2)
-      assertThat(server.stsRequests).isEmpty()
+    } finally {
+      Schedulers.resetFrom(schedulerSnapshot)
     }
   }
 
@@ -200,16 +238,9 @@ class GCloudToAwsKmsClientFactoryTest {
     virtualTime.advanceTimeBy(Duration.ZERO)
     while (virtualTime.scheduledTaskCount < count) {
       virtualTime.advanceTimeBy(Duration.ZERO)
-      check(System.nanoTime() < deadline) { "Credential operation did not schedule its retry" }
+      check(System.nanoTime() < deadline) { "Credential operation did not schedule its deadline" }
       Thread.sleep(1)
     }
-  }
-
-  private class AuthFailure(private val retryable: Boolean) :
-    IOException("authentication failure"), Retryable {
-    override fun isRetryable(): Boolean = retryable
-
-    override fun getRetryCount(): Int = 0
   }
 
   companion object {

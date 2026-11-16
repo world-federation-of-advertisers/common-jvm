@@ -47,10 +47,10 @@ import software.amazon.awssdk.services.sts.model.AssumeRoleWithWebIdentityReques
  * addition to `sts:AssumeRoleWithWebIdentity`).
  *
  * The returned client uses a credentials provider that automatically refreshes the AWS session
- * credentials before they expire by re-executing the token fetch + STS exchange. Known temporary
- * STS failures permit at most three retries, within a two-minute budget for the entire refresh. The
- * token provider handles its own retries. STS retries reuse the token already obtained. Exhaustion
- * is reported as a [GeneralSecurityException].
+ * credentials before they expire by re-executing the token fetch + STS exchange, with a two-minute
+ * deadline for the entire refresh. The token provider owns token-request retries; the AWS SDK owns
+ * STS retries and reuses the attestation token already obtained. This factory does not add retries
+ * around either provider.
  *
  * @param tokenProvider Source of Confidential Space attestation tokens.
  * @param refreshMargin How far before expiration to proactively refresh credentials.
@@ -73,7 +73,7 @@ class ConfidentialSpaceToAwsKmsClientFactory(
   override fun getKmsClient(config: ConfidentialSpaceToAwsWifCredentials): KmsClient {
     val credentialsProvider =
       RefreshableAwsCredentialsIdentityProvider(refreshMargin = refreshMargin, clock = clock) {
-        obtainAwsCredentials(config).timeout(CredentialRetry.REFRESH_TIMEOUT).toFuture()
+        obtainAwsCredentials(config).timeout(CREDENTIAL_REFRESH_TIMEOUT).toFuture()
       }
     return TinkAwsKmsClient()
       .withCredentialsProvider(
@@ -155,8 +155,6 @@ class ConfidentialSpaceToAwsKmsClientFactory(
   ): Mono<TimeBoundCredentials> =
     Mono.fromCallable { assumeRoleWithWebIdentity(config, attestationToken) }
       .subscribeOn(Schedulers.boundedElastic())
-      .retryWhen(CredentialRetry.create())
-      .onErrorMap { e -> GeneralSecurityException("AWS STS AssumeRoleWithWebIdentity failed", e) }
 
   private fun assumeRoleWithWebIdentity(
     config: ConfidentialSpaceToAwsWifCredentials,
@@ -176,15 +174,19 @@ class ConfidentialSpaceToAwsKmsClientFactory(
 
     val stsResponse =
       stsClient.use {
-        it.assumeRoleWithWebIdentity(
-          AssumeRoleWithWebIdentityRequest.builder()
-            .apply {
-              roleArn(config.roleArn)
-              roleSessionName(config.roleSessionName)
-              webIdentityToken(attestationToken)
-            }
-            .build()
-        )
+        try {
+          it.assumeRoleWithWebIdentity(
+            AssumeRoleWithWebIdentityRequest.builder()
+              .apply {
+                roleArn(config.roleArn)
+                roleSessionName(config.roleSessionName)
+                webIdentityToken(attestationToken)
+              }
+              .build()
+          )
+        } catch (e: Exception) {
+          throw GeneralSecurityException("AWS STS AssumeRoleWithWebIdentity failed", e)
+        }
       }
 
     val awsCredentials = stsResponse.credentials()
@@ -200,6 +202,7 @@ class ConfidentialSpaceToAwsKmsClientFactory(
   }
 
   companion object {
+    private val CREDENTIAL_REFRESH_TIMEOUT: Duration = Duration.ofMinutes(2)
 
     private val DEFAULT_REFRESH_MARGIN: Duration = Duration.ofMinutes(15)
   }

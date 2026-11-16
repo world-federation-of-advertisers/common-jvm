@@ -42,9 +42,7 @@ import org.wfanet.measurement.gcloud.confidentialspace.AttestationTokenRequest
 import org.wfanet.measurement.gcloud.confidentialspace.ConfidentialSpaceTokenType
 import reactor.test.scheduler.VirtualTimeScheduler
 
-/**
- * Exercises credential retries through the real Tink/AWS client, before any AWS request is sent.
- */
+/** Exercises SDK-owned STS retries and the refresh deadline through the real Tink/AWS client. */
 @RunWith(JUnit4::class)
 class ConfidentialSpaceToAwsKmsClientFactoryTest {
   private lateinit var virtualTime: VirtualTimeScheduler
@@ -54,7 +52,7 @@ class ConfidentialSpaceToAwsKmsClientFactoryTest {
 
   @Before
   fun setUp() {
-    virtualTime = VirtualTimeScheduler.getOrSet()
+    virtualTime = VirtualTimeScheduler.create()
     executor = Executors.newSingleThreadExecutor()
   }
 
@@ -68,34 +66,38 @@ class ConfidentialSpaceToAwsKmsClientFactoryTest {
   }
 
   @Test
-  fun `encrypt recovers from STS failure without fetching the token again`() {
+  fun `encrypt lets the SDK retry STS without fetching the token again`() {
     FederationTestServer().use { server ->
-      server.stsResponses.add(FederationTestServer.failure(503, "ServiceUnavailable", null))
+      repeat(FederationTestServer.SDK_MAX_ATTEMPTS - 1) {
+        server.stsResponses.add(FederationTestServer.failure(503, "ServiceUnavailable", null))
+      }
       val encryption =
         encrypt(aead { CompletableFuture.completedFuture("header.payload.signature") })
-      awaitScheduledTasks(3)
-      virtualTime.advanceTimeBy(Duration.ofSeconds(2))
+
       assertThat(encryption.get(10, TimeUnit.SECONDS)).isEqualTo("ciphertext".toByteArray())
-      assertThat(server.stsRequests).hasSize(2)
-      assertThat(server.stsRequests[0]).isEqualTo(server.stsRequests[1])
+      assertThat(server.stsRequests).hasSize(FederationTestServer.SDK_MAX_ATTEMPTS)
+      assertThat(server.stsRequests.toSet()).hasSize(1)
+      assertThat(server.stsRequests[0]).contains("WebIdentityToken=header.payload.signature")
       assertThat(server.kmsRequests).hasSize(1)
       assertThat(requests.get()).isEqualTo(1)
     }
   }
 
   @Test
-  fun `encrypt respects the STS Retry-After header`() {
+  fun `encrypt stops when the SDK STS attempt limit is exhausted`() {
     FederationTestServer().use { server ->
-      server.stsResponses.add(FederationTestServer.failure(503, "ServiceUnavailable", "75"))
-      val encryption =
+      repeat(FederationTestServer.SDK_MAX_ATTEMPTS) {
+        server.stsResponses.add(FederationTestServer.failure(503, "ServiceUnavailable", null))
+      }
+      // The server would succeed on another request, which must not be sent.
+      assertSecurityFailure(
         encrypt(aead { CompletableFuture.completedFuture("header.payload.signature") })
-      awaitScheduledTasks(3)
-      virtualTime.advanceTimeBy(Duration.ofSeconds(74))
-      assertThat(server.stsRequests).hasSize(1)
-      assertThat(encryption.isDone).isFalse()
-      virtualTime.advanceTimeBy(Duration.ofSeconds(2))
-      assertThat(encryption.get(10, TimeUnit.SECONDS)).isEqualTo("ciphertext".toByteArray())
-      assertThat(server.stsRequests).hasSize(2)
+      )
+
+      assertThat(server.stsRequests).hasSize(FederationTestServer.SDK_MAX_ATTEMPTS)
+      assertThat(server.stsRequests.toSet()).hasSize(1)
+      assertThat(server.stsRequests[0]).contains("WebIdentityToken=header.payload.signature")
+      assertThat(server.kmsRequests).isEmpty()
       assertThat(requests.get()).isEqualTo(1)
     }
   }
@@ -137,8 +139,6 @@ class ConfidentialSpaceToAwsKmsClientFactoryTest {
             .getKmsClient(config(emptyList()))
             .getAead(KEY_URI)
         )
-      awaitScheduledTasks(3)
-      virtualTime.advanceTimeBy(Duration.ofSeconds(2))
       assertThat(encryption.get(10, TimeUnit.SECONDS)).isEqualTo("ciphertext".toByteArray())
       assertThat(tokenRequests.map { it.tokenType })
         .containsExactly(
@@ -185,6 +185,7 @@ class ConfidentialSpaceToAwsKmsClientFactoryTest {
 
   @Test
   fun `encrypt cancels an unfinished token request at the refresh deadline`() {
+    VirtualTimeScheduler.getOrSet(virtualTime)
     val token = CompletableFuture<String>()
     val encryption = encrypt(aead { token })
     check(firstRequest.await(10, TimeUnit.SECONDS))

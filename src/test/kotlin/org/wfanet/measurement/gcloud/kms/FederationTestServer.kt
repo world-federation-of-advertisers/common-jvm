@@ -28,7 +28,9 @@ internal class FederationTestServer : AutoCloseable {
   val kmsAuthorizationHeaders = CopyOnWriteArrayList<String>()
   val stsResponses = ConcurrentLinkedQueue<Response>()
   private val originalProperties =
-    listOf("aws.endpointUrl", "aws.maxAttempts").associateWith { System.getProperty(it) }
+    listOf("aws.endpointUrl", "aws.maxAttempts", "aws.retryMode").associateWith {
+      System.getProperty(it)
+    }
   private val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
 
   init {
@@ -55,8 +57,9 @@ internal class FederationTestServer : AutoCloseable {
     }
     server.start()
     System.setProperty("aws.endpointUrl", "http://127.0.0.1:" + server.address.port)
-    // Disable SDK retries so these tests observe the factory's retry policy.
-    System.setProperty("aws.maxAttempts", "1")
+    // Exercise the SDK's own retries with a known limit.
+    System.setProperty("aws.maxAttempts", SDK_MAX_ATTEMPTS.toString())
+    System.setProperty("aws.retryMode", "standard")
   }
 
   override fun close() {
@@ -68,6 +71,8 @@ internal class FederationTestServer : AutoCloseable {
   }
 
   companion object {
+    const val SDK_MAX_ATTEMPTS = 3
+
     fun failure(status: Int, code: String, retryAfter: String?): Response =
       Response(
         status,
