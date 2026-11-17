@@ -258,6 +258,7 @@ class ConfidentialSpaceTokenClientTest {
     assertThat((exception as HttpResponseException).statusCode).isEqualTo(400)
     assertThat(exception).hasMessageThat().contains("400")
     assertThat(exception).hasMessageThat().contains("invalid audience")
+    assertThat(requestCount.get()).isEqualTo(1)
   }
 
   @Test
