@@ -206,7 +206,7 @@ class ConfidentialSpaceTokenClient(
               TOKEN_FETCH_TIMEOUT,
               maxOf(
                 backoff.durationForAttempt((signal.totalRetries() + 1).toInt()),
-                if (failure.statusCode == HTTP_TOO_MANY_REQUESTS) QUOTA_BACKOFF else Duration.ZERO,
+                if (failure.statusCode in QUOTA_STATUS_CODES) QUOTA_BACKOFF else Duration.ZERO,
                 retryAfterDelay(failure.headers.retryAfter),
               ),
             )
@@ -243,10 +243,14 @@ class ConfidentialSpaceTokenClient(
 
     private val SUCCESS_STATUS_CODES = 200..299
     private const val HTTP_TOO_MANY_REQUESTS = 429
+    private const val HTTP_INTERNAL_SERVER_ERROR = 500
     private const val MAX_TOKEN_RETRIES = 3L
     private val TOKEN_FETCH_TIMEOUT: Duration = Duration.ofMinutes(2)
     private val QUOTA_BACKOFF: Duration = Duration.ofMinutes(1)
-    private val RETRYABLE_STATUS_CODES = setOf(408, HTTP_TOO_MANY_REQUESTS, 500, 502, 503, 504)
+    // The launcher maps attestation quota failures to HTTP 500.
+    private val QUOTA_STATUS_CODES = setOf(HTTP_TOO_MANY_REQUESTS, HTTP_INTERNAL_SERVER_ERROR)
+    private val RETRYABLE_STATUS_CODES =
+      setOf(408, HTTP_TOO_MANY_REQUESTS, HTTP_INTERNAL_SERVER_ERROR, 502, 503, 504)
     private val backoff =
       ExponentialBackoff(
         initialDelay = Duration.ofSeconds(1),

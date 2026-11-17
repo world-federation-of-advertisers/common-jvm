@@ -261,13 +261,19 @@ class ConfidentialSpaceTokenClientTest {
   }
 
   @Test
-  fun `getToken retries quota failures within the provider`() {
+  fun `getToken waits one minute after an explicit quota response`() {
+    assertOneMinuteBackoff("HTTP/1.1 429 Too Many Requests\r\nContent-Length: 5\r\n\r\nquota")
+  }
+
+  @Test
+  fun `getToken waits one minute after a launcher internal error`() {
+    assertOneMinuteBackoff("HTTP/1.1 500 Internal Server Error\r\nContent-Length: 5\r\n\r\nerror")
+  }
+
+  private fun assertOneMinuteBackoff(errorResponse: String) {
     withVirtualTime { virtualTime ->
       val token = "header.payload.signature"
-      startServer(
-        "HTTP/1.1 429 Too Many Requests\r\nContent-Length: 5\r\n\r\nquota",
-        tokenResponse(token),
-      )
+      startServer(errorResponse, tokenResponse(token))
       val future = clientForServer().getToken(awsPrincipalTagsRequest())
       awaitRetryTimer(virtualTime, 3)
       virtualTime.advanceTimeBy(Duration.ofSeconds(59))
