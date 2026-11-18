@@ -14,6 +14,7 @@
 
 package org.wfanet.measurement.gcloud.confidentialspace
 
+import com.google.api.client.http.HttpResponseException
 import com.google.common.truth.Truth.assertThat
 import java.io.IOException
 import java.net.StandardProtocolFamily
@@ -26,7 +27,11 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.time.Duration
+import java.time.ZoneOffset
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
 import java.util.Base64
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
@@ -41,6 +46,7 @@ import org.junit.After
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
+import reactor.test.scheduler.VirtualTimeScheduler
 
 /**
  * Tests for [ConfidentialSpaceTokenClient] against a Unix domain socket server that replies with
@@ -54,25 +60,41 @@ class ConfidentialSpaceTokenClientTest {
   private lateinit var socketPath: Path
   @Volatile private var capturedRequest: String = ""
   private val acceptCount = AtomicInteger()
+  private val requestCount = AtomicInteger()
   private val idle = CountDownLatch(1)
   private val requestReceived = CompletableDeferred<Unit>()
+  private val acceptedChannels = CopyOnWriteArrayList<SocketChannel>()
+  private val connectionThreads = CopyOnWriteArrayList<Thread>()
 
-  /** Binds a domain socket that replies with [responses] in order, one per connection. */
+  /** Binds a domain socket that replies with [responses] in order, one per request. */
   private fun startServer(vararg responses: String) {
     val channel = bindSocket()
 
     serverThread =
       thread(start = true, isDaemon = true) {
+        val responseIndex = AtomicInteger()
         try {
           while (channel.isOpen) {
-            // All responses are served on one connection, so a client that pools sees the same
-            // connection on its second request.
-            channel.accept().use { connection ->
-              acceptCount.incrementAndGet()
-              for (response in responses) {
-                if (!serve(connection, response)) break
+            val connection = channel.accept()
+            acceptedChannels.add(connection)
+            acceptCount.incrementAndGet()
+            connectionThreads.add(
+              thread(start = true, isDaemon = true) {
+                connection.use {
+                  try {
+                    while (channel.isOpen) {
+                      capturedRequest = readRequest(connection) ?: break
+                      val index = responseIndex.getAndIncrement()
+                      if (index >= responses.size) break
+                      writeResponse(connection, responses[index])
+                      if (index == responses.lastIndex) break
+                    }
+                  } catch (e: IOException) {
+                    // Expected when the client or test closes the connection.
+                  }
+                }
               }
-            }
+            )
           }
         } catch (e: IOException) {
           // Expected once the channel is closed in tearDown.
@@ -99,6 +121,7 @@ class ConfidentialSpaceTokenClientTest {
       thread(start = true, isDaemon = true) {
         try {
           channel.accept().use {
+            acceptedChannels.add(it)
             readRequest(it)
             requestReceived.complete(Unit)
             idle.await()
@@ -109,18 +132,11 @@ class ConfidentialSpaceTokenClientTest {
       }
   }
 
-  /**
-   * Reads one request off [connection], records it, then writes [response].
-   *
-   * Returns false once the peer stops sending, so the caller can stop serving this connection.
-   */
-  private fun serve(connection: SocketChannel, response: String): Boolean {
-    capturedRequest = readRequest(connection) ?: return false
+  private fun writeResponse(connection: SocketChannel, response: String) {
     val out = ByteBuffer.wrap(response.toByteArray(StandardCharsets.UTF_8))
     while (out.hasRemaining()) {
       connection.write(out)
     }
-    return true
   }
 
   /**
@@ -135,6 +151,7 @@ class ConfidentialSpaceTokenClientTest {
     while (true) {
       val headerEnd = received.indexOf(HEADER_TERMINATOR)
       if (headerEnd >= 0 && isBodyComplete(received, headerEnd)) {
+        requestCount.incrementAndGet()
         return received.toString()
       }
       buffer.clear()
@@ -162,6 +179,12 @@ class ConfidentialSpaceTokenClientTest {
     idle.countDown()
     serverChannel?.close()
     serverThread?.join(TimeUnit.SECONDS.toMillis(5))
+    for (channel in acceptedChannels) {
+      channel.close()
+    }
+    for (thread in connectionThreads) {
+      thread.join(TimeUnit.SECONDS.toMillis(5))
+    }
     if (this::socketPath.isInitialized) {
       Files.deleteIfExists(socketPath)
     }
@@ -239,7 +262,7 @@ class ConfidentialSpaceTokenClientTest {
   }
 
   @Test
-  fun `getToken throws on a non-2xx response`(): Unit = runBlocking {
+  fun `getToken preserves a non-2xx response status`(): Unit = runBlocking {
     startServer(
       "HTTP/1.1 400 Bad Request\r\nContent-Length: 16\r\nConnection: close\r\n\r\ninvalid audience"
     )
@@ -247,8 +270,115 @@ class ConfidentialSpaceTokenClientTest {
     val exception =
       assertFailsWith<IOException> { clientForServer().getToken(awsPrincipalTagsRequest()).await() }
 
+    assertThat(exception).isInstanceOf(HttpResponseException::class.java)
+    assertThat((exception as HttpResponseException).statusCode).isEqualTo(400)
     assertThat(exception).hasMessageThat().contains("400")
     assertThat(exception).hasMessageThat().contains("invalid audience")
+    assertThat(requestCount.get()).isEqualTo(1)
+  }
+
+  @Test
+  fun `getToken waits one minute after an explicit quota response`() {
+    assertOneMinuteBackoff("HTTP/1.1 429 Too Many Requests\r\nContent-Length: 5\r\n\r\nquota")
+  }
+
+  @Test
+  fun `getToken waits one minute after a launcher internal error`() {
+    assertOneMinuteBackoff("HTTP/1.1 500 Internal Server Error\r\nContent-Length: 5\r\n\r\nerror")
+  }
+
+  private fun assertOneMinuteBackoff(errorResponse: String) {
+    withVirtualTime { virtualTime ->
+      val token = "header.payload.signature"
+      startServer(errorResponse, tokenResponse(token))
+      val future = clientForServer().getToken(awsPrincipalTagsRequest())
+      awaitRetryTimer(virtualTime, 3)
+      virtualTime.advanceTimeBy(Duration.ofSeconds(59))
+      assertThat(requestCount.get()).isEqualTo(1)
+      assertThat(future.isDone).isFalse()
+      virtualTime.advanceTimeBy(Duration.ofSeconds(2))
+      assertThat(future.get(10, TimeUnit.SECONDS)).isEqualTo(token)
+      assertThat(requestCount.get()).isEqualTo(2)
+    }
+  }
+
+  @Test
+  fun `getToken honors Retry-After seconds`() {
+    withVirtualTime { virtualTime ->
+      val token = "header.payload.signature"
+      startServer(
+        "HTTP/1.1 503 Service Unavailable\r\nRetry-After: 75\r\nContent-Length: 5\r\n\r\nerror",
+        tokenResponse(token),
+      )
+      val future = clientForServer().getToken(awsPrincipalTagsRequest())
+      awaitRetryTimer(virtualTime, 3)
+      virtualTime.advanceTimeBy(Duration.ofSeconds(60))
+      assertThat(requestCount.get()).isEqualTo(1)
+      virtualTime.advanceTimeBy(Duration.ofSeconds(20))
+      assertThat(future.get(10, TimeUnit.SECONDS)).isEqualTo(token)
+      assertThat(requestCount.get()).isEqualTo(2)
+    }
+  }
+
+  @Test
+  fun `getToken honors a Retry-After HTTP date`() {
+    withVirtualTime { virtualTime ->
+      val retryAfter =
+        DateTimeFormatter.RFC_1123_DATE_TIME.format(
+          ZonedDateTime.now(ZoneOffset.UTC).plusSeconds(90)
+        )
+      val token = "header.payload.signature"
+      startServer(
+        "HTTP/1.1 503 Service Unavailable\r\nRetry-After: $retryAfter\r\nContent-Length: 5\r\n\r\nerror",
+        tokenResponse(token),
+      )
+      val future = clientForServer().getToken(awsPrincipalTagsRequest())
+      awaitRetryTimer(virtualTime, 3)
+      virtualTime.advanceTimeBy(Duration.ofSeconds(80))
+      assertThat(requestCount.get()).isEqualTo(1)
+      virtualTime.advanceTimeBy(Duration.ofSeconds(12))
+      assertThat(future.get(10, TimeUnit.SECONDS)).isEqualTo(token)
+      assertThat(requestCount.get()).isEqualTo(2)
+    }
+  }
+
+  @Test
+  fun `getToken bounds service failures to three retries`() {
+    withVirtualTime { virtualTime ->
+      val error =
+        "HTTP/1.1 503 Service Unavailable\r\nRetry-After: invalid\r\nContent-Length: 5\r\n\r\nerror"
+      startServer(error, error, error, error)
+      val future = clientForServer().getToken(awsPrincipalTagsRequest())
+      for (timers in listOf(3L, 5L, 7L)) {
+        awaitRetryTimer(virtualTime, timers)
+        virtualTime.advanceTimeBy(Duration.ofSeconds(10))
+      }
+      val failure =
+        assertFailsWith<java.util.concurrent.ExecutionException> {
+          future.get(10, TimeUnit.SECONDS)
+        }
+      assertThat(failure.cause).isInstanceOf(HttpResponseException::class.java)
+      assertThat(requestCount.get()).isEqualTo(4)
+    }
+  }
+
+  @Test
+  fun `getToken bounds a long Retry-After by the total fetch deadline`() {
+    withVirtualTime { virtualTime ->
+      startServer(
+        "HTTP/1.1 503 Service Unavailable\r\nRetry-After: 600\r\nContent-Length: 5\r\n\r\nerror"
+      )
+      val future = clientForServer().getToken(awsPrincipalTagsRequest())
+      awaitRetryTimer(virtualTime, 3)
+      virtualTime.advanceTimeBy(Duration.ofMinutes(2))
+      val failure =
+        assertFailsWith<java.util.concurrent.ExecutionException> {
+          future.get(10, TimeUnit.SECONDS)
+        }
+      assertThat(failure.cause).isInstanceOf(IOException::class.java)
+      virtualTime.advanceTimeBy(Duration.ofMinutes(10))
+      assertThat(requestCount.get()).isEqualTo(1)
+    }
   }
 
   @Test
@@ -460,6 +590,61 @@ class ConfidentialSpaceTokenClientTest {
     job.cancel()
 
     assertThat(observed.await()).isInstanceOf(CancellationException::class.java)
+  }
+
+  @Test
+  fun `getToken cancellation during quota backoff prevents another request`() {
+    withVirtualTime { virtualTime ->
+      startServer("HTTP/1.1 429 Too Many Requests\r\nContent-Length: 5\r\n\r\nquota")
+      val future = clientForServer().getToken(awsPrincipalTagsRequest())
+      awaitRetryTimer(virtualTime, 3)
+      future.cancel(false)
+      virtualTime.advanceTimeBy(Duration.ofMinutes(3))
+      assertThat(future.isCancelled).isTrue()
+      assertThat(requestCount.get()).isEqualTo(1)
+    }
+  }
+
+  @Test
+  fun `getToken does not retry an individual request timeout`() {
+    withVirtualTime { virtualTime ->
+      startSilentServer()
+      val future = clientForServer().getToken(awsPrincipalTagsRequest())
+      val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10)
+      while (!requestReceived.isCompleted) {
+        check(System.nanoTime() < deadline) { "Token request was not received" }
+        Thread.sleep(1)
+      }
+      virtualTime.advanceTimeBy(Duration.ofSeconds(10))
+      val failure =
+        assertFailsWith<java.util.concurrent.ExecutionException> {
+          future.get(10, TimeUnit.SECONDS)
+        }
+      assertThat(failure.cause).isInstanceOf(IOException::class.java)
+      virtualTime.advanceTimeBy(Duration.ofMinutes(3))
+      assertThat(requestCount.get()).isEqualTo(1)
+    }
+  }
+
+  private fun withVirtualTime(action: (VirtualTimeScheduler) -> Unit) {
+    val virtualTime = VirtualTimeScheduler.getOrSet()
+    try {
+      action(virtualTime)
+    } finally {
+      virtualTime.advanceTimeBy(Duration.ofMinutes(3))
+      VirtualTimeScheduler.reset()
+    }
+  }
+
+  private fun tokenResponse(token: String): String =
+    "HTTP/1.1 200 OK\r\nContent-Length: ${token.length}\r\nConnection: close\r\n\r\n$token"
+
+  private fun awaitRetryTimer(virtualTime: VirtualTimeScheduler, count: Long) {
+    val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10)
+    while (virtualTime.scheduledTaskCount < count) {
+      check(System.nanoTime() < deadline) { "Token operation did not schedule its retry" }
+      Thread.sleep(1)
+    }
   }
 
   companion object {

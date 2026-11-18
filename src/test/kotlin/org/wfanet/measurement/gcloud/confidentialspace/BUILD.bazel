@@ -5,8 +5,10 @@ kt_jvm_test(
     srcs = ["ConfidentialSpaceTokenClientTest.kt"],
     test_class = "org.wfanet.measurement.gcloud.confidentialspace.ConfidentialSpaceTokenClientTest",
     deps = [
+        "//imports/java/com/google/api/client/http",
         "//imports/java/com/google/common/truth",
         "//imports/java/org/junit",
+        "//imports/java/reactor:test",
         "//imports/kotlin/kotlin/test",
         "//imports/kotlin/kotlinx/coroutines:core",
         "//src/main/kotlin/org/wfanet/measurement/gcloud/confidentialspace:confidential_space_token_client",

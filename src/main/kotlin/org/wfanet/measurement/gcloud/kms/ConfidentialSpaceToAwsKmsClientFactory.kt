@@ -47,7 +47,10 @@ import software.amazon.awssdk.services.sts.model.AssumeRoleWithWebIdentityReques
  * addition to `sts:AssumeRoleWithWebIdentity`).
  *
  * The returned client uses a credentials provider that automatically refreshes the AWS session
- * credentials before they expire by re-executing the token fetch + STS exchange.
+ * credentials before they expire by re-executing the token fetch + STS exchange, with a two-minute
+ * deadline for the entire refresh. The token provider owns token-request retries; the AWS SDK owns
+ * STS retries and reuses the attestation token already obtained. This factory does not add retries
+ * around either provider.
  *
  * @param tokenProvider Source of Confidential Space attestation tokens.
  * @param refreshMargin How far before expiration to proactively refresh credentials.
@@ -70,7 +73,7 @@ class ConfidentialSpaceToAwsKmsClientFactory(
   override fun getKmsClient(config: ConfidentialSpaceToAwsWifCredentials): KmsClient {
     val credentialsProvider =
       RefreshableAwsCredentialsIdentityProvider(refreshMargin = refreshMargin, clock = clock) {
-        obtainAwsCredentials(config).toFuture()
+        obtainAwsCredentials(config).timeout(CREDENTIAL_REFRESH_TIMEOUT).toFuture()
       }
     return TinkAwsKmsClient()
       .withCredentialsProvider(
@@ -199,6 +202,8 @@ class ConfidentialSpaceToAwsKmsClientFactory(
   }
 
   companion object {
+    private val CREDENTIAL_REFRESH_TIMEOUT: Duration = Duration.ofMinutes(2)
+
     private val DEFAULT_REFRESH_MARGIN: Duration = Duration.ofMinutes(15)
   }
 }

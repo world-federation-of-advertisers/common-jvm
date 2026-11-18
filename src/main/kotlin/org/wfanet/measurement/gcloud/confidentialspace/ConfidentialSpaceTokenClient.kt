@@ -14,6 +14,8 @@
 
 package org.wfanet.measurement.gcloud.confidentialspace
 
+import com.google.api.client.http.HttpHeaders
+import com.google.api.client.http.HttpResponseException
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
@@ -26,11 +28,17 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.time.Duration
+import java.time.Instant
+import java.time.format.DateTimeFormatter
+import java.time.format.DateTimeParseException
 import java.util.Base64
 import java.util.concurrent.CompletableFuture
+import kotlin.random.Random
+import org.wfanet.measurement.common.ExponentialBackoff
 import reactor.core.publisher.Mono
 import reactor.netty.ByteBufMono
 import reactor.netty.http.client.HttpClient
+import reactor.util.retry.Retry
 
 /** Attestation-token type understood by the Confidential Space launcher token endpoint. */
 enum class ConfidentialSpaceTokenType(val wireValue: String) {
@@ -63,7 +71,7 @@ fun interface AttestationTokenProvider {
   /**
    * Returns a future that completes with a freshly minted attestation token for [request], or
    * completes exceptionally with an [IOException] if the token cannot be obtained. Cancelling the
-   * future abandons the request.
+   * future abandons the request. Implementations handle retries for their own temporary failures.
    */
   fun getToken(request: AttestationTokenRequest): CompletableFuture<String>
 }
@@ -74,6 +82,9 @@ fun interface AttestationTokenProvider {
  * The launcher exposes an HTTP endpoint over a Unix domain socket at [socketPath]. Requests are
  * issued by Reactor Netty over a [DomainSocketAddress], which requires the Netty native transport
  * for the host platform.
+ *
+ * Temporary HTTP failures allow up to three retries within a two-minute token-fetch budget. Quota
+ * failures wait at least one minute; Retry-After can require a longer wait.
  *
  * @param socketPath Filesystem path of the launcher token socket.
  * @param requestTimeout Bound on a token request, covering both connecting to the socket and
@@ -93,6 +104,16 @@ class ConfidentialSpaceTokenClient(
       }
 
   override fun getToken(request: AttestationTokenRequest): CompletableFuture<String> {
+    return Mono.defer { requestToken(request) }
+      .retryWhen(tokenRetry())
+      .timeout(TOKEN_FETCH_TIMEOUT)
+      .onErrorMap { e ->
+        if (e is IOException) e else IOException("Launcher token request to $socketPath failed", e)
+      }
+      .toFuture()
+  }
+
+  private fun requestToken(request: AttestationTokenRequest): Mono<String> {
     val requestBody = buildRequestBody(request)
     return httpClient
       .post()
@@ -106,7 +127,11 @@ class ConfidentialSpaceTokenClient(
       )
       .responseSingle { httpResponse, body ->
         body.asString(StandardCharsets.UTF_8).defaultIfEmpty("").map { bodyText ->
-          TokenResponse(httpResponse.status().code(), bodyText)
+          TokenResponse(
+            httpResponse.status().code(),
+            bodyText,
+            httpResponse.responseHeaders().get(HttpHeaderNames.RETRY_AFTER),
+          )
         }
       }
       // responseTimeout only bounds the interval between reads, so the overall request is bounded
@@ -114,16 +139,21 @@ class ConfidentialSpaceTokenClient(
       .timeout(requestTimeout)
       .onErrorMap { e -> IOException("Launcher token request to $socketPath failed", e) }
       .map { response -> extractToken(response) }
-      .toFuture()
   }
 
   /** Returns the attestation token carried by [response], which must be a successful one. */
   private fun extractToken(response: TokenResponse): String {
     val token = response.body.trim()
     if (response.statusCode !in SUCCESS_STATUS_CODES) {
-      throw IOException(
-        "Launcher token request failed with status ${response.statusCode}: ${redactIfJwt(token)}"
-      )
+      throw HttpResponseException.Builder(
+          response.statusCode,
+          null,
+          HttpHeaders().setRetryAfter(response.retryAfter),
+        )
+        .setMessage(
+          "Launcher token request failed with status ${response.statusCode}: ${redactIfJwt(token)}"
+        )
+        .build()
     }
     if (token.isEmpty()) {
       throw IOException("Launcher returned an empty attestation token")
@@ -158,7 +188,49 @@ class ConfidentialSpaceTokenClient(
       .toString()
 
   /** Status code and body of a launcher token response. */
-  private data class TokenResponse(val statusCode: Int, val body: String)
+  private data class TokenResponse(val statusCode: Int, val body: String, val retryAfter: String?)
+
+  private fun tokenRetry(): Retry =
+    Retry.from { signals ->
+      signals.concatMap { signal ->
+        val failure = signal.failure()
+        if (
+          failure !is HttpResponseException ||
+            failure.statusCode !in RETRYABLE_STATUS_CODES ||
+            signal.totalRetries() >= MAX_TOKEN_RETRIES
+        ) {
+          Mono.error<Long>(failure)
+        } else {
+          Mono.delay(
+            minOf(
+              TOKEN_FETCH_TIMEOUT,
+              maxOf(
+                backoff.durationForAttempt((signal.totalRetries() + 1).toInt()),
+                if (failure.statusCode in QUOTA_STATUS_CODES) QUOTA_BACKOFF else Duration.ZERO,
+                retryAfterDelay(failure.headers.retryAfter),
+              ),
+            )
+          )
+        }
+      }
+    }
+
+  private fun retryAfterDelay(value: String?): Duration {
+    if (value == null) return Duration.ZERO
+    val seconds = value.toLongOrNull()
+    if (seconds != null) return Duration.ofSeconds(seconds.coerceAtLeast(0))
+    return try {
+      maxOf(
+        Duration.ZERO,
+        Duration.between(
+          Instant.now(),
+          Instant.from(DateTimeFormatter.RFC_1123_DATE_TIME.parse(value)),
+        ),
+      )
+    } catch (e: DateTimeParseException) {
+      Duration.ZERO
+    }
+  }
 
   companion object {
     /** Default Unix domain socket exposed by the Confidential Space launcher. */
@@ -170,6 +242,22 @@ class ConfidentialSpaceTokenClient(
     private val DEFAULT_REQUEST_TIMEOUT: Duration = Duration.ofSeconds(30)
 
     private val SUCCESS_STATUS_CODES = 200..299
+    private const val HTTP_TOO_MANY_REQUESTS = 429
+    private const val HTTP_INTERNAL_SERVER_ERROR = 500
+    private const val MAX_TOKEN_RETRIES = 3L
+    private val TOKEN_FETCH_TIMEOUT: Duration = Duration.ofMinutes(2)
+    private val QUOTA_BACKOFF: Duration = Duration.ofMinutes(1)
+    // The launcher maps attestation quota failures to HTTP 500.
+    private val QUOTA_STATUS_CODES = setOf(HTTP_TOO_MANY_REQUESTS, HTTP_INTERNAL_SERVER_ERROR)
+    private val RETRYABLE_STATUS_CODES =
+      setOf(408, HTTP_TOO_MANY_REQUESTS, HTTP_INTERNAL_SERVER_ERROR, 502, 503, 504)
+    private val backoff =
+      ExponentialBackoff(
+        initialDelay = Duration.ofSeconds(1),
+        multiplier = 2.0,
+        randomnessFactor = 0.5,
+        random = Random.Default,
+      )
 
     /**
      * Extracts container image signature key IDs from a Confidential Space attestation [token] by

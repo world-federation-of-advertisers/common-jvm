@@ -24,13 +24,14 @@ import com.google.gson.JsonObject
 import java.security.GeneralSecurityException
 import java.time.Clock
 import java.time.Duration
-import java.util.concurrent.CompletableFuture
 import java.util.logging.Logger
 import org.wfanet.measurement.aws.AwsCredentialsProviderAdapter
 import org.wfanet.measurement.aws.RefreshableAwsCredentialsIdentityProvider
 import org.wfanet.measurement.aws.TimeBoundCredentials
 import org.wfanet.measurement.common.crypto.tink.GCloudToAwsWifCredentials
 import org.wfanet.measurement.common.crypto.tink.KmsClientFactory
+import reactor.core.publisher.Mono
+import reactor.core.scheduler.Schedulers
 import software.amazon.awssdk.auth.credentials.AnonymousCredentialsProvider
 import software.amazon.awssdk.auth.credentials.AwsSessionCredentials
 import software.amazon.awssdk.regions.Region
@@ -44,6 +45,14 @@ import software.amazon.awssdk.services.sts.model.AssumeRoleWithWebIdentityReques
  * Confidential Space attestation token for Google Cloud credentials, then impersonates a service
  * account to obtain an OIDC ID token. That ID token is exchanged with AWS STS
  * `AssumeRoleWithWebIdentity` for temporary AWS credentials.
+ *
+ * Credential refresh has a two-minute deadline. The Google authentication library and AWS SDK own
+ * retries for their requests; this factory does not add retries around either library. AWS STS
+ * retries reuse the Google ID token already obtained.
+ *
+ * Some Google IAM failures, including generateIdToken 503 responses in Google auth 1.36.0, are
+ * returned as a plain [java.io.IOException] without a retry hint and fail the refresh without
+ * retry. This factory does not attempt to classify those errors.
  *
  * @param refreshMargin How far before expiration to proactively refresh credentials.
  * @param clock Clock used to determine the current time.
@@ -66,9 +75,10 @@ class GCloudToAwsKmsClientFactory(
   override fun getKmsClient(config: GCloudToAwsWifCredentials): KmsClient {
     val credentialsProvider =
       RefreshableAwsCredentialsIdentityProvider(refreshMargin = refreshMargin, clock = clock) {
-        // The credential chain is blocking, and the AWS SDK resolves credentials from a
-        // thread where blocking is expected, so it runs inline rather than on another thread.
-        CompletableFuture.completedFuture(obtainAwsCredentials(config))
+        Mono.fromCallable { obtainAwsCredentials(config) }
+          .subscribeOn(Schedulers.boundedElastic())
+          .timeout(CREDENTIAL_REFRESH_TIMEOUT)
+          .toFuture()
       }
     return TinkAwsKmsClient()
       .withCredentialsProvider(
@@ -79,6 +89,8 @@ class GCloudToAwsKmsClientFactory(
   }
 
   companion object {
+    private val CREDENTIAL_REFRESH_TIMEOUT: Duration = Duration.ofMinutes(2)
+
     private val DEFAULT_REFRESH_MARGIN: Duration = Duration.ofMinutes(15)
 
     private val SERVICE_ACCOUNT_REGEX = Regex("serviceAccounts/([^:/]+)")
