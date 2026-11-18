@@ -31,6 +31,7 @@ import java.time.ZoneOffset
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Base64
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
@@ -62,23 +63,38 @@ class ConfidentialSpaceTokenClientTest {
   private val requestCount = AtomicInteger()
   private val idle = CountDownLatch(1)
   private val requestReceived = CompletableDeferred<Unit>()
+  private val acceptedChannels = CopyOnWriteArrayList<SocketChannel>()
+  private val connectionThreads = CopyOnWriteArrayList<Thread>()
 
-  /** Binds a domain socket that replies with [responses] in order, one per connection. */
+  /** Binds a domain socket that replies with [responses] in order, one per request. */
   private fun startServer(vararg responses: String) {
     val channel = bindSocket()
 
     serverThread =
       thread(start = true, isDaemon = true) {
+        val responseIndex = AtomicInteger()
         try {
           while (channel.isOpen) {
-            // All responses are served on one connection, so a client that pools sees the same
-            // connection on its second request.
-            channel.accept().use { connection ->
-              acceptCount.incrementAndGet()
-              for (response in responses) {
-                if (!serve(connection, response)) break
+            val connection = channel.accept()
+            acceptedChannels.add(connection)
+            acceptCount.incrementAndGet()
+            connectionThreads.add(
+              thread(start = true, isDaemon = true) {
+                connection.use {
+                  try {
+                    while (channel.isOpen) {
+                      capturedRequest = readRequest(connection) ?: break
+                      val index = responseIndex.getAndIncrement()
+                      if (index >= responses.size) break
+                      writeResponse(connection, responses[index])
+                      if (index == responses.lastIndex) break
+                    }
+                  } catch (e: IOException) {
+                    // Expected when the client or test closes the connection.
+                  }
+                }
               }
-            }
+            )
           }
         } catch (e: IOException) {
           // Expected once the channel is closed in tearDown.
@@ -105,6 +121,7 @@ class ConfidentialSpaceTokenClientTest {
       thread(start = true, isDaemon = true) {
         try {
           channel.accept().use {
+            acceptedChannels.add(it)
             readRequest(it)
             requestReceived.complete(Unit)
             idle.await()
@@ -115,18 +132,11 @@ class ConfidentialSpaceTokenClientTest {
       }
   }
 
-  /**
-   * Reads one request off [connection], records it, then writes [response].
-   *
-   * Returns false once the peer stops sending, so the caller can stop serving this connection.
-   */
-  private fun serve(connection: SocketChannel, response: String): Boolean {
-    capturedRequest = readRequest(connection) ?: return false
+  private fun writeResponse(connection: SocketChannel, response: String) {
     val out = ByteBuffer.wrap(response.toByteArray(StandardCharsets.UTF_8))
     while (out.hasRemaining()) {
       connection.write(out)
     }
-    return true
   }
 
   /**
@@ -169,6 +179,12 @@ class ConfidentialSpaceTokenClientTest {
     idle.countDown()
     serverChannel?.close()
     serverThread?.join(TimeUnit.SECONDS.toMillis(5))
+    for (channel in acceptedChannels) {
+      channel.close()
+    }
+    for (thread in connectionThreads) {
+      thread.join(TimeUnit.SECONDS.toMillis(5))
+    }
     if (this::socketPath.isInitialized) {
       Files.deleteIfExists(socketPath)
     }
